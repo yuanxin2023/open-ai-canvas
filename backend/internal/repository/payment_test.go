@@ -333,6 +333,48 @@ func TestPaymentOrdersNeedingQueryIncludesAmbiguousCreationStates(t *testing.T) 
 	}
 }
 
+func TestRecentlyClosedPaymentOrdersNeedingQueryScopesProviderAndWindow(t *testing.T) {
+	db := openPaymentTestDB(t)
+	repo := New(db)
+	now := time.Now()
+	recent := now.Add(-time.Hour)
+	staleQuery := now.Add(-10 * time.Minute)
+	freshQuery := now.Add(-time.Minute)
+	orders := []model.PaymentOrder{
+		{
+			ID: "recent-zpay", UserID: "closed-user", IdempotencyKey: "closed-idem-a", MerchantOrderNo: "closed-merchant-order-00000000a",
+			ProductID: "product", ProductName: "积分", ProviderID: "zpay-alipay-qr", PluginID: "official-payment-zpay",
+			ProviderConfigID: "config", ProviderConfigVersion: 1, AmountFen: 100, Currency: "CNY", CreditsMicrocredits: 1_000_000,
+			Status: model.PaymentOrderClosed, ClosedAt: &recent, LastQueriedAt: &staleQuery,
+		},
+		{
+			ID: "freshly-queried-zpay", UserID: "closed-user", IdempotencyKey: "closed-idem-b", MerchantOrderNo: "closed-merchant-order-00000000b",
+			ProductID: "product", ProductName: "积分", ProviderID: "zpay-wechat-qr", PluginID: "official-payment-zpay",
+			ProviderConfigID: "config", ProviderConfigVersion: 1, AmountFen: 100, Currency: "CNY", CreditsMicrocredits: 1_000_000,
+			Status: model.PaymentOrderClosed, ClosedAt: &recent, LastQueriedAt: &freshQuery,
+		},
+		{
+			ID: "other-provider", UserID: "closed-user", IdempotencyKey: "closed-idem-c", MerchantOrderNo: "closed-merchant-order-00000000c",
+			ProductID: "product", ProductName: "积分", ProviderID: "wechat-native", PluginID: "official-payment-wechat-native",
+			ProviderConfigID: "config", ProviderConfigVersion: 1, AmountFen: 100, Currency: "CNY", CreditsMicrocredits: 1_000_000,
+			Status: model.PaymentOrderClosed, ClosedAt: &recent,
+		},
+	}
+	if err := db.Create(&orders).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	candidates, err := repo.RecentlyClosedPaymentOrdersNeedingQuery(
+		[]string{"zpay-alipay-qr", "zpay-wechat-qr"}, now.Add(-24*time.Hour), now.Add(-2*time.Minute), 16,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(candidates) != 1 || candidates[0].ID != "recent-zpay" {
+		t.Fatalf("late-payment candidates = %#v", candidates)
+	}
+}
+
 func TestUnresolvedPaymentOrderCandidateCountOverlapping(t *testing.T) {
 	db := openPaymentTestDB(t)
 	repo := New(db)

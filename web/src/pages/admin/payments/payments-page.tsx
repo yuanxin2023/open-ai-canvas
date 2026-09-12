@@ -113,7 +113,7 @@ export default function AdminPaymentsPage() {
             const [providerResult, productResult] = await Promise.all([listAdminPaymentProviders(), listAdminTopupProducts()]);
             setProviders(providerResult.providers);
             setProducts(productResult.products);
-            setBillProviderId((current) => current || providerResult.providers.find((item) => item.configured)?.id || providerResult.providers[0]?.id || "");
+            setBillProviderId((current) => current || providerResult.providers.find((item) => item.configured && item.supportsReconciliation)?.id || providerResult.providers.find((item) => item.supportsReconciliation)?.id || "");
         } catch (error) {
             message.error(error instanceof Error ? error.message : "读取支付配置失败");
         } finally {
@@ -314,7 +314,10 @@ export default function AdminPaymentsPage() {
                 <div className="flex items-center gap-3">
                     <PaymentBrandIcon providerId={provider.id} />
                     <div>
-                        <div className="font-medium">{provider.name}</div>
+                        <div className="flex items-center gap-2 font-medium">
+                            {provider.name}
+                            {provider.pluginId === "official-payment-zpay" ? <span className="rounded bg-foreground/8 px-1.5 py-0.5 text-[10px] font-semibold text-foreground/55">ZPAY</span> : null}
+                        </div>
                         <div className="mt-0.5 font-mono text-xs text-foreground/45">{provider.id}</div>
                     </div>
                 </div>
@@ -433,7 +436,7 @@ export default function AdminPaymentsPage() {
                         size="small"
                         icon={<XCircle className="size-3.5" />}
                         loading={orderActionId === order.id}
-                        disabled={!["created", "pending", "create_failed", "closing"].includes(order.status)}
+                        disabled={!providers.find((provider) => provider.id === order.providerId)?.supportsClose || !["created", "pending", "create_failed", "closing"].includes(order.status)}
                         onClick={() => closeOrder(order)}
                     >
                         关单
@@ -569,7 +572,7 @@ export default function AdminPaymentsPage() {
                                         value={billProviderId || undefined}
                                         placeholder="选择支付渠道"
                                         onChange={setBillProviderId}
-                                        options={providers.map((provider) => ({ value: provider.id, label: provider.name, disabled: !provider.configured }))}
+                                        options={providers.filter((provider) => provider.supportsReconciliation).map((provider) => ({ value: provider.id, label: provider.name, disabled: !provider.configured }))}
                                     />
                                     <DatePicker value={billDate} allowClear={false} disabledDate={(date) => !date.isBefore(dayjs(), "day") || date.isBefore(dayjs().subtract(3, "month"), "day")} onChange={(date) => date && setBillDate(date)} />
                                     <Button type="primary" loading={runningBill} disabled={!billProviderId} onClick={() => void runReconciliation()}>
@@ -734,13 +737,13 @@ export default function AdminPaymentsPage() {
 
 function PaymentBrandIcon({ providerId, compact = false }: { providerId: string; compact?: boolean }) {
     const size = compact ? "size-6" : "size-10";
-    if (providerId === "wechat-native")
+    if (providerId === "wechat-native" || providerId === "zpay-wechat-qr")
         return (
             <span className={`grid ${size} shrink-0 place-items-center rounded-lg bg-[#07c160]/10 text-[#07c160]`}>
                 <WechatFilled className={compact ? "text-sm" : "text-xl"} aria-hidden />
             </span>
         );
-    if (providerId === "alipay-page-pay")
+    if (providerId === "alipay-page-pay" || providerId === "zpay-alipay-qr")
         return (
             <span className={`grid ${size} shrink-0 place-items-center rounded-lg bg-[#1677ff]/10 text-[#1677ff]`}>
                 <AlipayCircleFilled className={compact ? "text-sm" : "text-xl"} aria-hidden />

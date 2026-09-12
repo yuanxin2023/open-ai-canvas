@@ -7,8 +7,11 @@ import (
 const (
 	PaymentPluginWeChatNative = "official-payment-wechat-native"
 	PaymentPluginAlipayPage   = "official-payment-alipay-page"
+	PaymentPluginZPay         = "official-payment-zpay"
 	PaymentProviderWeChat     = "wechat-native"
 	PaymentProviderAlipay     = "alipay-page-pay"
+	PaymentProviderZPayAlipay = "zpay-alipay-qr"
+	PaymentProviderZPayWeChat = "zpay-wechat-qr"
 )
 
 func bundledPaymentPluginManifests() []protocol.Manifest {
@@ -35,7 +38,52 @@ func bundledPaymentPluginManifests() []protocol.Manifest {
 			"redirect",
 			alipayPaymentConfiguration(),
 		),
+		zpayPaymentPluginManifest(),
 	}
+}
+
+func zpayPaymentPluginManifest() protocol.Manifest {
+	return protocol.Manifest{
+		APIVersion: "yingce.plugin/v1",
+		Metadata: protocol.Metadata{
+			ID: PaymentPluginZPay, Version: "1.0.0", Name: "ZPAY 聚合支付", Vendor: "ZPAY",
+			Description: "通过 ZPAY/EasyPay API 提供支付宝和微信扫码充值。", Enabled: false, Installable: true,
+			Documentation: "# ZPAY 聚合支付\n\n系统 RPC 支付适配器，提供支付宝和微信扫码充值。",
+		},
+		Surfaces:    []string{"wallet", "settings"},
+		Runtime:     protocol.ManifestRuntime{Backend: "rpc", BackendEntry: "backend/provider"},
+		Permissions: []string{"payment.create", "payment.query"},
+		Configuration: protocol.ManifestConfiguration{Fields: []protocol.ManifestField{
+			{Name: "publicBaseUrl", Type: "url", Label: "服务器公网地址", Required: true, Description: "用于生成 ZPAY 异步通知地址，必须可被 ZPAY 访问。"},
+			{Name: "apiBaseUrl", Type: "url", Label: "ZPAY API 地址", Required: true, Default: "https://zpayz.cn", Description: "只允许公网 HTTPS 根地址。"},
+			{Name: "pid", Type: "string", Label: "商户 ID", Required: true},
+			{Name: "merchantKey", Type: "password", Label: "商户密钥", Required: true, Secret: true},
+			{Name: "cid", Type: "string", Label: "支付渠道 ID", Description: "可选；多个渠道 ID 使用英文逗号分隔。"},
+		}},
+		Contributes: protocol.ManifestContributions{PaymentProviders: []protocol.ManifestPaymentProvider{
+			zpayPaymentContribution(PaymentProviderZPayAlipay, "支付宝支付", "brand:alipay"),
+			zpayPaymentContribution(PaymentProviderZPayWeChat, "微信支付", "brand:wechat-pay"),
+		}},
+	}
+}
+
+func zpayPaymentContribution(id, label, icon string) protocol.ManifestPaymentProvider {
+	return protocol.ManifestPaymentProvider{
+		ID: id, Label: label, Icon: icon, CheckoutMode: "qr_code",
+		IdentityFields:      []string{"apiBaseUrl", "pid"},
+		ExpiryPolicy:        protocol.ManifestPaymentExpiryPolicy{DefaultMinutes: 30, MinMinutes: 5, MaxMinutes: 1440},
+		NotificationSuccess: protocol.ManifestPaymentResponse{Status: 200, ContentType: "text/plain; charset=utf-8", Body: "success"},
+		NotificationFailure: protocol.ManifestPaymentResponse{Status: 400, ContentType: "text/plain; charset=utf-8", Body: "failure"},
+	}
+}
+
+func paymentManifestHasPermission(manifest protocol.Manifest, permission string) bool {
+	for _, value := range manifest.Permissions {
+		if value == permission {
+			return true
+		}
+	}
+	return false
 }
 
 func paymentPluginManifest(pluginID, providerID, name, vendor, description, runtime, icon, checkoutMode string, configuration protocol.ManifestConfiguration) protocol.Manifest {

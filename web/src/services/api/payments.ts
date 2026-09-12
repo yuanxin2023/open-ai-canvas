@@ -9,6 +9,8 @@ export type PaymentProvider = {
     enabled: boolean;
     pluginEnabled: boolean;
     configured: boolean;
+    supportsClose: boolean;
+    supportsReconciliation: boolean;
     closeAfterMinutes: number;
 };
 

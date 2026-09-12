@@ -9,7 +9,7 @@ import (
 
 func TestBundledPaymentPluginsMatchHostProviders(t *testing.T) {
 	manifests := bundledPaymentPluginManifests()
-	if len(manifests) != 2 {
+	if len(manifests) != 3 {
 		t.Fatalf("payment plugin manifests = %d", len(manifests))
 	}
 	for _, manifest := range manifests {
@@ -20,13 +20,34 @@ func TestBundledPaymentPluginsMatchHostProviders(t *testing.T) {
 		if management.Kind != PluginKindPayment || management.Origin != PluginOriginSystem || management.ActivationScope != PluginScopeSystem {
 			t.Fatalf("plugin %s management = %#v", manifest.Metadata.ID, management)
 		}
-		if len(manifest.Contributes.PaymentProviders) != 1 {
+		if len(manifest.Contributes.PaymentProviders) == 0 {
 			t.Fatalf("plugin %s payment contributions = %d", manifest.Metadata.ID, len(manifest.Contributes.PaymentProviders))
 		}
-		contribution := manifest.Contributes.PaymentProviders[0]
-		if contribution.ID == "" || contribution.Icon == "" || contribution.CheckoutMode == "" {
-			t.Fatalf("plugin %s has incomplete payment contribution: %#v", manifest.Metadata.ID, contribution)
+		for _, contribution := range manifest.Contributes.PaymentProviders {
+			if contribution.ID == "" || contribution.Icon == "" || contribution.CheckoutMode == "" {
+				t.Fatalf("plugin %s has incomplete payment contribution: %#v", manifest.Metadata.ID, contribution)
+			}
 		}
+	}
+}
+
+func TestZPayPaymentContributionsHaveIndependentCapabilities(t *testing.T) {
+	manifest, alipay, ok := paymentManifestContributionForProvider(PaymentProviderZPayAlipay)
+	if !ok || manifest.Metadata.ID != PaymentPluginZPay || alipay.Label != "支付宝支付" {
+		t.Fatalf("ZPAY Alipay contribution = %#v %#v %v", manifest.Metadata, alipay, ok)
+	}
+	_, wechat, ok := paymentManifestContributionForProvider(PaymentProviderZPayWeChat)
+	if !ok || wechat.Label != "微信支付" || wechat.ID == alipay.ID {
+		t.Fatalf("ZPAY WeChat contribution = %#v %v", wechat, ok)
+	}
+	if !paymentProviderSupports(alipay.ID, "payment.create") || !paymentProviderSupports(wechat.ID, "payment.query") {
+		t.Fatal("ZPAY create/query capabilities are missing")
+	}
+	if paymentProviderSupports(alipay.ID, "payment.close") || paymentProviderSupports(wechat.ID, "payment.reconcile") {
+		t.Fatal("ZPAY unexpectedly exposes close or reconciliation")
+	}
+	if !paymentProviderSupports(PaymentProviderAlipay, "payment.close") || !paymentProviderSupports(PaymentProviderWeChat, "payment.reconcile") {
+		t.Fatal("existing payment capabilities changed")
 	}
 }
 
@@ -59,7 +80,7 @@ func TestSystemPaymentPluginsRegisterRPCProviders(t *testing.T) {
 	if registry == nil {
 		t.Fatal("payment registry is nil")
 	}
-	for _, providerID := range []string{PaymentProviderAlipay, PaymentProviderWeChat} {
+	for _, providerID := range []string{PaymentProviderAlipay, PaymentProviderWeChat, PaymentProviderZPayAlipay, PaymentProviderZPayWeChat} {
 		provider, ok := registry.Get(providerID)
 		if !ok {
 			t.Fatalf("payment provider %q is missing", providerID)
@@ -83,7 +104,7 @@ func TestPaymentRegistryFailsClosedWhenOfficialPackagesAreMissing(t *testing.T) 
 	if registry == nil {
 		t.Fatal("payment registry is nil")
 	}
-	for _, providerID := range []string{PaymentProviderAlipay, PaymentProviderWeChat} {
+	for _, providerID := range []string{PaymentProviderAlipay, PaymentProviderWeChat, PaymentProviderZPayAlipay, PaymentProviderZPayWeChat} {
 		if _, ok := registry.Get(providerID); ok {
 			t.Fatalf("payment provider %q unexpectedly came from host fallback", providerID)
 		}

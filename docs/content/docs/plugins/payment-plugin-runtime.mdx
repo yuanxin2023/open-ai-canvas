@@ -27,7 +27,23 @@ Manifest 的支付贡献声明 `runtime.backend` 为 `rpc` 或 `wasm`，并通�
 | `verify_notification` | `Notification`，请求体通过 `bodyBase64` 传入 |
 | `download_trade_bill` | `BillRecord[]` |
 
-请求固定带有 `version: "yingce.payment/v1"`。插件不得访问宿主数据库，不得自行入账积分。宿主目前控制进程工作目录、环境变量、标准输出大小和 30 秒超时；支付宝、微信实现还会在插件内部校验网关和账单下载域名。通用插件的操作系统级沙箱、签名校验和网络白名单尚未启用，不应直接运行不受信任的支付插件。
+请求固定带有 `version: "yingce.payment/v1"`。多 Provider 入口还会收到 `providerId`，同一 RPC 可执行文件据此分发不同渠道；原有单 Provider 入口和省略 `providerId` 的协议保持兼容。`create_order` 的 `request.clientIP` 只由后端根据可信代理链填入，不接受前端 JSON 指定。
+
+支付通知同时支持 GET 查询串和 POST 请求体。GET 会把未经重排的原始查询字符串放入 `bodyBase64`，便于 EasyPay 类协议按原参数验签；两种通知均受 1 MiB 上限约束，并按 Manifest 的 `notificationSuccess` / `notificationFailure` 返回响应。
+
+插件不得访问宿主数据库，不得自行入账积分。宿主目前控制进程工作目录、环境变量、标准输出大小和 30 秒超时；支付宝、微信实现还会在插件内部校验网关和账单下载域名。通用插件的操作系统级沙箱、签名校验和网络白名单尚未启用，不应直接运行不受信任的支付插件。
+
+## 可选渠道能力
+
+支付能力由 Manifest 权限决定。声明 `payment.close` 的渠道才会显示主动关单操作；声明 `payment.reconcile` 的渠道才会进入手动和日账单对账。无关单能力的订单过期时，宿主先查单再仅在本地关闭，并在随后 24 小时低频补查晚到账，最终入账仍走现有幂等事务。
+
+Provider 列表 API 使用 `supportsClose` 和 `supportsReconciliation` 暴露这两个能力。旧支付宝和微信渠道均为 `true`；不支持的渠道不会显示对应操作。
+
+## ZPAY 聚合支付
+
+内置 `official-payment-zpay` 包贡献 `zpay-alipay-qr` 与 `zpay-wechat-qr` 两个独立渠道。管理员分别配置和启停，钱包分别显示“支付宝支付”和“微信支付”，不显示 ZPAY 品牌。配置字段为公网 `publicBaseUrl`、公网 HTTPS 根地址 `apiBaseUrl`、`pid`、加密保存且不回显的 `merchantKey`，以及可选的逗号分隔 `cid`。
+
+ZPAY 使用 `/mapi.php` 创建二维码订单、`/api.php?act=order` 查单和 GET 异步通知。插件不声明关单或账单对账能力；仅支持 CNY 充值，不包含退款、余额查询和账单下载。反向代理必须覆盖并正确传递 `X-Forwarded-For`，且后端端口不能直接暴露给公网，否则 ZPAY 下单所需的 `clientip` 可能不准确。
 
 ## 原生包的平台边界
 

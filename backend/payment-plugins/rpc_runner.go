@@ -14,13 +14,14 @@ import (
 const rpcVersion = "yingce.payment/v1"
 
 type rpcRequest struct {
-	Version   string              `json:"version"`
-	Operation string              `json:"operation"`
-	Config    Config              `json:"config,omitempty"`
-	Request   json.RawMessage     `json:"request,omitempty"`
-	Headers   map[string][]string `json:"headers,omitempty"`
-	Body      string              `json:"bodyBase64,omitempty"`
-	BillDate  string              `json:"billDate,omitempty"`
+	Version    string              `json:"version"`
+	ProviderID string              `json:"providerId,omitempty"`
+	Operation  string              `json:"operation"`
+	Config     Config              `json:"config,omitempty"`
+	Request    json.RawMessage     `json:"request,omitempty"`
+	Headers    map[string][]string `json:"headers,omitempty"`
+	Body       string              `json:"bodyBase64,omitempty"`
+	BillDate   string              `json:"billDate,omitempty"`
 }
 
 type rpcResponse struct {
@@ -31,6 +32,17 @@ type rpcResponse struct {
 }
 
 func RunRPC(provider Provider, input io.Reader, output io.Writer) error {
+	providers := map[string]Provider{}
+	if provider != nil {
+		providers[provider.Descriptor().ID] = provider
+	}
+	return RunRPCProviders(providers, input, output)
+}
+
+// RunRPCProviders serves one request and selects a contribution by the
+// providerId pinned by the host. Single-provider executables remain compatible
+// with older hosts that omit providerId.
+func RunRPCProviders(providers map[string]Provider, input io.Reader, output io.Writer) error {
 	decoder := json.NewDecoder(io.LimitReader(input, 2<<20))
 	var request rpcRequest
 	if err := decoder.Decode(&request); err != nil {
@@ -38,6 +50,12 @@ func RunRPC(provider Provider, input io.Reader, output io.Writer) error {
 	}
 	if request.Version != rpcVersion {
 		return writeRPC(output, rpcResponse{Code: "unsupported_version", Message: "不支持的支付插件协议版本"})
+	}
+	provider := providers[strings.TrimSpace(request.ProviderID)]
+	if provider == nil && strings.TrimSpace(request.ProviderID) == "" && len(providers) == 1 {
+		for _, candidate := range providers {
+			provider = candidate
+		}
 	}
 	if provider == nil {
 		return writeRPC(output, rpcResponse{Code: "provider_unavailable", Message: "支付插件未配置"})

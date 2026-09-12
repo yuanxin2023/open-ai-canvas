@@ -268,11 +268,24 @@ func officialPluginPackageDir() (string, error) {
 		current = parent
 	}
 	for _, candidate := range candidates {
-		if info, err := os.Stat(candidate); err == nil && info.IsDir() {
+		if info, err := os.Stat(candidate); err == nil && info.IsDir() && containsOfficialPluginPackage(candidate) {
 			return candidate, nil
 		}
 	}
 	return "", errors.New("未找到官方 plugin-packages 目录；请设置 CANVAS_OFFICIAL_PLUGIN_DIR")
+}
+
+func containsOfficialPluginPackage(dir string) bool {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return false
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasSuffix(strings.ToLower(entry.Name()), ".yingce-plugin") {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *pluginRuntime) reload() error {

@@ -41,6 +41,7 @@ type CreateRequest struct {
 	ExpiresAt       time.Time
 	NotifyURL       string
 	ReturnURL       string
+	ClientIP        string
 }
 
 type Checkout struct {

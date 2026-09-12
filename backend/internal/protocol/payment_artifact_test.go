@@ -13,7 +13,7 @@ import (
 )
 
 func TestOfficialPaymentArtifactsAreCanonicalLinuxAMD64(t *testing.T) {
-	for _, packageID := range []string{"official-payment-wechat-native", "official-payment-alipay-page"} {
+	for _, packageID := range []string{"official-payment-wechat-native", "official-payment-alipay-page", "official-payment-zpay"} {
 		t.Run(packageID, func(t *testing.T) {
 			root := filepath.Join("..", "..", "..", "plugin-packages")
 			providerPath := filepath.Join(root, packageID, "backend", "provider")

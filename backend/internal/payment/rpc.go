@@ -55,13 +55,14 @@ func NewRPCProvider(descriptor Descriptor, packageDir, entry string) (*RPCProvid
 func (p *RPCProvider) Descriptor() Descriptor { return p.descriptor }
 
 type rpcRequest struct {
-	Version   string              `json:"version"`
-	Operation string              `json:"operation"`
-	Config    Config              `json:"config,omitempty"`
-	Request   any                 `json:"request,omitempty"`
-	Headers   map[string][]string `json:"headers,omitempty"`
-	Body      string              `json:"bodyBase64,omitempty"`
-	BillDate  string              `json:"billDate,omitempty"`
+	Version    string              `json:"version"`
+	ProviderID string              `json:"providerId,omitempty"`
+	Operation  string              `json:"operation"`
+	Config     Config              `json:"config,omitempty"`
+	Request    any                 `json:"request,omitempty"`
+	Headers    map[string][]string `json:"headers,omitempty"`
+	Body       string              `json:"bodyBase64,omitempty"`
+	BillDate   string              `json:"billDate,omitempty"`
 }
 
 type rpcResponse struct {
@@ -91,6 +92,7 @@ func (p *RPCProvider) call(ctx context.Context, request rpcRequest, output any) 
 	}
 	ctx, cancel := context.WithTimeout(ctx, pluginRPCTimeout)
 	defer cancel()
+	request.ProviderID = p.descriptor.ID
 	payload, err := json.Marshal(request)
 	if err != nil {
 		return err

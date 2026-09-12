@@ -28,15 +28,17 @@ const (
 )
 
 type PaymentProviderView struct {
-	ID                string `json:"id"`
-	PluginID          string `json:"pluginId"`
-	Name              string `json:"name"`
-	Icon              string `json:"icon"`
-	CheckoutMode      string `json:"checkoutMode"`
-	Enabled           bool   `json:"enabled"`
-	PluginEnabled     bool   `json:"pluginEnabled"`
-	Configured        bool   `json:"configured"`
-	CloseAfterMinutes int    `json:"closeAfterMinutes"`
+	ID                     string `json:"id"`
+	PluginID               string `json:"pluginId"`
+	Name                   string `json:"name"`
+	Icon                   string `json:"icon"`
+	CheckoutMode           string `json:"checkoutMode"`
+	Enabled                bool   `json:"enabled"`
+	PluginEnabled          bool   `json:"pluginEnabled"`
+	Configured             bool   `json:"configured"`
+	SupportsClose          bool   `json:"supportsClose"`
+	SupportsReconciliation bool   `json:"supportsReconciliation"`
+	CloseAfterMinutes      int    `json:"closeAfterMinutes"`
 }
 
 type AdminPaymentProviderView struct {
@@ -69,6 +71,7 @@ type CreatePaymentOrderRequest struct {
 	ProductID      string `json:"productId"`
 	ProviderID     string `json:"providerId"`
 	IdempotencyKey string `json:"idempotencyKey"`
+	ClientIP       string `json:"-"`
 }
 
 type PaymentCheckoutView struct {
@@ -212,7 +215,11 @@ func (s *Service) UpdatePaymentProviderConfig(actor *model.User, providerID stri
 	if !ok {
 		return nil, BadAuthRequest("支付插件清单不存在")
 	}
-	policy := manifest.Contributes.PaymentProviders[0].ExpiryPolicy
+	_, contribution, ok := paymentManifestContributionForProvider(descriptor.ID)
+	if !ok {
+		return nil, BadAuthRequest("支付插件渠道声明不存在")
+	}
+	policy := contribution.ExpiryPolicy
 	if request.CloseAfterMinutes < policy.MinMinutes || request.CloseAfterMinutes > policy.MaxMinutes {
 		return nil, BadAuthRequest(fmt.Sprintf("未支付关闭时间必须为 %d-%d 分钟", policy.MinMinutes, policy.MaxMinutes))
 	}
@@ -306,8 +313,10 @@ func (s *Service) UpdatePaymentProviderConfig(actor *model.User, providerID stri
 
 func (s *Service) paymentProviderView(descriptor payment.Descriptor) (PaymentProviderView, *model.PaymentProviderConfig, error) {
 	view := PaymentProviderView{ID: descriptor.ID, PluginID: descriptor.PluginID, Name: descriptor.Name, Icon: descriptor.Icon, CheckoutMode: descriptor.CheckoutMode}
-	if manifest, ok := paymentManifestForProvider(descriptor.ID); ok && len(manifest.Contributes.PaymentProviders) > 0 {
-		view.CloseAfterMinutes = manifest.Contributes.PaymentProviders[0].ExpiryPolicy.DefaultMinutes
+	if manifest, contribution, ok := paymentManifestContributionForProvider(descriptor.ID); ok {
+		view.CloseAfterMinutes = contribution.ExpiryPolicy.DefaultMinutes
+		view.SupportsClose = paymentManifestHasPermission(manifest, "payment.close")
+		view.SupportsReconciliation = paymentManifestHasPermission(manifest, "payment.reconcile")
 	}
 	state, err := s.pluginStateForUser(nil, descriptor.PluginID, s.Plugins())
 	if err == nil {
@@ -328,14 +337,19 @@ func (s *Service) paymentProviderView(descriptor payment.Descriptor) (PaymentPro
 }
 
 func paymentManifestForProvider(providerID string) (protocol.Manifest, bool) {
+	manifest, _, ok := paymentManifestContributionForProvider(providerID)
+	return manifest, ok
+}
+
+func paymentManifestContributionForProvider(providerID string) (protocol.Manifest, protocol.ManifestPaymentProvider, bool) {
 	for _, manifest := range bundledPaymentPluginManifests() {
 		for _, contribution := range manifest.Contributes.PaymentProviders {
 			if contribution.ID == providerID {
-				return manifest, true
+				return manifest, contribution, true
 			}
 		}
 	}
-	return protocol.Manifest{}, false
+	return protocol.Manifest{}, protocol.ManifestPaymentProvider{}, false
 }
 
 func (s *Service) decryptPaymentConfig(config *model.PaymentProviderConfig) (payment.Config, error) {
@@ -508,6 +522,7 @@ func (s *Service) CreatePaymentOrder(ctx context.Context, actor *model.User, req
 		Currency: order.Currency, ExpiresAt: order.ExpiresAt,
 		NotifyURL: baseURL + "/api/payments/notify/" + url.PathEscape(order.ProviderID) + "/" + url.PathEscape(config.ID),
 		ReturnURL: baseURL + "/api/payments/return/" + url.PathEscape(order.ProviderID) + "?orderId=" + url.QueryEscape(order.ID),
+		ClientIP:  strings.TrimSpace(request.ClientIP),
 	})
 	if err != nil {
 		_ = s.repo.SetPaymentOrderCreateFailure(order.ID, safePaymentError(err))
@@ -554,7 +569,7 @@ func (s *Service) PaymentCheckout(actor *model.User, id string) (string, error) 
 // RefreshPaymentCheckout reuses the original merchant order number and order
 // snapshot. It always queries the provider before rebuilding a checkout so an
 // ambiguous create response cannot turn into a duplicate payment attempt.
-func (s *Service) RefreshPaymentCheckout(ctx context.Context, actor *model.User, id string) (*PaymentOrderView, error) {
+func (s *Service) RefreshPaymentCheckout(ctx context.Context, actor *model.User, id, clientIP string) (*PaymentOrderView, error) {
 	if actor == nil {
 		return nil, Unauthorized("请先登录")
 	}
@@ -592,6 +607,7 @@ func (s *Service) RefreshPaymentCheckout(ctx context.Context, actor *model.User,
 		Currency: order.Currency, ExpiresAt: order.ExpiresAt,
 		NotifyURL: baseURL + "/api/payments/notify/" + url.PathEscape(order.ProviderID) + "/" + url.PathEscape(config.ID),
 		ReturnURL: baseURL + "/api/payments/return/" + url.PathEscape(order.ProviderID) + "?orderId=" + url.QueryEscape(order.ID),
+		ClientIP:  strings.TrimSpace(clientIP),
 	})
 	if err != nil {
 		return nil, WrapAppError(http.StatusBadGateway, "刷新支付收银台失败，请稍后重试", err)
@@ -645,6 +661,9 @@ func (s *Service) ClosePaymentOrder(ctx context.Context, actor *model.User, id s
 	if order.Status == model.PaymentOrderCredited || order.Status == model.PaymentOrderClosed {
 		view := paymentOrderView(*order)
 		return &view, nil
+	}
+	if !paymentProviderSupports(order.ProviderID, "payment.close") {
+		return nil, BadAuthRequest("该支付渠道不支持主动关单")
 	}
 	if err := s.closePaymentOrder(ctx, order); err != nil {
 		return nil, err
@@ -763,6 +782,9 @@ func (s *Service) closePaymentOrder(ctx context.Context, order *model.PaymentOrd
 		queryNotFound = true
 	} else {
 		return WrapAppError(http.StatusBadGateway, "关单前查单失败，请稍后重试", queryErr)
+	}
+	if !paymentProviderSupports(order.ProviderID, "payment.close") {
+		return s.repo.MarkPaymentOrderClosed(order.ID, "CLOSED_LOCALLY")
 	}
 	closed, err := provider.CloseOrder(ctx, values, payment.CloseRequest{MerchantOrderNo: order.MerchantOrderNo})
 	if err == nil {
@@ -918,6 +940,9 @@ func (s *Service) AdminClosePaymentOrder(ctx context.Context, actor *model.User,
 		view := paymentOrderView(*order)
 		return &view, nil
 	}
+	if !paymentProviderSupports(order.ProviderID, "payment.close") {
+		return nil, BadAuthRequest("该支付渠道不支持主动关单")
+	}
 	if err := s.closePaymentOrder(ctx, order); err != nil {
 		return nil, err
 	}
@@ -954,6 +979,7 @@ func (s *Service) startPaymentWorker(ctx context.Context) {
 			case <-orderTicker.C:
 				s.reconcileExpiredPaymentOrders(ctx)
 				s.queryPendingPaymentOrders(ctx)
+				s.queryRecentlyClosedPaymentOrders(ctx)
 			}
 		}
 	})
@@ -1018,6 +1044,36 @@ func (s *Service) queryPendingPaymentOrders(ctx context.Context) {
 			log.Printf("payment order compensation query failed: order=%s error_type=%T", orders[index].ID, err)
 		}
 	}
+}
+
+func (s *Service) queryRecentlyClosedPaymentOrders(ctx context.Context) {
+	providerIDs := make([]string, 0)
+	for _, descriptor := range s.paymentRegistry.Descriptors() {
+		if !paymentProviderSupports(descriptor.ID, "payment.close") {
+			providerIDs = append(providerIDs, descriptor.ID)
+		}
+	}
+	if len(providerIDs) == 0 {
+		return
+	}
+	orders, err := s.repo.RecentlyClosedPaymentOrdersNeedingQuery(providerIDs, time.Now().Add(-24*time.Hour), time.Now().Add(-2*time.Minute), 16)
+	if err != nil {
+		log.Printf("recently closed payment order query failed: %v", err)
+		return
+	}
+	for index := range orders {
+		operationContext, cancel := context.WithTimeout(ctx, 20*time.Second)
+		err := s.queryPaymentOrder(operationContext, &orders[index])
+		cancel()
+		if err != nil {
+			log.Printf("closed payment order compensation query failed: order=%s error_type=%T", orders[index].ID, err)
+		}
+	}
+}
+
+func paymentProviderSupports(providerID, permission string) bool {
+	manifest, _, ok := paymentManifestContributionForProvider(providerID)
+	return ok && paymentManifestHasPermission(manifest, permission)
 }
 
 func safePaymentError(err error) string {

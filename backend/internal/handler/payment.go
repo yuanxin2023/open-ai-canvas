@@ -59,6 +59,7 @@ func RegisterPaymentRoutes(r *gin.RouterGroup, svc *service.Service) {
 			fail(c, http.StatusBadRequest, err)
 			return
 		}
+		request.ClientIP = c.ClientIP()
 		order, err := svc.CreatePaymentOrder(c.Request.Context(), user, request)
 		if err != nil {
 			failService(c, err)
@@ -133,7 +134,7 @@ func RegisterPaymentRoutes(r *gin.RouterGroup, svc *service.Service) {
 		if !enforceRateLimit(c, "payment-checkout-refresh:"+user.ID+":"+c.Param("id"), 5, time.Hour) {
 			return
 		}
-		order, err := svc.RefreshPaymentCheckout(c.Request.Context(), user, c.Param("id"))
+		order, err := svc.RefreshPaymentCheckout(c.Request.Context(), user, c.Param("id"), c.ClientIP())
 		if err != nil {
 			failService(c, err)
 			return
@@ -144,11 +145,14 @@ func RegisterPaymentRoutes(r *gin.RouterGroup, svc *service.Service) {
 	// Provider callbacks are intentionally unauthenticated at the application
 	// layer. Authenticity is established by the pinned provider config and raw
 	// request signature before any durable event is accepted.
-	r.POST("/payments/notify/:providerId/:configId", func(c *gin.Context) {
-		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, paymentNotificationMaxBytes)
-		rawBody, err := io.ReadAll(c.Request.Body)
+	paymentNotificationHandler := func(c *gin.Context) {
+		rawBody, err := paymentNotificationPayload(c)
 		if err != nil {
-			writePaymentNotificationFailure(c, svc, c.Param("providerId"), http.StatusBadRequest)
+			status := http.StatusBadRequest
+			if errors.Is(err, errPaymentNotificationTooLarge) {
+				status = http.StatusRequestEntityTooLarge
+			}
+			writePaymentNotificationFailure(c, svc, c.Param("providerId"), status)
 			return
 		}
 		err = svc.AcceptPaymentNotification(c.Request.Context(), c.Param("providerId"), c.Param("configId"), c.Request.Header.Clone(), rawBody)
@@ -167,7 +171,9 @@ func RegisterPaymentRoutes(r *gin.RouterGroup, svc *service.Service) {
 			return
 		}
 		c.Status(status)
-	})
+	}
+	r.GET("/payments/notify/:providerId/:configId", paymentNotificationHandler)
+	r.POST("/payments/notify/:providerId/:configId", paymentNotificationHandler)
 	r.GET("/payments/return/:providerId", func(c *gin.Context) {
 		orderID := strings.ToLower(strings.TrimSpace(c.Query("orderId")))
 		if !paymentOrderIDPattern.MatchString(orderID) {
@@ -356,6 +362,24 @@ func RegisterPaymentRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		ok(c, result)
 	})
+}
+
+var errPaymentNotificationTooLarge = errors.New("payment notification payload is too large")
+
+func paymentNotificationPayload(c *gin.Context) ([]byte, error) {
+	if c.Request.Method == http.MethodGet {
+		payload := []byte(c.Request.URL.RawQuery)
+		if len(payload) > paymentNotificationMaxBytes {
+			return nil, errPaymentNotificationTooLarge
+		}
+		return payload, nil
+	}
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, paymentNotificationMaxBytes)
+	payload, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		return nil, err
+	}
+	return payload, nil
 }
 
 func writePaymentNotificationFailure(c *gin.Context, svc *service.Service, providerID string, status int) {

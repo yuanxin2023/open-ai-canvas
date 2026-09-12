@@ -382,6 +382,21 @@ func (r *Repository) PaymentOrdersNeedingQuery(cutoff time.Time, limit int) ([]m
 	return items, err
 }
 
+func (r *Repository) RecentlyClosedPaymentOrdersNeedingQuery(providerIDs []string, closedAfter, queryCutoff time.Time, limit int) ([]model.PaymentOrder, error) {
+	if len(providerIDs) == 0 {
+		return []model.PaymentOrder{}, nil
+	}
+	if limit <= 0 || limit > 100 {
+		limit = 16
+	}
+	var items []model.PaymentOrder
+	err := r.db.Where(
+		"status = ? AND provider_id IN ? AND closed_at >= ? AND (last_queried_at IS NULL OR last_queried_at < ?)",
+		model.PaymentOrderClosed, providerIDs, closedAfter, queryCutoff,
+	).Order("last_queried_at asc, closed_at asc").Limit(limit).Find(&items).Error
+	return items, err
+}
+
 func (r *Repository) AdminPaymentOrders(status, keyword string, limit, offset int) ([]model.PaymentOrder, int64, error) {
 	var items []model.PaymentOrder
 	var total int64

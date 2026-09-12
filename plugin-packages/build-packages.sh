@@ -3,7 +3,7 @@ set -eu
 
 root_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 repo_dir=$(CDPATH= cd -- "$root_dir/.." && pwd)
-payment_plugins="official-payment-wechat-native official-payment-alipay-page"
+payment_plugins="official-payment-wechat-native official-payment-alipay-page official-payment-zpay"
 payments_only=false
 
 if [ "${1:-}" = "--payments-only" ]; then
@@ -61,6 +61,7 @@ build_payment_provider() {
 
 build_payment_provider official-payment-wechat-native ./cmd/payment-wechat
 build_payment_provider official-payment-alipay-page ./cmd/payment-alipay
+build_payment_provider official-payment-zpay ./cmd/payment-zpay
 
 package_plugin() {
   package_id=$1

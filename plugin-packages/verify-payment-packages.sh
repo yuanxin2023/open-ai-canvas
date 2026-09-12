@@ -22,7 +22,7 @@ esac
 temporary_dir=$(mktemp -d)
 trap 'rm -rf "$temporary_dir"' EXIT HUP INT TERM
 
-for package_id in official-payment-wechat-native official-payment-alipay-page; do
+for package_id in official-payment-wechat-native official-payment-alipay-page official-payment-zpay; do
   provider="$root_dir/$package_id/backend/provider"
   package_file="$root_dir/$package_id.yingce-plugin"
   archived_provider="$temporary_dir/$package_id-provider"

@@ -96,6 +96,10 @@ var systemPaymentPolicies = map[string]PluginManagementView{
 		Origin: PluginOriginSystem, Kind: PluginKindPayment,
 		ActivationScope: PluginScopeSystem, ConfigurationScope: PluginConfigurationSystem,
 	},
+	PaymentPluginZPay: {
+		Origin: PluginOriginSystem, Kind: PluginKindPayment,
+		ActivationScope: PluginScopeSystem, ConfigurationScope: PluginConfigurationSystem,
+	},
 }
 
 func pluginManagement(pluginID string, source string) PluginManagementView {

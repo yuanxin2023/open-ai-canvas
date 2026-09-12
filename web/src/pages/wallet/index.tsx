@@ -141,6 +141,7 @@ export default function WalletPage() {
 
     const selectedProduct = useMemo(() => paymentProducts.find((item) => item.id === selectedProductId), [paymentProducts, selectedProductId]);
     const selectedProvider = useMemo(() => paymentProviders.find((item) => item.id === selectedProviderId), [paymentProviders, selectedProviderId]);
+    const activeOrderProvider = useMemo(() => paymentProviders.find((item) => item.id === paymentOrder?.providerId), [paymentOrder?.providerId, paymentProviders]);
 
     useEffect(() => {
         paymentIdempotencyKey.current = "";
@@ -520,9 +521,13 @@ export default function WalletPage() {
                 footer={
                     paymentOrder?.status === "pending"
                         ? [
-                              <Button key="close" danger disabled={paymentQuerying} onClick={() => void cancelPayment()}>
-                                  关闭订单
-                              </Button>,
+                              ...(activeOrderProvider?.supportsClose
+                                  ? [
+                                        <Button key="close" danger disabled={paymentQuerying} onClick={() => void cancelPayment()}>
+                                            关闭订单
+                                        </Button>,
+                                    ]
+                                  : []),
                               <Button key="query" type="primary" loading={paymentQuerying} onClick={() => void confirmPayment()}>
                                   我已完成支付
                               </Button>,
@@ -646,7 +651,8 @@ function ledgerTitle(entry: CreditLedgerEntry) {
 
 function PaymentBrandIcon({ providerId, size = "normal" }: { providerId: string; size?: "normal" | "large" }) {
     const className = size === "large" ? "text-3xl" : "text-xl";
-    if (providerId === "wechat-native") return <WechatFilled className={`${className} text-[#07C160]`} aria-label="微信支付" />;
+    if (providerId === "wechat-native" || providerId === "zpay-wechat-qr") return <WechatFilled className={`${className} text-[#07C160]`} aria-label="微信支付" />;
+    if (providerId === "alipay-page-pay" || providerId === "zpay-alipay-qr") return <AlipayCircleFilled className={`${className} text-[#1677ff]`} aria-label="支付宝支付" />;
     return <CreditCard className={`${className} text-foreground/60`} aria-label="支付" />;
 }
 
