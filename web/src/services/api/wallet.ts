@@ -24,6 +24,14 @@ export type CreditLedgerEntry = {
     scene?: string;
     note?: string;
     createdAt: string;
+    billingMode?: "fixed_request" | "per_second" | "token";
+    reservedAmountMicrocredits?: number;
+    actualAmountMicrocredits?: number;
+    refundedAmountMicrocredits?: number;
+    inputTokens?: number;
+    outputTokens?: number;
+    cachedTokens?: number;
+    usageAvailable?: boolean;
 };
 
 export type WalletSummary = {

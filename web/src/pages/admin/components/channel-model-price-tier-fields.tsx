@@ -91,24 +91,24 @@ export function PriceTierFields({
                         {billingMode === "token" ? (
                             isVideo ? (
                                 <Form.Item className="admin-price-tier-unit-price mb-0" name={[index, "outputTokenPrice"]} label="视频 / 百万 Token" rules={[{ required: true, message: "请输入视频 Token 价格" }]}>
-                                    <InputNumber className="w-full" min={0.000001} max={1_000_000} precision={6} step={0.1} />
+                                    <InputNumber className="w-full" min={0.01} max={1_000_000} precision={2} step={0.01} />
                                 </Form.Item>
                             ) : (
                                 <div className="admin-price-tier-token-grid">
                                     <Form.Item className="mb-0" name={[index, "inputTokenPrice"]} label="输入 / 百万 Token" rules={[{ required: true, message: "请输入输入价格" }]}>
-                                        <InputNumber className="w-full" min={0} max={1_000_000} precision={6} step={0.1} />
+                                        <InputNumber className="w-full" min={0} max={1_000_000} precision={2} step={0.01} />
                                     </Form.Item>
                                     <Form.Item className="mb-0" name={[index, "outputTokenPrice"]} label="输出 / 百万 Token" rules={[{ required: true, message: "请输入输出价格" }]}>
-                                        <InputNumber className="w-full" min={0} max={1_000_000} precision={6} step={0.1} />
+                                        <InputNumber className="w-full" min={0} max={1_000_000} precision={2} step={0.01} />
                                     </Form.Item>
                                     <Form.Item className="mb-0" name={[index, "cachedTokenPrice"]} label="缓存 / 百万 Token" rules={[{ required: true, message: "请输入缓存价格" }]}>
-                                        <InputNumber className="w-full" min={0} max={1_000_000} precision={6} step={0.1} />
+                                        <InputNumber className="w-full" min={0} max={1_000_000} precision={2} step={0.01} />
                                     </Form.Item>
                                 </div>
                             )
                         ) : (
                             <Form.Item className="admin-price-tier-unit-price mb-0" name={[index, "unitPrice"]} label={billingMode === "per_second" ? "每秒消耗积分" : "每次消耗积分"} rules={[{ required: true, message: "请输入积分价格" }]}>
-                                <InputNumber className="w-full" min={0} max={1_000_000} precision={6} step={0.1} />
+                                <InputNumber className="w-full" min={0} max={1_000_000} precision={2} step={0.01} />
                             </Form.Item>
                         )}
                     </div>

@@ -311,13 +311,13 @@ export default function WalletPage() {
                         <div className="flex min-w-0 items-center gap-3">
                             <div className="min-w-0">
                                 <h1 className="text-[var(--fs-heading-lg)] font-semibold leading-7">积分中心</h1>
-                                <p className="mt-1 text-xs leading-5 text-foreground/58">模型调用、冻结与退款都在同一条可追溯流水中。</p>
+                                <p className="mt-1 text-xs leading-5 text-foreground/58">模型消费按实际扣费展示，预授权与差额退回可在详情中核对。</p>
                             </div>
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
                             <span className="app-projects-header-meta wallet-credit-meta">
                                 <Coins className="size-3" />
-                                可用 {formatCredits(account?.availableMicrocredits || 0, 6)}
+                                可用 {formatCredits(account?.availableMicrocredits || 0)}
                             </span>
                             <Button
                                 className="library-primary-action"
@@ -350,7 +350,7 @@ export default function WalletPage() {
                                     </div>
                                 </div>
                                 <div className="wallet-balance-number">
-                                    <strong>{formatCredits(account?.availableMicrocredits || 0, 6)}</strong>
+                                    <strong>{formatCredits(account?.availableMicrocredits || 0)}</strong>
                                     <span>积分</span>
                                 </div>
                             </div>
@@ -440,7 +440,7 @@ export default function WalletPage() {
                                         >
                                             <div className="font-medium">{product.name}</div>
                                             <div className="mt-1 text-xs text-foreground/48">
-                                                {formatCredits(product.creditsMicrocredits, 6)} 积分 · ¥ {(product.amountFen / 100).toFixed(2)}
+                                                {formatCredits(product.creditsMicrocredits)} 积分 · ¥ {(product.amountFen / 100).toFixed(2)}
                                             </div>
                                         </button>
                                     ))}
@@ -490,7 +490,18 @@ export default function WalletPage() {
 
                     {screens.md ? (
                         <TableSurface className="mt-0 rounded-xl border-border/70 bg-transparent">
-                            <Table className="app-data-table wallet-ledger-table" rowKey="id" size="middle" loading={loading} columns={columns} dataSource={entries} pagination={false} tableLayout="fixed" scroll={{ x: 990 }} />
+                            <Table
+                                className="app-data-table wallet-ledger-table"
+                                rowKey="id"
+                                size="middle"
+                                loading={loading}
+                                columns={columns}
+                                dataSource={entries}
+                                pagination={false}
+                                tableLayout="fixed"
+                                scroll={{ x: 990 }}
+                                expandable={{ columnTitle: "详情", columnWidth: 64, expandRowByClick: true, rowExpandable: hasBillingDetails, expandedRowRender: (entry) => <BillingLedgerDetails entry={entry} /> }}
+                            />
                         </TableSurface>
                     ) : (
                         <div className="grid gap-1 overflow-hidden rounded-md bg-transparent">
@@ -556,7 +567,7 @@ export default function WalletPage() {
                         </div>
                         <div className="mt-3 text-lg font-semibold">¥ {(paymentOrder.amountFen / 100).toFixed(2)}</div>
                         <div className="mt-1 text-xs text-foreground/48">
-                            {paymentOrder.productName} · {formatCredits(paymentOrder.creditsMicrocredits, 6)} 积分
+                            {paymentOrder.productName} · {formatCredits(paymentOrder.creditsMicrocredits)} 积分
                         </div>
                         {paymentOrder.status === "pending" && paymentOrder.checkout.mode === "qr_code" && paymentOrder.checkout.value ? (
                             <div className="mt-5 flex flex-col items-center">
@@ -579,7 +590,7 @@ function BalanceMetric({ label, description, value, icon }: { label: string; des
             <span className="wallet-balance-metric-icon">{icon}</span>
             <div>
                 <span>{label}</span>
-                <strong>{formatCredits(value, 6)}</strong>
+                <strong>{formatCredits(value)}</strong>
                 <small>{description}</small>
             </div>
         </div>
@@ -600,8 +611,41 @@ function LedgerMobileRow({ config, entry }: { config: AiConfig; entry: CreditLed
                     <CreditDelta value={entry.amountMicrocredits} />
                 </div>
                 <div className="mt-2 line-clamp-2 break-words text-xs leading-5 text-foreground/55">{[sceneLabel(entry.scene), entry.note].filter(Boolean).join(" · ") || meta.label}</div>
+                {hasBillingDetails(entry) ? (
+                    <details className="mt-3 text-xs text-foreground/60">
+                        <summary className="cursor-pointer font-medium text-foreground/70">查看计费详情</summary>
+                        <BillingLedgerDetails entry={entry} />
+                    </details>
+                ) : null}
             </div>
         </article>
+    );
+}
+
+function hasBillingDetails(entry: CreditLedgerEntry) {
+    return entry.type === "consume" && Boolean(entry.billingOrderId);
+}
+
+function BillingLedgerDetails({ entry }: { entry: CreditLedgerEntry }) {
+    const reserved = entry.reservedAmountMicrocredits ?? 0;
+    const actual = entry.actualAmountMicrocredits || Math.abs(entry.amountMicrocredits);
+    const refunded = entry.refundedAmountMicrocredits ?? Math.max(0, reserved - actual);
+    return (
+        <div className="grid gap-3 py-2 sm:grid-cols-2 lg:grid-cols-4">
+            <LedgerDetail label="预授权" value={`${formatCredits(reserved)} 积分`} />
+            <LedgerDetail label="实际消费" value={`${formatCredits(actual)} 积分`} />
+            <LedgerDetail label="差额退回" value={`${formatCredits(refunded)} 积分`} />
+            <LedgerDetail label="Token 用量" value={entry.usageAvailable ? `输入 ${entry.inputTokens || 0} · 输出 ${entry.outputTokens || 0} · 缓存 ${entry.cachedTokens || 0}` : "上游未返回用量"} />
+        </div>
+    );
+}
+
+function LedgerDetail({ label, value }: { label: string; value: string }) {
+    return (
+        <div className="rounded-md bg-foreground/[.035] px-3 py-2.5">
+            <div className="text-xs text-foreground/45">{label}</div>
+            <div className="mt-1 font-medium tabular-nums text-foreground/80">{value}</div>
+        </div>
     );
 }
 
@@ -610,7 +654,7 @@ function CreditDelta({ value }: { value: number }) {
     return (
         <span className={`shrink-0 font-medium tabular-nums ${colorClass}`}>
             {value > 0 ? "+" : ""}
-            {formatCredits(value, 6)}
+            {formatCredits(value)}
         </span>
     );
 }

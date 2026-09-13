@@ -232,7 +232,7 @@ export function CanvasTopBar({
                                 aria-label="查看积分明细"
                             >
                                 {refreshing && availableMicrocredits === null ? <LoaderCircle className="size-3.5 animate-spin opacity-60" style={{ color: theme.accent.primary }} /> : <Coins className="size-3.5" style={{ color: theme.accent.primary }} />}
-                                <span>{availableMicrocredits === null ? "--" : (availableMicrocredits / 1_000_000).toLocaleString("zh-CN", { maximumFractionDigits: 3 })}</span>
+                                <span>{availableMicrocredits === null ? "--" : (availableMicrocredits / 1_000_000).toLocaleString("zh-CN", { maximumFractionDigits: 2 })}</span>
                             </Link>
                         </CanvasTopBarTooltip>
                     ) : null}

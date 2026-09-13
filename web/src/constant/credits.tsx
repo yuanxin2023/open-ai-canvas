@@ -11,6 +11,9 @@ export function CreditSymbol({ className, ...props }: ComponentProps<"span">) {
     );
 }
 
-export function formatCredits(value: number, maximumFractionDigits = 6) {
+export const CREDIT_FRACTION_DIGITS = 2;
+export const MICRO_CREDITS_PER_CREDIT = 1_000_000;
+
+export function formatCredits(value: number, maximumFractionDigits = CREDIT_FRACTION_DIGITS) {
     return (value / 1_000_000).toLocaleString("zh-CN", { maximumFractionDigits });
 }

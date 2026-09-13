@@ -643,6 +643,9 @@ func (s *Service) logicalModelBundle(actor *model.User, id string, req LogicalMo
 	if req.UnitPriceMicrocredits < 0 || req.InputPriceMicrocredits < 0 || req.OutputPriceMicrocredits < 0 || req.CachedPriceMicrocredits < 0 {
 		return nil, nil, nil, false, BadAuthRequest("用户价格不能为负数")
 	}
+	if !validCreditPrecision(req.UnitPriceMicrocredits) || !validCreditPrecision(req.InputPriceMicrocredits) || !validCreditPrecision(req.OutputPriceMicrocredits) || !validCreditPrecision(req.CachedPriceMicrocredits) {
+		return nil, nil, nil, false, BadAuthRequest("用户价格最多保留 2 位小数")
+	}
 	pricePolicy := strings.TrimSpace(req.PricePolicy)
 	if pricePolicy != "channel" && pricePolicy != "unified" {
 		return nil, nil, nil, false, BadAuthRequest("请选择跟随供应价格或统一定价")

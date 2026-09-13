@@ -55,7 +55,7 @@ func (s *Service) QuoteLogicalModel(logicalModelID string, intent ModelRequestIn
 	switch routed.LogicalModel.BillingMode {
 	case "fixed_request":
 		quantity = 1
-		amount = routed.LogicalModel.UnitPriceMicrocredits
+		amount, err = creditAmount(routed.LogicalModel.UnitPriceMicrocredits, quantity, 10_000)
 	case "per_second":
 		if capability != "video" || quantity <= 0 {
 			return nil, BadAuthRequest("当前模型按时长计费，但请求未提供有效时长")

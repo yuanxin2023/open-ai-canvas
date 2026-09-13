@@ -442,7 +442,7 @@ function CreateRedeemBatchDrawer({
                     <section className="admin-redemption-drawer-section">
                         <div className="admin-redemption-drawer-section-heading">
                             <h3>批次参数</h3>
-                            <p>积分最多保留 6 位小数；单批最多生成 5,000 个兑换码。</p>
+                            <p>积分最多保留 2 位小数；单批最多生成 5,000 个兑换码。</p>
                         </div>
                         <div className="admin-redemption-form-grid">
                             <Form.Item
@@ -459,7 +459,7 @@ function CreateRedeemBatchDrawer({
                                     },
                                 ]}
                             >
-                                <InputNumber className="w-full" min={0.000001} precision={6} placeholder="例如 10" />
+                                <InputNumber className="w-full" min={0.01} precision={2} placeholder="例如 10" />
                             </Form.Item>
                             <Form.Item
                                 name="count"

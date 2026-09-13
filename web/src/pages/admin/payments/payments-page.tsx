@@ -682,12 +682,12 @@ export default function AdminPaymentsPage() {
                                     validator: (_, value) => {
                                         const credits = Number(value);
                                         const microcredits = Math.round(credits * 1_000_000);
-                                        return Number.isFinite(credits) && credits > 0 && credits <= 1_000_000_000 && Number.isSafeInteger(microcredits) ? Promise.resolve() : Promise.reject(new Error("请输入 0.000001 至 10 亿之间且可安全处理的积分"));
+                                        return Number.isFinite(credits) && credits >= 0.01 && credits <= 1_000_000_000 && Number.isSafeInteger(microcredits) ? Promise.resolve() : Promise.reject(new Error("请输入 0.01 至 10 亿之间且可安全处理的积分"));
                                     },
                                 },
                             ]}
                         >
-                            <InputNumber min={0.000001} max={1_000_000_000} precision={6} className="w-full" />
+                            <InputNumber min={0.01} max={1_000_000_000} precision={2} className="w-full" />
                         </Form.Item>
                     </div>
                     <Form.Item name="sortOrder" label="排序" rules={[{ required: true }]}>

@@ -67,7 +67,7 @@ export function priceTierSummaryLabel(tiers: ModelPriceTier[]) {
 
 export function formatPriceRange(values: number[], suffix: string) {
     const unique = Array.from(new Set(values)).sort((left, right) => left - right);
-    const format = (value: number) => value.toLocaleString("zh-CN", { maximumFractionDigits: 3 });
+    const format = (value: number) => value.toLocaleString("zh-CN", { maximumFractionDigits: 2 });
     return unique.length === 1 ? `${format(unique[0])} ${suffix}` : `${format(unique[0])}-${format(unique[unique.length - 1])} ${suffix}`;
 }
 

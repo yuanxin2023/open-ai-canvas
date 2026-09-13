@@ -372,9 +372,25 @@ func (r *Repository) CreditAccounts(userIDs []string) ([]model.CreditAccount, er
 }
 
 func (r *Repository) CreditLedger(userID string, entryType string, limit int, offset int) ([]model.CreditLedgerEntry, int64, error) {
+	return r.creditLedger(userID, entryType, limit, offset, false)
+}
+
+// WalletCreditLedger keeps audit rows intact while presenting settled billing as one user-facing consumption row.
+func (r *Repository) WalletCreditLedger(userID string, entryType string, limit int, offset int) ([]model.CreditLedgerEntry, int64, error) {
+	return r.creditLedger(userID, entryType, limit, offset, true)
+}
+
+func (r *Repository) creditLedger(userID string, entryType string, limit int, offset int, walletView bool) ([]model.CreditLedgerEntry, int64, error) {
 	var items []model.CreditLedgerEntry
 	var total int64
 	query := r.db.Model(&model.CreditLedgerEntry{}).Where("user_id = ? AND type <> ?", userID, model.CreditLedgerReserve)
+	if walletView {
+		query = query.Where(`NOT (type = ? AND billing_order_id <> '' AND EXISTS (
+			SELECT 1 FROM billing_orders
+			WHERE billing_orders.id = credit_ledger_entries.billing_order_id
+			AND billing_orders.status = ?
+		))`, model.CreditLedgerRefund, model.BillingStatusSettled)
+	}
 	switch entryType {
 	case "income":
 		query = query.Where("type IN ?", []model.CreditLedgerType{model.CreditLedgerRedeem, model.CreditLedgerAdminGrant, model.CreditLedgerAdminAdjust, model.CreditLedgerSignupBonus, model.CreditLedgerCheckinBonus})
@@ -392,8 +408,56 @@ func (r *Repository) CreditLedger(userID string, entryType string, limit int, of
 	if offset < 0 {
 		offset = 0
 	}
-	err := query.Order("created_at desc").Limit(limit).Offset(offset).Find(&items).Error
-	return items, total, err
+	if err := query.Order("created_at desc").Limit(limit).Offset(offset).Find(&items).Error; err != nil {
+		return nil, 0, err
+	}
+	if walletView {
+		if err := r.enrichWalletLedgerBilling(items); err != nil {
+			return nil, 0, err
+		}
+	}
+	return items, total, nil
+}
+
+func (r *Repository) enrichWalletLedgerBilling(items []model.CreditLedgerEntry) error {
+	ids := make([]string, 0, len(items))
+	seen := make(map[string]struct{}, len(items))
+	for _, item := range items {
+		if item.BillingOrderID == "" {
+			continue
+		}
+		if _, exists := seen[item.BillingOrderID]; exists {
+			continue
+		}
+		seen[item.BillingOrderID] = struct{}{}
+		ids = append(ids, item.BillingOrderID)
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	var orders []model.BillingOrder
+	if err := r.db.Where("id IN ?", ids).Find(&orders).Error; err != nil {
+		return err
+	}
+	byID := make(map[string]model.BillingOrder, len(orders))
+	for _, order := range orders {
+		byID[order.ID] = order
+	}
+	for index := range items {
+		order, exists := byID[items[index].BillingOrderID]
+		if !exists {
+			continue
+		}
+		items[index].BillingMode = order.BillingMode
+		items[index].ReservedAmountMicrocredits = order.ReservedAmountMicrocredits
+		items[index].ActualAmountMicrocredits = order.ActualAmountMicrocredits
+		items[index].RefundedAmountMicrocredits = order.RefundedAmountMicrocredits
+		items[index].InputTokens = order.InputTokens
+		items[index].OutputTokens = order.OutputTokens
+		items[index].CachedTokens = order.CachedTokens
+		items[index].UsageAvailable = order.UsageAvailable
+	}
+	return nil
 }
 
 func (r *Repository) CreditLedgerReferenceExists(referenceKey string) (bool, error) {
@@ -1019,7 +1083,12 @@ func tokenUsageAmount(order model.BillingOrder, usage *BillingUsage) (int64, err
 	if order.MultiplierBasisPoints <= 0 || base > (1<<63-1-9_999_999_999)/order.MultiplierBasisPoints {
 		return 0, errors.New("invalid token usage amount")
 	}
-	return (base*order.MultiplierBasisPoints + 9_999_999_999) / 10_000_000_000, nil
+	amount := (base*order.MultiplierBasisPoints + 9_999_999_999) / 10_000_000_000
+	const creditQuantumMicrocredits int64 = 10_000
+	if amount > (1<<63-1)-(creditQuantumMicrocredits-1) {
+		return 0, errors.New("invalid token usage amount")
+	}
+	return ((amount + creditQuantumMicrocredits - 1) / creditQuantumMicrocredits) * creditQuantumMicrocredits, nil
 }
 
 func safeTokenUsageProduct(tokens int64, price int64) (int64, bool) {

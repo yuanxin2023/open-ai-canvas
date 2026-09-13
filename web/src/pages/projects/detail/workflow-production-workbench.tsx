@@ -184,7 +184,7 @@ export default function WorkflowProductionWorkbench(props: Props) {
     const quoteRequestKey = JSON.stringify(quoteRequest || null);
     const [quotedCredits, setQuotedCredits] = useState<number | null>(null);
     const generationCredits = quotedCredits ?? configuredCredits;
-    const formattedGenerationCredits = generationCredits?.toLocaleString("zh-CN", { maximumFractionDigits: 6 });
+    const formattedGenerationCredits = generationCredits?.toLocaleString("zh-CN", { maximumFractionDigits: 2 });
     const modelSummary = routedModel ? modelDisplayName(effectiveConfig, routedModel) : "未选择模型";
     const durationSummary = `${Number(watchedDuration || Math.max(0.5, (selectedShot?.durationMs || 3000) / 1000))}s`;
     const resolutionSummary = generationCapability === "video" ? formatVideoResolutionLabel(resolution) : imageQuality.toUpperCase();

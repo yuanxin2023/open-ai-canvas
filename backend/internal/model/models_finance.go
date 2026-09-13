@@ -30,6 +30,14 @@ type CreditLedgerEntry struct {
 	Note                       string           `json:"note,omitempty" gorm:"size:500"`
 	ReferenceKey               *string          `json:"referenceKey,omitempty" gorm:"size:180;uniqueIndex"`
 	CreatedAt                  time.Time        `json:"createdAt" gorm:"index:idx_credit_ledger_user_created,priority:2"`
+	BillingMode                string           `json:"billingMode,omitempty" gorm:"-"`
+	ReservedAmountMicrocredits int64            `json:"reservedAmountMicrocredits,omitempty" gorm:"-"`
+	ActualAmountMicrocredits   int64            `json:"actualAmountMicrocredits,omitempty" gorm:"-"`
+	RefundedAmountMicrocredits int64            `json:"refundedAmountMicrocredits,omitempty" gorm:"-"`
+	InputTokens                int64            `json:"inputTokens,omitempty" gorm:"-"`
+	OutputTokens               int64            `json:"outputTokens,omitempty" gorm:"-"`
+	CachedTokens               int64            `json:"cachedTokens,omitempty" gorm:"-"`
+	UsageAvailable             bool             `json:"usageAvailable,omitempty" gorm:"-"`
 }
 
 type BillingOrder struct {

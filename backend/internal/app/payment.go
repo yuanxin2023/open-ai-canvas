@@ -438,7 +438,10 @@ func topupProductFromRequest(id, actorID string, request TopupProductRequest) (*
 		return nil, BadAuthRequest("充值金额必须为 1 分至 100 万元")
 	}
 	if request.CreditsMicrocredits <= 0 || request.CreditsMicrocredits > maxTopupCreditsMicrocredits {
-		return nil, BadAuthRequest("充值积分必须为 0.000001 至 10 亿积分")
+		return nil, BadAuthRequest("充值积分必须为 0.01 至 10 亿积分")
+	}
+	if !validCreditPrecision(request.CreditsMicrocredits) {
+		return nil, BadAuthRequest("充值积分最多保留 2 位小数")
 	}
 	return &model.TopupProduct{
 		ID: id, Name: name, Description: truncateRunes(strings.TrimSpace(request.Description), 500),

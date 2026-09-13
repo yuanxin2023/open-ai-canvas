@@ -19,8 +19,18 @@ func TestTokenUsageAmountSettlesArkVideoCompletionTokens(t *testing.T) {
 	if err != nil {
 		t.Fatalf("tokenUsageAmount() error = %v", err)
 	}
-	if amount != 1_742_400 {
+	if amount != 1_750_000 {
 		t.Fatalf("tokenUsageAmount() = %d", amount)
+	}
+}
+
+func TestTokenUsageAmountChargesMinimumCent(t *testing.T) {
+	amount, err := tokenUsageAmount(model.BillingOrder{Capability: "video", OutputTokenPriceMicrocredits: 10_000, MultiplierBasisPoints: 10_000}, &BillingUsage{OutputTokens: 1})
+	if err != nil {
+		t.Fatalf("tokenUsageAmount() error = %v", err)
+	}
+	if amount != 10_000 {
+		t.Fatalf("tokenUsageAmount() = %d, want 10000", amount)
 	}
 }
 
@@ -62,7 +72,7 @@ func TestSettleArkVideoTokenOrderFromPollUsage(t *testing.T) {
 	if err := db.AutoMigrate(&model.CreditAccount{}, &model.BillingOrder{}, &model.ApiCallLog{}, &model.CreditLedgerEntry{}); err != nil {
 		t.Fatal(err)
 	}
-	const reserved = int64(1_916_640)
+	const reserved = int64(1_920_000)
 	if err := db.Create(&model.CreditAccount{UserID: "user-1", ReservedMicrocredits: reserved}).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -88,14 +98,14 @@ func TestSettleArkVideoTokenOrderFromPollUsage(t *testing.T) {
 	if err := db.First(&order, "id = ?", "order-1").Error; err != nil {
 		t.Fatal(err)
 	}
-	if order.Status != model.BillingStatusSettled || order.ActualAmountMicrocredits != 1_742_400 || order.RefundedAmountMicrocredits != 174_240 {
+	if order.Status != model.BillingStatusSettled || order.ActualAmountMicrocredits != 1_750_000 || order.RefundedAmountMicrocredits != 170_000 {
 		t.Fatalf("settled order = %#v", order)
 	}
 	var account model.CreditAccount
 	if err := db.First(&account, "user_id = ?", "user-1").Error; err != nil {
 		t.Fatal(err)
 	}
-	if account.AvailableMicrocredits != 174_240 || account.ReservedMicrocredits != 0 {
+	if account.AvailableMicrocredits != 170_000 || account.ReservedMicrocredits != 0 {
 		t.Fatalf("settled account = %#v", account)
 	}
 }
@@ -109,8 +119,8 @@ func TestSettleArkVideoTokenOrderSupplementsUnderreservation(t *testing.T) {
 		t.Fatal(err)
 	}
 	const (
-		reserved   = int64(3_049_738)
-		actual     = int64(3_115_222)
+		reserved   = int64(3_050_000)
+		actual     = int64(3_120_000)
 		supplement = actual - reserved
 	)
 	if err := db.Create(&model.CreditAccount{UserID: "user-1", AvailableMicrocredits: 1_000_000, ReservedMicrocredits: reserved}).Error; err != nil {
@@ -165,7 +175,7 @@ func TestSettleArkVideoTokenOrderAllowsNegativeBalance(t *testing.T) {
 	if err := db.AutoMigrate(&model.CreditAccount{}, &model.BillingOrder{}, &model.ApiCallLog{}, &model.CreditLedgerEntry{}); err != nil {
 		t.Fatal(err)
 	}
-	const reserved = int64(3_049_738)
+	const reserved = int64(3_050_000)
 	if err := db.Create(&model.CreditAccount{UserID: "user-1", AvailableMicrocredits: 10_000, ReservedMicrocredits: reserved}).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -192,21 +202,21 @@ func TestSettleArkVideoTokenOrderAllowsNegativeBalance(t *testing.T) {
 	if err := db.First(&order, "id = ?", "order-1").Error; err != nil {
 		t.Fatal(err)
 	}
-	if order.Status != model.BillingStatusSettled || order.ActualAmountMicrocredits != 3_115_222 || order.OutputTokens != 171_166 || !order.UsageAvailable {
+	if order.Status != model.BillingStatusSettled || order.ActualAmountMicrocredits != 3_120_000 || order.OutputTokens != 171_166 || !order.UsageAvailable {
 		t.Fatalf("settled order = %#v", order)
 	}
 	var account model.CreditAccount
 	if err := db.First(&account, "user_id = ?", "user-1").Error; err != nil {
 		t.Fatal(err)
 	}
-	if account.AvailableMicrocredits != -55_484 || account.ReservedMicrocredits != 0 {
+	if account.AvailableMicrocredits != -60_000 || account.ReservedMicrocredits != 0 {
 		t.Fatalf("settled account = %#v", account)
 	}
 	var entry model.CreditLedgerEntry
 	if err := db.First(&entry, "billing_order_id = ? AND type = ?", "order-1", model.CreditLedgerConsume).Error; err != nil {
 		t.Fatal(err)
 	}
-	if entry.AvailableAfterMicrocredits != -55_484 || entry.AvailableDeltaMicrocredits != -65_484 {
+	if entry.AvailableAfterMicrocredits != -60_000 || entry.AvailableDeltaMicrocredits != -70_000 {
 		t.Fatalf("consume entry = %#v", entry)
 	}
 }

@@ -312,7 +312,7 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
 
     const renderSubmitButton = (expanded: boolean) => {
         const showCost = creditsEnabled && credits !== null;
-        const formattedCredits = credits?.toLocaleString("zh-CN", { maximumFractionDigits: 6 });
+        const formattedCredits = credits?.toLocaleString("zh-CN", { maximumFractionDigits: 2 });
         const actionLabel = isRunning ? "生成中" : showCost ? `预计消耗 ${formattedCredits} 积分，生成` : "生成";
         return (
             <Button

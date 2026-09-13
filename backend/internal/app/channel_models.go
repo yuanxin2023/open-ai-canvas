@@ -583,6 +583,9 @@ func validateChannelModelTierPricing(capability string, protocol model.ChannelIn
 	if input.UnitPriceMicrocredits < 0 || input.InputTokenPriceMicrocredits < 0 || input.OutputTokenPriceMicrocredits < 0 || input.CachedTokenPriceMicrocredits < 0 {
 		return BadAuthRequest("模型积分价格不能小于 0")
 	}
+	if !validCreditPrecision(input.UnitPriceMicrocredits) || !validCreditPrecision(input.InputTokenPriceMicrocredits) || !validCreditPrecision(input.OutputTokenPriceMicrocredits) || !validCreditPrecision(input.CachedTokenPriceMicrocredits) {
+		return BadAuthRequest("模型积分价格最多保留 2 位小数")
+	}
 	if !input.PriceConfigured {
 		return nil
 	}

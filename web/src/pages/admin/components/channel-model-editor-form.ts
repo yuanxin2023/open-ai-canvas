@@ -90,6 +90,6 @@ export function validateChannelModelPrices(values: Pick<ChannelModelFormValues, 
         }
         const prices = tier.billingMode !== "token" ? [tier.unitPrice] : capability === "video" ? [tier.outputTokenPrice] : [tier.inputTokenPrice, tier.outputTokenPrice, tier.cachedTokenPrice];
         if (prices.some((price) => typeof price !== "number" || !Number.isFinite(price) || price < 0 || price > 1_000_000)) fail("积分价格必须是 0 到 1000000 之间的有效数值");
-        if (tier.billingMode === "token" && capability === "video" && tier.outputTokenPrice < 0.000001) fail("视频 Token 价格必须至少为 0.000001");
+        if (tier.billingMode === "token" && capability === "video" && tier.outputTokenPrice < 0.01) fail("视频 Token 价格必须至少为 0.01");
     });
 }

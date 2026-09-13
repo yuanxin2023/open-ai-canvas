@@ -497,7 +497,7 @@ export default function CreditOperationsPanel({ users, activeOperation, onOperat
                         <section className="admin-credit-drawer-section">
                             <div className="admin-credit-drawer-section-heading">
                                 <h3>基础规则</h3>
-                                <p>积分支持最多 6 位小数，倍率支持最多 4 位小数。</p>
+                                <p>积分支持最多 2 位小数，倍率支持最多 4 位小数。</p>
                             </div>
                             <div className="admin-credit-policy-grid">
                                 <Form.Item
@@ -508,7 +508,7 @@ export default function CreditOperationsPanel({ users, activeOperation, onOperat
                                         { type: "number", min: 0, max: 1_000_000, message: "请输入 0–1,000,000" },
                                     ]}
                                 >
-                                    <InputNumber className="w-full" min={0} max={1_000_000} precision={6} />
+                                    <InputNumber className="w-full" min={0} max={1_000_000} precision={2} />
                                 </Form.Item>
                                 <Form.Item
                                     name="checkinBonus"
@@ -518,7 +518,7 @@ export default function CreditOperationsPanel({ users, activeOperation, onOperat
                                         { type: "number", min: 0, max: 100_000, message: "请输入 0–100,000" },
                                     ]}
                                 >
-                                    <InputNumber className="w-full" min={0} max={100_000} precision={6} />
+                                    <InputNumber className="w-full" min={0} max={100_000} precision={2} />
                                 </Form.Item>
                                 <Form.Item
                                     name="defaultMultiplier"
@@ -637,7 +637,7 @@ export default function CreditOperationsPanel({ users, activeOperation, onOperat
                                 },
                             ]}
                         >
-                            <InputNumber className="w-full" precision={6} prefix={<Coins className="size-3.5 text-foreground/45" />} placeholder="例如 10 或 -2" />
+                            <InputNumber className="w-full" precision={2} prefix={<Coins className="size-3.5 text-foreground/45" />} placeholder="例如 10 或 -2.50" />
                         </Form.Item>
                         <Form.Item name="note" label="调整原因" rules={[{ required: true, whitespace: true, message: "请填写工单号或处理依据" }]}>
                             <Input.TextArea rows={4} maxLength={500} showCount placeholder="例如：工单 YC-20260828，补偿失败任务费用" />

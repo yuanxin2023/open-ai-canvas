@@ -35,6 +35,9 @@ func validateCreditPolicy(policy CreditPolicy) error {
 	if policy.SignupBonusMicrocredits < 0 || policy.CheckinBonusMicrocredits < 0 {
 		return BadAuthRequest("注册和签到奖励不能小于 0")
 	}
+	if !validCreditPrecision(policy.SignupBonusMicrocredits) || !validCreditPrecision(policy.CheckinBonusMicrocredits) {
+		return BadAuthRequest("注册和签到奖励最多保留 2 位小数")
+	}
 	if policy.SignupBonusMicrocredits > 1_000_000*CreditScale || policy.CheckinBonusMicrocredits > 100_000*CreditScale {
 		return BadAuthRequest("积分奖励超出允许范围")
 	}
@@ -164,5 +167,5 @@ func creditAmount(unitPrice int64, quantity int64, multiplierBPS int64) (int64, 
 	if amount < 0 {
 		return 0, fmt.Errorf("积分计费金额无效：%d", amount)
 	}
-	return amount, nil
+	return roundCreditAmountUp(amount)
 }

@@ -74,8 +74,8 @@ func TestRestoreRefundedBillingOrderUsesObservedTokenAmount(t *testing.T) {
 	}
 	if err := db.Create(&model.BillingOrder{
 		ID: "order-1", UserID: "user-1", IdempotencyKey: "task:task-1", TaskID: "task-1",
-		Capability: "video", BillingMode: "token", AmountMicrocredits: 1_916_640,
-		ReservedAmountMicrocredits: 1_916_640, RefundedAmountMicrocredits: 1_916_640,
+		Capability: "video", BillingMode: "token", AmountMicrocredits: 1_920_000,
+		ReservedAmountMicrocredits: 1_920_000, RefundedAmountMicrocredits: 1_920_000,
 		OutputTokenPriceMicrocredits: 16_000_000, MultiplierBasisPoints: 10_000,
 		Status: model.BillingStatusRefunded, RefundedAt: &now,
 	}).Error; err != nil {
@@ -96,14 +96,14 @@ func TestRestoreRefundedBillingOrderUsesObservedTokenAmount(t *testing.T) {
 	if err := db.First(&order, "id = ?", "order-1").Error; err != nil {
 		t.Fatal(err)
 	}
-	if order.ActualAmountMicrocredits != 1_742_400 || order.RefundedAmountMicrocredits != 174_240 || order.OutputTokens != 108900 || !order.UsageAvailable {
+	if order.ActualAmountMicrocredits != 1_750_000 || order.RefundedAmountMicrocredits != 170_000 || order.OutputTokens != 108900 || !order.UsageAvailable {
 		t.Fatalf("restored token order = %#v", order)
 	}
 	var account model.CreditAccount
 	if err := db.First(&account, "user_id = ?", "user-1").Error; err != nil {
 		t.Fatal(err)
 	}
-	if account.AvailableMicrocredits != -1_642_400 {
-		t.Fatalf("available balance = %d, want -1642400", account.AvailableMicrocredits)
+	if account.AvailableMicrocredits != -1_650_000 {
+		t.Fatalf("available balance = %d, want -1650000", account.AvailableMicrocredits)
 	}
 }

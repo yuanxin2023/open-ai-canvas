@@ -61,8 +61,18 @@ func TestTokenEstimateAmountAllowsVideoOutputOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("tokenEstimateAmount() error = %v", err)
 	}
-	if amount != 1_916_640 {
+	if amount != 1_920_000 {
 		t.Fatalf("tokenEstimateAmount() = %d", amount)
+	}
+}
+
+func TestTokenEstimateAmountChargesMinimumCent(t *testing.T) {
+	amount, err := tokenEstimateAmount(&model.ChannelModel{OutputTokenPriceMicrocredits: 10_000}, tokenBillingEstimate{OutputTokens: 1}, 10_000)
+	if err != nil {
+		t.Fatalf("tokenEstimateAmount() error = %v", err)
+	}
+	if amount != CreditQuantumMicrocredits {
+		t.Fatalf("tokenEstimateAmount() = %d, want %d", amount, CreditQuantumMicrocredits)
 	}
 }
 

@@ -500,7 +500,7 @@ function operationLabel(operation: string) {
 }
 
 function formatCredits(value: number) {
-    return (value / 1_000_000).toLocaleString("zh-CN", { maximumFractionDigits: 6 });
+    return (value / 1_000_000).toLocaleString("zh-CN", { maximumFractionDigits: 2 });
 }
 
 function normalizeFetchModelKey(value: string) {

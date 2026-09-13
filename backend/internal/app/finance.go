@@ -17,7 +17,22 @@ import (
 	"gorm.io/gorm"
 )
 
-const CreditScale int64 = 1_000_000
+const (
+	CreditScale               int64 = 1_000_000
+	CreditFractionDigits            = 2
+	CreditQuantumMicrocredits       = CreditScale / 100
+)
+
+func validCreditPrecision(amount int64) bool {
+	return amount%CreditQuantumMicrocredits == 0
+}
+
+func roundCreditAmountUp(amount int64) (int64, error) {
+	if amount < 0 || amount > (1<<63-1)-(CreditQuantumMicrocredits-1) {
+		return 0, errors.New("积分金额无效")
+	}
+	return ((amount + CreditQuantumMicrocredits - 1) / CreditQuantumMicrocredits) * CreditQuantumMicrocredits, nil
+}
 
 type WalletSummary struct {
 	Account model.CreditAccount       `json:"account"`
@@ -125,7 +140,7 @@ func (s *Service) Wallet(user *model.User, entryType string, page int, limit int
 	if err != nil {
 		return nil, err
 	}
-	entries, total, err := s.repo.CreditLedger(user.ID, strings.TrimSpace(entryType), limit, (page-1)*limit)
+	entries, total, err := s.repo.WalletCreditLedger(user.ID, strings.TrimSpace(entryType), limit, (page-1)*limit)
 	if err != nil {
 		return nil, err
 	}
@@ -160,6 +175,9 @@ func (s *Service) AdminCreateRedeemBatch(actor *model.User, req CreateRedeemBatc
 	}
 	if req.AmountMicrocredits <= 0 {
 		return nil, BadAuthRequest("兑换码积分必须大于 0")
+	}
+	if !validCreditPrecision(req.AmountMicrocredits) {
+		return nil, BadAuthRequest("兑换码积分最多保留 2 位小数")
 	}
 	if req.Count <= 0 || req.Count > 5000 {
 		return nil, BadAuthRequest("单批兑换码数量需为 1-5000")
@@ -272,6 +290,9 @@ func (s *Service) AdminAdjustCredits(actor *model.User, userID string, req Admin
 	}
 	if req.AmountMicrocredits == 0 {
 		return nil, BadAuthRequest("调账积分不能为 0")
+	}
+	if !validCreditPrecision(req.AmountMicrocredits) {
+		return nil, BadAuthRequest("调账积分最多保留 2 位小数")
 	}
 	note := strings.TrimSpace(req.Note)
 	if note == "" {
@@ -494,7 +515,7 @@ func (s *Service) newLogicalModelBillingOrder(userID string, task *model.Task, i
 	amount := int64(0)
 	switch logicalModel.BillingMode {
 	case "fixed_request":
-		amount = logicalModel.UnitPriceMicrocredits
+		amount, err = creditAmount(logicalModel.UnitPriceMicrocredits, 1, 10_000)
 	case "per_second":
 		quantity = billingQuantity(capability, config["videoSeconds"])
 		if capability != "video" || quantity <= 0 {
@@ -800,7 +821,7 @@ func tokenEstimateAmount(item *model.ChannelModel, estimate tokenBillingEstimate
 	if amount <= 0 {
 		return 0, errors.New("Token 计费金额必须大于 0")
 	}
-	return amount, nil
+	return roundCreditAmountUp(amount)
 }
 
 func safeTokenProduct(tokens int64, price int64) (int64, bool) {
