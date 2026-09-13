@@ -7,6 +7,7 @@ type (
 	APICallLogQuery                        = app.APICallLogQuery
 	AccountFileStorageUsage                = app.AccountFileStorageUsage
 	AdminAppearanceSetting                 = app.AdminAppearanceSetting
+	AdminCustomerServiceSetting            = app.AdminCustomerServiceSetting
 	AdminAuditPage                         = app.AdminAuditPage
 	AdminCacheClearGroupResult             = app.AdminCacheClearGroupResult
 	AdminCacheClearRequest                 = app.AdminCacheClearRequest
@@ -52,6 +53,7 @@ type (
 	AnnouncementPage                       = app.AnnouncementPage
 	AppError                               = app.AppError
 	AppearanceSetting                      = app.AppearanceSetting
+	CustomerServiceSetting                 = app.CustomerServiceSetting
 	ArkPrivateAssetSettingRequest          = app.ArkPrivateAssetSettingRequest
 	ArkPrivateAssetSyncResult              = app.ArkPrivateAssetSyncResult
 	AssetCandidateInput                    = app.AssetCandidateInput
@@ -202,6 +204,7 @@ type (
 	PromptTemplateVariable                 = app.PromptTemplateVariable
 	ProviderTaskQueryResult                = app.ProviderTaskQueryResult
 	PublicAppearanceSetting                = app.PublicAppearanceSetting
+	PublicCustomerServiceSetting           = app.PublicCustomerServiceSetting
 	PublicArkPrivateAssetSetting           = app.PublicArkPrivateAssetSetting
 	PublicAuthSettings                     = app.PublicAuthSettings
 	PublicCanvasShare                      = app.PublicCanvasShare

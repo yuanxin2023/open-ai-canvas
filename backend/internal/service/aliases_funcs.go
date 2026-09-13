@@ -6,6 +6,7 @@ var (
 	ErrPlaybackNotReady                        = app.ErrPlaybackNotReady
 	AllowedPrivateUpstreamHost                 = app.AllowedPrivateUpstreamHost
 	AppearanceAssetMaxBytes                    = app.AppearanceAssetMaxBytes
+	CustomerServiceButtonImageMaxBytes         = app.CustomerServiceButtonImageMaxBytes
 	ApplyDefaultOutboundHeaders                = app.ApplyDefaultOutboundHeaders
 	ApplyOutboundHeaders                       = app.ApplyOutboundHeaders
 	BadAuthRequest                             = app.BadAuthRequest

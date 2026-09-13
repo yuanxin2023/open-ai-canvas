@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router";
 
 import { BrandLogo } from "@/components/brand/brand-logo";
+import { CustomerServiceWidget } from "@/components/customer-service/customer-service-widget";
 import { SiteComplianceFooter } from "@/components/layout/site-compliance-footer";
 import { aceternityMotion } from "@/lib/aceternity-motion";
 import { getAntThemeConfig } from "@/lib/app-theme";
@@ -138,6 +139,7 @@ export function AuthScene() {
                     <SiteComplianceFooter variant="auth" className="absolute inset-x-0 bottom-0" />
                 </section>
             </div>
+            <CustomerServiceWidget />
         </main>
     );
 }

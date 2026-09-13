@@ -62,6 +62,19 @@ SEO 标题、描述、可选关键词会投影到浏览器 metadata、Open Graph
 - `web/src/pages/admin/settings/appearance-settings-page.tsx`：站点及外观、草稿预览与原子保存流程。
 - `web/src/components/layout/site-compliance-footer.tsx`：公共版权与ICP备案展示。
 
+## 客服配置
+
+管理员可以在“运营 → 客服配置”控制用户端客服入口，包括总开关、桌面端与移动端可见性、四角默认位置、边缘距离、20–96 px 按钮大小、品牌色、按钮文字、圆形/胶囊/图文/自定义 PNG 形态，以及是否允许用户拖动。拖动位置只保存在当前浏览器中，不写入用户业务数据。
+
+用户端不展示 Chatwoot 原生启动气泡，而由站点按钮调用 Chatwoot SDK 打开会话窗口。`GET /api/public/customer-service` 只公开渲染所需配置，不返回资源 ID 或后台密钥；PNG 通过稳定的公开资源地址读取，正在使用的图片会阻止资源管理页删除。Chatwoot 网站 Token 属于浏览器公开标识，可由 `VITE_CHATWOOT_WEBSITE_TOKEN` 在构建时覆盖，不能替代后台 API 密钥。
+
+### 相关实现
+
+- `backend/internal/app/customer_service.go`：客服配置校验、公开投影、PNG 绑定与资源删除保护。
+- `backend/internal/handler/customer_service.go`：公开读取、图片流和管理员读写/上传接口。
+- `web/src/pages/admin/customer-service/customer-service-page.tsx`：客服配置编辑、上传与预览。
+- `web/src/components/customer-service/customer-service-widget.tsx`：用户端按钮、SDK 加载、打开会话与拖动记忆。
+
 ## 邮箱找回密码
 
 登录页在密码字段标题行提供“忘记密码？”入口。已配置账户邮件服务时，本地密码账号可以通过绑定邮箱获取 6 位验证码，并在 10 分钟内设置新密码；发送接口对存在和不存在的邮箱返回相同结果，避免公开账号状态。

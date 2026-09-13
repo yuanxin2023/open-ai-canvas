@@ -2,6 +2,7 @@ import { lazy, Suspense, type ReactNode } from "react";
 import { createBrowserRouter, Navigate, Outlet } from "react-router";
 
 import { RequireAuth } from "@/components/auth/require-auth";
+import { CustomerServiceWidget } from "@/components/customer-service/customer-service-widget";
 import { FullScreenLoader, WorkspaceRouteLoader } from "@/components/ui/aceternity/full-screen-loader";
 import { loadAssetsPage, loadCanvasPage, loadCanvasProjectPage, loadCreatePage, loadProjectDetailPage, loadProjectsPage, loadWalletPage } from "@/lib/workspace-route-modules";
 import { AuthScene } from "@/pages/auth/auth-scene";
@@ -19,6 +20,7 @@ const ChannelsPage = lazy(() => import("@/pages/admin/channels/channels-page"));
 const LogicalModelsPage = lazy(() => import("@/pages/admin/logical-models/logical-models-page"));
 const AdminPluginsPage = lazy(() => import("@/pages/admin/plugins/plugins-page"));
 const AdminPaymentsPage = lazy(() => import("@/pages/admin/payments/payments-page"));
+const CustomerServicePage = lazy(() => import("@/pages/admin/customer-service/customer-service-page"));
 const LogsPage = lazy(() => import("@/pages/admin/logs/logs-page"));
 const RedemptionCodesPage = lazy(() => import("@/pages/admin/redemption-codes/redemption-codes-page"));
 const RuntimePolicySettingsPage = lazy(() => import("@/pages/admin/settings/runtime-policy-settings-page"));
@@ -62,7 +64,7 @@ function fullScreenDeferred(element: ReactNode) {
 }
 
 function AuthenticatedWorkspaceLayout() {
-    return <RequireAuth>{fullScreenDeferred(<UserLayout><Outlet /></UserLayout>)}</RequireAuth>;
+    return <RequireAuth>{fullScreenDeferred(<><UserLayout><Outlet /></UserLayout><CustomerServiceWidget /></>)}</RequireAuth>;
 }
 
 /**
@@ -192,6 +194,7 @@ export const router = createBrowserRouter([
                     { path: "prompt-templates", element: <StoryboardPromptsPage /> },
                     { path: "storyboard-prompts", element: <Navigate to="/admin/prompt-templates" replace /> },
                     { path: "announcements", element: <AnnouncementsPage /> },
+                    { path: "customer-service", element: <CustomerServicePage /> },
                     { path: "resources", element: <StorageResourcesPage /> },
                     { path: "credit-operations", element: <CreditOperationsPage /> },
                     { path: "redemption-codes", element: <RedemptionCodesPage /> },
