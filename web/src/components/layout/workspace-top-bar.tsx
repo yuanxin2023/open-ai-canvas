@@ -3,6 +3,7 @@ import { Link, useLocation } from "react-router";
 
 import { SystemAnnouncementCenter } from "@/components/layout/system-announcement-center";
 import { WorkspaceAccountMenu } from "@/components/layout/workspace-account-menu";
+import { WorkspaceCreditPopover } from "@/components/layout/workspace-credit-popover";
 import { useWorkspaceTopBarContent } from "@/components/layout/workspace-top-bar-extension";
 import { AnimatedThemeToggler } from "@/components/ui/animated-theme-toggler";
 import { useThemeStore } from "@/stores/use-theme-store";
@@ -26,6 +27,7 @@ export function WorkspaceTopBar({ sidebarOpen, onToggleSidebar }: { sidebarOpen:
     const theme = useThemeStore((state) => state.theme);
     const setTheme = useThemeStore((state) => state.setTheme);
     const user = useUserStore((state) => state.user);
+    const creditsEnabled = useUserStore((state) => state.features.creditsEnabled);
     const { pathname } = useLocation();
     const extension = useWorkspaceTopBarContent();
 
@@ -47,6 +49,7 @@ export function WorkspaceTopBar({ sidebarOpen, onToggleSidebar }: { sidebarOpen:
             </div>
 
             <div className="flex shrink-0 items-center gap-1">
+                {user && creditsEnabled ? <WorkspaceCreditPopover userId={user.id} /> : null}
                 {user ? <SystemAnnouncementCenter userId={user.id} className="app-workspace-topbar-icon-button" autoOpen /> : null}
                 <AnimatedThemeToggler className="app-workspace-topbar-icon-button" theme={theme} onThemeChange={setTheme} aria-label="切换主题" />
                 <WorkspaceAccountMenu />
