@@ -1,14 +1,12 @@
 import { App, Button, Form, Input, Skeleton } from "antd";
 import { Switch } from "@/components/ui/base/switch";
-import { Copyright, Globe2, Image as ImageIcon, MonitorPlay, Moon, Palette, RefreshCw, RotateCcw, Save, Search, Sun, Type, Undo2, Upload } from "lucide-react";
+import { Copyright, Globe2, Image as ImageIcon, MonitorPlay, Moon, Palette, RefreshCw, RotateCcw, Save, Search, Sun, Undo2, Upload } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { useBlocker } from "react-router";
 
 import { AdminPageFrame } from "@/pages/admin/components/admin-shell";
 import { AdminStatusBadge, SettingsSectionCard } from "@/pages/admin/components/admin-ui";
 import { cn } from "@/lib/utils";
-import { cloneSkinDefinition, DEFAULT_CLASSIC_SKIN, duplicateSkinDefinition, normalizeSkinDefinition, type SkinDefinition } from "@/lib/skin-themes";
-import { SkinThemeEditor } from "@/pages/admin/settings/components/skin-theme-editor";
 import { deleteAdminResources } from "@/services/api/admin-storage";
 import { getAdminAppearance, resetAdminAppearance, updateAdminAppearance, uploadAppearanceAsset, type AdminAppearance, type AppearanceAssetSlot } from "@/services/api/appearance";
 import { commitPublicAppearance, DEFAULT_PUBLIC_APPEARANCE } from "@/stores/use-appearance-store";
@@ -34,8 +32,6 @@ export default function AppearanceSettingsPage() {
     const [authHeroDescription, setAuthHeroDescription] = useState("");
     const [authVideoAutoplay, setAuthVideoAutoplay] = useState(true);
     const [logoFrameEnabled, setLogoFrameEnabled] = useState(true);
-    const [skinId, setSkinId] = useState("classic");
-    const [skinThemes, setSkinThemes] = useState<SkinDefinition[]>([DEFAULT_CLASSIC_SKIN]);
     const [seoTitle, setSeoTitle] = useState("");
     const [seoDescription, setSeoDescription] = useState("");
     const [seoKeywords, setSeoKeywords] = useState("");
@@ -65,8 +61,6 @@ export default function AppearanceSettingsPage() {
             normalizeDraftCopy(authHeroDescription) !== setting?.authHeroDescription ||
             authVideoAutoplay !== setting?.authVideoAutoplay ||
             logoFrameEnabled !== setting?.logoFrameEnabled ||
-            skinId !== setting?.skinId ||
-            JSON.stringify(skinThemes) !== JSON.stringify(setting?.skinThemes) ||
             normalizeSingleLine(seoTitle) !== setting?.seoTitle ||
             normalizeDraftCopy(seoDescription) !== setting?.seoDescription ||
             normalizeSingleLine(seoKeywords) !== setting?.seoKeywords ||
@@ -85,9 +79,6 @@ export default function AppearanceSettingsPage() {
         setAuthHeroDescription(value.authHeroDescription);
         setAuthVideoAutoplay(value.authVideoAutoplay);
         setLogoFrameEnabled(value.logoFrameEnabled);
-        const themes = value.skinThemes.map((theme) => normalizeSkinDefinition(theme));
-        setSkinThemes(themes.length ? themes : [cloneSkinDefinition(DEFAULT_CLASSIC_SKIN)]);
-        setSkinId(themes.some((theme) => theme.id === value.skinId) ? value.skinId : "classic");
         setSeoTitle(value.seoTitle);
         setSeoDescription(value.seoDescription);
         setSeoKeywords(value.seoKeywords);
@@ -133,7 +124,7 @@ export default function AppearanceSettingsPage() {
         if (blocker.state !== "blocked") return;
         modal.confirm({
             title: "放弃站点及外观调整？",
-            content: "当前品牌、SEO、备案、皮肤或媒体配置尚未保存，离开后草稿会丢失。线上站点不会改变。",
+            content: "当前品牌、SEO、备案或媒体配置尚未保存，离开后草稿会丢失。线上站点不会改变。",
             okText: "放弃并离开",
             cancelText: "继续编辑",
             okButtonProps: { danger: true },
@@ -195,8 +186,6 @@ export default function AppearanceSettingsPage() {
         setAuthHeroDescription(setting.authHeroDescription);
         setAuthVideoAutoplay(setting.authVideoAutoplay);
         setLogoFrameEnabled(setting.logoFrameEnabled);
-        setSkinId(setting.skinId);
-        setSkinThemes(setting.skinThemes.map((theme) => cloneSkinDefinition(theme)));
         setSeoTitle(setting.seoTitle);
         setSeoDescription(setting.seoDescription);
         setSeoKeywords(setting.seoKeywords);
@@ -218,7 +207,7 @@ export default function AppearanceSettingsPage() {
         }
         modal.confirm({
             title: "放弃调整并重新读取？",
-            content: "重新读取会丢弃当前品牌、SEO、备案、皮肤和待上传文件。",
+            content: "重新读取会丢弃当前品牌、SEO、备案和待上传文件。",
             okText: "放弃并刷新",
             cancelText: "继续编辑",
             okButtonProps: { danger: true },
@@ -230,7 +219,7 @@ export default function AppearanceSettingsPage() {
         if (!setting?.configured || saving || refreshing || restoring) return;
         modal.confirm({
             title: "恢复影策默认品牌标识？",
-            content: "品牌名称、英文标识、Logo、登录页文案、视频、封面、SEO、备案和皮肤主题会立即恢复为项目内置值。已上传文件仍保留在存储资源中，不会被删除。",
+            content: "品牌名称、英文标识、Logo、登录页文案、视频、封面、SEO 和备案会立即恢复为项目内置值。已上传文件仍保留在存储资源中，不会被删除。",
             okText: "恢复默认",
             cancelText: "取消",
             okButtonProps: { danger: true },
@@ -298,11 +287,6 @@ export default function AppearanceSettingsPage() {
             message.error("显示备案号前请先填写备案号");
             return;
         }
-        const skinError = validateSkinDrafts(skinThemes, skinId);
-        if (skinError) {
-            message.error(skinError);
-            return;
-        }
         setSaving(true);
         const uploadedIDs: string[] = [];
         try {
@@ -330,8 +314,6 @@ export default function AppearanceSettingsPage() {
                 authVideoResourceId: ids.video,
                 authVideoPosterResourceId: ids.poster,
                 authVideoAutoplay,
-                skinId,
-                skinThemes,
                 seoTitle: nextSeoTitle,
                 seoDescription: nextSeoDescription,
                 seoKeywords: nextSeoKeywords,
@@ -366,42 +348,8 @@ export default function AppearanceSettingsPage() {
     const status = setting?.configured ? <AdminStatusBadge label="已自定义" tone="success" /> : <AdminStatusBadge label="使用原始外观" tone="neutral" />;
     const copyCustomized = normalizeDraftCopy(authHeroTitle) !== DEFAULT_PUBLIC_APPEARANCE.authHeroTitle || normalizeDraftCopy(authHeroDescription) !== DEFAULT_PUBLIC_APPEARANCE.authHeroDescription;
     const draftBrandName = brandName.trim() || "站点名称";
-    const selectedSkin = skinThemes.find((skin) => skin.id === skinId) || skinThemes[0] || DEFAULT_CLASSIC_SKIN;
-
-    const changeSkin = (next: SkinDefinition) => {
-        if (next.locked) return;
-        setSkinThemes((current) => current.map((theme) => (theme.id === next.id ? next : theme)));
-    };
-
-    const duplicateSkin = (sourceID: string) => {
-        if (skinThemes.length >= 16) return;
-        const source = skinThemes.find((theme) => theme.id === sourceID) || DEFAULT_CLASSIC_SKIN;
-        const copy = duplicateSkinDefinition(
-            source,
-            skinThemes.map((theme) => theme.id),
-        );
-        setSkinThemes((current) => [...current, copy]);
-        setSkinId(copy.id);
-    };
-
-    const deleteSkin = (targetID: string) => {
-        const target = skinThemes.find((theme) => theme.id === targetID);
-        if (!target || target.locked) return;
-        modal.confirm({
-            title: `删除主题“${target.name}”？`,
-            content: "删除会随本页其他调整一起保存；保存前仍可点击“撤销调整”恢复。若它当前启用，将自动切回经典黑白。",
-            okText: "删除主题",
-            cancelText: "取消",
-            okButtonProps: { danger: true },
-            onOk: () => {
-                setSkinThemes((current) => current.filter((theme) => theme.id !== targetID));
-                if (skinId === targetID) setSkinId("classic");
-            },
-        });
-    };
-
     return (
-        <AdminPageFrame title="站点及外观" description="统一管理品牌身份、登录页、搜索信息、备案展示与全站皮肤主题" scroll>
+        <AdminPageFrame title="站点及外观" description="统一管理品牌身份、登录页、搜索信息与备案展示" scroll>
             {loading ? (
                 <AppearanceSkeleton />
             ) : loadError || !setting ? (
@@ -428,7 +376,7 @@ export default function AppearanceSettingsPage() {
                                     <strong>{dirty ? "站点配置有调整待保存" : "站点及外观已与服务端同步"}</strong>
                                     <AdminStatusBadge label={dirty ? "尚未生效" : "服务端当前值"} tone={dirty ? "warning" : "neutral"} />
                                 </div>
-                                <p>{dirty ? "品牌、SEO、备案、皮肤和媒体只在本页预览；保存后才会应用。" : "公开页面会在应用渲染前读取品牌与皮肤，不会先闪现旧站点身份。"}</p>
+                                <p>{dirty ? "品牌、SEO、备案和媒体只在本页预览；保存后才会应用。" : "公开页面会在应用渲染前读取站点外观，不会先闪现旧站点身份。"}</p>
                             </div>
                         </div>
                         <div className="admin-appearance-command-actions">
@@ -678,24 +626,6 @@ export default function AppearanceSettingsPage() {
                         </div>
                     </SettingsSectionCard>
 
-                    <SettingsSectionCard
-                        className="admin-appearance-section"
-                        icon={<Type className="size-4" aria-hidden="true" />}
-                        title="5. 皮肤主题"
-                        description="默认主题保持项目原始样式且不可更改；其他主题可新建、复制、改名、删除，并分别定义浅色、深色、控件样式与交互反馈。"
-                        status={<AdminStatusBadge label={selectedSkin.name} tone="info" />}
-                    >
-                        <SkinThemeEditor
-                            themes={skinThemes}
-                            selectedID={skinId}
-                            disabled={saving || refreshing || restoring}
-                            onSelect={setSkinId}
-                            onCreate={() => duplicateSkin("classic")}
-                            onDuplicate={duplicateSkin}
-                            onDelete={deleteSkin}
-                            onChange={changeSkin}
-                        />
-                    </SettingsSectionCard>
                 </div>
             )}
         </AdminPageFrame>
@@ -817,23 +747,6 @@ function normalizeSingleLine(value: string) {
 
 function hasUnsupportedControlCharacter(value: string) {
     return Array.from(value).some((character) => character !== "\n" && /[\u0000-\u001f\u007f]/.test(character));
-}
-
-function validateSkinDrafts(themes: SkinDefinition[], selectedID: string) {
-    if (!themes.length || themes.length > 16) return "皮肤主题数量必须为 1 到 16 套";
-    const ids = new Set<string>();
-    for (const theme of themes) {
-        if (!/^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/.test(theme.id) || ids.has(theme.id)) return "皮肤主题 ID 无效或重复";
-        ids.add(theme.id);
-        if (!theme.name.trim() || Array.from(theme.name.trim()).length > 40) return "皮肤主题名称必须为 1 到 40 个字符";
-        if (Array.from(theme.description.trim()).length > 100) return "皮肤主题说明不能超过 100 个字符";
-        const invalidColor = [...Object.values(theme.tokens.light), ...Object.values(theme.tokens.dark)].some((color) => !/^#[0-9a-f]{6}([0-9a-f]{2})?$/i.test(color));
-        if (invalidColor) return `主题“${theme.name}”存在无效颜色，请使用 6 或 8 位十六进制色值`;
-        if (theme.tokens.components.controlHeightSmall > theme.tokens.components.controlHeight || theme.tokens.components.controlHeight > theme.tokens.components.controlHeightLarge) return `主题“${theme.name}”的控件高度顺序无效`;
-        if (theme.tokens.components.motionFast > theme.tokens.components.motionNormal) return `主题“${theme.name}”的快速动效不能慢于常规动效`;
-    }
-    if (!ids.has("classic") || !ids.has(selectedID)) return "默认主题或当前启用主题不存在";
-    return "";
 }
 
 function formatBytes(bytes: number) {

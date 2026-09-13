@@ -84,7 +84,7 @@
 
 - 分布：后台页 19、主界面页面 17、画布组件 10、共享组件 7。
 - 用法分类（pages 树 36 处）：**24 处带 `mode=multiple/tags` 或 `showSearch`**（ui 单选壳不覆盖，属已知能力缺口，需 ComboBox/多选落地后才能替换）；**12 处为朴素单选**，是可直接评估切换 ui `select` 的候选：
-  `admin/components/email-settings-panel.tsx`、`admin/settings/components/skin-theme-editor.tsx`、`admin/settings/storage-settings-page.tsx`、`admin/users/users-drawer.tsx`、`pages/canvas/index.tsx`、`pages/projects/detail/canvases.tsx`、`pages/projects/detail/settings.tsx`、`pages/settings/diagnostics-panel.tsx`、`pages/settings/index.tsx`、`pages/settings/prompt-preferences-pane.tsx`、`pages/skills/skill-editor-drawer.tsx`、`pages/skills/skill-install-modal.tsx`
+  `admin/components/email-settings-panel.tsx`、`admin/settings/storage-settings-page.tsx`、`admin/users/users-drawer.tsx`、`pages/canvas/index.tsx`、`pages/projects/detail/canvases.tsx`、`pages/projects/detail/settings.tsx`、`pages/settings/diagnostics-panel.tsx`、`pages/settings/index.tsx`、`pages/settings/prompt-preferences-pane.tsx`、`pages/skills/skill-editor-drawer.tsx`、`pages/skills/skill-install-modal.tsx`
 - 其余代表性文件：`pages/admin/components/analytics-panel.tsx`、`admin/users/users-panel.tsx`、`pages/settings/channel-settings-pane.tsx`（mode 多选）、`pages/tasks/index.tsx`（showSearch）等。
 
 ### 2. Tooltip — 29 处（ui tooltip 仅 3 文件消费）

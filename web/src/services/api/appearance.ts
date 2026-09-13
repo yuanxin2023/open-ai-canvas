@@ -1,5 +1,4 @@
 import { http } from "@/services/api/request";
-import type { SkinDefinition } from "@/lib/skin-themes";
 
 export type PublicAppearance = {
     schemaVersion: number;
@@ -13,8 +12,6 @@ export type PublicAppearance = {
     authVideoUrl: string;
     authVideoPosterUrl: string;
     authVideoAutoplay: boolean;
-    skinId: string;
-    activeSkin: SkinDefinition;
     seoTitle: string;
     seoDescription: string;
     seoKeywords: string;
@@ -42,8 +39,6 @@ export type AdminAppearance = {
     authVideoResourceId: string;
     authVideoPosterResourceId: string;
     authVideoAutoplay: boolean;
-    skinId: string;
-    skinThemes: SkinDefinition[];
     seoTitle: string;
     seoDescription: string;
     seoKeywords: string;
@@ -90,8 +85,6 @@ export async function updateAdminAppearance(
         | "authVideoResourceId"
         | "authVideoPosterResourceId"
         | "authVideoAutoplay"
-        | "skinId"
-        | "skinThemes"
         | "seoTitle"
         | "seoDescription"
         | "seoKeywords"

@@ -7,7 +7,6 @@ import zhCN from "antd/locale/zh_CN";
 import { AuthSessionHydrator } from "@/components/auth/auth-session-hydrator";
 import { FullScreenLoader } from "@/components/ui/aceternity/full-screen-loader";
 import { getAntThemeConfig } from "@/lib/app-theme";
-import { applySkinTheme } from "@/lib/skin-themes";
 import { appQueryClient } from "@/lib/query-client";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { applyAppearanceMetadata, useAppearanceStore } from "@/stores/use-appearance-store";
@@ -29,7 +28,6 @@ export function AppProviders({ children }: { children: ReactNode }) {
     useEffect(() => {
         document.documentElement.classList.toggle("dark", dark);
         document.documentElement.style.colorScheme = theme;
-        applySkinTheme(appearance.activeSkin, theme);
         applyAppearanceMetadata(appearance);
     }, [appearance, dark, theme]);
 
@@ -39,7 +37,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
     const isolateDevRepro = import.meta.env.DEV && typeof window !== "undefined" && window.location.pathname === "/dev/director-repro";
 
     return (
-        <ConfigProvider locale={zhCN} theme={getAntThemeConfig(dark, appearance.activeSkin)}>
+        <ConfigProvider locale={zhCN} theme={getAntThemeConfig(dark)}>
             <App message={{ duration: 3, maxCount: 3 }} notification={{ duration: 4.5, maxCount: 3, placement: "topRight" }}>
                 <QueryClientProvider client={appQueryClient}>
                     {isolateDevRepro ? (

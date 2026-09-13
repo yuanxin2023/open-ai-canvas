@@ -52,10 +52,6 @@ type (
 	AnnouncementPage                       = app.AnnouncementPage
 	AppError                               = app.AppError
 	AppearanceSetting                      = app.AppearanceSetting
-	AppearanceSkinComponentTokens          = app.AppearanceSkinComponentTokens
-	AppearanceSkinModeTokens               = app.AppearanceSkinModeTokens
-	AppearanceSkinTheme                    = app.AppearanceSkinTheme
-	AppearanceSkinTokens                   = app.AppearanceSkinTokens
 	ArkPrivateAssetSettingRequest          = app.ArkPrivateAssetSettingRequest
 	ArkPrivateAssetSyncResult              = app.ArkPrivateAssetSyncResult
 	AssetCandidateInput                    = app.AssetCandidateInput

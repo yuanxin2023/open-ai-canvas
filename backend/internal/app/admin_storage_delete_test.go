@@ -75,7 +75,7 @@ func TestDeleteAdminResourcesBlocksDarkAppearanceLogo(t *testing.T) {
 	if err := db.Create(&resource).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.UpdateAppearance(admin, AppearanceSetting{BrandName: "HIMA Studio", BrandSlug: "hima-studio", AuthHeroTitle: defaultAppearanceHeroTitle, DarkLogoResourceID: resource.ID, LogoFrameEnabled: true, SkinID: defaultAppearanceSkinID}); err != nil {
+	if _, err := svc.UpdateAppearance(admin, AppearanceSetting{BrandName: "HIMA Studio", BrandSlug: "hima-studio", AuthHeroTitle: defaultAppearanceHeroTitle, DarkLogoResourceID: resource.ID, LogoFrameEnabled: true}); err != nil {
 		t.Fatal(err)
 	}
 

@@ -115,7 +115,7 @@ export function AuthScene() {
                         transition={{ duration: aceternityMotion.duration.panel, ease: aceternityMotion.easing.enter }}
                         className="my-auto w-full max-w-[460px]"
                     >
-                        <ConfigProvider theme={getAntThemeConfig(true, appearance.activeSkin)}>
+                        <ConfigProvider theme={getAntThemeConfig(true)}>
                             <div className="auth-card-dark auth-scene-card h-auto overflow-hidden rounded-lg backdrop-blur-2xl">
                                 <section aria-label={copy.title} className={`flex flex-col ${recovery ? "min-h-[600px]" : activeTab === "login" ? "min-h-[500px]" : "min-h-[620px] sm:min-h-[640px]"}`}>
                                     <header className="px-6 pb-5 pt-6 sm:px-8 sm:pt-7">

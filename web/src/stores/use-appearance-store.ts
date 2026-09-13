@@ -1,10 +1,9 @@
 import { create } from "zustand";
 
 import type { PublicAppearance } from "@/services/api/appearance";
-import { applySkinTheme, DEFAULT_CLASSIC_SKIN, normalizeSkinDefinition } from "@/lib/skin-themes";
 
 export const DEFAULT_PUBLIC_APPEARANCE: PublicAppearance = {
-    schemaVersion: 7,
+    schemaVersion: 8,
     brandName: "影策",
     brandSlug: "open-ai-canvas",
     authHeroTitle: "让一个故事，\n从文字走向银幕。",
@@ -15,8 +14,6 @@ export const DEFAULT_PUBLIC_APPEARANCE: PublicAppearance = {
     authVideoUrl: "https://boss-shjd.biliapi.net/updream/aniforge/video/video_bbcb00bd-650d-4249-9346-5cd21fd2484c_m1hc-u0-1pu13x-3v1s.mp4",
     authVideoPosterUrl: "https://i0.hdslb.com/bfs/aitool/aniforge/image/02933f26-5f1b-49ff-a811-b7f95ee5e5b8_m1hc-u0-sau.jpg",
     authVideoAutoplay: true,
-    skinId: "classic",
-    activeSkin: DEFAULT_CLASSIC_SKIN,
     seoTitle: "影策",
     seoDescription: "影策，面向 AI 影视与短剧创作的工作台。",
     seoKeywords: "",
@@ -58,9 +55,7 @@ export function normalizePublicAppearance(value?: Partial<PublicAppearance> | nu
     const footerCopyright = normalizeAppearanceCopy(value?.footerCopyright, `© ${new Date().getFullYear()} ${resolvedBrandName}. All rights reserved.`);
     const icpFilingNumber = normalizeAppearanceCopy(value?.icpFilingNumber, "", true);
     return {
-        ...DEFAULT_PUBLIC_APPEARANCE,
-        ...value,
-        schemaVersion: 7,
+        schemaVersion: 8,
         brandName: resolvedBrandName,
         brandSlug,
         authHeroTitle,
@@ -71,8 +66,6 @@ export function normalizePublicAppearance(value?: Partial<PublicAppearance> | nu
         authVideoUrl: safeAppearanceURL(value?.authVideoUrl, DEFAULT_PUBLIC_APPEARANCE.authVideoUrl),
         authVideoPosterUrl: safeAppearanceURL(value?.authVideoPosterUrl, customVideo ? "" : DEFAULT_PUBLIC_APPEARANCE.authVideoPosterUrl),
         authVideoAutoplay: value?.authVideoAutoplay !== false,
-        skinId: normalizeSkinDefinition(value?.activeSkin).id,
-        activeSkin: normalizeSkinDefinition(value?.activeSkin),
         seoTitle,
         seoDescription,
         seoKeywords,
@@ -85,6 +78,7 @@ export function normalizePublicAppearance(value?: Partial<PublicAppearance> | nu
         authVideoPosterConfigured: Boolean(value?.authVideoPosterConfigured),
         configured: Boolean(value?.configured),
         revision: String(value?.revision || DEFAULT_PUBLIC_APPEARANCE.revision),
+        updatedAt: typeof value?.updatedAt === "string" ? value.updatedAt : undefined,
     };
 }
 
@@ -97,7 +91,6 @@ function normalizeAppearanceCopy(value: unknown, fallback: string, allowEmpty = 
 export function commitPublicAppearance(value?: Partial<PublicAppearance> | null) {
     const appearance = normalizePublicAppearance(value);
     useAppearanceStore.getState().setAppearance(appearance);
-    applySkinTheme(appearance.activeSkin, typeof document !== "undefined" && document.documentElement.classList.contains("dark") ? "dark" : "light");
     applyAppearanceMetadata(appearance);
     return appearance;
 }
@@ -114,8 +107,8 @@ export function applyAppearanceMetadata(appearance: PublicAppearance, targetDocu
     setMeta(targetDocument, "name", "twitter:card", "summary");
     setMeta(targetDocument, "name", "twitter:title", appearance.seoTitle || appearance.brandName);
     setMeta(targetDocument, "name", "twitter:description", appearance.seoDescription);
-    const mode = targetDocument.documentElement.classList.contains("dark") ? "dark" : "light";
-    setMeta(targetDocument, "name", "theme-color", appearance.activeSkin.tokens[mode].canvas);
+    const dark = targetDocument.documentElement.classList.contains("dark");
+    setMeta(targetDocument, "name", "theme-color", dark ? "#0a0a0a" : "#ffffff");
     let favicon = targetDocument.querySelector<HTMLLinkElement>('link[rel~="icon"]');
     if (!favicon) {
         favicon = targetDocument.createElement("link");

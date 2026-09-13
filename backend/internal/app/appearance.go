@@ -31,7 +31,7 @@ const (
 )
 
 const (
-	appearanceSchemaVersion        = 7
+	appearanceSchemaVersion        = 8
 	appearanceLogoMaxBytes   int64 = 5 << 20
 	appearancePosterMaxBytes int64 = 10 << 20
 	appearanceVideoMaxBytes  int64 = 256 << 20
@@ -40,7 +40,6 @@ const (
 const (
 	defaultAppearanceBrandName = "影策"
 	defaultAppearanceBrandSlug = "open-ai-canvas"
-	defaultAppearanceSkinID    = "classic"
 	defaultAppearanceLogoURL   = "/logo.svg"
 	defaultAppearanceVideoURL  = "https://boss-shjd.biliapi.net/updream/aniforge/video/video_bbcb00bd-650d-4249-9346-5cd21fd2484c_m1hc-u0-1pu13x-3v1s.mp4"
 	defaultAppearancePosterURL = "https://i0.hdslb.com/bfs/aitool/aniforge/image/02933f26-5f1b-49ff-a811-b7f95ee5e5b8_m1hc-u0-sau.jpg"
@@ -48,54 +47,50 @@ const (
 )
 
 type AppearanceSetting struct {
-	SchemaVersion             int                   `json:"schemaVersion"`
-	BrandName                 string                `json:"brandName"`
-	BrandSlug                 string                `json:"brandSlug"`
-	AuthHeroTitle             string                `json:"authHeroTitle"`
-	AuthHeroDescription       string                `json:"authHeroDescription"`
-	LogoResourceID            string                `json:"logoResourceId"`
-	DarkLogoResourceID        string                `json:"darkLogoResourceId"`
-	LogoFrameEnabled          bool                  `json:"logoFrameEnabled"`
-	AuthVideoResourceID       string                `json:"authVideoResourceId"`
-	AuthVideoPosterResourceID string                `json:"authVideoPosterResourceId"`
-	AuthVideoAutoplay         bool                  `json:"authVideoAutoplay"`
-	SkinID                    string                `json:"skinId"`
-	SkinThemes                []AppearanceSkinTheme `json:"skinThemes"`
-	SEOTitle                  string                `json:"seoTitle"`
-	SEODescription            string                `json:"seoDescription"`
-	SEOKeywords               string                `json:"seoKeywords"`
-	FooterCopyright           string                `json:"footerCopyright"`
-	ICPFilingEnabled          bool                  `json:"icpFilingEnabled"`
-	ICPFilingNumber           string                `json:"icpFilingNumber"`
+	SchemaVersion             int    `json:"schemaVersion"`
+	BrandName                 string `json:"brandName"`
+	BrandSlug                 string `json:"brandSlug"`
+	AuthHeroTitle             string `json:"authHeroTitle"`
+	AuthHeroDescription       string `json:"authHeroDescription"`
+	LogoResourceID            string `json:"logoResourceId"`
+	DarkLogoResourceID        string `json:"darkLogoResourceId"`
+	LogoFrameEnabled          bool   `json:"logoFrameEnabled"`
+	AuthVideoResourceID       string `json:"authVideoResourceId"`
+	AuthVideoPosterResourceID string `json:"authVideoPosterResourceId"`
+	AuthVideoAutoplay         bool   `json:"authVideoAutoplay"`
+	SEOTitle                  string `json:"seoTitle"`
+	SEODescription            string `json:"seoDescription"`
+	SEOKeywords               string `json:"seoKeywords"`
+	FooterCopyright           string `json:"footerCopyright"`
+	ICPFilingEnabled          bool   `json:"icpFilingEnabled"`
+	ICPFilingNumber           string `json:"icpFilingNumber"`
 }
 
 type PublicAppearanceSetting struct {
-	SchemaVersion             int                 `json:"schemaVersion"`
-	BrandName                 string              `json:"brandName"`
-	BrandSlug                 string              `json:"brandSlug"`
-	AuthHeroTitle             string              `json:"authHeroTitle"`
-	AuthHeroDescription       string              `json:"authHeroDescription"`
-	LogoURL                   string              `json:"logoUrl"`
-	DarkLogoURL               string              `json:"darkLogoUrl"`
-	LogoFrameEnabled          bool                `json:"logoFrameEnabled"`
-	AuthVideoURL              string              `json:"authVideoUrl"`
-	AuthVideoPosterURL        string              `json:"authVideoPosterUrl"`
-	AuthVideoAutoplay         bool                `json:"authVideoAutoplay"`
-	SkinID                    string              `json:"skinId"`
-	ActiveSkin                AppearanceSkinTheme `json:"activeSkin"`
-	SEOTitle                  string              `json:"seoTitle"`
-	SEODescription            string              `json:"seoDescription"`
-	SEOKeywords               string              `json:"seoKeywords"`
-	FooterCopyright           string              `json:"footerCopyright"`
-	ICPFilingEnabled          bool                `json:"icpFilingEnabled"`
-	ICPFilingNumber           string              `json:"icpFilingNumber"`
-	LogoConfigured            bool                `json:"logoConfigured"`
-	DarkLogoConfigured        bool                `json:"darkLogoConfigured"`
-	AuthVideoConfigured       bool                `json:"authVideoConfigured"`
-	AuthVideoPosterConfigured bool                `json:"authVideoPosterConfigured"`
-	Configured                bool                `json:"configured"`
-	Revision                  string              `json:"revision"`
-	UpdatedAt                 time.Time           `json:"updatedAt,omitempty"`
+	SchemaVersion             int       `json:"schemaVersion"`
+	BrandName                 string    `json:"brandName"`
+	BrandSlug                 string    `json:"brandSlug"`
+	AuthHeroTitle             string    `json:"authHeroTitle"`
+	AuthHeroDescription       string    `json:"authHeroDescription"`
+	LogoURL                   string    `json:"logoUrl"`
+	DarkLogoURL               string    `json:"darkLogoUrl"`
+	LogoFrameEnabled          bool      `json:"logoFrameEnabled"`
+	AuthVideoURL              string    `json:"authVideoUrl"`
+	AuthVideoPosterURL        string    `json:"authVideoPosterUrl"`
+	AuthVideoAutoplay         bool      `json:"authVideoAutoplay"`
+	SEOTitle                  string    `json:"seoTitle"`
+	SEODescription            string    `json:"seoDescription"`
+	SEOKeywords               string    `json:"seoKeywords"`
+	FooterCopyright           string    `json:"footerCopyright"`
+	ICPFilingEnabled          bool      `json:"icpFilingEnabled"`
+	ICPFilingNumber           string    `json:"icpFilingNumber"`
+	LogoConfigured            bool      `json:"logoConfigured"`
+	DarkLogoConfigured        bool      `json:"darkLogoConfigured"`
+	AuthVideoConfigured       bool      `json:"authVideoConfigured"`
+	AuthVideoPosterConfigured bool      `json:"authVideoPosterConfigured"`
+	Configured                bool      `json:"configured"`
+	Revision                  string    `json:"revision"`
+	UpdatedAt                 time.Time `json:"updatedAt,omitempty"`
 }
 
 type AdminAppearanceSetting struct {
@@ -115,8 +110,6 @@ func defaultAppearanceSetting() AppearanceSetting {
 		AuthHeroTitle:     defaultAppearanceHeroTitle,
 		AuthVideoAutoplay: true,
 		LogoFrameEnabled:  true,
-		SkinID:            defaultAppearanceSkinID,
-		SkinThemes:        defaultAppearanceSkinThemes(),
 	}
 }
 
@@ -177,11 +170,6 @@ func (s *Service) UpdateAppearance(actor *model.User, value AppearanceSetting) (
 	value.DarkLogoResourceID = strings.TrimSpace(value.DarkLogoResourceID)
 	value.AuthVideoResourceID = strings.TrimSpace(value.AuthVideoResourceID)
 	value.AuthVideoPosterResourceID = strings.TrimSpace(value.AuthVideoPosterResourceID)
-	value.SkinID = strings.TrimSpace(value.SkinID)
-	if len(value.SkinThemes) == 0 {
-		value.SkinThemes = defaultAppearanceSkinThemes()
-	}
-	value.SkinThemes = normalizeAppearanceSkinThemes(value.SkinThemes)
 	value.SEOTitle = normalizeAppearanceSingleLine(value.SEOTitle)
 	value.SEODescription = normalizeAppearanceCopy(value.SEODescription)
 	value.SEOKeywords = normalizeAppearanceSingleLine(value.SEOKeywords)
@@ -363,14 +351,6 @@ func (s *Service) readAppearance() (*model.SystemSetting, AppearanceSetting, err
 		value.AuthHeroTitle = defaultAppearanceHeroTitle
 	}
 	value.AuthHeroDescription = normalizeAppearanceCopy(value.AuthHeroDescription)
-	value.SkinID = strings.TrimSpace(value.SkinID)
-	if value.SkinID == "" {
-		value.SkinID = defaultAppearanceSkinID
-	}
-	if len(value.SkinThemes) == 0 {
-		value.SkinThemes = defaultAppearanceSkinThemes()
-	}
-	value.SkinThemes = normalizeAppearanceSkinThemes(value.SkinThemes)
 	value.SEOTitle = normalizeAppearanceSingleLine(value.SEOTitle)
 	value.SEODescription = normalizeAppearanceCopy(value.SEODescription)
 	value.SEOKeywords = normalizeAppearanceSingleLine(value.SEOKeywords)
@@ -431,9 +411,6 @@ func validateAppearanceSetting(value AppearanceSetting) error {
 		return err
 	}
 	if err := validateAppearanceCopy(value.AuthHeroDescription, "登录页说明文案", 160, false); err != nil {
-		return err
-	}
-	if err := validateAppearanceSkinThemes(value.SkinThemes, value.SkinID); err != nil {
 		return err
 	}
 	for _, field := range []struct {
@@ -623,8 +600,6 @@ func publicAppearanceSetting(setting *model.SystemSetting, value AppearanceSetti
 		AuthVideoURL:        defaultAppearanceVideoURL,
 		AuthVideoPosterURL:  defaultAppearancePosterURL,
 		AuthVideoAutoplay:   value.AuthVideoAutoplay,
-		SkinID:              value.SkinID,
-		ActiveSkin:          activeAppearanceSkin(value.SkinThemes, value.SkinID),
 		SEOTitle:            effectiveAppearanceSEOTitle(value),
 		SEODescription:      effectiveAppearanceSEODescription(value),
 		SEOKeywords:         value.SEOKeywords,
