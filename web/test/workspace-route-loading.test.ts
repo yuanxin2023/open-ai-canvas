@@ -44,6 +44,22 @@ describe("workspace route loading", () => {
         expect(navigation).not.toContain('to: "/home"');
     });
 
+    test("hides feature-gated discovery entries while keeping direct routes guarded", () => {
+        const router = source("../src/router.tsx");
+        const navigation = source("../src/components/layout/workspace-sidebar-nav.tsx");
+        const palette = source("../src/components/layout/workspace-command-palette.tsx");
+        const featureGuard = source("../src/components/auth/require-feature.tsx");
+
+        expect(navigation).toContain('...(features.shortDramaEnabled ? [toolItem("projects", "/projects")] : [])');
+        expect(palette).toContain('...(features.shortDramaEnabled ? [toolEntry("projects", "/projects")] : [])');
+        expect(navigation).toContain('...(features.pluginCenterEnabled ? [toolItem("plugins", "/plugins")] : [])');
+        expect(navigation).not.toContain("features.pluginCenterEnabled || isAdmin");
+        expect(featureGuard).not.toContain("adminBypass");
+        expect(router).toContain('<RequireFeature feature="shortDramaEnabled">{deferred(<ProjectsPage />)}</RequireFeature>');
+        expect(router).toContain('<RequireFeature feature="shortDramaEnabled">{deferred(<ProjectDetailPage />)}</RequireFeature>');
+        expect(router).toContain('<RequireFeature feature="pluginCenterEnabled">{deferred(<PluginsPage />)}</RequireFeature>');
+    });
+
     test("preloads canvas detail and paints opening feedback before navigation", () => {
         const modules = source("../src/lib/workspace-route-modules.ts");
         const router = source("../src/router.tsx");

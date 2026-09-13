@@ -48,7 +48,7 @@ function buildNav(features: FeatureAvailability, balance: string, isAdmin: boole
         {
             items: [
                 { id: "home", title: "首页", icon: Home, to: "/" },
-toolItem("projects", "/projects"),
+                ...(features.shortDramaEnabled ? [toolItem("projects", "/projects")] : []),
                 toolItem("canvas", "/canvas"),
                 ...(features.taskCenterEnabled ? [toolItem("tasks", "/tasks")] : []),
                 toolItem("assets", "/assets"),
@@ -56,7 +56,7 @@ toolItem("projects", "/projects"),
         },
         {
             heading: "工作台管理",
-            items: [toolItem("skills", "/skills"), ...(features.pluginCenterEnabled || isAdmin ? [toolItem("plugins", "/plugins")] : []), ...(features.creditsEnabled ? [{ ...toolItem("wallet", "/wallet"), badge: balance }] : [])],
+            items: [toolItem("skills", "/skills"), ...(features.pluginCenterEnabled ? [toolItem("plugins", "/plugins")] : []), ...(features.creditsEnabled ? [{ ...toolItem("wallet", "/wallet"), badge: balance }] : [])],
         },
     ];
 
