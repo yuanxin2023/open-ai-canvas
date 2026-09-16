@@ -19,7 +19,7 @@ const PAGE_TITLES: Record<string, string> = {
     assets: "素材",
     skills: "技能库",
     wallet: "积分中心",
-    settings: "设置",
+    settings: "个人中心",
 };
 
 export function WorkspaceTopBar({ sidebarOpen, onToggleSidebar }: { sidebarOpen: boolean; onToggleSidebar: () => void }) {

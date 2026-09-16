@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, Home, Infinity as InfinityIcon, LogOut, PanelLeftOpen, Plus, Search, ShieldCheck } from "lucide-react";
+import { ChevronDown, ChevronRight, CircleHelp, Home, Infinity as InfinityIcon, PanelLeftOpen, Plus, Search } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ComponentType, type CSSProperties } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router";
 
@@ -18,7 +18,7 @@ export type WorkspaceNavItem = {
     to?: string;
     shortcut?: string;
     badge?: string | number;
-    action?: "search" | "logout";
+    action?: "search" | "logout" | "help";
     children?: WorkspaceNavItem[];
 };
 
@@ -27,21 +27,12 @@ type WorkspaceNavGroup = {
     items: WorkspaceNavItem[];
 };
 
-/** 设置页分区子项，沿用 /settings?section=<key> 路由合同。 */
-const SETTINGS_SECTIONS: Array<{ key: string; label: string }> = [
-    { key: "channels", label: "自定义渠道" },
-    { key: "models", label: "模型选择" },
-    { key: "preferences", label: "生成偏好" },
-    { key: "prompts", label: "提示词偏好" },
-    { key: "storage", label: "我的对象存储" },
-];
-
 function toolItem(slug: NavigationToolSlug, to: string): WorkspaceNavItem {
     const tool = navigationTools.find((item) => item.slug === slug);
     return { id: slug, title: tool?.label ?? slug, icon: tool?.icon, to };
 }
 
-function buildNav(features: FeatureAvailability, isAdmin: boolean): { groups: WorkspaceNavGroup[]; footer: WorkspaceNavItem[] } {
+function buildNav(features: FeatureAvailability): { groups: WorkspaceNavGroup[]; footer: WorkspaceNavItem[] } {
     const groups: WorkspaceNavGroup[] = [
         {
             items: [
@@ -54,22 +45,12 @@ function buildNav(features: FeatureAvailability, isAdmin: boolean): { groups: Wo
         },
         {
             heading: "工作台管理",
-            items: [toolItem("skills", "/skills"), ...(features.pluginCenterEnabled ? [toolItem("plugins", "/plugins")] : []), ...(features.creditsEnabled ? [toolItem("wallet", "/wallet")] : [])],
+            items: [toolItem("skills", "/skills"), ...(features.pluginCenterEnabled ? [toolItem("plugins", "/plugins")] : []), ...(features.creditsEnabled ? [toolItem("wallet", "/settings?section=wallet")] : [])],
         },
     ];
 
-    const settingsSections = SETTINGS_SECTIONS.filter((section) => section.key !== "channels" || features.customChannelsEnabled);
     const footer: WorkspaceNavItem[] = [
-        ...(isAdmin ? [{ id: "admin", title: "管理员后台", icon: ShieldCheck, to: "/admin" }] : []),
-        {
-            ...toolItem("settings", "/settings"),
-            children: settingsSections.map((section) => ({
-                id: `settings:${section.key}`,
-                title: section.label,
-                to: `/settings?section=${section.key}`,
-            })),
-        },
-        { id: "logout", title: "退出登录", icon: LogOut, action: "logout" },
+        { id: "help", title: "帮助", icon: CircleHelp, action: "help" },
     ];
 
     return { groups, footer };
@@ -208,6 +189,7 @@ function NavItem({
             onLogout();
             return;
         }
+        if (item.action === "help") return;
         if (hasChildren) {
             setIsOpen((open) => !open);
             return;
@@ -293,14 +275,13 @@ export function WorkspaceSidebarNav({ collapsed, onNavigate, onOpenSearch, onExp
     const { pathname } = useLocation();
     const [searchParams] = useSearchParams();
     const features = useUserStore((state) => state.features);
-    const user = useUserStore((state) => state.user);
     const { handleLogout } = useWorkspaceLogout();
 
-    const { groups, footer } = useMemo(() => buildNav(features, user?.role === "admin"), [features, user?.role]);
+    const { groups, footer } = useMemo(() => buildNav(features), [features]);
 
     const slug = pathname.split("/").filter(Boolean)[0] || "home";
     const section = searchParams.get("section");
-    const activeId = slug === "settings" && section ? `settings:${section}` : slug;
+    const activeId = slug === "settings" && section === "wallet" ? "wallet" : slug === "settings" && section ? `settings:${section}` : slug;
 
     const scrollRef = useRef<HTMLDivElement>(null);
     const [scrollState, setScrollState] = useState({ hasTopFade: false, hasBottomFade: false });

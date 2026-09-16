@@ -4,7 +4,7 @@ import { createBrowserRouter, Navigate, Outlet, useLocation } from "react-router
 import { RequireAuth } from "@/components/auth/require-auth";
 import { CustomerServiceWidget } from "@/components/customer-service/customer-service-widget";
 import { FullScreenLoader, WorkspaceRouteLoader } from "@/components/ui/aceternity/full-screen-loader";
-import { loadAssetsPage, loadCanvasPage, loadCanvasProjectPage, loadCreatePage, loadProjectDetailPage, loadProjectsPage, loadWalletPage } from "@/lib/workspace-route-modules";
+import { loadAssetsPage, loadCanvasPage, loadCanvasProjectPage, loadCreatePage, loadProjectDetailPage, loadProjectsPage } from "@/lib/workspace-route-modules";
 import { CanvasRefreshShell } from "@/pages/canvas/canvas-refresh-shell";
 import { AuthScene } from "@/pages/auth/auth-scene";
 import RouteErrorPage from "@/pages/route-error";
@@ -48,7 +48,6 @@ const SkillsPage = lazy(() => import("@/pages/skills"));
 const PluginsPage = lazy(() => import("@/pages/plugins"));
 const EagleLibraryPage = lazy(() => import("@/pages/plugins/eagle"));
 const TasksPage = lazy(() => import("@/pages/tasks"));
-const WalletPage = lazy(loadWalletPage);
 const ProjectsPage = lazy(loadProjectsPage);
 const ProjectDetailPage = lazy(loadProjectDetailPage);
 const SettingsPage = lazy(() => import("@/pages/settings"));
@@ -62,6 +61,13 @@ function deferred(element: ReactNode) {
 
 function fullScreenDeferred(element: ReactNode) {
     return <Suspense fallback={<FullScreenLoader label="正在打开创作空间" detail="准备当前页面" />}>{element}</Suspense>;
+}
+
+function WalletRedirect() {
+    const { search } = useLocation();
+    const params = new URLSearchParams(search);
+    params.set("section", "wallet");
+    return <Navigate to={`/settings?${params.toString()}`} replace />;
 }
 
 function AuthenticatedWorkspaceLayout() {
@@ -137,7 +143,7 @@ export const router = createBrowserRouter([
                 path: "/wallet",
                 element: (
                     <RequireAuth>
-                        <RequireFeature feature="creditsEnabled">{deferred(<WalletPage />)}</RequireFeature>
+                        <RequireFeature feature="creditsEnabled"><WalletRedirect /></RequireFeature>
                     </RequireAuth>
                 ),
             },

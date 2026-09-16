@@ -5,6 +5,7 @@ import { SegmentedControl } from "@/components/ui/base/segmented-control";
 import type { ColumnsType } from "antd/es/table";
 import { motion, useReducedMotion } from "motion/react";
 import { ArrowDownLeft, ArrowUpRight, CalendarCheck, Coins, CreditCard, RefreshCw, RotateCcw, ShieldCheck, SlidersHorizontal, Sparkles, TicketCheck } from "lucide-react";
+import { useSearchParams } from "react-router";
 
 import { formatCredits } from "@/constant/credits";
 import { PaginationBar, TableSurface } from "@/components/layout/workspace-page";
@@ -23,8 +24,9 @@ const ledgerFilterOptions = [
     { label: "退款", value: "refund" },
 ];
 
-export default function WalletPage() {
+export default function WalletPage({ embedded = false }: { embedded?: boolean }) {
     const { message } = App.useApp();
+    const [walletSearchParams, setWalletSearchParams] = useSearchParams();
     const screens = Grid.useBreakpoint();
     const reducedMotion = useReducedMotion();
     const config = useEffectiveConfig();
@@ -93,7 +95,7 @@ export default function WalletPage() {
     }, []);
 
     useEffect(() => {
-        const returnedOrderId = new URLSearchParams(window.location.search).get("paymentOrder");
+        const returnedOrderId = walletSearchParams.get("paymentOrder");
         if (!returnedOrderId) return;
         getPaymentOrder(returnedOrderId)
             .then(({ order }) => {
@@ -103,7 +105,9 @@ export default function WalletPage() {
                 if (order.status === "pending") void confirmPayment(order.id);
             })
             .catch((error) => message.error(error instanceof Error ? error.message : "读取支付结果失败"));
-        window.history.replaceState(null, "", window.location.pathname);
+        const nextSearchParams = new URLSearchParams(walletSearchParams);
+        nextSearchParams.delete("paymentOrder");
+        setWalletSearchParams(nextSearchParams, { replace: true });
     }, []);
 
     useEffect(() => {
@@ -299,8 +303,8 @@ export default function WalletPage() {
     ];
 
     return (
-        <main className="app-user-content app-workspace-scroll library-page wallet-library-page relative h-full overflow-y-auto text-foreground">
-            <div className="relative w-full px-4 py-6 sm:px-6 lg:px-8">
+        <main className={`app-user-content library-page wallet-library-page relative text-foreground ${embedded ? "" : "app-workspace-scroll h-full overflow-y-auto"}`}>
+            <div className={embedded ? "relative w-full" : "relative w-full px-4 py-6 sm:px-6 lg:px-8"}>
                 <div className="studio-band">
                     <motion.header
                         initial={reducedMotion ? false : { opacity: 0, y: 10 }}

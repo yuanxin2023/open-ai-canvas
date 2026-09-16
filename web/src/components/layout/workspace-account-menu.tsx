@@ -1,24 +1,22 @@
 import { Popover } from "antd";
-import { Switch } from "@/components/ui/base/switch";
-import { CircleUserRound, LogIn, Moon, Sun } from "lucide-react";
+import { CircleUserRound, LogIn, LogOut, ShieldCheck } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
 
 import { AppChangelogButton } from "@/components/layout/app-changelog-modal";
 import { IdentityProviderBadge } from "@/components/layout/identity-provider-badge";
 import { useWalletBalance } from "@/hooks/use-wallet-balance";
+import { useWorkspaceLogout } from "@/hooks/use-workspace-logout";
 import { cn } from "@/lib/utils";
-import { useThemeStore } from "@/stores/use-theme-store";
 import { useUserStore, type LocalUser } from "@/stores/use-user-store";
 
 /** 顶部栏头像账户菜单：只承载账户信息、版本和显示偏好；管理与退出入口统一放在侧栏。 */
 export function WorkspaceAccountMenu() {
-    const theme = useThemeStore((state) => state.theme);
-    const setTheme = useThemeStore((state) => state.setTheme);
     const user = useUserStore((state) => state.user);
     const hydrated = useUserStore((state) => state.hydrated);
     const creditsEnabled = useUserStore((state) => state.features.creditsEnabled);
     const { availableMicrocredits } = useWalletBalance(user?.id, creditsEnabled);
+    const { handleLogout, loggingOut } = useWorkspaceLogout();
     const [menuOpen, setMenuOpen] = useState(false);
 
     const balance = availableMicrocredits === null
@@ -47,14 +45,39 @@ export function WorkspaceAccountMenu() {
                     </div>
 
                     <div className="border-t border-border/35 py-2">
+                        <Link
+                            to="/settings"
+                            onClick={() => setMenuOpen(false)}
+                            className="flex h-8 w-full items-center gap-2 rounded px-2 text-[var(--fs-label)] text-foreground/58 hover:bg-surface-hover hover:text-foreground [&_svg]:size-3.5"
+                        >
+                            <CircleUserRound aria-hidden />
+                            <span>个人中心</span>
+                        </Link>
+                        {user.role === "admin" ? (
+                            <Link
+                                to="/admin"
+                                onClick={() => setMenuOpen(false)}
+                                className="flex h-8 w-full items-center gap-2 rounded px-2 text-[var(--fs-label)] text-foreground/58 hover:bg-surface-hover hover:text-foreground [&_svg]:size-3.5"
+                            >
+                                <ShieldCheck aria-hidden />
+                                <span>管理员后台</span>
+                            </Link>
+                        ) : null}
                         <AppChangelogButton className="flex h-8 w-full items-center gap-2 rounded px-2 text-[var(--fs-label)] text-foreground/58 hover:bg-surface-hover hover:text-foreground [&_svg]:size-3.5" showLabel showVersion versionClassName="ml-auto text-[var(--fs-micro)] tabular-nums text-foreground/32" />
+                        <button
+                            type="button"
+                            disabled={loggingOut}
+                            className="flex h-8 w-full items-center gap-2 rounded px-2 text-[var(--fs-label)] text-foreground/58 hover:bg-surface-hover hover:text-foreground disabled:cursor-wait disabled:opacity-50 [&_svg]:size-3.5"
+                            onClick={() => {
+                                setMenuOpen(false);
+                                void handleLogout();
+                            }}
+                        >
+                            <LogOut aria-hidden />
+                            <span>退出登录</span>
+                        </button>
                     </div>
 
-                    <div className="flex h-10 items-center px-2">
-                        {theme === "dark" ? <Moon className="size-3.5 text-foreground/45" /> : <Sun className="size-3.5 text-foreground/45" />}
-                        <span className="ml-2 flex-1 text-xs text-foreground/65">深色模式</span>
-                        <Switch size="sm" checked={theme === "dark"} onChange={(checked) => setTheme(checked ? "dark" : "light")} aria-label="深色模式" />
-                    </div>
                 </div>
             )}
         >
