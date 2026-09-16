@@ -5,7 +5,6 @@ import { Link, useLocation, useNavigate, useSearchParams } from "react-router";
 import { BrandLogoFrame } from "@/components/brand/brand-logo";
 import { Kbd } from "@/components/ui/base/kbd";
 import { navigationTools, type NavigationToolSlug } from "@/constant/navigation-tools";
-import { useWalletBalance } from "@/hooks/use-wallet-balance";
 import { useWorkspaceLogout } from "@/hooks/use-workspace-logout";
 import { cn } from "@/lib/utils";
 import { preloadWorkspaceRoute } from "@/lib/workspace-route-modules";
@@ -42,7 +41,7 @@ function toolItem(slug: NavigationToolSlug, to: string): WorkspaceNavItem {
     return { id: slug, title: tool?.label ?? slug, icon: tool?.icon, to };
 }
 
-function buildNav(features: FeatureAvailability, balance: string, isAdmin: boolean): { groups: WorkspaceNavGroup[]; footer: WorkspaceNavItem[] } {
+function buildNav(features: FeatureAvailability, isAdmin: boolean): { groups: WorkspaceNavGroup[]; footer: WorkspaceNavItem[] } {
     const groups: WorkspaceNavGroup[] = [
         {
             items: [
@@ -55,7 +54,7 @@ function buildNav(features: FeatureAvailability, balance: string, isAdmin: boole
         },
         {
             heading: "工作台管理",
-            items: [toolItem("skills", "/skills"), ...(features.pluginCenterEnabled ? [toolItem("plugins", "/plugins")] : []), ...(features.creditsEnabled ? [{ ...toolItem("wallet", "/wallet"), badge: balance }] : [])],
+            items: [toolItem("skills", "/skills"), ...(features.pluginCenterEnabled ? [toolItem("plugins", "/plugins")] : []), ...(features.creditsEnabled ? [toolItem("wallet", "/wallet")] : [])],
         },
     ];
 
@@ -295,13 +294,9 @@ export function WorkspaceSidebarNav({ collapsed, onNavigate, onOpenSearch, onExp
     const [searchParams] = useSearchParams();
     const features = useUserStore((state) => state.features);
     const user = useUserStore((state) => state.user);
-    const creditsEnabled = useUserStore((state) => state.features.creditsEnabled);
-    const { availableMicrocredits } = useWalletBalance(user?.id, creditsEnabled);
     const { handleLogout } = useWorkspaceLogout();
 
-    const balance = availableMicrocredits === null ? "--" : (availableMicrocredits / 1_000_000).toLocaleString("zh-CN", { maximumFractionDigits: 2 });
-
-    const { groups, footer } = useMemo(() => buildNav(features, balance, user?.role === "admin"), [features, balance, user?.role]);
+    const { groups, footer } = useMemo(() => buildNav(features, user?.role === "admin"), [features, user?.role]);
 
     const slug = pathname.split("/").filter(Boolean)[0] || "home";
     const section = searchParams.get("section");
