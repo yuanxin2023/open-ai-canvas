@@ -61,6 +61,7 @@ type UpdatePaymentProviderConfigRequest struct {
 type TopupProductRequest struct {
 	Name                string `json:"name"`
 	Description         string `json:"description"`
+	Benefits            string `json:"benefits"`
 	AmountFen           int64  `json:"amountFen"`
 	CreditsMicrocredits int64  `json:"creditsMicrocredits"`
 	Enabled             bool   `json:"enabled"`
@@ -456,7 +457,7 @@ func topupProductFromRequest(id, actorID string, request TopupProductRequest) (*
 		return nil, BadAuthRequest("充值积分最多保留 2 位小数")
 	}
 	return &model.TopupProduct{
-		ID: id, Name: name, Description: truncateRunes(strings.TrimSpace(request.Description), 500),
+		ID: id, Name: name, Description: truncateRunes(strings.TrimSpace(request.Description), 500), Benefits: truncateRunes(strings.TrimSpace(request.Benefits), 1000),
 		AmountFen: request.AmountFen, CreditsMicrocredits: request.CreditsMicrocredits,
 		Enabled: request.Enabled, SortOrder: request.SortOrder, CreatedBy: actorID, UpdatedBy: actorID,
 	}, nil

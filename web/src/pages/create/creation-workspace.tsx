@@ -631,7 +631,7 @@ function ModePicker({ mode, onModeChange }: { mode: CreationMode; onModeChange: 
     ];
     return <div className="creation-mode-capsule" role="group" aria-label="生成类型">
         {items.map((item) => (
-            <button key={item.mode} type="button" className="creation-chat-control" aria-pressed={item.mode === mode} aria-label={`${item.label}生成`} onClick={() => onModeChange(item.mode)}>
+            <button key={item.mode} type="button" className={`creation-chat-control${item.mode === mode ? " is-selected" : ""}`} aria-pressed={item.mode === mode} aria-label={`${item.label}生成`} onClick={() => onModeChange(item.mode)}>
                 {item.icon}
                 <span>{item.label}</span>
             </button>

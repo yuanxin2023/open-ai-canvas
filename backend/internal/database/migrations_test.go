@@ -35,8 +35,37 @@ func TestMigrateSchemaRecordsAndValidatesVersion(t *testing.T) {
 	if !db.Migrator().HasTable(&model.AgentProfile{}) || !db.Migrator().HasIndex(&model.AgentProfile{}, "idx_agent_profiles_scope") {
 		t.Fatal("schema migration v15 did not create scoped Agent profiles")
 	}
+	if !db.Migrator().HasColumn(&model.TopupProduct{}, "Benefits") {
+		t.Fatal("schema migration v16 did not create top-up product benefits")
+	}
 	if err := MigrateSchema(db); err != nil {
 		t.Fatalf("migration should be idempotent: %v", err)
+	}
+}
+
+func TestMigrateSchemaV16UpgradesExistingDatabase(t *testing.T) {
+	db, err := Open(Config{Driver: "sqlite", DSN: "file:migration-topup-product-benefits-v16?mode=memory&cache=shared"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := MigrateSchema(db); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Migrator().DropColumn(&model.TopupProduct{}, "Benefits"); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Where("version = ?", 16).Delete(&schemaMigration{}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := MigrateSchema(db); err != nil {
+		t.Fatalf("upgrade from v15: %v", err)
+	}
+	if !db.Migrator().HasColumn(&model.TopupProduct{}, "Benefits") {
+		t.Fatal("v16 upgrade did not install top-up product benefits column")
+	}
+	status, err := ReadSchemaStatus(db)
+	if err != nil || !status.Ready || status.Current != 16 {
+		t.Fatalf("unexpected upgraded schema status: %+v, %v", status, err)
 	}
 }
 

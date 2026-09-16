@@ -52,7 +52,7 @@ func (r *Repository) CreateTopupProduct(product *model.TopupProduct) error {
 
 func (r *Repository) UpdateTopupProduct(product *model.TopupProduct) error {
 	return r.db.Model(&model.TopupProduct{}).Where("id = ?", product.ID).Updates(map[string]any{
-		"name": product.Name, "description": product.Description, "amount_fen": product.AmountFen,
+		"name": product.Name, "description": product.Description, "benefits": product.Benefits, "amount_fen": product.AmountFen,
 		"credits_microcredits": product.CreditsMicrocredits, "enabled": product.Enabled,
 		"sort_order": product.SortOrder, "updated_by": product.UpdatedBy, "updated_at": time.Now(),
 	}).Error

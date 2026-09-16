@@ -38,6 +38,7 @@ type TopupProduct struct {
 	ID                  string    `json:"id" gorm:"primaryKey;size:36"`
 	Name                string    `json:"name" gorm:"size:120"`
 	Description         string    `json:"description,omitempty" gorm:"size:500"`
+	Benefits            string    `json:"benefits,omitempty" gorm:"type:text"`
 	AmountFen           int64     `json:"amountFen" gorm:"index"`
 	CreditsMicrocredits int64     `json:"creditsMicrocredits"`
 	Enabled             bool      `json:"enabled" gorm:"index"`

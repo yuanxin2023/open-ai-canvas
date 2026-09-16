@@ -154,7 +154,10 @@ function NavItem({
     }, [isActive, hasChildren]);
 
     const Icon = item.icon;
-    const rowStyle = collapsed ? undefined : ({ paddingLeft: `${level * 12 + 10}px` } as CSSProperties);
+    const rowStyle = {
+        ...(collapsed ? {} : { paddingLeft: `${level * 12 + 10}px` }),
+        ...(isActive ? { background: "var(--workspace-nav-active-bg)" } : {}),
+    } as CSSProperties;
 
     const rowContent = (
         <>
@@ -237,7 +240,7 @@ function NavItem({
     );
 }
 
-function WorkspaceHelpMenu({ collapsed, onNavigate }: { collapsed: boolean; onNavigate: () => void }) {
+function WorkspaceHelpMenu({ collapsed, selected, onSelect, onNavigate }: { collapsed: boolean; selected: boolean; onSelect: () => void; onNavigate: () => void }) {
     const [open, setOpen] = useState(false);
     const [customerService, setCustomerService] = useState<PublicCustomerService | null>(null);
     const [mobileViewport, setMobileViewport] = useState(() => window.matchMedia("(max-width: 767px)").matches);
@@ -310,11 +313,13 @@ function WorkspaceHelpMenu({ collapsed, onNavigate }: { collapsed: boolean; onNa
         >
             <button
                 type="button"
-                className={cn("app-workspace-nav-link group flex min-h-9 w-full items-center justify-between gap-2 rounded-[var(--r-sm)] px-2.5 py-2 text-[var(--fs-body)] text-foreground/62 transition-colors duration-200 select-none hover:bg-surface-hover hover:text-foreground", collapsed && "is-collapsed")}
+                className={cn("app-workspace-nav-link group flex min-h-9 w-full items-center justify-between gap-2 rounded-[var(--r-sm)] px-2.5 py-2 text-[var(--fs-body)] text-foreground/62 transition-colors duration-200 select-none hover:bg-surface-hover hover:text-foreground", selected && "is-active font-medium", collapsed && "is-collapsed")}
+                style={selected ? { background: "var(--workspace-nav-active-bg)" } : undefined}
                 aria-label={collapsed ? "帮助" : undefined}
                 title={collapsed ? "帮助" : undefined}
                 aria-haspopup="menu"
                 aria-expanded={open}
+                onClick={onSelect}
             >
                 <span className="app-workspace-nav-main flex min-w-0 items-center gap-2.5">
                     <CircleHelp className="size-4 shrink-0 text-foreground/60 group-hover:text-foreground/80" strokeWidth={1.6} />
@@ -325,7 +330,7 @@ function WorkspaceHelpMenu({ collapsed, onNavigate }: { collapsed: boolean; onNa
     );
 }
 
-function NavGroup({ group, activeId, onNavigate, onOpenSearch, onLogout, collapsed }: { group: WorkspaceNavGroup; activeId: string; onNavigate: () => void; onOpenSearch: () => void; onLogout: () => void; collapsed: boolean }) {
+function NavGroup({ group, activeId, onNavigate, onOpenSearch, onLogout, collapsed }: { group: WorkspaceNavGroup; activeId: string; onNavigate: (id: string) => void; onOpenSearch: () => void; onLogout: () => void; collapsed: boolean }) {
     const [isOpen, setIsOpen] = useState(true);
     const hasActive = group.items.some((item) => item.id === activeId || (item.id === "settings" && activeId.startsWith("settings:")));
 
@@ -371,6 +376,12 @@ export function WorkspaceSidebarNav({ collapsed, onNavigate, onOpenSearch, onExp
     const slug = pathname.split("/").filter(Boolean)[0] || "home";
     const section = searchParams.get("section");
     const activeId = slug === "settings" && section === "wallet" ? "wallet" : slug === "settings" && section ? `settings:${section}` : slug;
+    const [selectedNavId, setSelectedNavId] = useState(activeId);
+    useEffect(() => setSelectedNavId(activeId), [activeId]);
+    const selectNavigationItem = (id: string) => {
+        setSelectedNavId(id);
+        onNavigate();
+    };
 
     const scrollRef = useRef<HTMLDivElement>(null);
     const [scrollState, setScrollState] = useState({ hasTopFade: false, hasBottomFade: false });
@@ -411,7 +422,7 @@ export function WorkspaceSidebarNav({ collapsed, onNavigate, onOpenSearch, onExp
                 className={cn("app-workspace-sidebar-scroll-area flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-3 pb-3 pt-2", collapsed && "is-collapsed", scrollState.hasTopFade && "has-top-fade", scrollState.hasBottomFade && "has-bottom-fade")}
             >
                 {groups.map((group, index) => (
-                    <NavGroup key={index} group={group} activeId={activeId} onNavigate={onNavigate} onOpenSearch={onOpenSearch} onLogout={() => void handleLogout()} collapsed={collapsed} />
+                    <NavGroup key={index} group={group} activeId={selectedNavId} onNavigate={selectNavigationItem} onOpenSearch={onOpenSearch} onLogout={() => void handleLogout()} collapsed={collapsed} />
                 ))}
             </div>
 
@@ -419,8 +430,8 @@ export function WorkspaceSidebarNav({ collapsed, onNavigate, onOpenSearch, onExp
                 <div className="flex flex-col gap-0.5">
                     {footer.map((item) => (
                         item.id === "help"
-                            ? <WorkspaceHelpMenu key={item.id} collapsed={collapsed} onNavigate={onNavigate} />
-                            : <NavItem key={item.id} item={item} activeId={activeId} onSelect={onNavigate} onOpenSearch={onOpenSearch} onLogout={() => void handleLogout()} collapsed={collapsed} />
+                            ? <WorkspaceHelpMenu key={item.id} collapsed={collapsed} selected={selectedNavId === item.id} onSelect={() => setSelectedNavId(item.id)} onNavigate={onNavigate} />
+                            : <NavItem key={item.id} item={item} activeId={selectedNavId} onSelect={selectNavigationItem} onOpenSearch={onOpenSearch} onLogout={() => void handleLogout()} collapsed={collapsed} />
                     ))}
                 </div>
             </div>

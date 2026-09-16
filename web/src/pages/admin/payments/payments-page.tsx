@@ -44,6 +44,7 @@ type ProviderFormValues = {
 type ProductFormValues = {
     name: string;
     description?: string;
+    benefits?: string;
     amountYuan: number;
     credits: number;
     enabled: boolean;
@@ -203,6 +204,7 @@ export default function AdminPaymentsPage() {
                 ? {
                       name: product.name,
                       description: product.description,
+                      benefits: product.benefits,
                       amountYuan: product.amountFen / 100,
                       credits: product.creditsMicrocredits / 1_000_000,
                       enabled: product.enabled,
@@ -219,6 +221,7 @@ export default function AdminPaymentsPage() {
         const input = {
             name: values.name.trim(),
             description: values.description?.trim(),
+            benefits: values.benefits?.trim(),
             amountFen: Math.round(values.amountYuan * 100),
             creditsMicrocredits: Math.round(values.credits * 1_000_000),
             enabled: values.enabled,
@@ -702,6 +705,9 @@ export default function AdminPaymentsPage() {
                     </Form.Item>
                     <Form.Item name="description" label="商品说明" rules={[{ max: 500 }]}>
                         <Input.TextArea rows={3} />
+                    </Form.Item>
+                    <Form.Item name="benefits" label="套餐权益（每行一项）" rules={[{ max: 1000 }]} extra="用户端商品卡片会将每一行显示为一条勾选说明；留空则不显示权益区域。">
+                        <Input.TextArea rows={4} placeholder={'例如：\n支持图片与文本生成\n支付成功后积分自动到账'} />
                     </Form.Item>
                     <div className="grid grid-cols-2 gap-3">
                         <Form.Item name="amountYuan" label="售价（元）" rules={[{ required: true }, { type: "number", min: 0.01, max: 1_000_000 }]}>

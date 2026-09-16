@@ -122,9 +122,13 @@ func TestTopupProductCreditAmountStaysWithinSafeLimit(t *testing.T) {
 	}); err == nil {
 		t.Fatal("expected oversized top-up credits to be rejected")
 	}
-	if _, err := topupProductFromRequest("product", "admin", TopupProductRequest{
-		Name: "有效积分商品", AmountFen: 1, CreditsMicrocredits: maxTopupCreditsMicrocredits,
-	}); err != nil {
+	product, err := topupProductFromRequest("product", "admin", TopupProductRequest{
+		Name: "有效积分商品", Benefits: "权益一\n权益二", AmountFen: 1, CreditsMicrocredits: maxTopupCreditsMicrocredits,
+	})
+	if err != nil {
 		t.Fatalf("maximum safe top-up credits: %v", err)
+	}
+	if product.Benefits != "权益一\n权益二" {
+		t.Fatalf("benefits = %q, want configured benefit lines", product.Benefits)
 	}
 }

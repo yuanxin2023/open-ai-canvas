@@ -1,6 +1,6 @@
 import { AlipayCircleFilled, WechatFilled } from "@ant-design/icons";
 import { App, Button, Input, Popover, QRCode, Skeleton } from "antd";
-import { Check, CircleCheck, CreditCard, Gift, Headphones, Sparkles } from "lucide-react";
+import { Check, CircleCheck, CreditCard, Gift, Sparkles } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { AppModal } from "@/components/ui/product/app-modal";
@@ -31,6 +31,7 @@ export function WorkspaceCreditPopover({ userId }: { userId: string }) {
     const completedPaymentOrderId = useRef("");
     const balance = availableMicrocredits === null ? "--" : formatCredits(availableMicrocredits);
     const normalizedCode = code.trim().toLowerCase();
+    const productBenefits = (product: TopupProduct) => (product.benefits || "").split(/\r?\n/).map((item) => item.trim()).filter(Boolean);
     const selectedProvider = useMemo(() => providers.find((provider) => provider.id === selectedProviderId), [providers, selectedProviderId]);
 
     useEffect(() => {
@@ -277,29 +278,13 @@ export function WorkspaceCreditPopover({ userId }: { userId: string }) {
                                         <Sparkles aria-hidden />
                                         <strong>{formatCredits(product.creditsMicrocredits)} 积分</strong>
                                     </div>
-                                    <div className="workspace-credit-product-facts">
-                                        <span><Check aria-hidden />按管理员配置金额结算</span>
-                                        <span><Check aria-hidden />支付成功后积分自动到账</span>
-                                    </div>
+                                    {productBenefits(product).length ? <div className="workspace-credit-product-facts">
+                                        {productBenefits(product).map((benefit, index) => <span key={`${product.id}-benefit-${index}`}><Check aria-hidden />{benefit}</span>)}
+                                    </div> : null}
                                     <Button type="primary" block disabled={!providers.length} onClick={() => openPaymentSelector(product)}>{providers.length ? "选择套餐" : "暂无可用支付方式"}</Button>
                                 </article>
                             ))}
 
-                            <article className="workspace-credit-product-card workspace-credit-contact-card">
-                                <div className="workspace-credit-product-card-heading">
-                                    <Headphones aria-hidden />
-                                    <h3>企业套餐</h3>
-                                </div>
-                                <div className="workspace-credit-contact-title">联系客服</div>
-                                <p className="workspace-credit-product-description">定制服务</p>
-                                <div className="workspace-credit-product-facts">
-                                    <span><Check aria-hidden />企业用量与能力可单独报价</span>
-                                    <span><Check aria-hidden />支持合同、对公与开票</span>
-                                    <span><Check aria-hidden />提供企业内训和业务陪跑</span>
-                                    <span><Check aria-hidden />资产存储数量与权限可按需定制</span>
-                                </div>
-                                <Button block onClick={() => message.info("客服联系方式将在后续配置")}>联系客服</Button>
-                            </article>
                         </div>
                     )}
                 </section>

@@ -562,8 +562,8 @@
     --workspace-sidebar: var(--workspace-navigation);
     --workspace-accent: #171717;
     --workspace-accent-soft: rgba(17, 17, 17, 0.07);
-    --workspace-nav-active-bg: color-mix(in srgb, var(--workspace-accent) 12%, transparent);
-    --workspace-nav-active-hover-bg: color-mix(in srgb, var(--workspace-accent) 16%, transparent);
+    --workspace-nav-active-bg: color-mix(in srgb, var(--workspace-sidebar) 90%, var(--foreground) 10%);
+    --workspace-nav-active-hover-bg: color-mix(in srgb, var(--workspace-sidebar) 86%, var(--foreground) 14%);
     --workspace-sidebar-width: 208px;        /* 侧栏展开宽度：较原 260px 收窄 20% */
     --workspace-sidebar-nav-width: 208px;    /* 展开态导航内容宽度 */
     --workspace-sidebar-collapsed-width: 56px; /* 折叠态保留可发现的图标菜单轨 */
@@ -726,8 +726,8 @@
     --workspace-sidebar: var(--workspace-navigation);
     --workspace-accent: #f5f5f5;
     --workspace-accent-soft: rgba(255, 255, 255, 0.09);
-    --workspace-nav-active-bg: color-mix(in srgb, var(--workspace-accent) 13%, transparent);
-    --workspace-nav-active-hover-bg: color-mix(in srgb, var(--workspace-accent) 18%, transparent);
+    --workspace-nav-active-bg: color-mix(in srgb, var(--workspace-sidebar) 90%, var(--foreground) 10%);
+    --workspace-nav-active-hover-bg: color-mix(in srgb, var(--workspace-sidebar) 86%, var(--foreground) 14%);
     --chart-1: oklch(0.87 0 0);
     --chart-2: oklch(0.556 0 0);
     --chart-3: oklch(0.439 0 0);
@@ -1940,7 +1940,9 @@
 
     .workspace-credit-products-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 360px));
+    justify-content: center;
+    align-items: stretch;
     gap: 20px;
     margin-top: 36px;
     }
@@ -1949,11 +1951,11 @@
     display: flex;
     min-height: 500px;
     flex-direction: column;
-    border: 1px solid var(--border-color);
+    border: 1px solid var(--workspace-border);
     border-radius: var(--r-xl);
     padding: 26px 24px 24px;
-    background: var(--surface-raised);
-    box-shadow: var(--elevation-card);
+    background: var(--workspace-surface-strong);
+    box-shadow: 0 10px 30px color-mix(in srgb, var(--foreground) 7%, transparent), 0 1px 3px color-mix(in srgb, var(--foreground) 5%, transparent);
     }
 
     .workspace-credit-product-card-heading {
@@ -2025,7 +2027,7 @@
     gap: 14px;
     margin: 28px 0 24px;
     padding-top: 24px;
-    border-top: 1px solid var(--border-color);
+    border-top: 1px solid var(--workspace-border);
     color: color-mix(in srgb, var(--foreground) 72%, transparent);
     font-size: var(--fs-label);
     line-height: 1.55;
@@ -2048,17 +2050,6 @@
     .workspace-credit-product-card > .ant-btn {
     height: 44px;
     margin-top: auto;
-    }
-
-    .workspace-credit-contact-title {
-    margin-top: 34px;
-    font-size: 30px;
-    font-weight: 650;
-    letter-spacing: -0.025em;
-    }
-
-    .workspace-credit-contact-card .workspace-credit-product-facts {
-    margin-top: 42px;
     }
 
     .workspace-credit-products-state {
@@ -13356,6 +13347,22 @@ html:not(.dark) .creation-media-preview-modal .ant-modal-container { background:
         background: rgba(255, 255, 255, .065) !important;
         color: var(--creation-text) !important;
         transform: none;
+    }
+
+    /* 生成方式是持久单选状态；放在同一 utilities 层中，避免被上面的透明背景重置。 */
+    .creation-home .creation-mode-capsule .creation-chat-control.is-selected,
+    .creation-home .creation-mode-capsule .creation-chat-control.is-selected:hover {
+        background: rgba(255, 255, 255, .12) !important;
+        color: var(--creation-text) !important;
+    }
+
+    .creation-home .creation-mode-capsule .creation-chat-control.is-selected > svg {
+        color: var(--creation-text) !important;
+    }
+
+    html:not(.dark) .creation-home .creation-mode-capsule .creation-chat-control.is-selected,
+    html:not(.dark) .creation-home .creation-mode-capsule .creation-chat-control.is-selected:hover {
+        background: rgba(28, 32, 37, .09) !important;
     }
 
     .creation-parameter-menu {
