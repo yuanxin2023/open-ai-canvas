@@ -6,7 +6,7 @@ import { AdminPageFrame } from "@/pages/admin/components/admin-shell";
 import { getAdminCustomerService, updateAdminCustomerService, uploadCustomerServiceButtonImage, type AdminCustomerService, type CustomerServiceDisplayType, type CustomerServicePosition } from "@/services/api/customer-service";
 import { cn } from "@/lib/utils";
 
-type EditableCustomerService = Pick<AdminCustomerService, "enabled" | "position" | "displayType" | "color" | "label" | "imageResourceId" | "draggable" | "desktopEnabled" | "mobileEnabled" | "buttonSize" | "offsetX" | "offsetY" | "tutorialUrl">;
+type EditableCustomerService = Pick<AdminCustomerService, "enabled" | "floatingButtonEnabled" | "position" | "displayType" | "color" | "label" | "imageResourceId" | "draggable" | "desktopEnabled" | "mobileEnabled" | "buttonSize" | "offsetX" | "offsetY" | "tutorialUrl">;
 
 const positionOptions = [
     { label: "右下", value: "bottom-right" },
@@ -25,6 +25,7 @@ const displayOptions = [
 function editableSetting(setting: AdminCustomerService): EditableCustomerService {
     return {
         enabled: setting.enabled,
+        floatingButtonEnabled: setting.floatingButtonEnabled,
         position: setting.position,
         displayType: setting.displayType,
         color: setting.color,
@@ -101,8 +102,8 @@ export default function CustomerServicePage() {
         setSaving(true);
         try {
             const updated = await updateAdminCustomerService({ ...draft, tutorialUrl });
-            if (updated.schemaVersion < 3 || updated.buttonSize !== draft.buttonSize || updated.tutorialUrl !== tutorialUrl) {
-                throw new Error("当前运行的后端版本尚未支持使用教程配置，请更新并重启后端服务后再保存");
+            if (updated.schemaVersion < 4 || updated.buttonSize !== draft.buttonSize || updated.tutorialUrl !== tutorialUrl || updated.floatingButtonEnabled !== draft.floatingButtonEnabled) {
+                throw new Error("当前运行的后端版本尚未支持最新客服配置，请更新并重启后端服务后再保存");
             }
             setSetting(updated);
             setDraft(editableSetting(updated));
@@ -185,6 +186,9 @@ export default function CustomerServicePage() {
                             <SettingsSection title="显示范围" description="总开关关闭后，用户端不加载 Chatwoot，也不会显示客服入口。">
                                 <SettingRow title="显示客服入口" description="控制整个用户端客服功能是否启用。">
                                     <Switch checked={draft.enabled} onChange={(value) => patchDraft("enabled", value)} />
+                                </SettingRow>
+                                <SettingRow title="显示悬浮客服按钮" description="关闭后隐藏用户端悬浮按钮，左侧“联系客服”入口仍可使用。">
+                                    <Switch checked={draft.floatingButtonEnabled} onChange={(value) => patchDraft("floatingButtonEnabled", value)} />
                                 </SettingRow>
                                 <SettingRow title="桌面端显示" description="在桌面浏览器和大屏设备上显示。">
                                     <Switch checked={draft.desktopEnabled} onChange={(value) => patchDraft("desktopEnabled", value)} />
@@ -300,7 +304,7 @@ export default function CustomerServicePage() {
                             <div className="admin-settings-section-content p-4">
                                 <div className="relative h-[420px] overflow-hidden rounded-xl border border-border/70 bg-[radial-gradient(circle_at_top,#ffffff10,transparent_55%)]">
                                     <div className="absolute inset-x-0 top-0 border-b border-border/50 px-4 py-3 text-xs text-foreground/40">用户工作区</div>
-                                    {draft.enabled ? <PreviewButton draft={draft} imagePreview={imagePreview} /> : <div className="grid h-full place-items-center text-xs text-foreground/35">客服入口已关闭</div>}
+                                    {draft.enabled && draft.floatingButtonEnabled ? <PreviewButton draft={draft} imagePreview={imagePreview} /> : <div className="grid h-full place-items-center text-xs text-foreground/35">{draft.enabled ? "悬浮客服按钮已关闭" : "客服入口已关闭"}</div>}
                                 </div>
                             </div>
                         </section>

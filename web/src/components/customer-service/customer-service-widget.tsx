@@ -120,7 +120,8 @@ export function CustomerServiceWidget() {
         return () => media.removeEventListener("change", update);
     }, [setting]);
 
-    const visible = Boolean(setting?.enabled && viewportAllowed && !location.pathname.startsWith("/admin"));
+    const serviceAvailable = Boolean(setting?.enabled && viewportAllowed && !location.pathname.startsWith("/admin"));
+    const buttonVisible = Boolean(serviceAvailable && setting?.floatingButtonEnabled);
     const requestOpenChat = useCallback(() => {
         if (sdkReady && window.$chatwoot) window.$chatwoot.toggle("open");
         else pendingOpenRef.current = true;
@@ -128,14 +129,14 @@ export function CustomerServiceWidget() {
 
     useEffect(() => {
         const handleOpen = () => {
-            if (visible) requestOpenChat();
+            if (serviceAvailable) requestOpenChat();
         };
         window.addEventListener(CUSTOMER_SERVICE_OPEN_EVENT, handleOpen);
         return () => window.removeEventListener(CUSTOMER_SERVICE_OPEN_EVENT, handleOpen);
-    }, [requestOpenChat, visible]);
+    }, [requestOpenChat, serviceAvailable]);
 
     useEffect(() => {
-        if (!visible) {
+        if (!serviceAvailable) {
             window.$chatwoot?.toggle("close");
             return;
         }
@@ -146,16 +147,16 @@ export function CustomerServiceWidget() {
                 window.$chatwoot?.toggle("open");
             }
         });
-    }, [setting?.position, visible]);
+    }, [serviceAvailable, setting?.position]);
 
     useLayoutEffect(() => {
-        if (!visible || !setting?.draggable || !buttonRef.current) {
+        if (!buttonVisible || !setting?.draggable || !buttonRef.current) {
             setPoint(null);
             return;
         }
         const stored = readStoredPoint();
         if (stored) setPoint(clampPoint(stored, buttonRef.current));
-    }, [setting?.displayType, setting?.draggable, visible]);
+    }, [buttonVisible, setting?.displayType, setting?.draggable]);
 
     useEffect(() => {
         if (!point || !buttonRef.current) return;
@@ -164,7 +165,7 @@ export function CustomerServiceWidget() {
         return () => window.removeEventListener("resize", update);
     }, [point]);
 
-    if (!visible || !setting) return null;
+    if (!buttonVisible || !setting) return null;
 
     const customImage = setting.displayType === "custom-image" && setting.imageUrl;
     const square = setting.displayType === "circle" || setting.displayType === "custom-image";

@@ -23,48 +23,50 @@ import (
 
 const (
 	customerServiceSettingKey         = "customer_service"
-	customerServiceSchemaVersion      = 3
+	customerServiceSchemaVersion      = 4
 	customerServiceButtonImageMaxSize = int64(2 << 20)
 )
 
 var customerServiceColorPattern = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
 
 type CustomerServiceSetting struct {
-	SchemaVersion   int    `json:"schemaVersion"`
-	Enabled         bool   `json:"enabled"`
-	Position        string `json:"position"`
-	DisplayType     string `json:"displayType"`
-	Color           string `json:"color"`
-	Label           string `json:"label"`
-	ImageResourceID string `json:"imageResourceId"`
-	Draggable       bool   `json:"draggable"`
-	DesktopEnabled  bool   `json:"desktopEnabled"`
-	MobileEnabled   bool   `json:"mobileEnabled"`
-	ButtonSize      int    `json:"buttonSize"`
-	OffsetX         int    `json:"offsetX"`
-	OffsetY         int    `json:"offsetY"`
-	TutorialURL     string `json:"tutorialUrl"`
+	SchemaVersion         int    `json:"schemaVersion"`
+	Enabled               bool   `json:"enabled"`
+	FloatingButtonEnabled bool   `json:"floatingButtonEnabled"`
+	Position              string `json:"position"`
+	DisplayType           string `json:"displayType"`
+	Color                 string `json:"color"`
+	Label                 string `json:"label"`
+	ImageResourceID       string `json:"imageResourceId"`
+	Draggable             bool   `json:"draggable"`
+	DesktopEnabled        bool   `json:"desktopEnabled"`
+	MobileEnabled         bool   `json:"mobileEnabled"`
+	ButtonSize            int    `json:"buttonSize"`
+	OffsetX               int    `json:"offsetX"`
+	OffsetY               int    `json:"offsetY"`
+	TutorialURL           string `json:"tutorialUrl"`
 }
 
 type PublicCustomerServiceSetting struct {
-	SchemaVersion   int       `json:"schemaVersion"`
-	Enabled         bool      `json:"enabled"`
-	Position        string    `json:"position"`
-	DisplayType     string    `json:"displayType"`
-	Color           string    `json:"color"`
-	Label           string    `json:"label"`
-	ImageURL        string    `json:"imageUrl"`
-	ImageConfigured bool      `json:"imageConfigured"`
-	Draggable       bool      `json:"draggable"`
-	DesktopEnabled  bool      `json:"desktopEnabled"`
-	MobileEnabled   bool      `json:"mobileEnabled"`
-	ButtonSize      int       `json:"buttonSize"`
-	OffsetX         int       `json:"offsetX"`
-	OffsetY         int       `json:"offsetY"`
-	TutorialURL     string    `json:"tutorialUrl"`
-	Configured      bool      `json:"configured"`
-	Revision        string    `json:"revision"`
-	UpdatedAt       time.Time `json:"updatedAt,omitempty"`
+	SchemaVersion         int       `json:"schemaVersion"`
+	Enabled               bool      `json:"enabled"`
+	FloatingButtonEnabled bool      `json:"floatingButtonEnabled"`
+	Position              string    `json:"position"`
+	DisplayType           string    `json:"displayType"`
+	Color                 string    `json:"color"`
+	Label                 string    `json:"label"`
+	ImageURL              string    `json:"imageUrl"`
+	ImageConfigured       bool      `json:"imageConfigured"`
+	Draggable             bool      `json:"draggable"`
+	DesktopEnabled        bool      `json:"desktopEnabled"`
+	MobileEnabled         bool      `json:"mobileEnabled"`
+	ButtonSize            int       `json:"buttonSize"`
+	OffsetX               int       `json:"offsetX"`
+	OffsetY               int       `json:"offsetY"`
+	TutorialURL           string    `json:"tutorialUrl"`
+	Configured            bool      `json:"configured"`
+	Revision              string    `json:"revision"`
+	UpdatedAt             time.Time `json:"updatedAt,omitempty"`
 }
 
 type AdminCustomerServiceSetting struct {
@@ -78,18 +80,19 @@ type AdminCustomerServiceSetting struct {
 
 func defaultCustomerServiceSetting() CustomerServiceSetting {
 	return CustomerServiceSetting{
-		SchemaVersion:  customerServiceSchemaVersion,
-		Enabled:        true,
-		Position:       "bottom-right",
-		DisplayType:    "circle",
-		Color:          "#2563EB",
-		Label:          "联系客服",
-		Draggable:      false,
-		DesktopEnabled: true,
-		MobileEnabled:  true,
-		ButtonSize:     56,
-		OffsetX:        24,
-		OffsetY:        24,
+		SchemaVersion:         customerServiceSchemaVersion,
+		Enabled:               true,
+		FloatingButtonEnabled: true,
+		Position:              "bottom-right",
+		DisplayType:           "circle",
+		Color:                 "#2563EB",
+		Label:                 "联系客服",
+		Draggable:             false,
+		DesktopEnabled:        true,
+		MobileEnabled:         true,
+		ButtonSize:            56,
+		OffsetX:               24,
+		OffsetY:               24,
 	}
 }
 
@@ -346,21 +349,22 @@ func publicCustomerServiceSetting(setting *model.SystemSetting, value CustomerSe
 		revision = strconv.FormatInt(setting.UpdatedAt.UTC().UnixNano(), 36)
 	}
 	result := &PublicCustomerServiceSetting{
-		SchemaVersion:  customerServiceSchemaVersion,
-		Enabled:        value.Enabled,
-		Position:       value.Position,
-		DisplayType:    value.DisplayType,
-		Color:          value.Color,
-		Label:          value.Label,
-		Draggable:      value.Draggable,
-		DesktopEnabled: value.DesktopEnabled,
-		MobileEnabled:  value.MobileEnabled,
-		ButtonSize:     value.ButtonSize,
-		OffsetX:        value.OffsetX,
-		OffsetY:        value.OffsetY,
-		TutorialURL:    value.TutorialURL,
-		Configured:     setting != nil,
-		Revision:       revision,
+		SchemaVersion:         customerServiceSchemaVersion,
+		Enabled:               value.Enabled,
+		FloatingButtonEnabled: value.FloatingButtonEnabled,
+		Position:              value.Position,
+		DisplayType:           value.DisplayType,
+		Color:                 value.Color,
+		Label:                 value.Label,
+		Draggable:             value.Draggable,
+		DesktopEnabled:        value.DesktopEnabled,
+		MobileEnabled:         value.MobileEnabled,
+		ButtonSize:            value.ButtonSize,
+		OffsetX:               value.OffsetX,
+		OffsetY:               value.OffsetY,
+		TutorialURL:           value.TutorialURL,
+		Configured:            setting != nil,
+		Revision:              revision,
 	}
 	if setting != nil {
 		result.UpdatedAt = setting.UpdatedAt

@@ -8,6 +8,7 @@ export type CustomerServiceDisplayType = "circle" | "pill" | "icon-text" | "cust
 export type PublicCustomerService = {
     schemaVersion: number;
     enabled: boolean;
+    floatingButtonEnabled: boolean;
     position: CustomerServicePosition;
     displayType: CustomerServiceDisplayType;
     color: string;
@@ -51,7 +52,7 @@ export async function getAdminCustomerService(signal?: AbortSignal) {
     return result.setting;
 }
 
-export async function updateAdminCustomerService(input: Pick<AdminCustomerService, "enabled" | "position" | "displayType" | "color" | "label" | "imageResourceId" | "draggable" | "desktopEnabled" | "mobileEnabled" | "buttonSize" | "offsetX" | "offsetY" | "tutorialUrl">) {
+export async function updateAdminCustomerService(input: Pick<AdminCustomerService, "enabled" | "floatingButtonEnabled" | "position" | "displayType" | "color" | "label" | "imageResourceId" | "draggable" | "desktopEnabled" | "mobileEnabled" | "buttonSize" | "offsetX" | "offsetY" | "tutorialUrl">) {
     const result = await http.patch<{ setting: AdminCustomerService }>("/admin/customer-service", input);
     return result.setting;
 }

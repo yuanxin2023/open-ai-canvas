@@ -1,13 +1,16 @@
 package app
 
-import "testing"
+import (
+	"encoding/json"
+	"testing"
+)
 
 func TestCustomerServiceDefaultsKeepSupportAvailable(t *testing.T) {
 	setting := defaultCustomerServiceSetting()
-	if setting.SchemaVersion != 3 {
-		t.Fatalf("expected schema version 3, got %d", setting.SchemaVersion)
+	if setting.SchemaVersion != 4 {
+		t.Fatalf("expected schema version 4, got %d", setting.SchemaVersion)
 	}
-	if !setting.Enabled || !setting.DesktopEnabled || !setting.MobileEnabled {
+	if !setting.Enabled || !setting.FloatingButtonEnabled || !setting.DesktopEnabled || !setting.MobileEnabled {
 		t.Fatalf("default visibility = %#v", setting)
 	}
 	if setting.Position != "bottom-right" || setting.DisplayType != "circle" || setting.Color != "#2563EB" || setting.Label != "联系客服" {
@@ -19,6 +22,16 @@ func TestCustomerServiceDefaultsKeepSupportAvailable(t *testing.T) {
 	public := publicCustomerServiceSetting(nil, setting)
 	if public.Configured || public.Revision != "builtin" || public.ImageConfigured || public.ImageURL != "" {
 		t.Fatalf("public defaults = %#v", public)
+	}
+}
+
+func TestCustomerServiceOlderConfigKeepsFloatingButtonEnabled(t *testing.T) {
+	setting := defaultCustomerServiceSetting()
+	if err := json.Unmarshal([]byte(`{"schemaVersion":3,"enabled":true}`), &setting); err != nil {
+		t.Fatal(err)
+	}
+	if !setting.FloatingButtonEnabled {
+		t.Fatal("older customer service config unexpectedly disables the floating button")
 	}
 }
 
