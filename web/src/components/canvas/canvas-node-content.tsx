@@ -13,14 +13,13 @@ import { buildLibTVImagePreviewUrl, buildLibTVVideoSourceUrl } from "@/lib/canva
 import type { CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
 import type { CanvasTheme } from "@/lib/canvas-theme";
 import { formatBytes } from "@/lib/image-utils";
-import { resourceIdFromStorageKey } from "@/services/api/resources";
+import { resourceFileUrl, resourceIdFromStorageKey } from "@/services/api/resources";
 import type { GenerationTask } from "@/services/api/task-center";
-import { cacheResourceObjectUrl, getCachedResourceObjectUrl, scheduleResourceBlobCache } from "@/services/resource-blob-cache";
+import { cacheResourceObjectUrl, getCachedResourceObjectUrl, peekCachedResourceObjectUrl, scheduleResourceBlobCache } from "@/services/resource-blob-cache";
 import { resolveMediaUrl } from "@/services/file-storage";
 import { hydrateCanvasVideoPreview } from "@/services/canvas-video-preview";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 import { getNodeDefinition } from "@/lib/canvas/node-registry";
-import { PORTRAIT_CLEARANCE_NODE_TYPE } from "@/lib/portrait-clearance/contracts";
 import { ART_CRITIQUE_NODE_TYPE } from "@/lib/art-critique/contracts";
 import { createDefaultSubtitleStyle } from "@/types/timeline";
 import { CanvasResourceMentionTextarea } from "./canvas-resource-mention-textarea";
@@ -35,7 +34,6 @@ import { ColorGradeNodeContent } from "./nodes/color-grade-node";
 import { HtmlNodeContent } from "./nodes/html-node";
 import { PanoramaNodeContent } from "./nodes/panorama-node";
 import { SvgNodeContent } from "./nodes/svg-node";
-import { PortraitClearanceNodeContent } from "./nodes/portrait-clearance-node";
 import { ArtCritiqueNodeContent } from "./nodes/ai-art-critique-node";
 import { MediaConversionNodeContent } from "./nodes/media-conversion-node";
 import { MEDIA_CONVERSION_NODE_TYPE } from "@/lib/media-conversion/contracts";
@@ -69,12 +67,12 @@ export function CanvasNodeContent(props: CanvasNodeContentProps) {
     if (props.node.metadata?.fileUpload) return <CanvasFileUploadContent node={props.node} theme={props.theme} reduceMotion={props.reduceMediaEffects} />;
     const hasCustomContent = props.node.type === CanvasNodeType.Config
         || props.node.type === CanvasNodeType.Script
+        || props.node.type === CanvasNodeType.BatchTable
         || Boolean(props.node.metadata?.directorSceneId)
         || (props.node.metadata?.workflowKind === "character" && Boolean(props.node.metadata.characterAssetId))
         || (props.node.metadata?.workflowKind === "story_input" && !props.isEditingContent)
         || (props.node.metadata?.workflowKind === "styleboard" && !props.node.metadata.content);
     if (hasCustomContent && props.renderNodeContent) return props.renderNodeContent(props.node);
-    if (props.node.type === PORTRAIT_CLEARANCE_NODE_TYPE) return <PortraitClearanceNodeContent node={props.node} />;
     if (props.node.type === ART_CRITIQUE_NODE_TYPE) return <ArtCritiqueNodeContent node={props.node} />;
     if (props.node.type === MEDIA_CONVERSION_NODE_TYPE) return <MediaConversionNodeContent node={props.node} theme={props.theme} />;
     if (props.isBatchRoot) return <ImageNodeContent {...props} />;
@@ -650,13 +648,19 @@ function useNodeResourceUrl(node: CanvasNodeData, eager: boolean) {
         ? content
         : node.metadata?.previewContent
             || (node.type === CanvasNodeType.Image && node.metadata?.importSource?.provider === "libtv" ? buildLibTVImagePreviewUrl(content) : content);
-    const isRemoteResource = Boolean(resourceIdFromStorageKey(storageKey));
+    const resourceId = resourceIdFromStorageKey(storageKey);
+    const isRemoteResource = Boolean(resourceId);
+    // 图片内容随资源 ID 不可变且后端允许磁盘强缓存：视口内的远程图片首帧直接上直链，
+    // 走浏览器原生解码与磁盘缓存；Blob 缓存就绪后再平滑替换，避免刷新后满屏转圈。
+    const synchronousUrl = eager && isRemoteResource && node.type === CanvasNodeType.Image ? peekCachedResourceObjectUrl(storageKey) || resourceFileUrl(resourceId) : "";
     // Inline data URLs are already local, but decoding thousands of them is
     // still expensive. Images must wait for the same viewport gate as remote
     // resources; otherwise DOM virtualization does not reduce image work.
     const isLazyVisual = node.type === CanvasNodeType.Image;
-    const [url, setUrl] = useState(isRemoteResource || isLazyVisual ? "" : fallback);
-    const [loading, setLoading] = useState(isRemoteResource && eager);
+    const isHttpUrl = Boolean(fallback && !fallback.startsWith("data:"));
+    const initialUrl = synchronousUrl || (eager && isLazyVisual && isHttpUrl ? fallback : (isRemoteResource || isLazyVisual ? "" : fallback));
+    const [url, setUrl] = useState(() => initialUrl);
+    const [loading, setLoading] = useState(() => !initialUrl && isRemoteResource && eager);
 
     useEffect(() => {
         let cancelled = false;
@@ -665,19 +669,30 @@ function useNodeResourceUrl(node: CanvasNodeData, eager: boolean) {
             setLoading(false);
             return;
         }
-        setUrl("");
-        setLoading(eager);
+        const cachedSync = peekCachedResourceObjectUrl(storageKey);
+        if (cachedSync) {
+            setUrl(cachedSync);
+            setLoading(false);
+            return;
+        }
+        if (!url && eager && isHttpUrl) {
+            setUrl(fallback);
+            setLoading(false);
+        } else if (!url) {
+            setLoading(eager);
+        }
         // 只有进入视口或被激活的节点才下载远程媒体；缓存层会复用已有 Blob URL 和 in-flight 请求。
         const resolve = eager ? cacheResourceObjectUrl(storageKey) : getCachedResourceObjectUrl(storageKey);
         void resolve.then((cached) => {
-            if (!cancelled) setUrl(cached || (eager ? fallback : ""));
+            if (!cancelled && cached) setUrl(cached);
+            else if (!cancelled && eager && fallback) setUrl(fallback);
         }).catch(() => {
-            if (!cancelled && eager) setUrl(fallback);
+            if (!cancelled && eager) setUrl(synchronousUrl || fallback);
         }).finally(() => {
             if (!cancelled) setLoading(false);
         });
         return () => { cancelled = true; };
-    }, [eager, fallback, isLazyVisual, isRemoteResource, storageKey]);
+    }, [eager, fallback, isHttpUrl, isLazyVisual, isRemoteResource, storageKey]);
 
     return { url, loading };
 }

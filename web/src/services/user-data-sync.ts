@@ -13,6 +13,8 @@ import { useSyncProgressStore } from "@/stores/use-sync-progress-store";
 import { useCanvasHistoryStore } from "@/stores/canvas/use-canvas-history-store";
 import { repairMissingCanvasAssets } from "@/services/canvas-asset-repair";
 import { canvasNodeToAsset } from "@/lib/canvas/canvas-node-asset";
+import { sameAgentCanvasContent } from "@/lib/canvas/agent-canvas-snapshot";
+import { applyAgentCanvasPatch, type AgentCanvasPatch } from "@/lib/canvas/agent-canvas-patch";
 
 let activeRemoteUserId = "";
 type RemoteUserDataPhase = "inactive" | "hydrating" | "ready" | "failed";
@@ -29,6 +31,7 @@ let incrementalSession = false;
 let sessionEpoch = 0;
 const verifiedProjects = new Set<string>();
 const verifiedAssets = new Set<string>();
+const remoteProjectLoadPromises = new Map<string, Promise<CanvasProject | undefined>>();
 
 export async function initializeRemoteUserDataSession(userId: string) {
     await withRemoteUserDataSyncExclusive(async () => {
@@ -42,8 +45,10 @@ export async function initializeRemoteUserDataSession(userId: string) {
 }
 
 export async function loadCanvasProjectForEditing(id: string) {
+    const pending = remoteProjectLoadPromises.get(id);
+    if (pending) return pending;
     const epoch = sessionEpoch;
-    return withRemoteUserDataSyncExclusive(async () => {
+    const request = withRemoteUserDataSyncExclusive(async () => {
         if (epoch !== sessionEpoch) throw new Error("账号已切换，请重新打开画布");
         const local = useCanvasStore.getState().projects.find((project) => project.id === id);
         if (!activeRemoteUserId || verifiedProjects.has(id)) return local;
@@ -51,8 +56,10 @@ export async function loadCanvasProjectForEditing(id: string) {
         await loadReferencedAssets(collectAssetIds(project));
         const current = useCanvasStore.getState().projects.find((candidate) => candidate.id === id);
         if (current && !sameEntitySnapshot(acknowledgedProjects.get(id), current)) {
-            const baseline = acknowledgedProjects.get(id);
-            if (baseline && Date.parse(baseline.updatedAt) !== Date.parse(project.updatedAt)) throw new Error("画布已在其他端修改，请先导出本地修改再重新加载");
+            // 当前页面已经开始编辑本地缓存时，远端详情只建立新的冲突基线；
+            // 保留当前画布内容，后续保存由当前打开的画布显式覆盖远端版本，
+            // 避免旧缓存被永久卡在“自动重试但永远冲突”的状态。
+            acknowledgedProjects.set(id, project);
             verifiedProjects.add(id);
             return current;
         }
@@ -61,6 +68,64 @@ export async function loadCanvasProjectForEditing(id: string) {
         useCanvasStore.setState((state) => ({ projects: [...state.projects.filter((candidate) => candidate.id !== id), project] }));
         return project;
     });
+    remoteProjectLoadPromises.set(id, request);
+    const clearPending = () => {
+        if (remoteProjectLoadPromises.get(id) === request) remoteProjectLoadPromises.delete(id);
+    };
+    void request.then(clearPending, clearPending);
+    return request;
+}
+
+// Never replace edits made while the Agent was running. Leave the acknowledged
+// baseline untouched on conflict, so automatic sync cannot silently overwrite it.
+const agentCanvasListeners = new Set<(project: CanvasProject, previous: CanvasProject | undefined) => void>();
+
+export function subscribeAgentCanvasRefresh(listener: (project: CanvasProject, previous: CanvasProject | undefined) => void) {
+    agentCanvasListeners.add(listener);
+    return () => { agentCanvasListeners.delete(listener); };
+}
+
+export async function refreshCanvasAfterAgent(id: string) {
+    const epoch = sessionEpoch;
+    return withRemoteUserDataSyncExclusive(async () => {
+        if (!activeRemoteUserId) throw new Error("请先登录再刷新 Agent 画布结果");
+        const { project } = await getRemoteCanvasProject(id);
+        if (epoch !== sessionEpoch) throw new Error("账号已切换");
+        const current = useCanvasStore.getState().projects.find((candidate) => candidate.id === id);
+        if (current && !sameAgentCanvasContent(acknowledgedProjects.get(id), current)) throw new Error("Agent 已更新服务端画布，但本地存在未同步编辑。已保留本地内容，请处理同步冲突后刷新。");
+        if (current && sameEntitySnapshot(current, project)) return current;
+        const projected = current ? { ...project, viewport: current.viewport } : project;
+        for (const listener of agentCanvasListeners) listener(projected, current);
+        acknowledgedProjects.set(id, project);
+        verifiedProjects.add(id);
+        useCanvasStore.setState((state) => ({ projects: [...state.projects.filter((candidate) => candidate.id !== id), projected] }));
+        return projected;
+    });
+}
+
+export async function applyAgentCanvasPatches(id: string, patches: AgentCanvasPatch[]) {
+    const epoch = sessionEpoch;
+    return withRemoteUserDataSyncExclusive(async () => {
+        if (epoch !== sessionEpoch || !activeRemoteUserId) throw new Error("账号已切换或未登录，已停止 Agent 画布同步");
+        const baseline = acknowledgedProjects.get(id);
+        const current = useCanvasStore.getState().projects.find((project) => project.id === id);
+        if (!baseline || !current) throw new Error("缺少画布同步基线，需要重新读取画布");
+        const remote = patches.reduce(applyAgentCanvasPatch, baseline);
+        const projected = patches.reduce(applyAgentCanvasPatch, current);
+        if (projected !== current) {
+            for (const listener of agentCanvasListeners) listener(projected, current);
+        }
+        acknowledgedProjects.set(id, remote);
+        verifiedProjects.add(id);
+        if (projected === current) return current;
+        useCanvasStore.setState((state) => ({ projects: state.projects.map((project) => project.id === id ? projected : project) }));
+        return projected;
+    });
+}
+
+async function waitForRemoteProjectLoads() {
+    const pending = [...remoteProjectLoadPromises.values()];
+    if (pending.length) await Promise.all(pending);
 }
 
 export async function loadAssetLibraryPage(options: Parameters<typeof listRemoteAssetsPage>[0]) {
@@ -169,6 +234,7 @@ export function resetRemoteUserDataSync() {
     incrementalSession = false;
     verifiedProjects.clear();
     verifiedAssets.clear();
+    remoteProjectLoadPromises.clear();
     activeRemoteUserId = "";
     remoteUserDataPhase = "inactive";
     acknowledgedAssets.clear();
@@ -376,6 +442,8 @@ export async function saveRemoteUserDataNow() {
     const epoch = sessionEpoch;
     if (!activeRemoteUserId) return;
     requireRemoteUserDataBaseline();
+    // 画布先用本地缓存秒开时，远端详情校验可能仍在进行；写入必须等待校验结果。
+    await waitForRemoteProjectLoads();
     if (syncPromise) {
         syncQueued = true;
         return syncPromise;
@@ -416,7 +484,11 @@ async function saveRemoteUserDataBatch(uploaded: Map<string, string>) {
             const baseline = acknowledgedProjects.get(source.id);
             if (!baseline || verifiedProjects.has(source.id)) continue;
             const { project } = await getRemoteCanvasProject(source.id);
-            if (Date.parse(project.updatedAt) !== Date.parse(baseline.updatedAt)) throw new Error("画布远端版本已变化，已停止覆盖，请重新打开画布");
+            if (Date.parse(project.updatedAt) !== Date.parse(baseline.updatedAt)) {
+                // 以远端当前版本作为新的校验基线，继续提交当前打开画布的完整快照。
+                // 这是画布编辑态的显式覆盖策略，避免资产同步被旧缓存冲突永久阻塞。
+                acknowledgedProjects.set(source.id, project);
+            }
             verifiedProjects.add(source.id);
         }
         for (const source of dirtyAssets) {
