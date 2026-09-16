@@ -3,7 +3,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProp
 import { useLocation } from "react-router";
 
 import { cn } from "@/lib/utils";
-import { getPublicCustomerService, type PublicCustomerService } from "@/services/api/customer-service";
+import { CUSTOMER_SERVICE_OPEN_EVENT, getPublicCustomerService, type PublicCustomerService } from "@/services/api/customer-service";
 
 declare global {
     interface Window {
@@ -121,6 +121,18 @@ export function CustomerServiceWidget() {
     }, [setting]);
 
     const visible = Boolean(setting?.enabled && viewportAllowed && !location.pathname.startsWith("/admin"));
+    const requestOpenChat = useCallback(() => {
+        if (sdkReady && window.$chatwoot) window.$chatwoot.toggle("open");
+        else pendingOpenRef.current = true;
+    }, [sdkReady]);
+
+    useEffect(() => {
+        const handleOpen = () => {
+            if (visible) requestOpenChat();
+        };
+        window.addEventListener(CUSTOMER_SERVICE_OPEN_EVENT, handleOpen);
+        return () => window.removeEventListener(CUSTOMER_SERVICE_OPEN_EVENT, handleOpen);
+    }, [requestOpenChat, visible]);
 
     useEffect(() => {
         if (!visible) {
@@ -191,8 +203,7 @@ export function CustomerServiceWidget() {
             suppressClickRef.current = false;
             return;
         }
-        if (sdkReady && window.$chatwoot) window.$chatwoot.toggle("open");
-        else pendingOpenRef.current = true;
+        requestOpenChat();
     };
 
     return (

@@ -1,4 +1,5 @@
-import { ChevronDown, ChevronRight, CircleHelp, Home, Infinity as InfinityIcon, PanelLeftOpen, Plus, Search } from "lucide-react";
+import { Popover } from "antd";
+import { BookOpen, ChevronDown, ChevronRight, CircleHelp, Headphones, Home, Infinity as InfinityIcon, PanelLeftOpen, Plus, Search } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ComponentType, type CSSProperties } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router";
 
@@ -8,6 +9,7 @@ import { navigationTools, type NavigationToolSlug } from "@/constant/navigation-
 import { useWorkspaceLogout } from "@/hooks/use-workspace-logout";
 import { cn } from "@/lib/utils";
 import { preloadWorkspaceRoute } from "@/lib/workspace-route-modules";
+import { CUSTOMER_SERVICE_OPEN_EVENT, getPublicCustomerService, type PublicCustomerService } from "@/services/api/customer-service";
 import { useUserStore, type FeatureAvailability } from "@/stores/use-user-store";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
 
@@ -18,7 +20,7 @@ export type WorkspaceNavItem = {
     to?: string;
     shortcut?: string;
     badge?: string | number;
-    action?: "search" | "logout" | "help";
+    action?: "search" | "logout";
     children?: WorkspaceNavItem[];
 };
 
@@ -50,7 +52,7 @@ function buildNav(features: FeatureAvailability): { groups: WorkspaceNavGroup[];
     ];
 
     const footer: WorkspaceNavItem[] = [
-        { id: "help", title: "帮助", icon: CircleHelp, action: "help" },
+        { id: "help", title: "帮助", icon: CircleHelp },
     ];
 
     return { groups, footer };
@@ -189,7 +191,6 @@ function NavItem({
             onLogout();
             return;
         }
-        if (item.action === "help") return;
         if (hasChildren) {
             setIsOpen((open) => !open);
             return;
@@ -233,6 +234,94 @@ function NavItem({
                 </div>
             ) : null}
         </div>
+    );
+}
+
+function WorkspaceHelpMenu({ collapsed, onNavigate }: { collapsed: boolean; onNavigate: () => void }) {
+    const [open, setOpen] = useState(false);
+    const [customerService, setCustomerService] = useState<PublicCustomerService | null>(null);
+    const [mobileViewport, setMobileViewport] = useState(() => window.matchMedia("(max-width: 767px)").matches);
+
+    useEffect(() => {
+        let active = true;
+        const load = () => {
+            void getPublicCustomerService()
+                .then((setting) => {
+                    if (active) setCustomerService(setting);
+                })
+                .catch(() => {
+                    if (active) setCustomerService(null);
+                });
+        };
+        load();
+        window.addEventListener("customer-service-config-updated", load);
+        return () => {
+            active = false;
+            window.removeEventListener("customer-service-config-updated", load);
+        };
+    }, []);
+
+    useEffect(() => {
+        const media = window.matchMedia("(max-width: 767px)");
+        const update = () => setMobileViewport(media.matches);
+        update();
+        media.addEventListener("change", update);
+        return () => media.removeEventListener("change", update);
+    }, []);
+
+    const contactVisible = Boolean(customerService?.enabled && (mobileViewport ? customerService.mobileEnabled : customerService.desktopEnabled));
+    const tutorialUrl = customerService?.tutorialUrl?.trim() || "";
+    const closeMenu = () => setOpen(false);
+    const openTutorial = () => {
+        if (!tutorialUrl) return;
+        closeMenu();
+        onNavigate();
+        window.open(tutorialUrl, "_blank", "noopener,noreferrer");
+    };
+    const openCustomerService = () => {
+        closeMenu();
+        onNavigate();
+        window.dispatchEvent(new CustomEvent(CUSTOMER_SERVICE_OPEN_EVENT));
+    };
+
+    return (
+        <Popover
+            trigger="click"
+            placement={collapsed ? "rightBottom" : "topLeft"}
+            open={open}
+            onOpenChange={setOpen}
+            rootClassName="workspace-help-popover"
+            content={(
+                <div className="w-44 py-0.5">
+                    {tutorialUrl ? (
+                        <button type="button" className="flex h-9 w-full items-center gap-2.5 rounded px-2 text-xs text-foreground/65 hover:bg-surface-hover hover:text-foreground" onClick={openTutorial}>
+                            <BookOpen className="size-3.5" aria-hidden />
+                            <span>使用教程</span>
+                        </button>
+                    ) : null}
+                    {contactVisible ? (
+                        <button type="button" className="flex h-9 w-full items-center gap-2.5 rounded px-2 text-xs text-foreground/65 hover:bg-surface-hover hover:text-foreground" onClick={openCustomerService}>
+                            <Headphones className="size-3.5" aria-hidden />
+                            <span>联系客服</span>
+                        </button>
+                    ) : null}
+                </div>
+            )}
+        >
+            <button
+                type="button"
+                className={cn("app-workspace-nav-link group flex min-h-9 w-full items-center justify-between gap-2 rounded-[var(--r-sm)] px-2.5 py-2 text-[var(--fs-body)] text-foreground/62 transition-colors duration-200 select-none hover:bg-surface-hover hover:text-foreground", collapsed && "is-collapsed")}
+                aria-label={collapsed ? "帮助" : undefined}
+                title={collapsed ? "帮助" : undefined}
+                aria-haspopup="menu"
+                aria-expanded={open}
+            >
+                <span className="app-workspace-nav-main flex min-w-0 items-center gap-2.5">
+                    <CircleHelp className="size-4 shrink-0 text-foreground/60 group-hover:text-foreground/80" strokeWidth={1.6} />
+                    <span className="app-workspace-nav-title truncate">帮助</span>
+                </span>
+            </button>
+        </Popover>
     );
 }
 
@@ -329,7 +418,9 @@ export function WorkspaceSidebarNav({ collapsed, onNavigate, onOpenSearch, onExp
             <div className="app-workspace-sidebar-footer shrink-0 px-3 py-3">
                 <div className="flex flex-col gap-0.5">
                     {footer.map((item) => (
-                        <NavItem key={item.id} item={item} activeId={activeId} onSelect={onNavigate} onOpenSearch={onOpenSearch} onLogout={() => void handleLogout()} collapsed={collapsed} />
+                        item.id === "help"
+                            ? <WorkspaceHelpMenu key={item.id} collapsed={collapsed} onNavigate={onNavigate} />
+                            : <NavItem key={item.id} item={item} activeId={activeId} onSelect={onNavigate} onOpenSearch={onOpenSearch} onLogout={() => void handleLogout()} collapsed={collapsed} />
                     ))}
                 </div>
             </div>

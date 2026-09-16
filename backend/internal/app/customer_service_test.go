@@ -4,8 +4,8 @@ import "testing"
 
 func TestCustomerServiceDefaultsKeepSupportAvailable(t *testing.T) {
 	setting := defaultCustomerServiceSetting()
-	if setting.SchemaVersion != 2 {
-		t.Fatalf("expected schema version 2, got %d", setting.SchemaVersion)
+	if setting.SchemaVersion != 3 {
+		t.Fatalf("expected schema version 3, got %d", setting.SchemaVersion)
 	}
 	if !setting.Enabled || !setting.DesktopEnabled || !setting.MobileEnabled {
 		t.Fatalf("default visibility = %#v", setting)
@@ -39,6 +39,8 @@ func TestValidateCustomerServiceSettingRejectsUnsafeValues(t *testing.T) {
 		{name: "missing custom image", mutate: func(value *CustomerServiceSetting) { value.DisplayType = "custom-image" }},
 		{name: "offset", mutate: func(value *CustomerServiceSetting) { value.OffsetX = 7 }},
 		{name: "button size", mutate: func(value *CustomerServiceSetting) { value.ButtonSize = 19 }},
+		{name: "tutorial scheme", mutate: func(value *CustomerServiceSetting) { value.TutorialURL = "javascript:alert(1)" }},
+		{name: "tutorial missing host", mutate: func(value *CustomerServiceSetting) { value.TutorialURL = "https:///guide" }},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -48,5 +50,17 @@ func TestValidateCustomerServiceSettingRejectsUnsafeValues(t *testing.T) {
 				t.Fatalf("value accepted: %#v", value)
 			}
 		})
+	}
+}
+
+func TestValidateCustomerServiceSettingAcceptsTutorialURL(t *testing.T) {
+	value := defaultCustomerServiceSetting()
+	value.TutorialURL = "https://docs.example.com/guide"
+	if err := validateCustomerServiceSetting(value); err != nil {
+		t.Fatalf("valid tutorial URL rejected: %v", err)
+	}
+	public := publicCustomerServiceSetting(nil, value)
+	if public.TutorialURL != value.TutorialURL {
+		t.Fatalf("public tutorial URL = %q", public.TutorialURL)
 	}
 }

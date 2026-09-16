@@ -1,5 +1,7 @@
 import { http } from "@/services/api/request";
 
+export const CUSTOMER_SERVICE_OPEN_EVENT = "customer-service:open";
+
 export type CustomerServicePosition = "bottom-right" | "bottom-left" | "top-right" | "top-left";
 export type CustomerServiceDisplayType = "circle" | "pill" | "icon-text" | "custom-image";
 
@@ -18,6 +20,7 @@ export type PublicCustomerService = {
     buttonSize: number;
     offsetX: number;
     offsetY: number;
+    tutorialUrl: string;
     configured: boolean;
     revision: string;
     updatedAt?: string;
@@ -48,7 +51,7 @@ export async function getAdminCustomerService(signal?: AbortSignal) {
     return result.setting;
 }
 
-export async function updateAdminCustomerService(input: Pick<AdminCustomerService, "enabled" | "position" | "displayType" | "color" | "label" | "imageResourceId" | "draggable" | "desktopEnabled" | "mobileEnabled" | "buttonSize" | "offsetX" | "offsetY">) {
+export async function updateAdminCustomerService(input: Pick<AdminCustomerService, "enabled" | "position" | "displayType" | "color" | "label" | "imageResourceId" | "draggable" | "desktopEnabled" | "mobileEnabled" | "buttonSize" | "offsetX" | "offsetY" | "tutorialUrl">) {
     const result = await http.patch<{ setting: AdminCustomerService }>("/admin/customer-service", input);
     return result.setting;
 }

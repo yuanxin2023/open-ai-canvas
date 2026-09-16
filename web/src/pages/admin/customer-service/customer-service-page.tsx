@@ -6,7 +6,7 @@ import { AdminPageFrame } from "@/pages/admin/components/admin-shell";
 import { getAdminCustomerService, updateAdminCustomerService, uploadCustomerServiceButtonImage, type AdminCustomerService, type CustomerServiceDisplayType, type CustomerServicePosition } from "@/services/api/customer-service";
 import { cn } from "@/lib/utils";
 
-type EditableCustomerService = Pick<AdminCustomerService, "enabled" | "position" | "displayType" | "color" | "label" | "imageResourceId" | "draggable" | "desktopEnabled" | "mobileEnabled" | "buttonSize" | "offsetX" | "offsetY">;
+type EditableCustomerService = Pick<AdminCustomerService, "enabled" | "position" | "displayType" | "color" | "label" | "imageResourceId" | "draggable" | "desktopEnabled" | "mobileEnabled" | "buttonSize" | "offsetX" | "offsetY" | "tutorialUrl">;
 
 const positionOptions = [
     { label: "右下", value: "bottom-right" },
@@ -36,6 +36,7 @@ function editableSetting(setting: AdminCustomerService): EditableCustomerService
         buttonSize: Number.isFinite(setting.buttonSize) && setting.buttonSize >= 20 && setting.buttonSize <= 96 ? setting.buttonSize : 56,
         offsetX: setting.offsetX,
         offsetY: setting.offsetY,
+        tutorialUrl: setting.tutorialUrl || "",
     };
 }
 export default function CustomerServicePage() {
@@ -87,11 +88,21 @@ export default function CustomerServicePage() {
             message.warning("请先上传 PNG 按钮图片");
             return;
         }
+        const tutorialUrl = draft.tutorialUrl.trim();
+        if (tutorialUrl) {
+            try {
+                const parsed = new URL(tutorialUrl);
+                if (!/^https?:$/.test(parsed.protocol) || !parsed.hostname) throw new Error("invalid tutorial URL");
+            } catch {
+                message.warning("使用教程链接必须是有效的 HTTP 或 HTTPS 地址");
+                return;
+            }
+        }
         setSaving(true);
         try {
-            const updated = await updateAdminCustomerService(draft);
-            if (updated.schemaVersion < 2 || updated.buttonSize !== draft.buttonSize) {
-                throw new Error("当前运行的后端版本尚未支持按钮大小，请更新并重启后端服务后再保存");
+            const updated = await updateAdminCustomerService({ ...draft, tutorialUrl });
+            if (updated.schemaVersion < 3 || updated.buttonSize !== draft.buttonSize || updated.tutorialUrl !== tutorialUrl) {
+                throw new Error("当前运行的后端版本尚未支持使用教程配置，请更新并重启后端服务后再保存");
             }
             setSetting(updated);
             setDraft(editableSetting(updated));
@@ -158,6 +169,19 @@ export default function CustomerServicePage() {
                 ) : (
                     <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
                         <div className="space-y-4">
+                            <SettingsSection title="使用教程" description="配置用户端左侧“帮助”菜单中的使用教程入口。">
+                                <label className="block space-y-2 text-xs font-semibold text-foreground/65">
+                                    教程链接
+                                    <Input
+                                        value={draft.tutorialUrl}
+                                        maxLength={2048}
+                                        placeholder="https://docs.example.com/guide"
+                                        onChange={(event) => patchDraft("tutorialUrl", event.target.value)}
+                                    />
+                                </label>
+                                <p className="text-xs leading-5 text-foreground/45">支持 HTTP 或 HTTPS 地址；留空时用户端不显示“使用教程”选项。</p>
+                            </SettingsSection>
+
                             <SettingsSection title="显示范围" description="总开关关闭后，用户端不加载 Chatwoot，也不会显示客服入口。">
                                 <SettingRow title="显示客服入口" description="控制整个用户端客服功能是否启用。">
                                     <Switch checked={draft.enabled} onChange={(value) => patchDraft("enabled", value)} />

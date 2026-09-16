@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"mime/multipart"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -22,7 +23,7 @@ import (
 
 const (
 	customerServiceSettingKey         = "customer_service"
-	customerServiceSchemaVersion      = 2
+	customerServiceSchemaVersion      = 3
 	customerServiceButtonImageMaxSize = int64(2 << 20)
 )
 
@@ -42,6 +43,7 @@ type CustomerServiceSetting struct {
 	ButtonSize      int    `json:"buttonSize"`
 	OffsetX         int    `json:"offsetX"`
 	OffsetY         int    `json:"offsetY"`
+	TutorialURL     string `json:"tutorialUrl"`
 }
 
 type PublicCustomerServiceSetting struct {
@@ -59,6 +61,7 @@ type PublicCustomerServiceSetting struct {
 	ButtonSize      int       `json:"buttonSize"`
 	OffsetX         int       `json:"offsetX"`
 	OffsetY         int       `json:"offsetY"`
+	TutorialURL     string    `json:"tutorialUrl"`
 	Configured      bool      `json:"configured"`
 	Revision        string    `json:"revision"`
 	UpdatedAt       time.Time `json:"updatedAt,omitempty"`
@@ -135,6 +138,7 @@ func (s *Service) UpdateCustomerService(actor *model.User, value CustomerService
 	value.Color = strings.ToUpper(strings.TrimSpace(value.Color))
 	value.Label = strings.TrimSpace(value.Label)
 	value.ImageResourceID = strings.TrimSpace(value.ImageResourceID)
+	value.TutorialURL = strings.TrimSpace(value.TutorialURL)
 	if err := validateCustomerServiceSetting(value); err != nil {
 		return nil, err
 	}
@@ -220,6 +224,7 @@ func (s *Service) readCustomerService() (*model.SystemSetting, CustomerServiceSe
 	value.Color = strings.ToUpper(strings.TrimSpace(value.Color))
 	value.Label = strings.TrimSpace(value.Label)
 	value.ImageResourceID = strings.TrimSpace(value.ImageResourceID)
+	value.TutorialURL = strings.TrimSpace(value.TutorialURL)
 	return setting, value, nil
 }
 
@@ -252,6 +257,15 @@ func validateCustomerServiceSetting(value CustomerServiceSetting) error {
 	}
 	if value.ButtonSize < 20 || value.ButtonSize > 96 {
 		return BadAuthRequest("客服按钮大小必须在 20 到 96 像素之间")
+	}
+	if value.TutorialURL != "" {
+		if len(value.TutorialURL) > 2048 {
+			return BadAuthRequest("使用教程链接不能超过 2048 个字符")
+		}
+		parsed, err := url.Parse(value.TutorialURL)
+		if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" || parsed.User != nil {
+			return BadAuthRequest("使用教程链接必须是有效的 HTTP 或 HTTPS 地址")
+		}
 	}
 	return nil
 }
@@ -344,6 +358,7 @@ func publicCustomerServiceSetting(setting *model.SystemSetting, value CustomerSe
 		ButtonSize:     value.ButtonSize,
 		OffsetX:        value.OffsetX,
 		OffsetY:        value.OffsetY,
+		TutorialURL:    value.TutorialURL,
 		Configured:     setting != nil,
 		Revision:       revision,
 	}
