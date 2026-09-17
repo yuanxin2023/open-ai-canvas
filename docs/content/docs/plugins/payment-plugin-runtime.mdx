@@ -40,9 +40,9 @@ Manifest 的支付贡献声明 `runtime.backend` 为 `rpc` 或 `wasm`，并通�
 
 ## 可选渠道能力
 
-支付能力由 Manifest 权限决定。声明 `payment.close` 的渠道才会显示主动关单操作；声明 `payment.reconcile` 的渠道才会进入手动和日账单对账。无关单能力的订单过期时，宿主先查单再仅在本地关闭，并在随后 24 小时低频补查晚到账，最终入账仍走现有幂等事务。
+支付能力由 Manifest 权限决定。声明 `payment.close` 的渠道在关闭订单时会执行远程关单；未声明该能力的渠道仍允许用户或管理员关闭订单，但宿主必须先查单确认未支付，再仅在本地关闭。声明 `payment.reconcile` 的渠道才会进入手动和日账单对账。无关单能力的本地关闭订单会在随后 24 小时低频补查晚到账，最终入账仍走现有幂等事务。
 
-Provider 列表 API 使用 `supportsClose` 和 `supportsReconciliation` 暴露这两个能力。旧支付宝和微信渠道均为 `true`；不支持的渠道不会显示对应操作。
+Provider 列表 API 使用 `supportsClose` 和 `supportsReconciliation` 暴露这两个能力。`supportsClose` 只表示是否能同步关闭渠道侧订单，不控制站内关闭入口；旧支付宝和微信渠道均支持远程关单。
 
 ## ZPAY 聚合支付
 

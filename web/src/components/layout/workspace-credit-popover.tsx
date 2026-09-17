@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AppModal } from "@/components/ui/product/app-modal";
 import { formatCredits } from "@/constant/credits";
 import { useWalletBalance } from "@/hooks/use-wallet-balance";
-import { createPaymentOrder, getPaymentOrder, listPaymentProviders, listTopupProducts, queryPaymentOrder, refreshPaymentCheckout, type PaymentOrder, type PaymentProvider, type TopupProduct } from "@/services/api/payments";
+import { closePaymentOrder, createPaymentOrder, getPaymentOrder, listPaymentProviders, listTopupProducts, queryPaymentOrder, refreshPaymentCheckout, type PaymentOrder, type PaymentProvider, type TopupProduct } from "@/services/api/payments";
 import { redeemCredits } from "@/services/api/wallet";
 
 export function WorkspaceCreditPopover({ userId }: { userId: string }) {
@@ -124,6 +124,21 @@ export function WorkspaceCreditPopover({ userId }: { userId: string }) {
             else message.info("支付渠道尚未确认，请稍后再试");
         } catch (error) {
             message.error(error instanceof Error ? error.message : "查询支付结果失败");
+        } finally {
+            setPaymentQuerying(false);
+        }
+    };
+
+    const cancelPayment = async () => {
+        if (!paymentOrder) return;
+        setPaymentQuerying(true);
+        try {
+            const result = await closePaymentOrder(paymentOrder.id);
+            setPaymentOrder(result.order);
+            if (result.order.status === "credited") paymentCompleted(result.order.id);
+            else message.success("未支付订单已关闭");
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "关闭订单失败");
         } finally {
             setPaymentQuerying(false);
         }
@@ -359,7 +374,12 @@ export function WorkspaceCreditPopover({ userId }: { userId: string }) {
                                         <div><dt>到账积分</dt><dd>{formatCredits(paymentOrder.creditsMicrocredits)} 积分</dd></div>
                                         <div><dt>订单号</dt><dd>{paymentOrder.merchantOrderNo}</dd></div>
                                     </dl>
-                                    {paymentOrder.status === "create_failed" ? <Button type="primary" loading={paymentQuerying} onClick={() => void retryPaymentCheckout()}>重新生成支付信息</Button> : paymentOrder.status === "pending" ? <Button type="primary" loading={paymentQuerying} onClick={() => void confirmPayment()}>我已完成支付</Button> : <Button type="primary" onClick={closePaymentSelector}>完成</Button>}
+                                    {paymentOrder.status === "create_failed" ? <Button type="primary" loading={paymentQuerying} onClick={() => void retryPaymentCheckout()}>重新生成支付信息</Button> : paymentOrder.status === "pending" ? (
+                                        <div className="flex gap-2">
+                                            <Button danger disabled={paymentQuerying} onClick={() => void cancelPayment()}>关闭订单</Button>
+                                            <Button type="primary" loading={paymentQuerying} onClick={() => void confirmPayment()}>我已完成支付</Button>
+                                        </div>
+                                    ) : <Button type="primary" onClick={closePaymentSelector}>完成</Button>}
                                 </div>
                             </div>
                         )}

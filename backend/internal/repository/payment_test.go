@@ -449,6 +449,28 @@ func TestAdminPaymentOrdersSearchUserIdentity(t *testing.T) {
 	}
 }
 
+func TestUserPaymentOrdersScopesOwnerStatusAndPagination(t *testing.T) {
+	db := openPaymentTestDB(t)
+	now := time.Now()
+	orders := []model.PaymentOrder{
+		{ID: "u1-new", UserID: "user-1", MerchantOrderNo: "merchant-u1-new", IdempotencyKey: "u1-new", Status: model.PaymentOrderPending, CreatedAt: now},
+		{ID: "u1-old", UserID: "user-1", MerchantOrderNo: "merchant-u1-old", IdempotencyKey: "u1-old", Status: model.PaymentOrderClosed, CreatedAt: now.Add(-time.Minute)},
+		{ID: "u2", UserID: "user-2", MerchantOrderNo: "merchant-u2", IdempotencyKey: "u2", Status: model.PaymentOrderPending, CreatedAt: now.Add(time.Minute)},
+	}
+	if err := db.Create(&orders).Error; err != nil {
+		t.Fatal(err)
+	}
+	repo := New(db)
+	items, total, err := repo.UserPaymentOrders("user-1", nil, 1, 0)
+	if err != nil || total != 2 || len(items) != 1 || items[0].ID != "u1-new" {
+		t.Fatalf("page items=%v total=%d err=%v", items, total, err)
+	}
+	items, total, err = repo.UserPaymentOrders("user-1", []model.PaymentOrderStatus{model.PaymentOrderClosed}, 20, 0)
+	if err != nil || total != 1 || len(items) != 1 || items[0].ID != "u1-old" {
+		t.Fatalf("filtered items=%v total=%d err=%v", items, total, err)
+	}
+}
+
 func openPaymentTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open("file:"+t.Name()+"?mode=memory&cache=shared&_busy_timeout=5000"), &gorm.Config{})

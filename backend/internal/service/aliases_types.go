@@ -171,6 +171,7 @@ type (
 	ParameterSupport                       = app.ParameterSupport
 	PasswordResetRequest                   = app.PasswordResetRequest
 	PaymentCheckoutView                    = app.PaymentCheckoutView
+	PaymentOrderPage                       = app.PaymentOrderPage
 	PaymentOrderView                       = app.PaymentOrderView
 	PaymentProviderView                    = app.PaymentProviderView
 	PluginManagementView                   = app.PluginManagementView

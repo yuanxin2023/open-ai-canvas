@@ -145,7 +145,6 @@ export default function WalletPage({ embedded = false }: { embedded?: boolean })
 
     const selectedProduct = useMemo(() => paymentProducts.find((item) => item.id === selectedProductId), [paymentProducts, selectedProductId]);
     const selectedProvider = useMemo(() => paymentProviders.find((item) => item.id === selectedProviderId), [paymentProviders, selectedProviderId]);
-    const activeOrderProvider = useMemo(() => paymentProviders.find((item) => item.id === paymentOrder?.providerId), [paymentOrder?.providerId, paymentProviders]);
 
     useEffect(() => {
         paymentIdempotencyKey.current = "";
@@ -536,13 +535,9 @@ export default function WalletPage({ embedded = false }: { embedded?: boolean })
                 footer={
                     paymentOrder?.status === "pending"
                         ? [
-                              ...(activeOrderProvider?.supportsClose
-                                  ? [
-                                        <Button key="close" danger disabled={paymentQuerying} onClick={() => void cancelPayment()}>
-                                            关闭订单
-                                        </Button>,
-                                    ]
-                                  : []),
+                              <Button key="close" danger disabled={paymentQuerying} onClick={() => void cancelPayment()}>
+                                  关闭订单
+                              </Button>,
                               <Button key="query" type="primary" loading={paymentQuerying} onClick={() => void confirmPayment()}>
                                   我已完成支付
                               </Button>,

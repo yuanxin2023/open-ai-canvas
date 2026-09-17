@@ -90,6 +90,12 @@ export function createPaymentOrder(input: { productId: string; providerId: strin
     return http.post<{ order: PaymentOrder }>("/payments/orders", input);
 }
 
+export type PaymentOrderFilter = "all" | "unpaid" | "completed" | "failed" | "closed";
+
+export function listPaymentOrders(params: { status?: PaymentOrderFilter; page?: number; pageSize?: number } = {}) {
+    return http.get<{ orders: PaymentOrder[]; total: number; page: number; pageSize: number }>("/payments/orders", { params });
+}
+
 export function getPaymentOrder(id: string) {
     return http.get<{ order: PaymentOrder }>(`/payments/orders/${encodeURIComponent(id)}`);
 }

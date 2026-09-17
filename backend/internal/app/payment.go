@@ -111,6 +111,13 @@ type AdminPaymentOrderPage struct {
 	Limit  int                     `json:"pageSize"`
 }
 
+type PaymentOrderPage struct {
+	Orders []PaymentOrderView `json:"orders"`
+	Total  int64              `json:"total"`
+	Page   int                `json:"page"`
+	Limit  int                `json:"pageSize"`
+}
+
 type AdminPaymentOrderUser struct {
 	ID          string `json:"id"`
 	Username    string `json:"username"`
@@ -568,6 +575,48 @@ func (s *Service) PaymentOrder(actor *model.User, id string) (*PaymentOrderView,
 	return &view, nil
 }
 
+func (s *Service) PaymentOrderPage(actor *model.User, status string, page, limit int) (*PaymentOrderPage, error) {
+	if actor == nil {
+		return nil, Unauthorized("请先登录")
+	}
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 || limit > 100 {
+		limit = 20
+	}
+	statuses, err := paymentOrderStatusesForUserFilter(status)
+	if err != nil {
+		return nil, err
+	}
+	orders, total, err := s.repo.UserPaymentOrders(actor.ID, statuses, limit, (page-1)*limit)
+	if err != nil {
+		return nil, err
+	}
+	views := make([]PaymentOrderView, 0, len(orders))
+	for _, order := range orders {
+		views = append(views, paymentOrderView(order))
+	}
+	return &PaymentOrderPage{Orders: views, Total: total, Page: page, Limit: limit}, nil
+}
+
+func paymentOrderStatusesForUserFilter(status string) ([]model.PaymentOrderStatus, error) {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "", "all":
+		return nil, nil
+	case "unpaid":
+		return []model.PaymentOrderStatus{model.PaymentOrderCreated, model.PaymentOrderPending, model.PaymentOrderClosing}, nil
+	case "completed":
+		return []model.PaymentOrderStatus{model.PaymentOrderCredited}, nil
+	case "failed":
+		return []model.PaymentOrderStatus{model.PaymentOrderCreateFailed}, nil
+	case "closed":
+		return []model.PaymentOrderStatus{model.PaymentOrderClosed}, nil
+	default:
+		return nil, BadAuthRequest("无效的订单状态筛选")
+	}
+}
+
 func (s *Service) PaymentCheckout(actor *model.User, id string) (string, error) {
 	if actor == nil {
 		return "", Unauthorized("请先登录")
@@ -677,9 +726,6 @@ func (s *Service) ClosePaymentOrder(ctx context.Context, actor *model.User, id s
 	if order.Status == model.PaymentOrderCredited || order.Status == model.PaymentOrderClosed {
 		view := paymentOrderView(*order)
 		return &view, nil
-	}
-	if !paymentProviderSupports(order.ProviderID, "payment.close") {
-		return nil, BadAuthRequest("该支付渠道不支持主动关单")
 	}
 	if err := s.closePaymentOrder(ctx, order); err != nil {
 		return nil, err
@@ -967,9 +1013,6 @@ func (s *Service) AdminClosePaymentOrder(ctx context.Context, actor *model.User,
 	if order.Status == model.PaymentOrderCredited || order.Status == model.PaymentOrderClosed {
 		view := paymentOrderView(*order)
 		return &view, nil
-	}
-	if !paymentProviderSupports(order.ProviderID, "payment.close") {
-		return nil, BadAuthRequest("该支付渠道不支持主动关单")
 	}
 	if err := s.closePaymentOrder(ctx, order); err != nil {
 		return nil, err

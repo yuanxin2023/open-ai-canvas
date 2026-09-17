@@ -459,7 +459,7 @@ export default function AdminPaymentsPage() {
                     visibleActionCount={0}
                     actions={[
                         { key: "sync", label: "同步支付状态", icon: <RefreshCw className="size-3.5" />, disabled: Boolean(orderActionId) || ["credited", "closed"].includes(order.status), onClick: () => queryOrder(order) },
-                        { key: "close", label: "关闭订单", icon: <XCircle className="size-3.5" />, danger: true, disabled: Boolean(orderActionId) || !providers.find((provider) => provider.id === order.providerId)?.supportsClose || !["created", "pending", "create_failed", "closing"].includes(order.status), onClick: () => closeOrder(order) },
+                        { key: "close", label: "关闭订单", icon: <XCircle className="size-3.5" />, danger: true, disabled: Boolean(orderActionId) || !["created", "pending", "create_failed", "closing"].includes(order.status), onClick: () => closeOrder(order) },
                     ]}
                 />
             ),

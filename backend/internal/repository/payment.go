@@ -416,6 +416,20 @@ func (r *Repository) AdminPaymentOrders(status, keyword string, limit, offset in
 	return items, total, err
 }
 
+func (r *Repository) UserPaymentOrders(userID string, statuses []model.PaymentOrderStatus, limit, offset int) ([]model.PaymentOrder, int64, error) {
+	var items []model.PaymentOrder
+	var total int64
+	query := r.db.Model(&model.PaymentOrder{}).Where("user_id = ?", strings.TrimSpace(userID))
+	if len(statuses) > 0 {
+		query = query.Where("status IN ?", statuses)
+	}
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	err := query.Order("created_at desc").Limit(limit).Offset(offset).Find(&items).Error
+	return items, total, err
+}
+
 // BeginPaymentReconciliation creates or safely reuses the single daily run
 // for a provider. A recently running job is left alone so two workers cannot
 // reconcile and grant the same missing credit concurrently.
