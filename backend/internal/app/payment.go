@@ -843,7 +843,12 @@ func (s *Service) closePaymentOrder(ctx context.Context, order *model.PaymentOrd
 	} else if errors.Is(queryErr, payment.ErrOrderNotFound) {
 		queryNotFound = true
 	} else {
-		return WrapAppError(http.StatusBadGateway, "关单前查单失败，请稍后重试", queryErr)
+		// Querying before cancellation is a best-effort paid-order guard. Match
+		// Sub2API's behavior and do not trap the user in pending state when the
+		// provider query is unavailable. Verified late notifications and the
+		// closed-order compensation worker can still credit the order.
+		log.Printf("payment order close query failed; closing locally: order=%s provider=%s error=%s", order.ID, order.ProviderID, safePaymentError(queryErr))
+		return s.repo.MarkPaymentOrderClosed(order.ID, "CLOSED_LOCALLY_QUERY_FAILED")
 	}
 	if !paymentProviderSupports(order.ProviderID, "payment.close") {
 		return s.repo.MarkPaymentOrderClosed(order.ID, "CLOSED_LOCALLY")
@@ -879,10 +884,14 @@ func (s *Service) closePaymentOrder(ctx context.Context, order *model.PaymentOrd
 			return nil
 		}
 	}
+	providerStatus := "CLOSED_LOCALLY_CLOSE_FAILED"
 	if queryNotFound && errors.Is(err, payment.ErrOrderNotFound) && errors.Is(recheckErr, payment.ErrOrderNotFound) {
-		return s.repo.MarkPaymentOrderClosed(order.ID, "NOT_FOUND")
+		providerStatus = "NOT_FOUND"
+	} else if recheckErr != nil && !errors.Is(recheckErr, payment.ErrOrderNotFound) {
+		log.Printf("payment order close recheck failed; closing locally: order=%s provider=%s error=%s", order.ID, order.ProviderID, safePaymentError(recheckErr))
 	}
-	return WrapAppError(http.StatusBadGateway, "支付渠道关单失败，请稍后重试", err)
+	log.Printf("payment provider close failed; order closed locally: order=%s provider=%s error=%s", order.ID, order.ProviderID, safePaymentError(err))
+	return s.repo.MarkPaymentOrderClosed(order.ID, providerStatus)
 }
 
 func (s *Service) applyPaymentResult(providerID string, result payment.Result) (*model.PaymentOrder, error) {

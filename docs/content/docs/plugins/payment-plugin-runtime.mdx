@@ -40,7 +40,7 @@ Manifest 的支付贡献声明 `runtime.backend` 为 `rpc` 或 `wasm`，并通�
 
 ## 可选渠道能力
 
-支付能力由 Manifest 权限决定。声明 `payment.close` 的渠道在关闭订单时会执行远程关单；未声明该能力的渠道仍允许用户或管理员关闭订单，但宿主必须先查单确认未支付，再仅在本地关闭。声明 `payment.reconcile` 的渠道才会进入手动和日账单对账。无关单能力的本地关闭订单会在随后 24 小时低频补查晚到账，最终入账仍走现有幂等事务。
+支付能力由 Manifest 权限决定。声明 `payment.close` 的渠道在关闭订单时会尝试远程关单；未声明该能力的渠道仍允许用户或管理员关闭订单。关闭前查单是尽力执行的已支付保护，查单或远程关单失败不阻塞本地取消；已验签的晚到通知仍可入账，无关单能力的本地关闭订单还会在随后 24 小时低频补查，最终入账走现有幂等事务。
 
 Provider 列表 API 使用 `supportsClose` 和 `supportsReconciliation` 暴露这两个能力。`supportsClose` 只表示是否能同步关闭渠道侧订单，不控制站内关闭入口；旧支付宝和微信渠道均支持远程关单。
 
@@ -48,7 +48,7 @@ Provider 列表 API 使用 `supportsClose` 和 `supportsReconciliation` 暴露�
 
 内置 `official-payment-zpay` 包贡献 `zpay-alipay-qr` 与 `zpay-wechat-qr` 两个独立渠道。管理员分别配置和启停，钱包分别显示“支付宝支付”和“微信支付”，不显示 ZPAY 品牌。配置字段为公网 `publicBaseUrl`、公网 HTTPS 根地址 `apiBaseUrl`、`pid`、加密保存且不回显的 `merchantKey`，以及可选的逗号分隔 `cid`。
 
-ZPAY 使用 `/mapi.php` 创建二维码订单、`/api.php?act=order` 查单和 GET 异步通知。插件不声明关单或账单对账能力；仅支持 CNY 充值，不包含退款、余额查询和账单下载。反向代理必须覆盖并正确传递 `X-Forwarded-For`，且后端端口不能直接暴露给公网，否则 ZPAY 下单所需的 `clientip` 可能不准确。
+ZPAY 使用 `/mapi.php` 创建二维码订单、以表单 POST `/api.php`（`act=order`）查单和 GET 异步通知；查单响应兼容字段位于顶层或 `data` 对象的易支付实现。插件不声明关单或账单对账能力；仅支持 CNY 充值，不包含退款、余额查询和账单下载。反向代理必须覆盖并正确传递 `X-Forwarded-For`，且后端端口不能直接暴露给公网，否则 ZPAY 下单所需的 `clientip` 可能不准确。
 
 ## 原生包的平台边界
 

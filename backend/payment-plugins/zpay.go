@@ -183,10 +183,11 @@ func (p *ZPayProvider) QueryOrder(ctx context.Context, config Config, request Qu
 		"key":          {config["merchantKey"]},
 		"out_trade_no": {strings.TrimSpace(request.MerchantOrderNo)},
 	}
-	httpRequest, err := http.NewRequestWithContext(ctx, http.MethodGet, zpayEndpoint(config, "/api.php")+"?"+query.Encode(), nil)
+	httpRequest, err := http.NewRequestWithContext(ctx, http.MethodPost, zpayEndpoint(config, "/api.php"), strings.NewReader(query.Encode()))
 	if err != nil {
 		return Result{}, err
 	}
+	httpRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	var response zpayQueryResponse
 	if err := p.do(httpRequest, &response); err != nil {
 		return Result{}, err
@@ -197,24 +198,35 @@ func (p *ZPayProvider) QueryOrder(ctx context.Context, config Config, request Qu
 		}
 		return Result{}, zpayRejected("zpay_query_rejected", response.Message)
 	}
-	if response.PID.String() != strings.TrimSpace(config["pid"]) || response.Type != p.paymentType || response.OutTradeNo != request.MerchantOrderNo {
-		return Result{}, errors.New("ZPAY 查单结果与商户或支付渠道不匹配")
+	payload := response.payload()
+	if pid := payload.PID.String(); pid != "" && pid != strings.TrimSpace(config["pid"]) {
+		return Result{}, errors.New("ZPAY 查单结果与商户不匹配")
 	}
-	amountFen, err := parseYuanToFen(response.Money)
-	if err != nil {
+	if payload.Type != "" && payload.Type != p.paymentType {
+		return Result{}, errors.New("ZPAY 查单结果与支付渠道不匹配")
+	}
+	if payload.OutTradeNo != "" && payload.OutTradeNo != request.MerchantOrderNo {
+		return Result{}, errors.New("ZPAY 查单结果与订单不匹配")
+	}
+	merchantOrderNo := firstNonEmptyZPay(payload.OutTradeNo, request.MerchantOrderNo)
+	paid := payload.Status.String() == "1" || strings.EqualFold(payload.TradeStatus, "TRADE_SUCCESS")
+	amountFen := int64(0)
+	if strings.TrimSpace(payload.Money) != "" {
+		amountFen, err = parseYuanToFen(payload.Money)
+	}
+	if err != nil || (paid && strings.TrimSpace(payload.Money) == "") {
 		return Result{}, errors.New("ZPAY 查单金额无效")
 	}
-	paid := response.Status.String() == "1"
-	if paid && strings.TrimSpace(response.TradeNo) == "" {
+	if paid && strings.TrimSpace(payload.TradeNo) == "" {
 		return Result{}, errors.New("ZPAY 已支付订单缺少交易号")
 	}
-	paidAt, _ := time.ParseInLocation("2006-01-02 15:04:05", response.EndTime, time.FixedZone("CST", 8*60*60))
+	paidAt, _ := time.ParseInLocation("2006-01-02 15:04:05", payload.EndTime, time.FixedZone("CST", 8*60*60))
 	providerStatus := "WAIT_BUYER_PAY"
 	if paid {
 		providerStatus = "TRADE_SUCCESS"
 	}
 	return Result{
-		MerchantOrderNo: response.OutTradeNo, ProviderTradeNo: response.TradeNo, ProviderStatus: providerStatus,
+		MerchantOrderNo: merchantOrderNo, ProviderTradeNo: payload.TradeNo, ProviderStatus: providerStatus,
 		AmountFen: amountFen, Currency: "CNY", Paid: paid, PaidAt: paidAt,
 	}, nil
 }
@@ -318,16 +330,29 @@ type zpayCreateResponse struct {
 	QRCode  string     `json:"qrcode"`
 }
 
+type zpayQueryPayload struct {
+	PID         zpayScalar `json:"pid"`
+	Status      zpayScalar `json:"status"`
+	TradeStatus string     `json:"trade_status"`
+	Type        string     `json:"type"`
+	TradeNo     string     `json:"trade_no"`
+	OutTradeNo  string     `json:"out_trade_no"`
+	Money       string     `json:"money"`
+	EndTime     string     `json:"endtime"`
+}
+
 type zpayQueryResponse struct {
-	Code       zpayScalar `json:"code"`
-	Message    string     `json:"msg"`
-	PID        zpayScalar `json:"pid"`
-	Status     zpayScalar `json:"status"`
-	Type       string     `json:"type"`
-	TradeNo    string     `json:"trade_no"`
-	OutTradeNo string     `json:"out_trade_no"`
-	Money      string     `json:"money"`
-	EndTime    string     `json:"endtime"`
+	Code    zpayScalar `json:"code"`
+	Message string     `json:"msg"`
+	zpayQueryPayload
+	Data zpayQueryPayload `json:"data"`
+}
+
+func (response zpayQueryResponse) payload() zpayQueryPayload {
+	if response.Data.PID.String() != "" || response.Data.Status.String() != "" || response.Data.TradeStatus != "" || response.Data.Type != "" || response.Data.TradeNo != "" || response.Data.OutTradeNo != "" || response.Data.Money != "" || response.Data.EndTime != "" {
+		return response.Data
+	}
+	return response.zpayQueryPayload
 }
 
 func zpayAPIBaseURL(config Config) string {

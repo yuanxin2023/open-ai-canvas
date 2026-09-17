@@ -112,13 +112,18 @@ func TestZPayCreateOrderCheckoutValuePriority(t *testing.T) {
 	}
 }
 
-func TestZPayQueryOrderValidatesIdentityAndPayment(t *testing.T) {
+func TestZPayQueryOrderUsesFormAndSupportsNestedResponse(t *testing.T) {
 	client := &http.Client{Transport: zpayRoundTripFunc(func(request *http.Request) (*http.Response, error) {
-		query := request.URL.Query()
-		if request.URL.Path != "/api.php" || query.Get("act") != "order" || query.Get("pid") != "merchant-1" || query.Get("key") != "merchant-secret" || query.Get("out_trade_no") != "order-1" {
-			t.Fatalf("query = %s", request.URL.RequestURI())
+		if request.Method != http.MethodPost || request.URL.Path != "/api.php" {
+			t.Fatalf("request = %s %s", request.Method, request.URL.RequestURI())
 		}
-		return zpayJSONResponse(`{"code":1,"pid":"merchant-1","status":1,"type":"alipay","trade_no":"trade-1","out_trade_no":"order-1","money":"12.34","endtime":"2026-09-12 01:02:03"}`), nil
+		if err := request.ParseForm(); err != nil {
+			t.Fatal(err)
+		}
+		if request.Form.Get("act") != "order" || request.Form.Get("pid") != "merchant-1" || request.Form.Get("key") != "merchant-secret" || request.Form.Get("out_trade_no") != "order-1" {
+			t.Fatalf("form = %#v", request.Form)
+		}
+		return zpayJSONResponse(`{"code":1,"data":{"status":1,"trade_no":"trade-1","money":"12.34","endtime":"2026-09-12 01:02:03"}}`), nil
 	})}
 	result, err := NewZPayProvider(client, "alipay").QueryOrder(context.Background(), zpayTestConfig(), QueryRequest{MerchantOrderNo: "order-1"})
 	if err != nil {
@@ -126,6 +131,16 @@ func TestZPayQueryOrderValidatesIdentityAndPayment(t *testing.T) {
 	}
 	if !result.Paid || result.AmountFen != 1234 || result.ProviderTradeNo != "trade-1" || result.ProviderStatus != "TRADE_SUCCESS" || result.PaidAt.IsZero() {
 		t.Fatalf("result = %#v", result)
+	}
+}
+
+func TestZPayQueryOrderRejectsMismatchedReturnedIdentity(t *testing.T) {
+	client := &http.Client{Transport: zpayRoundTripFunc(func(*http.Request) (*http.Response, error) {
+		return zpayJSONResponse(`{"code":1,"pid":"another-merchant","status":0,"type":"alipay","out_trade_no":"order-1"}`), nil
+	})}
+	_, err := NewZPayProvider(client, "alipay").QueryOrder(context.Background(), zpayTestConfig(), QueryRequest{MerchantOrderNo: "order-1"})
+	if err == nil || !strings.Contains(err.Error(), "商户不匹配") {
+		t.Fatalf("error = %v", err)
 	}
 }
 
