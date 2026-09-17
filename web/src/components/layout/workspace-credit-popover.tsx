@@ -1,6 +1,7 @@
 import { AlipayCircleFilled, WechatFilled } from "@ant-design/icons";
 import { App, Button, Input, Popover, QRCode, Skeleton } from "antd";
 import { Check, CircleCheck, CreditCard, Gift, Sparkles } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { AppModal } from "@/components/ui/product/app-modal";
@@ -9,16 +10,13 @@ import { useWalletBalance } from "@/hooks/use-wallet-balance";
 import { closePaymentOrder, createPaymentOrder, getPaymentOrder, listPaymentProviders, listTopupProducts, queryPaymentOrder, refreshPaymentCheckout, type PaymentOrder, type PaymentProvider, type TopupProduct } from "@/services/api/payments";
 import { redeemCredits } from "@/services/api/wallet";
 
+const PAYMENT_CATALOG_STALE_TIME_MS = 5 * 60_000;
+
 export function WorkspaceCreditPopover({ userId }: { userId: string }) {
     const { message } = App.useApp();
     const { availableMicrocredits } = useWalletBalance(userId);
     const [open, setOpen] = useState(false);
     const [productsOpen, setProductsOpen] = useState(false);
-    const [products, setProducts] = useState<TopupProduct[]>([]);
-    const [providers, setProviders] = useState<PaymentProvider[]>([]);
-    const [productsLoading, setProductsLoading] = useState(false);
-    const [productsError, setProductsError] = useState("");
-    const [productsReloadKey, setProductsReloadKey] = useState(0);
     const [selectedProduct, setSelectedProduct] = useState<TopupProduct | null>(null);
     const [selectedProviderId, setSelectedProviderId] = useState("");
     const [paymentOrder, setPaymentOrder] = useState<PaymentOrder | null>(null);
@@ -32,30 +30,31 @@ export function WorkspaceCreditPopover({ userId }: { userId: string }) {
     const balance = availableMicrocredits === null ? "--" : formatCredits(availableMicrocredits);
     const normalizedCode = code.trim().toLowerCase();
     const productBenefits = (product: TopupProduct) => (product.benefits || "").split(/\r?\n/).map((item) => item.trim()).filter(Boolean);
+    const paymentCatalogQuery = useQuery({
+        queryKey: ["payment-catalog", userId],
+        queryFn: async () => {
+            const [productsResult, providersResult] = await Promise.all([listTopupProducts(), listPaymentProviders()]);
+            return { products: productsResult.products, providers: providersResult.providers };
+        },
+        staleTime: PAYMENT_CATALOG_STALE_TIME_MS,
+        refetchOnWindowFocus: false,
+    });
+    const products = useMemo(() => paymentCatalogQuery.data?.products ?? [], [paymentCatalogQuery.data?.products]);
+    const providers = useMemo(() => paymentCatalogQuery.data?.providers ?? [], [paymentCatalogQuery.data?.providers]);
+    const productsLoading = paymentCatalogQuery.isPending;
+    const productsError = !paymentCatalogQuery.data && paymentCatalogQuery.error
+        ? paymentCatalogQuery.error instanceof Error ? paymentCatalogQuery.error.message : "读取商品套餐失败"
+        : "";
     const selectedProvider = useMemo(() => providers.find((provider) => provider.id === selectedProviderId), [providers, selectedProviderId]);
 
     useEffect(() => {
         if (!productsOpen) return;
-        let active = true;
-        setProductsLoading(true);
-        setProductsError("");
-        void Promise.all([listTopupProducts(), listPaymentProviders()])
-            .then(([productsResult, providersResult]) => {
-                if (!active) return;
-                setProducts(productsResult.products);
-                setProviders(providersResult.providers);
-                setSelectedProviderId((current) => providersResult.providers.some((provider) => provider.id === current) ? current : providersResult.providers[0]?.id || "");
-            })
-            .catch((error) => {
-                if (active) setProductsError(error instanceof Error ? error.message : "读取商品套餐失败");
-            })
-            .finally(() => {
-                if (active) setProductsLoading(false);
-            });
-        return () => {
-            active = false;
-        };
-    }, [productsOpen, productsReloadKey]);
+        void paymentCatalogQuery.refetch({ cancelRefetch: false });
+    }, [productsOpen, paymentCatalogQuery.refetch]);
+
+    useEffect(() => {
+        setSelectedProviderId((current) => providers.some((provider) => provider.id === current) ? current : providers[0]?.id || "");
+    }, [providers]);
 
     useEffect(() => {
         paymentIdempotencyKey.current = "";
@@ -274,7 +273,7 @@ export function WorkspaceCreditPopover({ userId }: { userId: string }) {
                         <div className="workspace-credit-products-state">
                             <strong>商品套餐加载失败</strong>
                             <span>{productsError}</span>
-                            <Button onClick={() => setProductsReloadKey((current) => current + 1)}>重新加载</Button>
+                            <Button onClick={() => void paymentCatalogQuery.refetch()}>重新加载</Button>
                         </div>
                     ) : (
                         <div className="workspace-credit-products-grid">

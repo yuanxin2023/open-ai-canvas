@@ -47,7 +47,7 @@ function buildNav(features: FeatureAvailability): { groups: WorkspaceNavGroup[];
         },
         {
             heading: "工作台管理",
-            items: [toolItem("skills", "/skills"), ...(features.pluginCenterEnabled ? [toolItem("plugins", "/plugins")] : []), ...(features.creditsEnabled ? [toolItem("wallet", "/settings?section=wallet")] : [])],
+            items: [toolItem("skills", "/skills"), ...(features.pluginCenterEnabled ? [toolItem("plugins", "/plugins")] : [])],
         },
     ];
 
