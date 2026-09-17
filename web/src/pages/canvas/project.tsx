@@ -559,7 +559,7 @@ function InfiniteCanvasPage() {
         const sessionId = searchParams.get("conversation");
         if (!projectLoaded || !sessionId) return;
         if (!chatSessions.some((session) => session.id === sessionId)) {
-            message.warning("未找到要接续的会话，请从首页重新进入。");
+            message.warning("未找到要接续的会话，请从创作页重新进入。");
         } else {
             activeChatIdRef.current = sessionId;
             setActiveChatId(sessionId);

@@ -1918,7 +1918,7 @@
     max-height: calc(100vh - 48px);
     min-height: min(680px, calc(100vh - 48px));
     overflow-y: auto;
-    padding: 42px 40px 40px;
+    padding: 38px 32px 32px;
     background: color-mix(in srgb, var(--background) 95%, var(--foreground));
     }
 
@@ -1940,20 +1940,20 @@
 
     .workspace-credit-products-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 360px));
+    grid-template-columns: repeat(auto-fill, minmax(min(250px, 100%), 1fr));
     justify-content: center;
     align-items: stretch;
-    gap: 20px;
-    margin-top: 36px;
+    gap: 16px;
+    margin-top: 30px;
     }
 
     .workspace-credit-product-card {
     display: flex;
-    min-height: 500px;
+    min-height: 440px;
     flex-direction: column;
     border: 1px solid var(--workspace-border);
     border-radius: var(--r-xl);
-    padding: 26px 24px 24px;
+    padding: 22px 20px 20px;
     background: var(--workspace-surface-strong);
     box-shadow: 0 10px 30px color-mix(in srgb, var(--foreground) 7%, transparent), 0 1px 3px color-mix(in srgb, var(--foreground) 5%, transparent);
     }
@@ -1984,7 +1984,7 @@
     display: flex;
     align-items: baseline;
     gap: 5px;
-    margin-top: 30px;
+    margin-top: 22px;
     font-variant-numeric: tabular-nums;
     }
 
@@ -1994,7 +1994,7 @@
     }
 
     .workspace-credit-product-price strong {
-    font-size: 38px;
+    font-size: 34px;
     font-weight: 650;
     letter-spacing: -0.035em;
     }
@@ -2012,7 +2012,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    margin-top: 28px;
+    margin-top: 20px;
     font-size: var(--fs-body-lg);
     }
 
@@ -2024,9 +2024,9 @@
 
     .workspace-credit-product-facts {
     display: grid;
-    gap: 14px;
-    margin: 28px 0 24px;
-    padding-top: 24px;
+    gap: 10px;
+    margin: 20px 0 18px;
+    padding-top: 18px;
     border-top: 1px solid var(--workspace-border);
     color: color-mix(in srgb, var(--foreground) 72%, transparent);
     font-size: var(--fs-label);
@@ -2048,7 +2048,7 @@
     }
 
     .workspace-credit-product-card > .ant-btn {
-    height: 44px;
+    height: 40px;
     margin-top: auto;
     }
 
@@ -2075,7 +2075,7 @@
     .workspace-credit-product-skeleton.ant-skeleton-element,
     .workspace-credit-product-skeleton .ant-skeleton-image {
     width: 100% !important;
-    height: 500px !important;
+    height: 440px !important;
     border-radius: var(--r-xl) !important;
     }
 

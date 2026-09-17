@@ -48,7 +48,7 @@ export function WelcomeSetting() {
         <div className="admin-appearance-logo-frame-option">
             <div className="admin-appearance-logo-frame-copy">
                 <strong>启用欢迎页</strong>
-                <p>切换后立即保存。关闭后访问 /welcome 将跳转到首页。</p>
+                <p>切换后立即保存。关闭后访问 /welcome 将跳转到创作页。</p>
                 {error ? (
                     <div role="alert">
                         {error}

@@ -106,7 +106,7 @@ export function AuthScene() {
                 <section className="auth-scene-form-pane relative flex min-h-[660px] items-start justify-center overflow-y-auto px-4 pb-24 pt-20 sm:px-8 lg:min-h-0 lg:px-10 lg:pb-24 lg:pt-20">
                     <Link to="/" className="auth-scene-return absolute right-5 top-5 z-20 inline-flex h-9 items-center gap-2 rounded-full px-4 text-xs backdrop-blur-xl transition lg:right-8 lg:top-8">
                         <ArrowLeft className="size-3.5" />
-                        返回首页
+                        返回创作
                     </Link>
 
                     <motion.div

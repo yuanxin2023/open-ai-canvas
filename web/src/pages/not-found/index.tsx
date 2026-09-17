@@ -15,7 +15,7 @@ export default function NotFound() {
                     <div className="mt-8 flex flex-wrap justify-center gap-3">
                         <Link to="/" className="inline-flex h-9 items-center gap-2 rounded-md bg-stone-950 px-4 text-[var(--fs-body)] font-medium text-white transition-colors hover:bg-stone-800 dark:bg-stone-100 dark:text-stone-950 dark:hover:bg-stone-200">
                             <Home className="size-4" />
-                            返回首页
+                            返回创作
                         </Link>
                     </div>
                 </section>

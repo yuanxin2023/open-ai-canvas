@@ -22,8 +22,8 @@ export async function continueCreationConversationOnCanvas(source: SourceConvers
     const sessionId = `creation:${source.id}`;
     const messages: CanvasAssistantMessage[] = source.messages.map((item) => ({
         id: `creation:${source.id}:${item.id}`, role: item.role,
-        text: item.content || (item.status === "done" ? "首页作品已生成，可在画布中继续创作。" : item.status === "error" ? "首页生成未完成。" : item.status === "cancelled" ? "首页生成已停止。" : "来自首页的创作记录"),
-        meta: "来自首页",
+        text: item.content || (item.status === "done" ? "创作页作品已生成，可在画布中继续创作。" : item.status === "error" ? "创作页生成未完成。" : item.status === "cancelled" ? "创作页生成已停止。" : "来自创作页的创作记录"),
+        meta: "来自创作页",
         detail: { kind: "creation-handoff", sourceConversationId: source.id, sourceMessageId: item.id, createdAt: item.createdAt,
             status: item.status, mode: item.mode, model: item.model, taskIds: item.taskIds, error: item.error, settings: item.settings,
             references: item.references?.map(({ id, label, kind }) => ({ id, label, kind })),

@@ -11,7 +11,7 @@ import { useUserStore } from "@/stores/use-user-store";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
 
 const PAGE_TITLES: Record<string, string> = {
-    home: "首页",
+    home: "创作",
     create: "创作",
     projects: "短剧创作",
     canvas: "画布",

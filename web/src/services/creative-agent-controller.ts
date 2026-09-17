@@ -204,7 +204,7 @@ export class CreativeAgentController {
         const protocol: ResponseInputMessage[] = [
             { role: "system", content: `${CREATIVE_AGENT_SYSTEM_PROMPT}\n${creativeScenarioPrompt(this.state.scene)}\n用户系统提示：${config.systemPrompt || ""}` },
             ...this.state.messages.slice(-20).map((message) => ({ role: message.role, content: message.text })),
-            { role: "user", content: [{ type: "text", text: JSON.stringify({ brief: this.state.brief, proposal: this.state.proposal, availableModels: catalogue, references: this.state.references, canvas: canvas ? buildCanvasContext(canvas.read()) : { available: false, instruction: "首页不能操作画布" }, currentRequest: prepared.prompt }) }, ...imageReferences.map((reference) => ({ type: "image_url" as const, image_url: { url: reference.storageKey! } }))] },
+            { role: "user", content: [{ type: "text", text: JSON.stringify({ brief: this.state.brief, proposal: this.state.proposal, availableModels: catalogue, references: this.state.references, canvas: canvas ? buildCanvasContext(canvas.read()) : { available: false, instruction: "创作页不能操作画布" }, currentRequest: prepared.prompt }) }, ...imageReferences.map((reference) => ({ type: "image_url" as const, image_url: { url: reference.storageKey! } }))] },
         ];
         const itemKey = `planning:${nanoid()}`;
         this.state = { ...this.state, planning: { itemKey, protocol, model: config.model, prompt }, pendingPayment: undefined };

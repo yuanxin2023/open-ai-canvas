@@ -39,7 +39,7 @@ describe("workspace route loading", () => {
         expect(router).toContain('{ path: "/create", element: <RequireAuth>{deferred(<CreatePage />)}</RequireAuth> }');
         expect(router).not.toContain('path: "/home"');
         expect(router).not.toContain("HomePage");
-        expect(navigation).toContain('{ id: "home", title: "首页", icon: Home, to: "/" }');
+        expect(navigation).toContain('{ id: "home", title: "创作", icon: Home, to: "/" }');
         expect(navigation).not.toContain('to: "/create"');
         expect(navigation).not.toContain('to: "/home"');
     });
