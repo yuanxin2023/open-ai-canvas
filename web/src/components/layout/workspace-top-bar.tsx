@@ -31,8 +31,8 @@ export function WorkspaceTopBar({ sidebarOpen, onToggleSidebar }: { sidebarOpen:
     const { pathname } = useLocation();
     const extension = useWorkspaceTopBarContent();
 
-    const slug = pathname.split("/").filter(Boolean)[0];
-    const pageTitle = (slug && PAGE_TITLES[slug]) || brandName;
+    const slug = pathname.split("/").filter(Boolean)[0] || "home";
+    const pageTitle = PAGE_TITLES[slug] || brandName;
 
     return (
         <header className={`app-workspace-topbar flex shrink-0 items-center justify-between gap-2 px-3 sm:px-4 ${extension ? "has-extension" : ""}`}>

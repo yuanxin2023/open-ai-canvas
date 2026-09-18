@@ -34,6 +34,7 @@ describe("workspace route loading", () => {
     test("keeps the creation page at root and preserves the create compatibility route", () => {
         const router = source("../src/router.tsx");
         const navigation = source("../src/components/layout/workspace-sidebar-nav.tsx");
+        const topBar = source("../src/components/layout/workspace-top-bar.tsx");
 
         expect(router).toContain('{ path: "/", element: <RequireAuth>{deferred(<CreatePage />)}</RequireAuth> }');
         expect(router).toContain('{ path: "/create", element: <RequireAuth>{deferred(<CreatePage />)}</RequireAuth> }');
@@ -42,6 +43,8 @@ describe("workspace route loading", () => {
         expect(navigation).toContain('{ id: "home", title: "创作", icon: Home, to: "/" }');
         expect(navigation).not.toContain('to: "/create"');
         expect(navigation).not.toContain('to: "/home"');
+        expect(topBar).toContain('home: "创作"');
+        expect(topBar).toContain('pathname.split("/").filter(Boolean)[0] || "home"');
     });
 
     test("hides feature-gated discovery entries while keeping direct routes guarded", () => {
