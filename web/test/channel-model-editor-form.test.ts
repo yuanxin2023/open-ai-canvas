@@ -70,7 +70,7 @@ describe("pricing write validation", () => {
         expect(() => validateChannelModelPrices({ ...draft, priceTiers: [{ ...defaultPriceTier(), billingMode: "token", inputTokenPrice: NaN }] })).toThrow();
         const video = { ...draft, capability: "video" as const, protocol: "volcengine-ark-video", priceTiers: [{ ...defaultPriceTier(), billingMode: "token" as const }] };
         expect(() => validateChannelModelPrices(video)).toThrow("至少为");
-        video.priceTiers[0].outputTokenPrice = 0.000001;
+        video.priceTiers[0].outputTokenPrice = 0.01;
         expect(() => validateChannelModelPrices(video)).not.toThrow();
     });
 });

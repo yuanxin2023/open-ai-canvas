@@ -202,6 +202,7 @@ func RegisterPaymentRoutes(r *gin.RouterGroup, svc *service.Service) {
 	})
 
 	admin := r.Group("/admin/payments")
+	registerPaymentExportRoutes(admin, svc)
 	admin.GET("/providers", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {
@@ -293,7 +294,7 @@ func RegisterPaymentRoutes(r *gin.RouterGroup, svc *service.Service) {
 			fail(c, http.StatusBadRequest, err)
 			return
 		}
-		result, err := svc.AdminPaymentOrderPage(user, c.Query("status"), c.Query("keyword"), page, limit)
+		result, err := svc.AdminPaymentOrderPage(user, paymentOrderQuery(c), page, limit)
 		if err != nil {
 			failService(c, err)
 			return
@@ -355,7 +356,7 @@ func RegisterPaymentRoutes(r *gin.RouterGroup, svc *service.Service) {
 			fail(c, http.StatusBadRequest, err)
 			return
 		}
-		result, err := svc.AdminPaymentReconciliationPage(user, c.Query("providerId"), c.Query("status"), page, limit)
+		result, err := svc.AdminPaymentReconciliationPage(user, paymentReconciliationQuery(c), page, limit)
 		if err != nil {
 			failService(c, err)
 			return

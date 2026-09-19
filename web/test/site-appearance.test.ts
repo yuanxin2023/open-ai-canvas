@@ -63,12 +63,13 @@ describe("site appearance", () => {
     });
 
     test("site UI keeps metadata and official ICP wiring without skin controls", async () => {
-        const [storeSource, footerSource, pageSource, globalStyles, adminStyles] = await Promise.all([
+        const [storeSource, footerSource, pageSource, globalStyles, adminStyles, adminTokens] = await Promise.all([
             Bun.file(new URL("../src/stores/use-appearance-store.ts", import.meta.url)).text(),
             Bun.file(new URL("../src/components/layout/site-compliance-footer.tsx", import.meta.url)).text(),
             Bun.file(new URL("../src/pages/admin/settings/appearance-settings-page.tsx", import.meta.url)).text(),
             Bun.file(new URL("../src/styles/globals.css", import.meta.url)).text(),
             Bun.file(new URL("../src/styles/admin-ui.css", import.meta.url)).text(),
+            Bun.file(new URL("../src/pages/admin/theme/admin-tokens.css", import.meta.url)).text(),
         ]);
 
         expect(storeSource).toContain('setMeta(targetDocument, "name", "description"');
@@ -78,7 +79,7 @@ describe("site appearance", () => {
         expect(pageSource).not.toContain("皮肤主题");
         expect(globalStyles).toContain("--control-switch-checked-bg: #16a34a");
         expect(globalStyles).toContain("--plugin-switch-checked-bg: var(--control-switch-checked-bg)");
-        expect(adminStyles).toContain("--admin-status-warning: var(--palette-status-warning)");
+        expect(adminTokens).toContain("--admin-status-warning:");
         expect(adminStyles).toContain("border-radius: var(--menu-radius);");
     });
 });

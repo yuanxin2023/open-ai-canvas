@@ -100,7 +100,7 @@ test("appearance management exposes light and dark logo uploads plus the frame s
     expect(pageSource).toContain("深浅模式 Logo 预览");
     expect(pageSource).toContain("登录页视频自动播放");
     expect(pageSource).toContain("authVideoAutoplay");
-    expect(brandSource).toContain("useThemeStore");
+    expect(brandSource).toContain("useActiveTheme");
     expect(brandSource).toContain("data-logo-frame-enabled");
     expect(brandSource).toContain("failedSource === source");
     expect(brandSource).toContain('aria-hidden="true"');

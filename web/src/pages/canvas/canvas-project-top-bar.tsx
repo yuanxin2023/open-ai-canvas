@@ -1,19 +1,22 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Link } from "react-router";
-import { Clapperboard, CloudDownload, Coins, CopyPlus, Focus, FolderKanban, Gauge, Home, LayoutGrid, LoaderCircle, Menu, Pencil, Plus, Redo2, Search, Share2, Trash2, Undo2, Upload } from "lucide-react";
+import { Clapperboard, CloudDownload, CloudUpload, CopyPlus, Focus, FolderKanban, Gauge, History, Home, LayoutGrid, Menu, Pencil, Plus, Redo2, Save, Search, Share2, Trash2, Undo2, Upload } from "lucide-react";
 import { Button, Dropdown, Tooltip } from "antd";
 
-import { useWalletBalance } from "@/hooks/use-wallet-balance";
+import { WorkspaceCreditPopover } from "@/components/layout/workspace-credit-popover";
 import { canvasDockStyle } from "@/lib/canvas/canvas-aceternity-style";
 import type { CanvasContextSummary } from "@/lib/canvas/canvas-context-summary";
 import type { CanvasShortDramaProgress } from "@/lib/canvas/canvas-short-drama";
 import { canvasThemes } from "@/lib/canvas-theme";
-import { useThemeStore } from "@/stores/use-theme-store";
+import { useCanvasThemeStore } from "@/stores/canvas/use-canvas-theme-store";
 import { useUserStore } from "@/stores/use-user-store";
 import type { CanvasMediaPerformanceMode } from "@/types/canvas";
 import { CanvasShortcutsModal } from "./canvas-shortcuts-modal";
 
 type CanvasTopBarProps = {
+    syncStatus?: ReactNode;
+    versionsOpen: boolean;
+    onToggleVersions: () => void;
     title: string;
     titleDraft: string;
     isTitleEditing: boolean;
@@ -25,6 +28,8 @@ type CanvasTopBarProps = {
     canRedo: boolean;
     onCreateProject: () => void;
     onDeleteProject: () => void;
+    onSave: () => void | Promise<void>;
+    onForceSave: () => void;
     onImportImage: () => void;
     onImportLibTV: () => void;
     onImportTapNow: () => void;
@@ -41,6 +46,9 @@ type CanvasTopBarProps = {
 };
 
 export function CanvasTopBar({
+    syncStatus,
+    versionsOpen,
+    onToggleVersions,
     title,
     titleDraft,
     isTitleEditing,
@@ -52,6 +60,8 @@ export function CanvasTopBar({
     canRedo,
     onCreateProject,
     onDeleteProject,
+    onSave,
+    onForceSave,
     onImportImage,
     onImportLibTV,
     onImportTapNow,
@@ -66,11 +76,10 @@ export function CanvasTopBar({
     onEnterFocusMode,
     shortDramaGuide,
 }: CanvasTopBarProps) {
-    const theme = canvasThemes[useThemeStore((state) => state.theme)];
+    const theme = canvasThemes[useCanvasThemeStore((state) => state.theme)];
     const dockStyle = canvasDockStyle(theme, theme.node.text);
     const user = useUserStore((state) => state.user);
     const creditsEnabled = useUserStore((state) => state.features.creditsEnabled);
-    const { availableMicrocredits, refreshing } = useWalletBalance(user?.id, creditsEnabled);
     const titleRef = useRef<HTMLDivElement>(null);
     const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
@@ -105,6 +114,8 @@ export function CanvasTopBar({
                                     { type: "divider" },
                                     { key: "new", icon: <Plus className="size-4" />, label: "新建画布", onClick: onCreateProject },
                                     { key: "delete", danger: true, icon: <Trash2 className="size-4" />, label: "删除当前画布", onClick: onDeleteProject },
+                                    { key: "save", icon: <Save className="size-4" />, label: <MenuLabel text="保存" shortcut="⌘ S" />, onClick: () => void onSave() },
+                                    { key: "force-save", icon: <CloudUpload className="size-4" />, label: "修复素材关联并保存", onClick: onForceSave },
                                     { type: "divider" },
                                     { key: "import", icon: <Upload className="size-4" />, label: "导入素材", onClick: onImportImage },
                                     { key: "search", icon: <Search className="size-4" />, label: <MenuLabel text="搜索节点" shortcut="⌘ F" />, onClick: onOpenSearch },
@@ -179,9 +190,10 @@ export function CanvasTopBar({
                             </div>
                         ) : null}
                     </div>
+                    {syncStatus}
                 </div>
 
-                <div className="canvas-topbar-cluster pointer-events-auto flex items-center gap-1.5" style={dockStyle}>
+                <div className="canvas-topbar-cluster canvas-topbar-tools-cluster pointer-events-auto flex items-center gap-1.5" style={dockStyle}>
                     <CanvasTopBarTooltip label="搜索画布节点">
                         <Button
                             type="text"
@@ -225,19 +237,7 @@ export function CanvasTopBar({
                             <Button type="text" className="canvas-topbar-action !hidden !h-10 !w-10 !min-w-10 !rounded-xl !p-0 lg:!inline-flex" style={{ color: theme.node.text }} icon={<Gauge className="size-4" />} aria-label="媒体性能模式" />
                         </Dropdown>
                     </CanvasTopBarTooltip>
-                    {user && creditsEnabled ? (
-                        <CanvasTopBarTooltip label="查看积分明细">
-                            <Link
-                                to="/wallet"
-                                className="canvas-topbar-action inline-flex h-9 min-w-[5.5rem] items-center justify-center gap-1.5 rounded-lg px-2.5 text-xs font-medium tabular-nums"
-                                style={{ color: theme.node.text }}
-                                aria-label="查看积分明细"
-                            >
-                                {refreshing && availableMicrocredits === null ? <LoaderCircle className="size-3.5 animate-spin opacity-60" style={{ color: theme.accent.primary }} /> : <Coins className="size-3.5" style={{ color: theme.accent.primary }} />}
-                                <span>{availableMicrocredits === null ? "--" : (availableMicrocredits / 1_000_000).toLocaleString("zh-CN", { maximumFractionDigits: 2 })}</span>
-                            </Link>
-                        </CanvasTopBarTooltip>
-                    ) : null}
+                    {user && creditsEnabled ? <WorkspaceCreditPopover userId={user.id} /> : null}
                     <CanvasTopBarTooltip label="进入专注模式（Shift + Ctrl/Cmd + F）">
                         <Button type="text" className="canvas-topbar-action !h-10 !w-10 !min-w-10 !rounded-xl !p-0" style={{ color: theme.node.text }} icon={<Focus className="size-4" />} onClick={onEnterFocusMode} aria-label="进入专注模式" />
                     </CanvasTopBarTooltip>
@@ -256,6 +256,19 @@ export function CanvasTopBar({
                             </Button>
                         </CanvasTopBarTooltip>
                     ) : null}
+                    <CanvasTopBarTooltip label="版本记录与本地草稿">
+                        <Button
+                            type="text"
+                            className="canvas-topbar-action canvas-topbar-version-button !h-10 !rounded-xl !px-2.5 !font-medium"
+                            style={{ color: theme.node.text, background: versionsOpen ? theme.toolbar.activeBg : undefined }}
+                            icon={<History className="size-4" />}
+                            aria-label="版本记录"
+                            aria-pressed={versionsOpen}
+                            onClick={onToggleVersions}
+                        >
+                            版本
+                        </Button>
+                    </CanvasTopBarTooltip>
                     <CanvasTopBarTooltip label="分享画布">
                         <Button type="text" className="canvas-topbar-action !h-10 !w-10 !min-w-10 !rounded-xl !p-0" style={{ color: theme.node.text }} icon={<Share2 className="size-4" />} onClick={onShare} aria-label="分享画布" />
                     </CanvasTopBarTooltip>

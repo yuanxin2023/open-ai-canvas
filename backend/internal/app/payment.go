@@ -198,7 +198,7 @@ func (s *Service) AdminPaymentProviders(actor *model.User) ([]AdminPaymentProvid
 		if err != nil {
 			return nil, err
 		}
-		manifest, _ := paymentManifestForProvider(descriptor.ID)
+		manifest, _ := s.paymentManifestForProvider(descriptor.ID)
 		view := AdminPaymentProviderView{PaymentProviderView: base, Values: map[string]string{}, SecretConfigured: map[string]bool{}, ConfigFields: manifest.Configuration.Fields}
 		if config != nil {
 			values, err := s.decryptPaymentConfig(config)
@@ -231,15 +231,14 @@ func (s *Service) UpdatePaymentProviderConfig(actor *model.User, providerID stri
 		return nil, BadAuthRequest("未知支付渠道")
 	}
 	descriptor := provider.Descriptor()
-	manifest, ok := paymentManifestForProvider(descriptor.ID)
+	manifest, ok := s.paymentManifestForProvider(descriptor.ID)
 	if !ok {
 		return nil, BadAuthRequest("支付插件清单不存在")
 	}
-	_, contribution, ok := paymentManifestContributionForProvider(descriptor.ID)
+	policy, ok := paymentExpiryPolicy(manifest, descriptor.ID)
 	if !ok {
-		return nil, BadAuthRequest("支付插件渠道声明不存在")
+		return nil, BadAuthRequest("支付插件清单不存在")
 	}
-	policy := contribution.ExpiryPolicy
 	if request.CloseAfterMinutes < policy.MinMinutes || request.CloseAfterMinutes > policy.MaxMinutes {
 		return nil, BadAuthRequest(fmt.Sprintf("未支付关闭时间必须为 %d-%d 分钟", policy.MinMinutes, policy.MaxMinutes))
 	}
@@ -333,8 +332,10 @@ func (s *Service) UpdatePaymentProviderConfig(actor *model.User, providerID stri
 
 func (s *Service) paymentProviderView(descriptor payment.Descriptor) (PaymentProviderView, *model.PaymentProviderConfig, error) {
 	view := PaymentProviderView{ID: descriptor.ID, PluginID: descriptor.PluginID, Name: descriptor.Name, Icon: descriptor.Icon, CheckoutMode: descriptor.CheckoutMode}
-	if manifest, contribution, ok := paymentManifestContributionForProvider(descriptor.ID); ok {
-		view.CloseAfterMinutes = contribution.ExpiryPolicy.DefaultMinutes
+	if manifest, ok := s.paymentManifestForProvider(descriptor.ID); ok {
+		if policy, found := paymentExpiryPolicy(manifest, descriptor.ID); found {
+			view.CloseAfterMinutes = policy.DefaultMinutes
+		}
 		view.SupportsClose = paymentManifestHasPermission(manifest, "payment.close")
 		view.SupportsReconciliation = paymentManifestHasPermission(manifest, "payment.reconcile")
 	}
@@ -356,20 +357,73 @@ func (s *Service) paymentProviderView(descriptor payment.Descriptor) (PaymentPro
 	return view, config, nil
 }
 
-func paymentManifestForProvider(providerID string) (protocol.Manifest, bool) {
-	manifest, _, ok := paymentManifestContributionForProvider(providerID)
-	return manifest, ok
-}
-
-func paymentManifestContributionForProvider(providerID string) (protocol.Manifest, protocol.ManifestPaymentProvider, bool) {
-	for _, manifest := range bundledPaymentPluginManifests() {
-		for _, contribution := range manifest.Contributes.PaymentProviders {
-			if contribution.ID == providerID {
-				return manifest, contribution, true
+func (s *Service) paymentManifestForProvider(providerID string) (protocol.Manifest, bool) {
+	providerID = strings.TrimSpace(providerID)
+	if providerID == "" {
+		return protocol.Manifest{}, false
+	}
+	if s != nil {
+		for _, plugin := range s.Plugins() {
+			for _, contribution := range plugin.Manifest.Contributes.PaymentProviders {
+				if contribution.ID == providerID {
+					return protocolManifestFromPluginView(plugin), true
+				}
 			}
 		}
 	}
+	return bundledPaymentManifestForProvider(providerID)
+}
+
+func bundledPaymentManifestForProvider(providerID string) (protocol.Manifest, bool) {
+	for _, manifest := range bundledPaymentPluginManifests() {
+		for _, contribution := range manifest.Contributes.PaymentProviders {
+			if contribution.ID == providerID {
+				return manifest, true
+			}
+		}
+	}
+	return protocol.Manifest{}, false
+}
+
+func paymentManifestContributionForProvider(providerID string) (protocol.Manifest, protocol.ManifestPaymentProvider, bool) {
+	manifest, ok := bundledPaymentManifestForProvider(providerID)
+	if !ok {
+		return protocol.Manifest{}, protocol.ManifestPaymentProvider{}, false
+	}
+	for _, contribution := range manifest.Contributes.PaymentProviders {
+		if contribution.ID == providerID {
+			return manifest, contribution, true
+		}
+	}
 	return protocol.Manifest{}, protocol.ManifestPaymentProvider{}, false
+}
+
+func protocolManifestFromPluginView(plugin PluginView) protocol.Manifest {
+	return protocol.Manifest{
+		APIVersion: plugin.Manifest.APIVersion,
+		Metadata: protocol.Metadata{
+			ID: plugin.Manifest.ID, Version: plugin.Manifest.Version, Name: plugin.Manifest.Name,
+			Vendor: plugin.Manifest.Author, Description: plugin.Manifest.Description,
+			Documentation: plugin.Manifest.Documentation,
+		},
+		Surfaces:      plugin.Manifest.Surfaces,
+		Runtime:       plugin.Manifest.Runtime,
+		Permissions:   plugin.Manifest.Permissions,
+		Configuration: plugin.Manifest.Configuration,
+		Contributes:   plugin.Manifest.Contributes,
+	}
+}
+
+func paymentExpiryPolicy(manifest protocol.Manifest, providerID string) (protocol.ManifestPaymentExpiryPolicy, bool) {
+	for _, contribution := range manifest.Contributes.PaymentProviders {
+		if contribution.ID == providerID {
+			return contribution.ExpiryPolicy, true
+		}
+	}
+	if len(manifest.Contributes.PaymentProviders) == 1 {
+		return manifest.Contributes.PaymentProviders[0].ExpiryPolicy, true
+	}
+	return protocol.ManifestPaymentExpiryPolicy{}, false
 }
 
 func (s *Service) decryptPaymentConfig(config *model.PaymentProviderConfig) (payment.Config, error) {
@@ -960,12 +1014,16 @@ func paymentOrderView(order model.PaymentOrder) PaymentOrderView {
 	}
 }
 
-func (s *Service) AdminPaymentOrderPage(actor *model.User, status, keyword string, page, limit int) (*AdminPaymentOrderPage, error) {
+func (s *Service) AdminPaymentOrderPage(actor *model.User, query PaymentOrderQuery, page, limit int) (*AdminPaymentOrderPage, error) {
 	if err := s.RequireAdmin(actor); err != nil {
 		return nil, err
 	}
 	page, limit = normalizeAdminPage(page, limit)
-	orders, total, err := s.repo.AdminPaymentOrders(status, keyword, limit, (page-1)*limit)
+	filter, err := query.filter()
+	if err != nil {
+		return nil, err
+	}
+	orders, total, err := s.repo.AdminPaymentOrders(filter, limit, (page-1)*limit)
 	if err != nil {
 		return nil, err
 	}

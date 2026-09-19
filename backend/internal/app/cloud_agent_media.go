@@ -2,11 +2,13 @@ package app
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 	"unicode/utf8"
 
+	"gorm.io/gorm"
 	"infinite-canvas/backend/internal/model"
 	"infinite-canvas/backend/internal/repository"
 )
@@ -213,7 +215,8 @@ func cloudAgentMediaDocument(repo *repository.Repository, userID, canvasID strin
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	if args.SnapshotHash == "" || cloudAgentCanvasHash(doc) != args.SnapshotHash {
+	unchanged := args.SnapshotHash != "" && (cloudAgentCanvasHash(doc) == args.SnapshotHash || cloudAgentMediaContentHash(doc) == args.SnapshotHash)
+	if !unchanged {
 		return nil, nil, nil, creationConflict("画布已变化，请重新读取画布并重新审批；未提交生成任务")
 	}
 	nodes, err := creationObjects(doc["nodes"])
@@ -447,6 +450,22 @@ func cloudAgentMediaOperation(mode string, refs map[string]any) string {
 	return ""
 }
 
+func (s *Service) fillCloudAgentMediaSnapshotHash(userID, canvasID string, a *cloudAgentMediaArgs) error {
+	if a == nil || strings.TrimSpace(a.SnapshotHash) != "" {
+		return nil
+	}
+	canvas, err := s.repo.CanvasProjectForUser(userID, canvasID)
+	if err != nil {
+		return err
+	}
+	doc, err := creationDocument(canvas.PayloadJSON)
+	if err != nil {
+		return err
+	}
+	a.SnapshotHash = cloudAgentMediaContentHash(doc)
+	return nil
+}
+
 func (s *Service) prepareCloudAgentMedia(run *model.CloudAgentExecution, state *cloudAgentRuntime, call cloudAgentCall) (CreateTaskRequest, *cloudAgentMediaPlan, error) {
 	var a cloudAgentMediaArgs
 	if err := decodeCloudAgentJSONObject(call.Function.Arguments, &a); err != nil {
@@ -454,6 +473,9 @@ func (s *Service) prepareCloudAgentMedia(run *model.CloudAgentExecution, state *
 	}
 	a.Mode = strings.ToLower(strings.TrimSpace(a.Mode))
 	a.DraftRunID = run.ID
+	if err := s.fillCloudAgentMediaSnapshotHash(run.UserID, state.Request.CanvasID, &a); err != nil {
+		return CreateTaskRequest{}, nil, err
+	}
 	if err := validateCloudAgentMediaArgs(a, state); err != nil {
 		return CreateTaskRequest{}, nil, err
 	}
@@ -519,7 +541,7 @@ func saveCloudAgentDocument(repo *repository.Repository, canvas *model.CanvasPro
 	}
 	before := canvas.PayloadJSON
 	canvas.PayloadJSON = string(raw)
-	return repo.CompareSaveCreationCanvas(canvas, before)
+	return saveCreationCanvasWithHistory(repo, canvas, before)
 }
 
 // Called inside the same transaction as the task, charge reservation and Agent checkpoint.
@@ -650,9 +672,22 @@ func createCloudAgentMediaNode(repo *repository.Repository, userID, canvasID str
 	return nil
 }
 
-func completeCloudAgentMediaNode(repo *repository.Repository, userID, canvasID string, task *model.Task, policy RuntimePolicySetting) (string, error) {
+type cloudAgentMediaWritebackError struct {
+	error
+	reason string
+}
+
+func (e *cloudAgentMediaWritebackError) Unwrap() error { return e.error }
+
+func completeCloudAgentMediaNode(repo *repository.Repository, userID, canvasID, targetNodeID string, task *model.Task, policy RuntimePolicySetting) (string, error) {
+	if validateCloudAgentID(targetNodeID, "生成节点ID", 80) != nil {
+		return "", &cloudAgentMediaWritebackError{error: creationConflict("任务缺少有效的目标节点记录，未回写画布"), reason: "target_node_unknown"}
+	}
 	canvas, err := repo.CanvasProjectForUser(userID, canvasID)
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return "", &cloudAgentMediaWritebackError{error: creationConflict("目标画布不存在或已不可访问，未回写任务状态"), reason: "canvas_unavailable"}
+		}
 		return "", err
 	}
 	doc, err := creationDocument(canvas.PayloadJSON)
@@ -660,9 +695,12 @@ func completeCloudAgentMediaNode(repo *repository.Repository, userID, canvasID s
 		return "", err
 	}
 	for _, node := range creationMaps(doc["nodes"]) {
+		if stringValue(node["id"]) != targetNodeID {
+			continue
+		}
 		meta, _ := node["metadata"].(map[string]any)
 		if stringValue(meta["taskId"]) != task.ID {
-			continue
+			return "", &cloudAgentMediaWritebackError{error: creationConflict("目标节点的任务绑定已变化，未覆盖现有内容"), reason: "task_binding_changed"}
 		}
 		meta["taskStatus"] = string(task.Status)
 		meta["status"] = "error"
@@ -676,7 +714,7 @@ func completeCloudAgentMediaNode(repo *repository.Repository, userID, canvasID s
 				if saveErr := saveCloudAgentDocument(repo, canvas, doc, policy); saveErr != nil {
 					return stringValue(node["id"]), saveErr
 				}
-				return stringValue(node["id"]), BadAuthRequest("生成结果没有可用的账号资源，未写入媒体地址")
+				return stringValue(node["id"]), &cloudAgentMediaWritebackError{error: BadAuthRequest("生成结果没有可用的账号资源，未写入媒体地址"), reason: "result_resource_unavailable"}
 			}
 			meta["content"], meta["storageKey"], meta["status"] = resourceFileURL(id), "resource:"+id, "success"
 			meta["naturalWidth"], meta["naturalHeight"] = resource.Width, resource.Height
@@ -689,5 +727,5 @@ func completeCloudAgentMediaNode(repo *repository.Repository, userID, canvasID s
 		}
 		return stringValue(node["id"]), saveCloudAgentDocument(repo, canvas, doc, policy)
 	}
-	return "", creationConflict("生成节点已删除或已绑定其他任务；结果仍保留在任务中心，未重建节点")
+	return "", &cloudAgentMediaWritebackError{error: creationConflict("目标生成节点不存在，未重建节点；任务记录仍保留在任务中心"), reason: "target_node_missing"}
 }

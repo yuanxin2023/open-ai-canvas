@@ -1,6 +1,7 @@
 package app
 
 import (
+	"errors"
 	"testing"
 
 	"infinite-canvas/backend/internal/payment"
@@ -80,7 +81,7 @@ func TestSystemPaymentPluginsRegisterRPCProviders(t *testing.T) {
 	if registry == nil {
 		t.Fatal("payment registry is nil")
 	}
-	for _, providerID := range []string{PaymentProviderAlipay, PaymentProviderWeChat, PaymentProviderZPayAlipay, PaymentProviderZPayWeChat} {
+	for _, providerID := range []string{PaymentProviderAlipay, PaymentProviderWeChat, PaymentProviderZPayAlipay, PaymentProviderZPayWeChat, "xunhupay-aggregate"} {
 		provider, ok := registry.Get(providerID)
 		if !ok {
 			t.Fatalf("payment provider %q is missing", providerID)
@@ -90,6 +91,14 @@ func TestSystemPaymentPluginsRegisterRPCProviders(t *testing.T) {
 		}
 		if provider.Descriptor().PluginID == "" || provider.Descriptor().PluginVersion == "" {
 			t.Fatalf("payment provider %q is missing plugin identity: %#v", providerID, provider.Descriptor())
+		}
+		err := provider.ValidateConfig(nil)
+		var providerErr *payment.ProviderError
+		if !errors.As(err, &providerErr) {
+			t.Fatalf("provider %q ValidateConfig() = %T %v, want ProviderError", providerID, err, err)
+		}
+		if providerErr.Code == "plugin_executable_missing" || providerErr.Code == "plugin_exec_format_error" || providerErr.Code == "plugin_start_failed" {
+			t.Fatalf("provider %q failed to start: %#v cause=%v", providerID, providerErr, providerErr.Cause)
 		}
 	}
 }
@@ -104,7 +113,7 @@ func TestPaymentRegistryFailsClosedWhenOfficialPackagesAreMissing(t *testing.T) 
 	if registry == nil {
 		t.Fatal("payment registry is nil")
 	}
-	for _, providerID := range []string{PaymentProviderAlipay, PaymentProviderWeChat, PaymentProviderZPayAlipay, PaymentProviderZPayWeChat} {
+	for _, providerID := range []string{PaymentProviderAlipay, PaymentProviderWeChat, PaymentProviderZPayAlipay, PaymentProviderZPayWeChat, "xunhupay-aggregate"} {
 		if _, ok := registry.Get(providerID); ok {
 			t.Fatalf("payment provider %q unexpectedly came from host fallback", providerID)
 		}
@@ -130,5 +139,40 @@ func TestTopupProductCreditAmountStaysWithinSafeLimit(t *testing.T) {
 	}
 	if product.Benefits != "权益一\n权益二" {
 		t.Fatalf("benefits = %q, want configured benefit lines", product.Benefits)
+	}
+}
+
+func TestXunHuPayOfficialPackageIsPaymentPlugin(t *testing.T) {
+	center, err := newPluginRuntime(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var plugin PluginView
+	for _, item := range center.list() {
+		if item.Manifest.ID == "official-payment-xunhupay" {
+			plugin = item
+			plugin.Management = pluginManagementFromView(item)
+			break
+		}
+	}
+	if plugin.Manifest.ID == "" {
+		t.Fatal("official-payment-xunhupay is missing")
+	}
+	if plugin.Management.Kind != PluginKindPayment || plugin.Source != PluginOriginOfficial {
+		t.Fatalf("xunhupay plugin = %#v", plugin)
+	}
+	if len(plugin.Manifest.Contributes.PaymentProviders) != 1 || plugin.Manifest.Contributes.PaymentProviders[0].ID != "xunhupay-aggregate" {
+		t.Fatalf("xunhupay contributions = %#v", plugin.Manifest.Contributes.PaymentProviders)
+	}
+	registry := center.paymentRegistrySnapshot()
+	if registry == nil {
+		t.Fatal("payment registry is nil")
+	}
+	provider, ok := registry.Get("xunhupay-aggregate")
+	if !ok {
+		t.Fatal("xunhupay-aggregate provider is missing")
+	}
+	if _, ok := provider.(*payment.RPCProvider); !ok {
+		t.Fatalf("xunhupay provider type = %T", provider)
 	}
 }

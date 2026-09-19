@@ -38,6 +38,28 @@ func cloudAgentCanvasHash(doc map[string]any) string {
 	return creationHash(content)
 }
 
+// Generation does not depend on node positions. Keep the full canvas hash for
+// mutations and undo, which must still detect layout edits before restoring data.
+func cloudAgentMediaContentHash(doc map[string]any) string {
+	content := make(map[string]any, len(doc))
+	for key, value := range doc {
+		content[key] = value
+	}
+	nodes := creationMaps(doc["nodes"])
+	projected := make([]map[string]any, 0, len(nodes))
+	for _, node := range nodes {
+		item := make(map[string]any, len(node))
+		for key, value := range node {
+			if key != "position" {
+				item[key] = value
+			}
+		}
+		projected = append(projected, item)
+	}
+	content["nodes"] = projected
+	return cloudAgentCanvasHash(content)
+}
+
 func cloudAgentCanvasState(repo *repository.Repository, userID string, doc map[string]any, offset int, ids []string, storyboardOffset int) (any, error) {
 	if offset < 0 || storyboardOffset < 0 || len(ids) > 8 {
 		return nil, BadAuthRequest("画布读取分页参数无效")
@@ -152,7 +174,7 @@ func cloudAgentCanvasState(repo *repository.Repository, userID string, doc map[s
 			edges = append(edges, map[string]any{"id": edge["id"], "fromNodeId": edge["fromNodeId"], "toNodeId": edge["toNodeId"]})
 		}
 	}
-	return map[string]any{"snapshotHash": cloudAgentCanvasHash(doc), "nodes": nodes, "connections": edges, "totalNodes": len(all), "nextOffset": next, "hasMore": next > 0}, nil
+	return map[string]any{"snapshotHash": cloudAgentCanvasHash(doc), "mediaSnapshotHash": cloudAgentMediaContentHash(doc), "nodes": nodes, "connections": edges, "totalNodes": len(all), "nextOffset": next, "hasMore": next > 0}, nil
 }
 
 func cloudAgentSafeNumber(value any) (any, bool) {
@@ -342,6 +364,7 @@ func cloudAgentBatchTableState(table map[string]any, offset int, precise bool) m
 		columns = defaultCloudAgentBatchReferenceColumns()
 	}
 
+	globalPrompt := strings.TrimSpace(stringValue(table["globalPrompt"]))
 	all := creationMaps(table["rows"])
 	count, textLimit := 20, 240
 	if precise {
@@ -353,10 +376,14 @@ func cloudAgentBatchTableState(table map[string]any, offset int, precise bool) m
 	for _, row := range all {
 		rowEnabled, _ := row["enabled"].(bool)
 		prompt := strings.TrimSpace(stringValue(row["prompt"]))
+		effectivePrompt := globalPrompt
+		if effectivePrompt == "" {
+			effectivePrompt = prompt
+		}
 		inputs := cloudAgentBatchInputIDs(row["inputNodeIds"], len(columns))
 		if rowEnabled {
 			enabled++
-			if prompt == "" {
+			if effectivePrompt == "" {
 				missingPrompt++
 			}
 			minimumInputs := 1
@@ -366,7 +393,7 @@ func cloudAgentBatchTableState(table map[string]any, offset int, precise bool) m
 			if len(inputs) < minimumInputs {
 				missingReferences++
 			}
-			if prompt != "" && len(inputs) >= minimumInputs {
+			if effectivePrompt != "" && len(inputs) >= minimumInputs {
 				ready++
 			}
 		}
@@ -397,7 +424,7 @@ func cloudAgentBatchTableState(table map[string]any, offset int, precise bool) m
 		}
 		rows = append(rows, item)
 	}
-	return map[string]any{
+	projected := map[string]any{
 		"operation": operation, "concurrency": concurrency, "referenceColumns": columns,
 		"rows": rows, "totalRows": len(all), "nextOffset": next, "hasMore": next > 0,
 		"generationPreview": map[string]any{
@@ -405,6 +432,13 @@ func cloudAgentBatchTableState(table map[string]any, offset int, precise bool) m
 			"missingReferenceRows": missingReferences, "outputLinkedRows": outputLinked,
 		},
 	}
+	if globalPrompt != "" {
+		projected["globalPrompt"] = truncateRunes(globalPrompt, textLimit)
+		if len([]rune(globalPrompt)) > textLimit {
+			projected["globalPromptTruncated"] = true
+		}
+	}
+	return projected
 }
 
 func cloudAgentBatchInputIDs(value any, limit int) []any {

@@ -17,6 +17,7 @@ type ResourceReferenceDocument struct {
 	Title         string
 	PrimaryJSON   string
 	SecondaryJSON string
+	TaskStatus    model.TaskStatus
 }
 
 type ResourceDirectReference struct {
@@ -85,6 +86,11 @@ func (r *Repository) ResourceReferenceSnapshot(userID string, excludingAssetID s
 	if len(resourceIDs) == 0 {
 		return snapshot, nil
 	}
+	history, err := r.CanvasHistoryResourceReferences(resourceIDs)
+	if err != nil {
+		return snapshot, err
+	}
+	snapshot.Direct = append(snapshot.Direct, history...)
 
 	var assets []model.Asset
 	assetQuery := r.db.Where("user_id = ? AND id <> ?", userID, excludingAssetID)
@@ -104,11 +110,13 @@ func (r *Repository) ResourceReferenceSnapshot(userID string, excludingAssetID s
 	}
 
 	var tasks []model.Task
-	if err := r.db.Select("id", "prompt", "input_json", "result_json").Where("user_id = ?", userID).Find(&tasks).Error; err != nil {
+	if err := r.db.Select("id", "prompt", "status", "input_json", "result_json").Where("user_id = ?", userID).Find(&tasks).Error; err != nil {
 		return snapshot, err
 	}
+	taskStatuses := make(map[string]model.TaskStatus, len(tasks))
 	for _, task := range tasks {
-		snapshot.Documents = append(snapshot.Documents, ResourceReferenceDocument{Kind: "任务", ID: task.ID, Title: task.Prompt, PrimaryJSON: task.InputJSON, SecondaryJSON: task.ResultJSON})
+		taskStatuses[task.ID] = task.Status
+		snapshot.Documents = append(snapshot.Documents, ResourceReferenceDocument{Kind: "任务", ID: task.ID, Title: task.Prompt, PrimaryJSON: task.InputJSON, SecondaryJSON: task.ResultJSON, TaskStatus: task.Status})
 	}
 
 	var runs []model.CreationRun
@@ -127,19 +135,19 @@ func (r *Repository) ResourceReferenceSnapshot(userID string, excludingAssetID s
 	}
 
 	var taskLogs []model.TaskLog
-	if err := r.db.Select("id", "message", "payload").Where("user_id = ?", userID).Find(&taskLogs).Error; err != nil {
+	if err := r.db.Select("id", "task_id", "message", "payload").Where("user_id = ?", userID).Find(&taskLogs).Error; err != nil {
 		return snapshot, err
 	}
 	for _, taskLog := range taskLogs {
-		snapshot.Documents = append(snapshot.Documents, ResourceReferenceDocument{Kind: "任务日志", ID: taskLog.ID, Title: taskLog.Message, PrimaryJSON: taskLog.Payload})
+		snapshot.Documents = append(snapshot.Documents, ResourceReferenceDocument{Kind: "任务日志", ID: taskLog.ID, Title: taskLog.Message, PrimaryJSON: taskLog.Payload, TaskStatus: taskStatuses[taskLog.TaskID]})
 	}
 
 	var results []model.Result
-	if err := r.db.Select("id", "kind", "url", "payload").Where("user_id = ?", userID).Find(&results).Error; err != nil {
+	if err := r.db.Select("id", "task_id", "kind", "url", "payload").Where("user_id = ?", userID).Find(&results).Error; err != nil {
 		return snapshot, err
 	}
 	for _, result := range results {
-		snapshot.Documents = append(snapshot.Documents, ResourceReferenceDocument{Kind: "任务结果", ID: result.ID, Title: result.Kind, PrimaryJSON: result.URL, SecondaryJSON: result.Payload})
+		snapshot.Documents = append(snapshot.Documents, ResourceReferenceDocument{Kind: "任务结果", ID: result.ID, Title: result.Kind, PrimaryJSON: result.URL, SecondaryJSON: result.Payload, TaskStatus: taskStatuses[result.TaskID]})
 	}
 
 	var projects []model.Project
@@ -319,6 +327,9 @@ func (r *Repository) AssetBusinessReferences(userID string, assetID string) ([]R
 
 func (r *Repository) DeleteAssetAndResources(userID string, assetID string, resourceIDs []string, deletionJobs []model.ResourceDeletionJob) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := New(tx).RequireNoCanvasHistoryReferences(resourceIDs); err != nil {
+			return err
+		}
 		versionIDs := tx.Model(&model.AssetVersion{}).Select("id").Where("asset_id = ?", assetID)
 		if err := tx.Where("asset_version_id IN (?)", versionIDs).Delete(&model.ShotAssetReference{}).Error; err != nil {
 			return err

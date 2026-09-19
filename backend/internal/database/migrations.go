@@ -11,7 +11,7 @@ import (
 	"gorm.io/gorm"
 )
 
-const CurrentSchemaVersion int64 = 16
+const CurrentSchemaVersion int64 = 24
 
 const baselineSchemaChecksum = "sha256:open-ai-canvas-schema-v1-20260830"
 const schemaMigrationAppliedAtIndexChecksum = "sha256:schema-migrations-applied-at-index-v2-20260830"
@@ -22,6 +22,7 @@ const resourcePlaybackChecksum = "sha256:resource-playback-v6-20260902"
 const assetLibraryFoldersChecksum = "sha256:asset-library-folders-v6-20260902"
 const logicalModelActiveCodeChecksum = "sha256:logical-model-active-code-v8-20260905"
 const creationRuntimeChecksum = "sha256:creation-runtime-v10-20260909"
+const legacyTopupProductBenefitsChecksum = "sha256:topup-product-benefits-v16-20260916"
 
 const postgresSchemaMigrationLockID int64 = 73123910420260830
 
@@ -67,7 +68,29 @@ var schemaMigrations = []migration{
 	{version: 15, name: "agent_profiles", checksum: "sha256:agent-profiles-v15-20260914", apply: func(tx *gorm.DB) error {
 		return tx.AutoMigrate(&model.AgentProfile{})
 	}},
-	{version: 16, name: "topup_product_benefits", checksum: "sha256:topup-product-benefits-v16-20260916", apply: func(tx *gorm.DB) error {
+	{version: 16, name: "agent_lessons", checksum: "sha256:agent-lessons-v16-20260917", apply: func(tx *gorm.DB) error {
+		return tx.AutoMigrate(&model.AgentLesson{})
+	}},
+	{version: 17, name: "agent_lessons_owner_index", checksum: "sha256:agent-lessons-owner-index-v17-20260917", apply: func(tx *gorm.DB) error {
+		return tx.AutoMigrate(&model.AgentLesson{})
+	}},
+	{version: 18, name: "agent_memory_settings", checksum: "sha256:agent-memory-settings-v18-20260917", apply: func(tx *gorm.DB) error {
+		return tx.AutoMigrate(&model.AgentMemorySetting{})
+	}},
+	{version: 19, name: "payment_plugin_version", checksum: "sha256:payment-plugin-version-v19-20260917", apply: migrateSchemaV19},
+	{version: 20, name: "banner_announcements", checksum: "sha256:banner-announcements-v20-20260917", apply: func(tx *gorm.DB) error {
+		return tx.AutoMigrate(&model.BannerAnnouncement{})
+	}},
+	{version: 21, name: "banner_announcement_title_runs", checksum: "sha256:banner-announcement-title-runs-v21-20260917", apply: func(tx *gorm.DB) error {
+		return tx.AutoMigrate(&model.BannerAnnouncement{})
+	}},
+	{version: 22, name: "banner_announcement_notice_type", checksum: "sha256:banner-announcement-notice-type-v22-20260917", apply: func(tx *gorm.DB) error {
+		return tx.AutoMigrate(&model.BannerAnnouncement{})
+	}},
+	{version: 23, name: "canvas_revision_history", checksum: "sha256:canvas-revision-history-v23-20260918", apply: func(tx *gorm.DB) error {
+		return tx.AutoMigrate(&model.CanvasProject{}, &model.CanvasSnapshot{}, &model.CanvasSnapshotResource{})
+	}},
+	{version: 24, name: "topup_product_benefits", checksum: legacyTopupProductBenefitsChecksum, apply: func(tx *gorm.DB) error {
 		if tx.Migrator().HasColumn(&model.TopupProduct{}, "Benefits") {
 			return nil
 		}
@@ -236,6 +259,28 @@ func migrateSchemaV5(tx *gorm.DB) error {
 	return nil
 }
 
+func migrateSchemaV19(tx *gorm.DB) error {
+	for _, value := range []any{&model.PaymentProviderConfig{}, &model.PaymentOrder{}} {
+		if !tx.Migrator().HasTable(value) {
+			continue
+		}
+		if err := addPaymentPluginVersionColumn(tx, value); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func addPaymentPluginVersionColumn(tx *gorm.DB, value any) error {
+	if tx.Migrator().HasColumn(value, "plugin_version") {
+		return nil
+	}
+	if err := tx.Migrator().AddColumn(value, "PluginVersion"); err != nil {
+		return fmt.Errorf("增加支付插件版本列：%w", err)
+	}
+	return nil
+}
+
 func migrateSchemaV6(tx *gorm.DB) error {
 	if !tx.Migrator().HasTable(&model.Resource{}) {
 		return fmt.Errorf("资源表不存在")
@@ -310,6 +355,9 @@ func MigrateSchema(db *gorm.DB) error {
 		if err := tx.AutoMigrate(&schemaMigration{}); err != nil {
 			return fmt.Errorf("初始化数据库迁移记录：%w", err)
 		}
+		if err := normalizeLegacyTopupProductBenefitsMigration(tx); err != nil {
+			return err
+		}
 		plan, err := migrationsForDatabase(tx)
 		if err != nil {
 			return err
@@ -336,6 +384,31 @@ func MigrateSchema(db *gorm.DB) error {
 		}
 		return RequireSchemaVersion(tx)
 	})
+}
+
+func normalizeLegacyTopupProductBenefitsMigration(tx *gorm.DB) error {
+	var applied schemaMigration
+	err := tx.First(&applied, "version = ?", 16).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("读取旧版充值权益迁移：%w", err)
+	}
+	if applied.Name != "topup_product_benefits" || applied.Checksum != legacyTopupProductBenefitsChecksum {
+		return nil
+	}
+	var targetCount int64
+	if err := tx.Model(&schemaMigration{}).Where("version = ?", 24).Count(&targetCount).Error; err != nil {
+		return fmt.Errorf("检查充值权益迁移目标版本：%w", err)
+	}
+	if targetCount != 0 {
+		return errors.New("数据库同时包含旧版和新版充值权益迁移记录")
+	}
+	if err := tx.Model(&schemaMigration{}).Where("version = ?", 16).Update("version", 24).Error; err != nil {
+		return fmt.Errorf("迁移旧版充值权益版本记录：%w", err)
+	}
+	return nil
 }
 
 func ReadSchemaStatus(db *gorm.DB) (SchemaStatus, error) {

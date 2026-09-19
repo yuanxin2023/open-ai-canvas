@@ -70,7 +70,7 @@ describe("large canvas media rendering", () => {
     });
 
     test("keeps inactive video nodes on a viewport-gated static first frame", () => {
-        const inactivePreviewSource = canvasNodeContentSource.match(/function InactiveVideoPreview[\s\S]*?\n}\n\nfunction VideoPreviewPlayButton/)?.[0] || "";
+        const inactivePreviewSource = canvasNodeContentSource.match(/function InactiveVideoPreview[\s\S]*?\r?\n}\r?\n\r?\nfunction VideoPreviewPlayButton/)?.[0] || "";
         expect(canvasNodeContentSource).toContain("if (previewUrl || !nearViewport || !node.metadata?.content || !updateMetadataRef.current)");
         expect(canvasNodeContentSource).not.toContain("hydrateMediaPreview");
         expect(inactivePreviewSource).not.toContain("<video");

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import {
     DEFAULT_CANVAS_BACKGROUND_MODE,
@@ -14,6 +14,7 @@ import {
 } from "../src/lib/canvas/canvas-appearance";
 
 const values = new Map<string, string>();
+const originalWindow = (globalThis as { window?: unknown }).window;
 
 beforeEach(() => {
     values.clear();
@@ -27,6 +28,11 @@ beforeEach(() => {
             },
         },
     });
+});
+
+afterEach(() => {
+    if (originalWindow === undefined) delete (globalThis as { window?: unknown }).window;
+    else Object.defineProperty(globalThis, "window", { configurable: true, value: originalWindow });
 });
 
 describe("canvas custom appearance", () => {

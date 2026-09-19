@@ -374,25 +374,121 @@ const arkSeedreamRatioSizes = [
   ["3:2", "2496x1664"], ["2:3", "1664x2496"], ["21:9", "3024x1296"]
 ];
 
+const arkSeedreamImageBody = (optionNamespace) => ({
+  model: ref("request.model"), prompt: ref("request.prompt"),
+  // Ark 的 size 只接受 WIDTHxHEIGHT 或 2k/3k/4k；统一层的比例值在这里换算成 2K 档像素尺寸，像素或档位值原样透传。
+  size: omit({ $switch: { cases: arkSeedreamRatioSizes.map(([ratio, size]) => ({ when: eq(ref("request.aspectRatio"), ratio), then: size })), default: ref("request.aspectRatio") } }),
+  image: omit(conditional(
+    eq(len(ref("request.images")), 1),
+    first(map(ref("request.images"), "media", ref("media.value"))),
+    conditional(gt(len(ref("request.images")), 1), map(ref("request.images"), "media", ref("media.value")), null)
+  )),
+  sequential_image_generation: omit(ref(`request.providerOptions.${optionNamespace}.sequential_image_generation`)),
+  sequential_image_generation_options: omit(ref(`request.providerOptions.${optionNamespace}.sequential_image_generation_options`)),
+  watermark: coalesce(ref(`request.providerOptions.${optionNamespace}.watermark`), ref("request.watermark"), false),
+  seed: omit(ref(`request.providerOptions.${optionNamespace}.seed`)),
+  response_format: coalesce(ref(`request.providerOptions.${optionNamespace}.response_format`), "b64_json")
+});
+
 add({
   id: "volcengine-ark-seedream", providerId: "volcengine-ark-image", name: "Volcengine Ark Seedream Images", vendor: "Volcengine", capability: "image",
   baseUrl: "https://ark.cn-beijing.volces.com", auth: bearer, params: imageParams,
-  create: jsonCreate("/api/v3/images/generations", {
-    model: ref("request.model"), prompt: ref("request.prompt"),
-    // Ark 的 size 只接受 WIDTHxHEIGHT 或 2k/3k/4k；统一层的比例值在这里换算成 2K 档像素尺寸，像素或档位值原样透传。
-    size: omit({ $switch: { cases: arkSeedreamRatioSizes.map(([ratio, size]) => ({ when: eq(ref("request.aspectRatio"), ratio), then: size })), default: ref("request.aspectRatio") } }),
-    image: omit(conditional(
-      eq(len(ref("request.images")), 1),
-      first(map(ref("request.images"), "media", ref("media.value"))),
-      conditional(gt(len(ref("request.images")), 1), map(ref("request.images"), "media", ref("media.value")), null)
-    )),
-    sequential_image_generation: omit(ref("request.providerOptions.volcengine-ark-image.sequential_image_generation")),
-    sequential_image_generation_options: omit(ref("request.providerOptions.volcengine-ark-image.sequential_image_generation_options")),
-    watermark: coalesce(ref("request.providerOptions.volcengine-ark-image.watermark"), ref("request.watermark"), false),
-    seed: omit(ref("request.providerOptions.volcengine-ark-image.seed")),
-    response_format: coalesce(ref("request.providerOptions.volcengine-ark-image.response_format"), "b64_json")
-  }),
+  notes: "官方 Ark 推理接入：Base URL 使用 /api/v3，API Key 来自方舟推理接入控制台，不可与 Agent Plan 专属 Key 混用。",
+  create: jsonCreate("/api/v3/images/generations", arkSeedreamImageBody("volcengine-ark-image")),
   response: { status: "succeeded", images: ref("response.data"), usage: ref("response.usage"), errorPaths: ["error.code"], messagePaths: ["error.message"] }
+});
+
+add({
+  id: "volcengine-ark-agent-plan-seedream", providerId: "volcengine-ark-agent-plan-image", name: "Volcengine Ark Agent Plan Seedream Images", vendor: "Volcengine", capability: "image",
+  baseUrl: "https://ark.cn-beijing.volces.com", auth: bearer, params: imageParams,
+  notes: "Agent Plan 专属接入：请求路径为 /api/plan/v3/images/generations，必须使用 Agent Plan 控制台专属 API Key；请求体与官方 Seedream 协议一致，但凭证与额度按 AFP 套餐结算，不能与 /api/v3 官方 Key 混用。",
+  create: jsonCreate("/api/plan/v3/images/generations", arkSeedreamImageBody("volcengine-ark-agent-plan-image")),
+  response: { status: "succeeded", images: ref("response.data"), usage: ref("response.usage"), errorPaths: ["error.code"], messagePaths: ["error.message"] }
+});
+
+const arkSeedanceValidations = [
+  { assert: { $lte: [len(ref("request.images")), 9] }, message: "Seedance 最多支持 9 张参考图片" },
+  { assert: { $lte: [len(ref("request.videos")), 3] }, message: "Seedance 最多支持 3 个参考视频" },
+  { assert: { $lte: [len(ref("request.audios")), 3] }, message: "Seedance 最多支持 3 个参考音频" },
+  { assert: { $or: [eq(len(ref("request.audios")), 0), gt({ $add: [len(ref("request.images")), len(ref("request.videos"))] }, 0)] }, message: "Seedance 不支持纯音频或文本+音频，请同时添加参考图片或参考视频" }
+];
+
+const arkSeedanceParams = [
+  ["model", "string", true, "model", "Ark endpoint/model ID。"],
+  ["prompt", "string", true, "content[type=text].text", "视频提示词。"],
+  ["images", "media[]", false, "content[type=image_url]", "first_frame、last_frame、reference_image 等 role 原样映射。"],
+  ["videos", "media[]", false, "content[type=video_url]", "reference_video。"],
+  ["audios", "media[]", false, "content[type=audio_url]", "reference_audio/reference_voice。"],
+  ["aspectRatio", "string", false, "ratio", "输出画幅。"],
+  ["resolution", "string", false, "resolution", "输出分辨率档位。"],
+  ["duration", "integer", false, "duration", "输出时长秒数。"],
+  ["generateAudio", "boolean", false, "generate_audio", "是否生成音频。"],
+  ["watermark", "boolean", false, "watermark", "是否带水印。"],
+  ["seed", "integer", false, "seed", "providerOptions seed。"],
+  ["camera_fixed", "boolean", false, "camera_fixed", "providerOptions camera_fixed。"]
+];
+
+const arkSeedanceBody = (optionNamespace) => ({
+  model: ref("request.model"),
+  content: {
+    $concatArrays: [
+      [{ type: "text", text: ref("request.prompt") }],
+      map(sorted(ref("request.images")), "media", {
+        type: "image_url",
+        image_url: { url: ref("media.value") },
+        role: coalesce(ref("media.role"), "reference_image")
+      }),
+      map(sorted(ref("request.videos")), "media", {
+        type: "video_url",
+        video_url: { url: ref("media.value") },
+        role: coalesce(ref("media.role"), "reference_video")
+      }),
+      map(sorted(ref("request.audios")), "media", {
+        type: "audio_url",
+        audio_url: { url: ref("media.value") },
+        role: coalesce(ref("media.role"), "reference_audio")
+      })
+    ]
+  },
+  ratio: coalesce(ref("request.aspectRatio"), "16:9"),
+  resolution: coalesce(ref("request.resolution"), "720p"),
+  duration: conditional(gt(ref("request.duration"), 0), ref("request.duration"), 5),
+  generate_audio: ref("request.generateAudio"),
+  watermark: ref("request.watermark"),
+  seed: omit(ref(`request.providerOptions.${optionNamespace}.seed`)),
+  camera_fixed: omit(ref(`request.providerOptions.${optionNamespace}.camera_fixed`))
+});
+
+const arkSeedanceResponse = {
+  taskId: coalesce(ref("response.id"), ref("response.task_id"), ref("response.data.id"), ref("taskId")),
+  status: coalesce(ref("response.status"), ref("response.data.status"), "pending"),
+  message: coalesce(ref("response.error.message"), ref("response.message"), ref("response.fail_reason")),
+  videos: coalesce(ref("response.content.video_url"), ref("response.video_url"), ref("response.output.video_url"), ref("response.data.video_url")),
+  usage: ref("response.usage"),
+  errorPaths: ["error.code"],
+  resultEphemeral: true
+};
+
+add({
+  id: "volcengine-ark-seedance", providerId: "volcengine-ark-video", name: "Volcengine Ark Seedance", vendor: "Volcengine", capability: "video",
+  baseUrl: "https://ark.cn-beijing.volces.com", auth: bearer, params: arkSeedanceParams, requiresPublicMediaUrls: true,
+  validations: arkSeedanceValidations,
+  notes: "官方 Ark 推理接入：创建/查询/取消走 /api/v3/contents/generations/tasks；插件不根据图片下标推断首尾帧，role 由业务层确定。API Key 来自方舟推理接入控制台。",
+  create: jsonCreate("/api/v3/contents/generations/tasks", arkSeedanceBody("volcengine-ark-video")),
+  poll: { method: "GET", path: "/api/v3/contents/generations/tasks/{{taskId}}" },
+  cancel: { method: "DELETE", path: "/api/v3/contents/generations/tasks/{{taskId}}" },
+  response: arkSeedanceResponse
+});
+
+add({
+  id: "volcengine-ark-agent-plan-seedance", providerId: "volcengine-ark-agent-plan-video", name: "Volcengine Ark Agent Plan Seedance", vendor: "Volcengine", capability: "video",
+  baseUrl: "https://ark.cn-beijing.volces.com", auth: bearer, params: arkSeedanceParams, requiresPublicMediaUrls: true,
+  validations: arkSeedanceValidations,
+  notes: "Agent Plan 专属接入：创建/查询/取消走 /api/plan/v3/contents/generations/tasks；请求体与官方 Seedance 协议一致，但必须使用 Agent Plan 专属 API Key 与 AFP 额度，不能与 /api/v3 官方 Key 混用。",
+  create: jsonCreate("/api/plan/v3/contents/generations/tasks", arkSeedanceBody("volcengine-ark-agent-plan-video")),
+  poll: { method: "GET", path: "/api/plan/v3/contents/generations/tasks/{{taskId}}" },
+  cancel: { method: "DELETE", path: "/api/plan/v3/contents/generations/tasks/{{taskId}}" },
+  response: arkSeedanceResponse
 });
 
 // Gemini imageConfig.imageSize 只接受 1K/2K/4K；画布统一层用 1k/2k/4k 或 low/medium/high。
@@ -684,6 +780,57 @@ add({
     videos: coalesce(ref("response.data.metadata.url"), ref("response.metadata.url"), ref("response.data.url"), ref("response.url")),
     message: coalesce(ref("response.data.error.message"), ref("response.error.message"), ref("response.message"), ref("response.detail"))
   })
+});
+
+// Agnes 图像是同步端点，文生图与图生图共用 POST /v1/images/generations：
+// 不传 image 为文生图，传 image 为图生图或多图合成。官方参数表只承认
+// model、prompt、size（必填，档位 1K/2K/3K/4K 或 WxH 精确尺寸）、ratio、image、
+// return_base64 和 extra_body，因此这里不发送 n、output_format、quality、
+// background 等 OpenAI 兼容字段。顶层 response_format 是官方明确列出的错误写法，
+// 输出格式只能声明在 extra_body 内。参考图放 extra_body.image，支持公共 HTTPS URL
+// 和 Data URI Base64，所以不强制公共媒体 URL，本地开发也能直接联调。
+const agnesImageRatios = ["1:1", "3:4", "4:3", "16:9", "9:16", "2:3", "3:2", "21:9"];
+const agnesImageAspect = trim(ref("request.aspectRatio"));
+const agnesImageIsRatio = { $in: [agnesImageAspect, agnesImageRatios] };
+const agnesImageIsPixel = eq(len(split(agnesImageAspect, "x")), 2);
+// size 是官方必填项：像素尺寸原样透传，其余情况（比例、auto、空值）一律落到分辨率档位，不能省略。
+const agnesImageSize = conditional(agnesImageIsPixel, agnesImageAspect, {
+  $switch: {
+    cases: [
+      { when: { $in: [lower(trim(ref("request.quality"))), ["1k", "low", "standard"]] }, then: "1K" },
+      { when: { $in: [lower(trim(ref("request.quality"))), ["2k", "medium", "hd", "high"]] }, then: "2K" },
+      { when: { $in: [lower(trim(ref("request.quality"))), ["3k"]] }, then: "3K" },
+      { when: { $in: [lower(trim(ref("request.quality"))), ["4k"]] }, then: "4K" }
+    ],
+    default: "1K"
+  }
+});
+
+add({
+  id: "agnes-image", providerId: "agnes-image", name: "Agnes Image", vendor: "Agnes AI", capability: "image",
+  baseUrl: "https://api.agnes-ai.cn", auth: bearer, params: imageParams, requiresPublicMediaUrls: false,
+  notes: "Agnes 官方图像端点，同步返回。文生图与图生图共用 /v1/images/generations：不传 image 为文生图，传 image 为图生图或多图合成。size 必填，取 1K/2K/3K/4K 档位或 WxH 精确尺寸；画面比例走独立的 ratio 字段。参考图放在 extra_body.image，支持公共 HTTPS URL 或 Data URI Base64。顶层 response_format 是官方明确列出的错误写法，输出格式只能声明在 extra_body.response_format。该端点不接受 n，单次请求固定返回一张图片，需要多张时由上层拆分为多个任务。",
+  validations: [
+    { assert: { $or: [{ $in: [agnesImageAspect, ["", "auto", ...agnesImageRatios]] }, eq(len(split(agnesImageAspect, "x")), 2)] }, message: "Agnes 图像只支持 1:1、3:4、4:3、16:9、9:16、2:3、3:2、21:9 比例或 WxH 像素尺寸" }
+  ],
+  create: jsonCreate("/v1/images/generations", {
+    model: ref("request.model"),
+    prompt: ref("request.prompt"),
+    size: omit(agnesImageSize),
+    ratio: omit(conditional(agnesImageIsRatio, agnesImageAspect)),
+    extra_body: omit({
+      image: omit(map(sorted(ref("request.images")), "media", coalesce(ref("media.dataUrl"), ref("media.url")))),
+      response_format: coalesce(ref("request.providerOptions.agnes-image.response_format"), "url")
+    })
+  }, { originPath: true }),
+  response: {
+    status: "succeeded",
+    images: map(ref("response.data"), "item", {
+      url: omit(ref("item.url")),
+      dataUrl: conditional(ref("item.b64_json"), { $concat: ["data:image/png;base64,", ref("item.b64_json")] })
+    }),
+    errorPaths: ["error.code", "code"], messagePaths: ["error.message", "message", "msg"]
+  }
 });
 
 add({

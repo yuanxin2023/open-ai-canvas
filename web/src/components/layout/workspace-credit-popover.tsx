@@ -1,5 +1,5 @@
 import { AlipayCircleFilled, WechatFilled } from "@ant-design/icons";
-import { App, Button, Input, Popover, QRCode, Skeleton } from "antd";
+import { App, Button, ConfigProvider, Input, Popover, QRCode, Skeleton } from "antd";
 import { Check, CircleCheck, CreditCard, Gift, Sparkles } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -7,10 +7,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AppModal } from "@/components/ui/product/app-modal";
 import { formatCredits } from "@/constant/credits";
 import { useWalletBalance } from "@/hooks/use-wallet-balance";
+import { getWorkspaceAntThemeConfig } from "@/lib/app-theme";
+import { WORKSPACE_CREDIT_PRODUCTS_OPEN_EVENT } from "@/lib/workspace-wallet";
 import { closePaymentOrder, createPaymentOrder, getPaymentOrder, listPaymentProviders, listTopupProducts, queryPaymentOrder, refreshPaymentCheckout, type PaymentOrder, type PaymentProvider, type TopupProduct } from "@/services/api/payments";
 import { redeemCredits } from "@/services/api/wallet";
 
 const PAYMENT_CATALOG_STALE_TIME_MS = 5 * 60_000;
+const workspaceCreditTheme = getWorkspaceAntThemeConfig();
 
 export function WorkspaceCreditPopover({ userId }: { userId: string }) {
     const { message } = App.useApp();
@@ -51,6 +54,15 @@ export function WorkspaceCreditPopover({ userId }: { userId: string }) {
         if (!productsOpen) return;
         void paymentCatalogQuery.refetch({ cancelRefetch: false });
     }, [productsOpen, paymentCatalogQuery.refetch]);
+
+    useEffect(() => {
+        const openProducts = () => {
+            setOpen(false);
+            setProductsOpen(true);
+        };
+        window.addEventListener(WORKSPACE_CREDIT_PRODUCTS_OPEN_EVENT, openProducts);
+        return () => window.removeEventListener(WORKSPACE_CREDIT_PRODUCTS_OPEN_EVENT, openProducts);
+    }, []);
 
     useEffect(() => {
         setSelectedProviderId((current) => providers.some((provider) => provider.id === current) ? current : providers[0]?.id || "");
@@ -184,7 +196,7 @@ export function WorkspaceCreditPopover({ userId }: { userId: string }) {
     };
 
     return (
-        <>
+        <ConfigProvider theme={workspaceCreditTheme}>
             <Popover
             trigger="click"
             placement="bottomRight"
@@ -209,32 +221,34 @@ export function WorkspaceCreditPopover({ userId }: { userId: string }) {
                         <span><Gift aria-hidden />兑换码兑换</span>
                         <small>32 位兑换码</small>
                     </div>
-                    <div className="workspace-credit-redeem-row">
-                        <Input
-                            aria-label="兑换码"
-                            autoComplete="off"
-                            maxLength={32}
-                            placeholder="输入兑换码"
-                            value={code}
-                            disabled={redeeming}
-                            onChange={(event) => setCode(event.target.value)}
-                            onPressEnter={() => void redeem()}
-                        />
-                        <Button type="primary" loading={redeeming} disabled={normalizedCode.length !== 32} onClick={() => void redeem()}>
-                            兑换
+                    <div className="workspace-credit-actions">
+                        <div className="workspace-credit-redeem-row">
+                            <Input
+                                aria-label="兑换码"
+                                autoComplete="off"
+                                maxLength={32}
+                                placeholder="输入兑换码"
+                                value={code}
+                                disabled={redeeming}
+                                onChange={(event) => setCode(event.target.value)}
+                                onPressEnter={() => void redeem()}
+                            />
+                            <Button type="primary" loading={redeeming} disabled={normalizedCode.length !== 32} onClick={() => void redeem()}>
+                                兑换
+                            </Button>
+                        </div>
+                        <Button
+                            className="workspace-credit-purchase-button"
+                            type="primary"
+                            icon={<CreditCard aria-hidden />}
+                            onClick={() => {
+                                setOpen(false);
+                                setProductsOpen(true);
+                            }}
+                        >
+                            购买积分与套餐
                         </Button>
                     </div>
-                    <Button
-                        className="workspace-credit-purchase-button"
-                        type="primary"
-                        icon={<CreditCard aria-hidden />}
-                        onClick={() => {
-                            setOpen(false);
-                            setProductsOpen(true);
-                        }}
-                    >
-                        购买积分与套餐
-                    </Button>
                 </div>
             )}
         >
@@ -385,7 +399,7 @@ export function WorkspaceCreditPopover({ userId }: { userId: string }) {
                     </section>
                 ) : null}
             </AppModal>
-        </>
+        </ConfigProvider>
     );
 }
 

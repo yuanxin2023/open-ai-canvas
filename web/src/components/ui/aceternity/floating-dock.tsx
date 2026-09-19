@@ -71,11 +71,12 @@ const TOUCH_DOCK_METRICS: Record<NonNullable<FloatingDockProps["size"]>, DockMet
 export const FloatingDock = forwardRef<HTMLDivElement, FloatingDockProps>(function FloatingDock({ items, size = "default", embedded = false, className, style, ariaLabel = "画布工具", showLabels = false }, forwardedRef) {
     const mouseX = useMotionValue(Number.POSITIVE_INFINITY);
     const reducedMotion = useReducedMotion();
-    const [coarsePointer, setCoarsePointer] = useState(() => typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches);
+    const [coarsePointer, setCoarsePointer] = useState(() => typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches);
     // 窄屏下 dock 按钮总宽易超出可用宽度：此时允许横向滚动并禁用放大（放大依赖 overflow-visible，与滚动互斥）
     const [narrow, setNarrow] = useState(() => (typeof window !== "undefined" ? window.innerWidth < 768 : false));
 
     useEffect(() => {
+        if (typeof window.matchMedia !== "function") return;
         const media = window.matchMedia("(pointer: coarse)");
         const update = () => setCoarsePointer(media.matches);
         update();
