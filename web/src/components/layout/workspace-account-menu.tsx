@@ -4,14 +4,13 @@ import { LogIn, Moon, Sun } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router";
 
-import { AppChangelogButton } from "@/components/layout/app-changelog-modal";
 import { WorkspaceAccountCard } from "./workspace-account-card";
 import { UserAvatar } from "./user-avatar";
 import { openWorkspaceCreditProducts } from "@/lib/workspace-wallet";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { useUserStore } from "@/stores/use-user-store";
 
-/** 顶部与侧栏复用同一账户卡片；顶部额外保留版本和主题偏好。 */
+/** 顶部与侧栏复用同一账户卡片；顶部额外保留主题偏好。 */
 export function WorkspaceAccountMenu() {
     const theme = useThemeStore((state) => state.theme);
     const setTheme = useThemeStore((state) => state.setTheme);
@@ -35,13 +34,11 @@ export function WorkspaceAccountMenu() {
                     <WorkspaceAccountCard onNavigate={() => setMenuOpen(false)} onBuyCredits={() => { setMenuOpen(false); openWorkspaceCreditProducts(); }} />
 
                     <div className="workspace-topbar-account-section">
-                        <AppChangelogButton className="flex h-8 w-full items-center gap-2 rounded px-2 text-[var(--fs-label)] text-foreground/58 hover:bg-surface-hover hover:text-foreground [&_svg]:size-3.5" showLabel showVersion versionClassName="ml-auto text-[var(--fs-micro)] tabular-nums text-foreground/32" />
-                    </div>
-
-                    <div className="workspace-topbar-account-theme">
-                        {theme === "dark" ? <Moon className="size-3.5 text-foreground/45" /> : <Sun className="size-3.5 text-foreground/45" />}
-                        <span className="ml-2 flex-1 text-xs text-foreground/65">深色模式</span>
-                        <Switch size="sm" checked={theme === "dark"} onChange={(checked) => setTheme(checked ? "dark" : "light")} aria-label="深色模式" />
+                        <div className="workspace-topbar-account-theme">
+                            {theme === "dark" ? <Moon className="size-3.5 text-foreground/45" /> : <Sun className="size-3.5 text-foreground/45" />}
+                            <span className="ml-2 flex-1 text-xs text-foreground/65">深色模式</span>
+                            <Switch size="sm" checked={theme === "dark"} onChange={(checked) => setTheme(checked ? "dark" : "light")} aria-label="深色模式" />
+                        </div>
                     </div>
                 </div>
             )}

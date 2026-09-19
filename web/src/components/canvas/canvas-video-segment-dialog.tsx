@@ -351,7 +351,7 @@ export function CanvasVideoSegmentDialog({ node, nodes, connections, open, mode,
                                 <div className="grid gap-3 md:grid-cols-2">
                                     <label className="block min-w-0">
                                         <div className="mb-1.5 text-sm font-medium">生成节点模型</div>
-                                        <ModelPicker config={config} value={resolvedModel} onChange={setModel} capability="video" requirements={modelRequirements} fullWidth onMissingConfig={() => message.warning("请先配置支持参考视频的视频模型")} />
+                                        <ModelPicker config={config} value={resolvedModel} onChange={setModel} capability="video" requirements={modelRequirements} fullWidth onMissingConfig={() => message.warning("请先配置支持参考视频的视频模型")} directList />
                                     </label>
                                     <label className="block min-w-0">
                                         <div className="mb-1.5 text-sm font-medium">生成模式</div>

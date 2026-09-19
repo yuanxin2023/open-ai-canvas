@@ -1,6 +1,6 @@
 import { App, Button, InputNumber } from "antd";
 import { SettingsRow } from "@/components/ui/product/settings-row";
-import { ArrowLeft, Boxes, Brain, Bug, Cloud, MessageSquareText, RadioTower, ReceiptText, SlidersHorizontal, Workflow } from "lucide-react";
+import { ArrowLeft, Boxes, Brain, Bug, CircleDollarSign, Cloud, MessageSquareText, RadioTower, ReceiptText, SlidersHorizontal, Workflow } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useState, type ReactNode } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 
@@ -18,19 +18,21 @@ import { RUNNINGHUB_PLUGIN_ID } from "@/lib/plugins/builtin/workflows";
 import { usePluginStore } from "@/stores/use-plugin-store";
 import { PaymentOrdersPane } from "./payment-orders-pane";
 import { openWorkspaceWallet } from "@/lib/workspace-wallet";
+import { CreditLedgerPane } from "./credit-ledger-pane";
 
-type ConfigSectionKey = "orders" | "channels" | "models" | "runninghub" | "preferences" | "prompts" | "agent-memory" | "storage" | "diagnostics";
+type ConfigSectionKey = "orders" | "wallet" | "channels" | "models" | "runninghub" | "preferences" | "prompts" | "agent-memory" | "storage" | "diagnostics";
 
-const configSections: Array<{ key: ConfigSectionKey; label: string; description: string; icon: ReactNode }> = [
-    { key: "orders", label: "我的订单", description: "查看充值记录与取消订单", icon: <ReceiptText className="size-4" /> },
-    { key: "channels", label: "个人渠道", description: "模型服务与个人工作流", icon: <RadioTower className="size-4" /> },
-    { key: "runninghub", label: "RunningHub 工作流", description: "个人渠道的云端工作流配置", icon: <Workflow className="size-4" /> },
-    { key: "models", label: "模型选择", description: "按领域选择默认模型", icon: <Boxes className="size-4" /> },
-    { key: "preferences", label: "生成偏好", description: "画布生成默认值", icon: <SlidersHorizontal className="size-4" /> },
-    { key: "prompts", label: "提示词偏好", description: "按任务定制平台模板", icon: <MessageSquareText className="size-4" /> },
-    { key: "agent-memory", label: "Agent 记忆", description: "批准、添加、导出导入、压缩", icon: <Brain className="size-4" /> },
-    { key: "storage", label: "我的对象存储", description: "管理个人媒体存储", icon: <Cloud className="size-4" /> },
-    { key: "diagnostics", label: "问题诊断", description: "导出日志协助排查", icon: <Bug className="size-4" /> },
+const configSections: Array<{ key: ConfigSectionKey; label: string; icon: ReactNode }> = [
+    { key: "orders", label: "我的订单", icon: <ReceiptText className="size-4" /> },
+    { key: "wallet", label: "积分流水", icon: <CircleDollarSign className="size-4" /> },
+    { key: "channels", label: "个人渠道", icon: <RadioTower className="size-4" /> },
+    { key: "runninghub", label: "RunningHub 工作流", icon: <Workflow className="size-4" /> },
+    { key: "models", label: "模型选择", icon: <Boxes className="size-4" /> },
+    { key: "preferences", label: "生成偏好", icon: <SlidersHorizontal className="size-4" /> },
+    { key: "prompts", label: "提示词偏好", icon: <MessageSquareText className="size-4" /> },
+    { key: "agent-memory", label: "Agent 记忆", icon: <Brain className="size-4" /> },
+    { key: "storage", label: "我的对象存储", icon: <Cloud className="size-4" /> },
+    { key: "diagnostics", label: "问题诊断", icon: <Bug className="size-4" /> },
 ];
 
 export function isConfigSection(value: string | null): value is ConfigSectionKey {
@@ -46,20 +48,18 @@ export default function SettingsPage() {
     const creditsEnabled = useUserStore((state) => state.features.creditsEnabled);
     const runtimeStatuses = usePluginStore((state) => state.runtimeStatuses);
     const runningHubPluginEnabled = runtimeStatuses[RUNNINGHUB_PLUGIN_ID] === "enabled";
-    const requestedSectionEnabled = (requestedSection !== "runninghub" || runningHubPluginEnabled) && (!["wallet", "orders"].includes(requestedSection || "") || creditsEnabled);
-    const initialSection = isConfigSection(requestedSection) && requestedSectionEnabled ? requestedSection : customChannelsEnabled ? "channels" : "models";
-    const [activeTab, setActiveTab] = useState<ConfigSectionKey>(initialSection === "channels" && !customChannelsEnabled ? "models" : initialSection);
+    const visibleConfigSections = useMemo(() => (customChannelsEnabled ? configSections : configSections.filter((section) => section.key !== "channels"))
+        .filter((section) => section.key !== "runninghub" || runningHubPluginEnabled)
+        .filter((section) => !["wallet", "orders"].includes(section.key) || creditsEnabled), [creditsEnabled, customChannelsEnabled, runningHubPluginEnabled]);
+    const isVisibleConfigSection = (value: string | null): value is ConfigSectionKey => isConfigSection(value) && visibleConfigSections.some((section) => section.key === value);
+    const firstVisibleSection = visibleConfigSections[0]?.key || "models";
+    const [activeTab, setActiveTab] = useState<ConfigSectionKey>(isVisibleConfigSection(requestedSection) ? requestedSection : firstVisibleSection);
     const config = useConfigStore((state) => state.config);
     const effectiveConfig = useEffectiveConfig();
     const updateConfig = useConfigStore((state) => state.updateConfig);
     const shouldPromptContinue = searchParams.get("continue") === "1";
     const userId = useUserStore((state) => state.user?.id);
     const userChannels = config.channels.filter((channel) => channel.scope !== "system");
-    const visibleConfigSections = useMemo(() => (customChannelsEnabled ? configSections : configSections.filter((section) => section.key !== "channels"))
-        .filter((section) => section.key !== "runninghub" || runningHubPluginEnabled)
-        .filter((section) => !["wallet", "orders"].includes(section.key) || creditsEnabled), [creditsEnabled, customChannelsEnabled, runningHubPluginEnabled]);
-
-    const isVisibleConfigSection = (value: string | null): value is ConfigSectionKey => isConfigSection(value) && visibleConfigSections.some((section) => section.key === value);
 
     useLayoutEffect(() => {
         document.body.classList.add("app-user-overlays");
@@ -71,8 +71,8 @@ export default function SettingsPage() {
             setActiveTab(requestedSection);
             return;
         }
-        setActiveTab((current) => visibleConfigSections.some((section) => section.key === current) ? current : customChannelsEnabled ? "channels" : "models");
-    }, [customChannelsEnabled, requestedSection, visibleConfigSections]);
+        setActiveTab(firstVisibleSection);
+    }, [firstVisibleSection, requestedSection, visibleConfigSections]);
 
     useEffect(() => {
         if (!userId) return;
@@ -113,6 +113,7 @@ export default function SettingsPage() {
 
     const panes: Record<ConfigSectionKey, ReactNode> = {
         orders: <SettingsPane><PaymentOrdersPane onOpenWallet={() => openWorkspaceWallet()} /></SettingsPane>,
+        wallet: <SettingsPane><CreditLedgerPane /></SettingsPane>,
         channels: <SettingsPane><ChannelSettingsPane onOpenModels={() => selectSection("models")} onOpenRunningHub={runningHubPluginEnabled ? () => selectSection("runninghub") : undefined} /></SettingsPane>,
         models: (
             <SettingsPane>
@@ -196,7 +197,7 @@ export default function SettingsPage() {
             ) : null}
             <div className="settings-library-frame flex min-h-0 flex-1 flex-col md:flex-row">
                 <aside className="settings-nav-panel w-full shrink-0 md:w-[200px]">
-                    <nav className="thin-scrollbar flex gap-1 overflow-x-auto p-2 md:block md:space-y-1 md:p-2.5" aria-label="配置分类">
+                    <nav className="thin-scrollbar flex gap-1 overflow-x-auto p-2 md:block md:space-y-1 md:overflow-x-hidden md:p-2.5" aria-label="配置分类">
                         {visibleConfigSections.map((item) => {
                             const selected = item.key === activeTab;
                             return (
@@ -210,7 +211,6 @@ export default function SettingsPage() {
                                     <span className="shrink-0 md:mt-0.5">{item.icon}</span>
                                     <span className="min-w-0">
                                         <span className="block whitespace-nowrap text-sm font-medium">{item.label}</span>
-                                        <span className="mt-1 hidden text-[var(--fs-label)] leading-4 text-current opacity-65 md:block">{item.description}</span>
                                     </span>
                                 </button>
                             );

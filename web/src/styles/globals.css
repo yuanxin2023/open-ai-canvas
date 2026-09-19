@@ -19788,6 +19788,11 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap { box-shadow: 0 
     width: min(360px, calc(100vw - 24px)) !important;
     padding: 10px !important;
 }
+.creation-model-picker-surface .creation-model-picker-menu.is-direct-list {
+    max-height: min(520px, calc(100vh - 24px)) !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+}
 .creation-model-picker-surface .canvas-model-picker-brands { display: grid; gap: 5px; }
 .creation-model-picker-surface .canvas-model-picker-subheading { display: flex; align-items: baseline; justify-content: space-between; padding: 3px 5px 8px; color: var(--foreground); font-size: 12px; font-weight: 650; }
 .creation-model-picker-surface .canvas-model-picker-subheading small { color: color-mix(in srgb, var(--foreground) 52%, transparent); font-size: 10px; font-weight: 500; }

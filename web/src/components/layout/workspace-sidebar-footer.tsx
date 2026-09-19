@@ -4,7 +4,6 @@ import { ChevronRight, CircleUserRound, LogIn, LogOut, Moon, ShieldCheck, Sun } 
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router";
 
-import { AppChangelogButton } from "@/components/layout/app-changelog-modal";
 import { IdentityProviderBadge } from "@/components/layout/identity-provider-badge";
 import { SystemAnnouncementCenter } from "@/components/layout/system-announcement-center";
 import { useWalletBalance } from "@/hooks/use-wallet-balance";
@@ -81,10 +80,6 @@ export function WorkspaceSidebarFooter({ expandedClassName, collapsedClassName, 
                                     <MenuLink to="/admin" icon={<ShieldCheck />} label="管理员后台" onNavigate={() => setMenuOpen(false)} />
                                 </nav>
                             ) : null}
-
-                            <div className="border-y border-border/65 py-2">
-                                <AppChangelogButton className="flex h-8 w-full items-center gap-2 rounded px-2 text-[var(--fs-label)] text-foreground/58 hover:bg-surface-hover hover:text-foreground [&_svg]:size-3.5" showLabel showVersion versionClassName="ml-auto text-[var(--fs-micro)] tabular-nums text-foreground/32" />
-                            </div>
 
                             <div className="flex h-10 items-center px-2">
                                 {theme === "dark" ? <Moon className="size-3.5 text-foreground/45" /> : <Sun className="size-3.5 text-foreground/45" />}

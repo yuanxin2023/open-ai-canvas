@@ -73,3 +73,28 @@ func TestWalletCreditLedgerKeepsWholeOrderRefund(t *testing.T) {
 		t.Fatalf("refund ledger = %#v, total = %d", items, total)
 	}
 }
+
+func TestWalletCreditLedgerIncomeIncludesPaymentTopup(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open("file:wallet-ledger-income?mode=memory&cache=shared"), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AutoMigrate(&model.BillingOrder{}, &model.CreditLedgerEntry{}); err != nil {
+		t.Fatal(err)
+	}
+	entries := []model.CreditLedgerEntry{
+		{ID: "topup", UserID: "user-1", Type: model.CreditLedgerPaymentTopup, AmountMicrocredits: 10_000_000, CreatedAt: time.Now()},
+		{ID: "consume", UserID: "user-1", Type: model.CreditLedgerConsume, AmountMicrocredits: -1_000_000, CreatedAt: time.Now()},
+	}
+	if err := db.Create(&entries).Error; err != nil {
+		t.Fatal(err)
+	}
+	repo := &Repository{db: db}
+	items, total, err := repo.WalletCreditLedger("user-1", "income", 20, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 1 || len(items) != 1 || items[0].ID != "topup" {
+		t.Fatalf("income wallet ledger = %#v, total = %d", items, total)
+	}
+}

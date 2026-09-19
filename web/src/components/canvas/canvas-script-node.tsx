@@ -422,6 +422,7 @@ export function CanvasScriptNodeContent({
                                 showSelectedPrice={false}
                                 onChange={onModelChange}
                                 onMissingConfig={() => navigateToSettings({ continueCreation: true })}
+                                directList
                             />
                         </div>
                     </Tooltip>
