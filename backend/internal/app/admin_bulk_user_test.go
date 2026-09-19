@@ -1,6 +1,8 @@
 package app
 
 import (
+	"encoding/json"
+	"strings"
 	"testing"
 
 	"infinite-canvas/backend/internal/model"
@@ -69,6 +71,87 @@ func TestCreateAdminUserRejectsDuplicateUsername(t *testing.T) {
 		t.Fatal("CreateAdminUser() duplicate username error = nil")
 	}
 }
+
+func TestUpdateUserAllowsAdminToResetPasswordAndRevokesTargetSessions(t *testing.T) {
+	db := newBulkUserTestDB(t)
+	oldHash, err := hashPassword("old-password")
+	if err != nil {
+		t.Fatal(err)
+	}
+	actor := model.User{ID: "admin-1", Username: "admin", Role: model.UserRoleAdmin, Status: model.UserStatusActive}
+	target := model.User{ID: "user-1", Username: "user-one", DisplayName: "User One", PasswordHash: oldHash, Role: model.UserRoleUser, Status: model.UserStatusActive}
+	if err := db.Create(&[]model.User{actor, target}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&[]model.AuthSession{{ID: "admin-session", UserID: actor.ID}, {ID: "user-session", UserID: target.ID}}).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	updated, err := (&Service{repo: repository.New(db)}).UpdateUser(&actor, target.ID, UpdateUserRequest{Password: "new-password"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bcrypt.CompareHashAndPassword([]byte(updated.PasswordHash), []byte("new-password")) != nil {
+		t.Fatal("updated password hash does not match the new password")
+	}
+	if bcrypt.CompareHashAndPassword([]byte(updated.PasswordHash), []byte("old-password")) == nil {
+		t.Fatal("updated password still matches the old password")
+	}
+	var targetSessions int64
+	if err := db.Model(&model.AuthSession{}).Where("user_id = ?", target.ID).Count(&targetSessions).Error; err != nil {
+		t.Fatal(err)
+	}
+	if targetSessions != 0 {
+		t.Fatalf("target sessions = %d, want 0", targetSessions)
+	}
+	var actorSessions int64
+	if err := db.Model(&model.AuthSession{}).Where("user_id = ?", actor.ID).Count(&actorSessions).Error; err != nil {
+		t.Fatal(err)
+	}
+	if actorSessions != 1 {
+		t.Fatalf("actor sessions = %d, want 1", actorSessions)
+	}
+	var audit model.AdminAuditEvent
+	if err := db.Where("action = ? AND target_id = ?", "user.update", target.ID).First(&audit).Error; err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(audit.Summary, "重置密码") {
+		t.Fatalf("audit summary = %q", audit.Summary)
+	}
+	var metadata struct {
+		PasswordReset bool `json:"passwordReset"`
+	}
+	if err := json.Unmarshal([]byte(audit.MetadataJSON), &metadata); err != nil {
+		t.Fatal(err)
+	}
+	if !metadata.PasswordReset {
+		t.Fatalf("audit metadata = %s", audit.MetadataJSON)
+	}
+}
+
+func TestUpdateUserPasswordRequiresAdmin(t *testing.T) {
+	db := newBulkUserTestDB(t)
+	oldHash, err := hashPassword("old-password")
+	if err != nil {
+		t.Fatal(err)
+	}
+	actor := model.User{ID: "user-1", Username: "user-one", Role: model.UserRoleUser, Status: model.UserStatusActive}
+	target := model.User{ID: "user-2", Username: "user-two", PasswordHash: oldHash, Role: model.UserRoleUser, Status: model.UserStatusActive}
+	if err := db.Create(&[]model.User{actor, target}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := (&Service{repo: repository.New(db)}).UpdateUser(&actor, target.ID, UpdateUserRequest{Password: "new-password"}); err == nil {
+		t.Fatal("UpdateUser() error = nil, want admin permission error")
+	}
+	var stored model.User
+	if err := db.First(&stored, "id = ?", target.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if bcrypt.CompareHashAndPassword([]byte(stored.PasswordHash), []byte("old-password")) != nil {
+		t.Fatal("password changed without admin permission")
+	}
+}
+
 func TestBulkDisableUsersDisablesUsersSessionsAndWritesAudits(t *testing.T) {
 	db := newBulkUserTestDB(t)
 	actor := model.User{ID: "admin-1", Username: "admin", Role: model.UserRoleAdmin, Status: model.UserStatusActive}

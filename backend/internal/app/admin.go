@@ -333,6 +333,7 @@ func (s *Service) UpdateUser(actor *model.User, userID string, req UpdateUserReq
 		}
 		user.Email = email
 	}
+	passwordReset := false
 	if req.Password != "" {
 		if err := validatePassword(req.Password); err != nil {
 			return nil, err
@@ -345,6 +346,7 @@ func (s *Service) UpdateUser(actor *model.User, userID string, req UpdateUserReq
 		if err := s.repo.DeleteUserAuthSessions(user.ID); err != nil {
 			return nil, fmt.Errorf("清理旧登录会话失败，密码未更新：%w", err)
 		}
+		passwordReset = true
 	}
 	user.Role = nextRole
 	user.Status = nextStatus
@@ -352,7 +354,11 @@ func (s *Service) UpdateUser(actor *model.User, userID string, req UpdateUserReq
 	if err := s.repo.Save(user); err != nil {
 		return nil, err
 	}
-	if err := s.appendAdminAudit(actor, "user.update", "user", user.ID, "更新用户账号状态或资料", map[string]any{"role": user.Role, "status": user.Status}); err != nil {
+	auditSummary := "更新用户账号状态或资料"
+	if passwordReset {
+		auditSummary = "更新用户资料并重置密码"
+	}
+	if err := s.appendAdminAudit(actor, "user.update", "user", user.ID, auditSummary, map[string]any{"role": user.Role, "status": user.Status, "passwordReset": passwordReset}); err != nil {
 		return nil, err
 	}
 	return user, nil

@@ -116,6 +116,10 @@ CSV 使用中文表头、UTF-8 BOM、CRLF；金额按整数分精确转换为两
 
 前端使用已经应用到列表的筛选条件导出；更改条件后，先查询/筛选再启用导出，分页和刷新沿用已应用条件。明细抽屉支持“仅异常”和单独刷新，切换记录/筛选时取消旧请求，避免旧响应覆盖新记录。下载接口的 JSON 错误 Blob 会解析为业务提示，超量或重跑冲突不会被保存为 CSV。
 
+## 管理员重置用户密码
+
+`PATCH /api/admin/users/:id` 仅允许管理员调用。请求可选携带 `password`；留空或省略时不修改密码，非空时至少 8 位。服务端使用与注册登录相同的密码哈希流程，并在保存新密码时清除目标用户的全部现有登录会话。审计事件不记录明文密码，只记录本次用户更新是否包含密码重置。
+
 ## 用户 Agent 记忆
 
 `GET/POST /api/agent/memories`、`PATCH/DELETE /api/agent/memories/:id`、`POST /api/agent/memories/:id/decide`、`GET /api/agent/memories/export`、`POST /api/agent/memories/import`、`GET/PATCH /api/agent/memories/settings`、`POST /api/agent/memories/compact` 需要登录。记忆按 `author_user_id` 隔离；手动添加直接批准，Agent `remember_lesson` 写入待审，由本人 `decide`。导出 `kind` 为 `agent-memories`。压缩只处理该用户已批准记忆，创建 `canvas_text` 任务 `operation=agent_memory_compact`；worker 仅在 `agent_memory_settings.compact_task_id` 与任务 ID 一致时应用 JSON 计划（merge 保留第一条并删除其余，rewrite 原地更新）。周期为 `off` / `daily` / `weekly` / `monthly`，调度每 5 分钟扫描，每拍最多 3 个用户。

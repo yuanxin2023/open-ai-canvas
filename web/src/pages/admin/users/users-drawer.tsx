@@ -1,10 +1,13 @@
-import { App, Button, Drawer, Form, Input } from "antd";
+import { App, Button, Drawer, Form, Input, Tooltip } from "antd";
+import { Copy, RefreshCw } from "lucide-react";
 import { Select } from "@/pages/admin/ui/controls";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ChangeEvent } from "react";
 
+import { useCopyText } from "@/hooks/use-copy-text";
 import { createAdminUser, updateAdminUser, type AdminUser, type LocalUser } from "@/services/api/auth";
+import { generateAdminPassword } from "./admin-password";
 
-type UserFormValues = Pick<LocalUser, "displayName" | "email" | "role" | "status">;
+type UserFormValues = Pick<LocalUser, "displayName" | "email" | "role" | "status"> & { password?: string };
 
 export function AdminUserEditDrawer({
     user,
@@ -20,6 +23,7 @@ export function AdminUserEditDrawer({
     const { message, modal } = App.useApp();
     const [saving, setSaving] = useState(false);
     const [form] = Form.useForm<UserFormValues>();
+    const copyText = useCopyText();
     const editingSelf = user?.id === actorId;
 
     useEffect(() => {
@@ -28,6 +32,7 @@ export function AdminUserEditDrawer({
         form.setFieldsValue({
             displayName: user.displayName,
             email: user.email || "",
+            password: "",
             role: user.role,
             status: user.status,
         });
@@ -41,7 +46,7 @@ export function AdminUserEditDrawer({
         }
         modal.confirm({
             title: "放弃用户修改？",
-            content: "尚未保存的账号、角色或状态修改将丢失。",
+            content: "尚未保存的账号、密码、角色或状态修改将丢失。",
             okText: "放弃修改",
             cancelText: "继续编辑",
             okButtonProps: { danger: true },
@@ -52,6 +57,7 @@ export function AdminUserEditDrawer({
     const save = async () => {
         if (!user) return;
         const values = await form.validateFields();
+        const password = values.password || "";
         setSaving(true);
         try {
             const result = await updateAdminUser(user.id, {
@@ -59,11 +65,12 @@ export function AdminUserEditDrawer({
                 email: values.email?.trim() || "",
                 role: values.role,
                 status: values.status,
+                ...(password ? { password } : {}),
             });
             onSaved(result.user);
             form.resetFields();
             onClose();
-            message.success("用户信息已保存");
+            message.success(password ? "用户信息已保存，密码已重置" : "用户信息已保存");
         } catch (error) {
             message.error(error instanceof Error ? error.message : "保存用户失败");
         } finally {
@@ -91,6 +98,28 @@ export function AdminUserEditDrawer({
                 <Form.Item name="email" label="邮箱" rules={[{ type: "email", message: "请输入有效邮箱" }]}>
                     <Input placeholder="name@example.com" />
                 </Form.Item>
+                <Form.Item
+                    name="password"
+                    label="修改密码"
+                    extra="留空则保持原密码；修改后会清除该用户当前的全部登录状态。"
+                    rules={[{
+                        validator: (_, value?: string) => !value || Array.from(value).length >= 8
+                            ? Promise.resolve()
+                            : Promise.reject(new Error("密码至少 8 位")),
+                    }]}
+                >
+                    <AdminPasswordField
+                        onCopy={() => {
+                            const password = form.getFieldValue("password") || "";
+                            if (!password) {
+                                message.warning("请先输入或生成新密码");
+                                return;
+                            }
+                            copyText(password, "密码已复制");
+                        }}
+                        onGenerate={() => form.setFields([{ name: "password", value: generateAdminPassword(16), touched: true, errors: [] }])}
+                    />
+                </Form.Item>
                 <Form.Item name="role" label="角色" extra={editingSelf ? "不能在此修改当前管理员自己的角色。" : "角色变更会立即影响后台访问权限。"}>
                     <Select disabled={editingSelf} options={[{ label: "管理员", value: "admin" }, { label: "普通用户", value: "user" }]} />
                 </Form.Item>
@@ -99,6 +128,38 @@ export function AdminUserEditDrawer({
                 </Form.Item>
             </Form>
         </Drawer>
+    );
+}
+
+function AdminPasswordField({
+    value = "",
+    onChange,
+    onCopy,
+    onGenerate,
+}: {
+    value?: string;
+    onChange?: (event: ChangeEvent<HTMLInputElement>) => void;
+    onCopy: () => void;
+    onGenerate: () => void;
+}) {
+    return (
+        <div className="flex items-center gap-2">
+            <Input.Password
+                className="min-w-0 flex-1"
+                value={value}
+                onChange={onChange}
+                placeholder="输入新密码，或随机生成 16 位密码"
+                autoComplete="new-password"
+                suffix={(
+                    <Tooltip title="复制密码">
+                        <Button type="text" size="small" aria-label="复制密码" icon={<Copy className="size-3.5" />} onClick={onCopy} />
+                    </Tooltip>
+                )}
+            />
+            <Tooltip title="随机生成 16 位密码">
+                <Button aria-label="随机生成 16 位密码" icon={<RefreshCw className="size-4" />} onClick={onGenerate} />
+            </Tooltip>
+        </div>
     );
 }
 
