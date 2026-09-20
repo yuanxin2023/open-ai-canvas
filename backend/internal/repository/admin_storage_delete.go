@@ -68,6 +68,7 @@ func (r *Repository) DeleteAdminResources(resources []model.Resource, deletionJo
 			query string
 		}{
 			{&model.Announcement{}, "image_resource_id IN ?"},
+			{&model.Inspiration{}, "cover_resource_id IN ?"},
 			{&model.AssetRepresentation{}, "resource_id IN ?"},
 			{&model.VoiceProfile{}, "sample_resource_id IN ?"},
 			{&model.ShotArtifact{}, "resource_id IN ?"},
@@ -84,6 +85,9 @@ func (r *Repository) DeleteAdminResources(resources []model.Resource, deletionJo
 			return err
 		}
 		if err := tx.Where("resource_id IN ?", resourceIDs).Delete(&model.AnnouncementImageDraft{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("resource_id IN ?", resourceIDs).Delete(&model.InspirationCoverDraft{}).Error; err != nil {
 			return err
 		}
 		if len(deletionJobs) > 0 {

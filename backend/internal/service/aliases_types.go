@@ -67,6 +67,10 @@ type (
 	AnalyticsTrendPoint                    = app.AnalyticsTrendPoint
 	AnalyticsUserRow                       = app.AnalyticsUserRow
 	AnnouncementPage                       = app.AnnouncementPage
+	InspirationPage                        = app.InspirationPage
+	InspirationRequest                     = app.InspirationRequest
+	InspirationOrderItem                   = app.InspirationOrderItem
+	InspirationOrderRequest                = app.InspirationOrderRequest
 	AppError                               = app.AppError
 	AppearanceSetting                      = app.AppearanceSetting
 	CustomerServiceSetting                 = app.CustomerServiceSetting
@@ -322,7 +326,9 @@ type (
 	UserDataSnapshot                       = app.UserDataSnapshot
 	UserDataSummary                        = app.UserDataSummary
 	UserPromptCustomizationRequest         = app.UserPromptCustomizationRequest
+	UserPromptPage                         = app.UserPromptPage
 	UserPromptPreference                   = app.UserPromptPreference
+	UserPromptRequest                      = app.UserPromptRequest
 	VideoBooleanConfig                     = app.VideoBooleanConfig
 	VideoCapabilityConfig                  = app.VideoCapabilityConfig
 	VideoDurationConfig                    = app.VideoDurationConfig

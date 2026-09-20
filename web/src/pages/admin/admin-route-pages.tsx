@@ -15,6 +15,7 @@ const EmailSettingsPanel = lazy(() => import("./components/email-settings-panel"
 const FeatureAvailabilityPanel = lazy(() => import("./components/feature-availability-panel"));
 const StorageResourcesPanel = lazy(() => import("./components/storage-resources-panel"));
 const AgentLessonsPanel = lazy(() => import("./components/agent-lessons-panel"));
+const AdminInspirationsPanel = lazy(() => import("./components/admin-inspirations-panel"));
 
 export function AnalyticsPage() {
     const { references } = useAdminContext();
@@ -134,6 +135,14 @@ export function AgentLessonsPage() {
     return (
         <AdminPageFrame title="Agent 记忆" description="按用户查看个人记忆；批准仍由用户自己处理" scroll>
             <AgentLessonsPanel />
+        </AdminPageFrame>
+    );
+}
+
+export function InspirationsPage() {
+    return (
+        <AdminPageFrame title="提示词运营" description="维护首页“精选灵感”的内容、发布状态与展示顺序" scroll>
+            <AdminInspirationsPanel />
         </AdminPageFrame>
     );
 }

@@ -18,6 +18,8 @@ type CreditLedgerType string
 type RedeemCodeStatus string
 type AnnouncementStatus string
 type AnnouncementLevel string
+type InspirationMode string
+type InspirationStatus string
 type ProjectStatus string
 type ProjectUnitKind string
 type ProjectUnitStatus string
@@ -54,6 +56,13 @@ const (
 
 	UserStatusActive   UserStatus = "active"
 	UserStatusDisabled UserStatus = "disabled"
+
+	InspirationModeText  InspirationMode = "text"
+	InspirationModeImage InspirationMode = "image"
+	InspirationModeVideo InspirationMode = "video"
+
+	InspirationStatusActive   InspirationStatus = "active"
+	InspirationStatusDisabled InspirationStatus = "disabled"
 
 	ChannelScopeSystem ChannelScope = "system"
 	ChannelScopeUser   ChannelScope = "user"

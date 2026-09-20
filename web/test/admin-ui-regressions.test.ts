@@ -156,9 +156,73 @@ test("storage settings keep generic S3 controls and connection validation", asyn
     expect(compacted).toContain('["aliyun", "tencent", "qiniu", "s3"].includes(setting.provider || "")');
 });
 
+test("customer service settings keep comfortable card padding", async () => {
+    const [source, css] = await Promise.all([
+        Bun.file(new URL("../src/pages/admin/customer-service/customer-service-page.tsx", import.meta.url)).text(),
+        Bun.file(new URL("../src/styles/admin-ui.css", import.meta.url)).text(),
+    ]);
+
+    expect(source).toContain("admin-customer-service-settings");
+    expect(compactSource(css)).toContain("[data-admin-root] .admin-customer-service-settings .admin-settings-section-summary { padding: 18px 24px;");
+    expect(compactSource(css)).toContain("[data-admin-root] .admin-customer-service-settings .admin-settings-section-content { padding: 22px 24px 24px;");
+    expect(compactSource(css)).toContain("[data-admin-root] .admin-customer-service-settings .admin-settings-section-content { padding: 18px 16px 20px;");
+});
+
+test("top-up product editor uses a centered responsive modal", async () => {
+    const [source, css] = await Promise.all([
+        Bun.file(new URL("../src/pages/admin/payments/payments-page.tsx", import.meta.url)).text(),
+        Bun.file(new URL("../src/pages/admin/payments/payments-page.css", import.meta.url)).text(),
+    ]);
+    const productEditor = sourceSection(source, '<AdminModal\n                centered\n                title={productDrawer', "</AdminModal>");
+
+    expect(productEditor).toContain('title={productDrawer ? "编辑充值商品" : "新增充值商品"}');
+    expect(productEditor).toContain('rootClassName="admin-payment-product-modal"');
+    expect(productEditor).toContain('width="min(680px, calc(100vw - 32px))"');
+    expect(productEditor).toContain("maskClosable={!productSaving}");
+    expect(productEditor).toContain("保存商品");
+    expect(productEditor).not.toContain("<Drawer");
+    expect(compactSource(css)).toContain(".admin-payment-product-modal .ant-modal-body { max-height: min(72vh, 680px);");
+    expect(compactSource(css)).toContain(".admin-payment-product-modal .grid.grid-cols-2 { grid-template-columns: minmax(0, 1fr);");
+});
+
 test("admin navigation keeps the storage resource page reachable", async () => {
-    const source = await Bun.file(new URL("../src/pages/admin/components/admin-shell.tsx", import.meta.url)).text();
+    const [source, chromeCss] = await Promise.all([Bun.file(new URL("../src/pages/admin/components/admin-shell.tsx", import.meta.url)).text(), Bun.file(new URL("../src/pages/admin/theme/admin-chrome.css", import.meta.url)).text()]);
+    const storageGroup = sourceSection(source, 'id: "storage"', "\n];");
     expect(source).toContain('path: "/admin/resources"');
+    expect(storageGroup).toContain('label: "存储与备份"');
+    expect(storageGroup).toContain('path: "/admin/resources"');
+    expect(storageGroup).toContain('path: "/admin/settings/runtime-policy"');
+    expect(storageGroup).toContain('path: "/admin/settings/storage"');
+    expect(source).toContain('className="admin-nav-group-toggle"');
+    expect(source).toContain("aria-expanded={isOpen}");
+    expect(source).toContain("inert={!isOpen}");
+    expect(source).not.toContain('className="admin-sidebar-nav thin-scrollbar');
+    expect(compactSource(chromeCss)).toContain(".admin-sidebar-nav::-webkit-scrollbar { display: none;");
+});
+
+test("featured inspiration operations stay connected from admin to the creation workspace", async () => {
+    const [shellSource, routeSource, panelSource, apiSource, workspaceSource] = await Promise.all([
+        Bun.file(new URL("../src/pages/admin/components/admin-shell.tsx", import.meta.url)).text(),
+        Bun.file(new URL("../src/router.tsx", import.meta.url)).text(),
+        Bun.file(new URL("../src/pages/admin/components/admin-inspirations-panel.tsx", import.meta.url)).text(),
+        Bun.file(new URL("../src/services/api/inspirations.ts", import.meta.url)).text(),
+        Bun.file(new URL("../src/pages/create/creation-workspace.tsx", import.meta.url)).text(),
+    ]);
+    const operationsGroup = sourceSection(shellSource, 'id: "operations"', 'id: "announcements"');
+
+    expect(operationsGroup).toContain('path: "/admin/inspirations"');
+    expect(operationsGroup).toContain('label: "提示词运营"');
+    expect(routeSource).toContain('{ path: "inspirations", element: <InspirationsPage /> }');
+    expect(panelSource).toContain("<AdminModal centered");
+    expect(panelSource).toContain('rootClassName="admin-inspiration-editor-modal"');
+    expect(panelSource).not.toContain("<AdminDrawer");
+    expect(panelSource).toContain("getAdminInspirationOrder");
+    expect(panelSource).toContain("saveAdminInspirationOrder(orderItems.map((item) => item.id), orderOriginal)");
+    expect(panelSource).toContain('message.success(editing ? "精选灵感已更新" : "精选灵感已保存为停用状态")');
+    expect(apiSource).toContain('http.put<{ saved: boolean }>("/admin/inspirations/order", { ids, expectedIds })');
+    expect(workspaceSource).toContain("listInspirations()");
+    expect(workspaceSource).toContain('setError(reason instanceof Error ? reason.message : "精选灵感暂时无法加载")');
+    expect(workspaceSource).not.toContain("creationFeaturedWorks");
 });
 
 test("nested admin pages return to their own parent entry", async () => {
@@ -264,6 +328,10 @@ test("admin tables keep requested filters and actions in the intended positions"
 
     const operationColumn = sourceSection(creditSource, 'title: "操作"', "const hasFilters");
     expect(operationColumn).toContain('fixed: "right"');
+    expect(creditSource).toContain("<AdminModal");
+    expect(creditSource).toContain('rootClassName="admin-credit-modal admin-credit-policy-modal"');
+    expect(creditSource).toContain('rootClassName="admin-credit-modal admin-credit-adjustment-modal"');
+    expect(creditSource).not.toContain("<Drawer");
 });
 
 test("request logs display user credit billing independently from upstream cost", async () => {
@@ -353,7 +421,7 @@ test("banner announcement editor keeps title styles through edit, save and statu
 
     // emoji 面板：默认收起（Popover 点击触发），插入后不自动关闭，方便连续插入。
     expect(emojiPickerSource).toContain('trigger="click"');
-    expect(emojiPickerSource).toContain('onPick(item.char)');
+    expect(emojiPickerSource).toContain("onPick(item.char)");
     expect(noticeSource).toContain("BANNER_NOTICE_EMOJI_GROUPS");
     expect(noticeSource).not.toContain("DEFAULT_ICON");
 

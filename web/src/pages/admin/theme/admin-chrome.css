@@ -80,35 +80,85 @@
 
 [data-admin-root] .admin-sidebar-nav {
     padding: 10px 8px 16px;
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+
+[data-admin-root] .admin-sidebar-nav::-webkit-scrollbar {
+    display: none;
 }
 
 [data-admin-root] .admin-nav-group + .admin-nav-group {
-    margin-top: 18px;
+    margin-top: 14px;
 }
 
-[data-admin-root] .admin-nav-group-label,
-[data-admin-root] .admin-nav-group-label span {
-    display: block;
-    margin: 0 0 6px;
+[data-admin-root] .admin-nav-group-toggle {
+    display: flex;
+    width: 100%;
+    height: 32px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
     padding: 0 8px;
-    color: var(--admin-text-muted) !important;
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.02em;
-    line-height: 16px;
-    text-transform: none;
+    border: 0;
+    border-radius: var(--admin-radius);
+    background: transparent;
+    color: var(--admin-text);
+    text-align: left;
+    transition: background-color var(--admin-motion), color var(--admin-motion);
 }
 
-[data-admin-root] .admin-nav-group-label::before,
-[data-admin-root] .admin-nav-group-label::after {
-    content: none !important;
-    display: none !important;
-    width: 0 !important;
-    height: 0 !important;
-    min-width: 0 !important;
-    flex: 0 !important;
-    border: 0 !important;
-    background: none !important;
+[data-admin-root] .admin-nav-group-toggle:hover {
+    background: var(--admin-nav-hover);
+}
+
+[data-admin-root] .admin-nav-group-toggle:focus-visible {
+    outline: 2px solid var(--admin-focus);
+    outline-offset: 1px;
+}
+
+[data-admin-root] .admin-nav-group-label {
+    display: block;
+    min-width: 0;
+    margin: 0 !important;
+    overflow: hidden;
+    padding: 0 !important;
+    color: inherit !important;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    line-height: 18px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+[data-admin-root] .admin-nav-group-chevron {
+    width: 14px;
+    height: 14px;
+    flex: 0 0 auto;
+    color: var(--admin-text-muted);
+    stroke-width: 2;
+    transition: transform var(--admin-motion), color var(--admin-motion);
+}
+
+[data-admin-root] .admin-nav-group-chevron.is-open {
+    transform: rotate(90deg);
+}
+
+[data-admin-root] .admin-nav-group-toggle:hover .admin-nav-group-chevron {
+    color: var(--admin-text);
+}
+
+[data-admin-root] .admin-nav-group-content {
+    display: grid;
+    grid-template-rows: 1fr;
+    opacity: 1;
+    transition: grid-template-rows var(--admin-motion), opacity var(--admin-motion);
+}
+
+[data-admin-root] .admin-nav-group-content.is-folded {
+    grid-template-rows: 0fr;
+    opacity: 0;
 }
 
 [data-admin-root] .admin-nav-group-items,
@@ -117,9 +167,15 @@
     flex-direction: column;
     gap: 6px;
     margin-left: 0 !important;
-    padding-left: 0 !important;
+    padding: 6px 0 0 !important;
     border: 0 !important;
     border-left: 0 !important;
+    overflow: hidden;
+}
+
+[data-admin-root] .admin-nav-group-standalone .admin-nav-group-items,
+[data-admin-root] .admin-nav-group-items.is-collapsed {
+    padding-top: 0 !important;
 }
 
 [data-admin-root] .admin-nav-collapsed-separator {
@@ -182,6 +238,13 @@
 [data-admin-root] .admin-sidebar-edge-toggle:focus-visible {
     outline: 2px solid var(--admin-focus);
     outline-offset: 1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    [data-admin-root] .admin-nav-group-content,
+    [data-admin-root] .admin-nav-group-chevron {
+        transition-duration: 0.01ms;
+    }
 }
 
 [data-admin-root] .admin-sidebar-footer {
@@ -962,6 +1025,63 @@
 .admin-modal-root .ant-modal-footer,
 .admin-channel-modal-root .ant-modal-footer {
     border-top: 1px solid var(--admin-border);
+}
+
+.admin-inspiration-cell {
+    display: flex;
+    min-width: 320px;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.admin-inspiration-cell > img {
+    width: 82px;
+    height: 58px;
+    flex: 0 0 auto;
+    border: 1px solid var(--admin-border);
+    border-radius: var(--admin-radius);
+    background: var(--admin-surface-2);
+    object-fit: cover;
+}
+
+.admin-inspiration-cell strong { color: var(--admin-text); font-size: 13px; }
+.admin-inspiration-cell p { max-width: 520px; margin: 3px 0 6px; overflow: hidden; color: var(--admin-text-muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+
+.admin-inspiration-editor {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    gap: 24px;
+    padding: 4px 0 0;
+}
+
+.admin-inspiration-editor-modal .ant-modal-body {
+    max-height: min(72vh, 760px);
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding-right: 6px;
+}
+
+.admin-inspiration-form-grid { display: grid; grid-template-columns: minmax(0, 1fr) 180px; gap: 14px; }
+.admin-inspiration-preview { align-self: start; position: sticky; top: 0; color: var(--admin-text-muted); font-size: 12px; }
+.admin-inspiration-preview > span { display: block; margin-bottom: 10px; color: var(--admin-text-secondary); font-weight: 650; }
+.admin-inspiration-preview > p { margin-top: 10px; line-height: 1.6; }
+.admin-inspiration-preview-card { overflow: hidden; border: 1px solid var(--admin-border); border-radius: var(--admin-radius-lg); background: var(--admin-surface); box-shadow: var(--admin-shadow-card); }
+.admin-inspiration-preview-card > img, .admin-inspiration-preview-empty { width: 100%; aspect-ratio: 16 / 10; background: var(--admin-surface-2); object-fit: cover; }
+.admin-inspiration-preview-empty { display: grid; place-items: center; color: var(--admin-text-muted); }
+.admin-inspiration-preview-card > div:last-child { padding: 14px; }
+.admin-inspiration-preview-card strong { display: block; color: var(--admin-text); font-size: 15px; }
+.admin-inspiration-preview-card p { margin: 6px 0 10px; color: var(--admin-text-secondary); line-height: 1.6; }
+.admin-inspiration-preview-card small { color: var(--admin-text-muted); }
+
+.admin-inspiration-order-list { max-height: 55vh; margin-top: 16px; overflow-y: auto; }
+.admin-inspiration-order-list > div { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; padding: 10px; border: 1px solid var(--admin-border); border-radius: var(--admin-radius); background: var(--admin-surface); }
+.admin-inspiration-order-list > div > span { min-width: 0; flex: 1; }
+.admin-inspiration-order-list small { margin-left: 8px; color: var(--admin-text-muted); }
+
+@media (max-width: 900px) {
+    .admin-inspiration-editor { grid-template-columns: 1fr; }
+    .admin-inspiration-form-grid { grid-template-columns: 1fr; gap: 0; }
+    .admin-inspiration-preview { position: static; }
 }
 
 .admin-drawer .ant-drawer-title,

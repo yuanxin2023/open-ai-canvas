@@ -66,6 +66,7 @@
 .creation-inspiration-overlay svg { width: 14px; height: 14px; transform: rotate(45deg); }
 .creation-featured-card:hover .creation-inspiration-overlay, .creation-featured-card:focus-visible .creation-inspiration-overlay { opacity: 1; transform: translateY(0); }
 .creation-inspiration-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; margin-top: 24px; color: var(--user-ink-muted); font-size: 12px; }
+.creation-inspiration-state { display: flex; min-height: 180px; align-items: center; justify-content: center; flex-direction: column; gap: 12px; border: 1px dashed var(--user-border); border-radius: 18px; color: var(--user-ink-muted); }
 .creation-inspiration-footer details { max-width: 60ch; }
 .creation-inspiration-footer summary { cursor: pointer; padding-block: 8px; }
 .creation-inspiration-footer p { line-height: 1.7; margin: 8px 0; }

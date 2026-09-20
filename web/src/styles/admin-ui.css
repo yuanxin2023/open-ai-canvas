@@ -6126,40 +6126,38 @@
     width: 100%;
 }
 
-.admin-credit-drawer .ant-drawer-content {
-    background: var(--admin-layer-0);
+[data-admin-root] .admin-customer-service-settings .admin-settings-section-summary {
+    padding: 18px 24px;
 }
 
-.admin-credit-drawer .ant-drawer-header {
-    min-height: 64px;
-    border-bottom: 1px solid var(--admin-divider);
-    background: var(--admin-layer-1);
-    padding: 16px 20px;
+[data-admin-root] .admin-customer-service-settings .admin-settings-section-content {
+    padding: 22px 24px 24px;
 }
 
-.admin-credit-drawer .ant-drawer-title {
-    color: var(--admin-text-primary);
-    font-size: 16px;
-    font-weight: 650;
+@media (max-width: 640px) {
+    [data-admin-root] .admin-customer-service-settings .admin-settings-section-summary {
+        padding: 16px;
+    }
+
+    [data-admin-root] .admin-customer-service-settings .admin-settings-section-content {
+        padding: 18px 16px 20px;
+    }
 }
 
-.admin-credit-drawer .ant-drawer-body {
-    padding: 20px;
+.admin-credit-modal .ant-modal-body {
+    max-height: min(72vh, 720px);
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding-right: 6px;
 }
 
-.admin-credit-drawer .ant-drawer-footer {
-    min-height: 64px;
-    background: var(--admin-layer-1);
-    padding: 14px 20px;
-}
-
-.admin-credit-drawer .ant-drawer-footer .ant-btn {
+.admin-credit-modal .ant-modal-footer .ant-btn {
     min-width: 80px;
     min-height: 36px;
     border-radius: 7px;
 }
 
-.admin-credit-drawer :is(.ant-input-number, .ant-input-number-affix-wrapper) {
+.admin-credit-modal :is(.ant-input-number, .ant-input-number-affix-wrapper) {
     width: 100%;
 }
 

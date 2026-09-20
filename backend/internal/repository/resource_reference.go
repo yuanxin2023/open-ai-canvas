@@ -284,6 +284,29 @@ func (r *Repository) ResourceReferenceSnapshot(userID string, excludingAssetID s
 	for _, draft := range announcementDrafts {
 		snapshot.Direct = append(snapshot.Direct, ResourceDirectReference{Kind: "公告草稿", ID: draft.ResourceID, ResourceID: draft.ResourceID})
 	}
+
+	var inspirations []model.Inspiration
+	// 封面归属跟随上传资源；后续可能由另一位管理员替换，不能按灵感创建人过滤。
+	if err := r.db.Where("cover_resource_id IN ?", resourceIDs).Find(&inspirations).Error; err != nil {
+		return snapshot, err
+	}
+	for _, inspiration := range inspirations {
+		snapshot.Direct = append(snapshot.Direct, ResourceDirectReference{Kind: "精选灵感", ID: inspiration.ID, Title: inspiration.Title, ResourceID: inspiration.CoverResourceID})
+	}
+	var userPrompts []model.UserPrompt
+	if err := r.db.Where("user_id = ? AND cover_resource_id IN ?", userID, resourceIDs).Find(&userPrompts).Error; err != nil {
+		return snapshot, err
+	}
+	for _, prompt := range userPrompts {
+		snapshot.Direct = append(snapshot.Direct, ResourceDirectReference{Kind: "个人提示词", ID: prompt.ID, Title: prompt.Title, ResourceID: prompt.CoverResourceID})
+	}
+	var inspirationDrafts []model.InspirationCoverDraft
+	if err := r.db.Where("user_id = ? AND resource_id IN ?", userID, resourceIDs).Find(&inspirationDrafts).Error; err != nil {
+		return snapshot, err
+	}
+	for _, draft := range inspirationDrafts {
+		snapshot.Direct = append(snapshot.Direct, ResourceDirectReference{Kind: "精选灵感草稿", ID: draft.ResourceID, ResourceID: draft.ResourceID})
+	}
 	return snapshot, nil
 }
 

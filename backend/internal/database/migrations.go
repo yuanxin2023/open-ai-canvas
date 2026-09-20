@@ -1,6 +1,7 @@
 package database
 
 import (
+	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,7 +12,10 @@ import (
 	"gorm.io/gorm"
 )
 
-const CurrentSchemaVersion int64 = 24
+const CurrentSchemaVersion int64 = 26
+
+//go:embed seed/inspirations.json
+var inspirationSeedJSON []byte
 
 const baselineSchemaChecksum = "sha256:open-ai-canvas-schema-v1-20260830"
 const schemaMigrationAppliedAtIndexChecksum = "sha256:schema-migrations-applied-at-index-v2-20260830"
@@ -96,6 +100,42 @@ var schemaMigrations = []migration{
 		}
 		return tx.Migrator().AddColumn(&model.TopupProduct{}, "Benefits")
 	}},
+	{version: 25, name: "featured_inspirations", checksum: "sha256:featured-inspirations-v25-20260920", apply: migrateSchemaV25},
+	{version: 26, name: "user_prompt_library", checksum: "sha256:user-prompt-library-v26-20260920", apply: func(tx *gorm.DB) error {
+		return tx.AutoMigrate(&model.UserPrompt{})
+	}},
+}
+
+func migrateSchemaV25(tx *gorm.DB) error {
+	if err := tx.AutoMigrate(&model.Inspiration{}, &model.InspirationCoverDraft{}); err != nil {
+		return err
+	}
+	var count int64
+	if err := tx.Model(&model.Inspiration{}).Count(&count).Error; err != nil || count > 0 {
+		return err
+	}
+	var rows []model.Inspiration
+	if err := json.Unmarshal(inspirationSeedJSON, &rows); err != nil {
+		return fmt.Errorf("解析精选灵感种子数据：%w", err)
+	}
+	now := time.Now().UTC()
+	for index := range rows {
+		rows[index].SortOrder = int64(index + 1)
+		rows[index].Status = model.InspirationStatusActive
+		rows[index].CreatedBy = "system"
+		rows[index].UpdatedBy = "system"
+		rows[index].CreatedAt = now
+		rows[index].UpdatedAt = now
+		encoded, err := json.Marshal(rows[index].Tags)
+		if err != nil {
+			return err
+		}
+		rows[index].TagsJSON = string(encoded)
+	}
+	if len(rows) != 22 {
+		return fmt.Errorf("精选灵感种子数量异常：%d", len(rows))
+	}
+	return tx.Create(&rows).Error
 }
 
 func migrateSchemaV14(tx *gorm.DB) error {

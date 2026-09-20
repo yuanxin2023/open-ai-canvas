@@ -9,6 +9,16 @@ description: 信封、错误码与 OpenAPI
 
 机器可读规范：运行中的 `GET /api/openapi.yaml`，源文件 `backend/internal/handler/openapi.yaml`。前端 TypeScript 仍走 `web/src/services/api` 的 `http`，不从 OpenAPI 生成客户端。
 
+## 个人提示词
+
+登录用户通过 `GET /api/user-prompts` 分页读取自己的提示词，可按关键词和文本/图片/视频类型过滤；`POST /api/user-prompts` 新增，`PUT /api/user-prompts/:id` 编辑，`DELETE /api/user-prompts/:id` 删除。服务端始终按当前用户校验记录与上传封面归属，不接受其他账号的资源或提示词 ID；每个用户最多保存 500 条。
+
+## 精选灵感
+
+登录用户通过 `GET /api/inspirations` 读取按运营顺序排列的已启用内容；托管封面从 `GET /api/inspirations/:id/cover` 读取，普通用户不能借此访问停用内容。HTTPS 外链由浏览器直接加载，后端不代理或抓取。
+
+管理员使用 `/api/admin/inspirations` 分页查询、新增和编辑，使用 `PATCH /api/admin/inspirations/:id/status` 启停，使用单条 DELETE 或 `POST /api/admin/inspirations/batch-delete` 永久删除。`GET/PUT /api/admin/inspirations/order` 使用 `ids + expectedIds` 全量快照保存顺序，列表发生并发变化时拒绝覆盖。`POST /api/admin/inspiration-covers` 上传封面草稿，取消时调用对应 DELETE；新建记录始终以 `disabled` 状态保存。
+
 ## 画布保存、历史与恢复
 
 画布内容使用数据库递增的 `revision` 做乐观并发校验；`updatedAt` 仅用于展示，不作为版本依据。新建 `PUT /canvas-projects/:id` 的 `project.revision` 为 0，已有画布必须带上读取到的版本。数据库在同一次条件更新中匹配 ID、用户与版本，成功后返回 `data.project` 摘要及递增后的版本；缺失版本返回 428，陈旧版本返回 409，非法版本返回 400。客户端不能获取新版号后直接重发旧内容。

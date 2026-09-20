@@ -15,3 +15,17 @@
     background: var(--btn-solid-active-bg) !important;
     color: var(--btn-solid-fg) !important;
 }
+
+.admin-payment-product-modal .ant-modal-body {
+    max-height: min(72vh, 680px);
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding-right: 6px;
+}
+
+@media (max-width: 600px) {
+    .admin-payment-product-modal .grid.grid-cols-2 {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 0;
+    }
+}

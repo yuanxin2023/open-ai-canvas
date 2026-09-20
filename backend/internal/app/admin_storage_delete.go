@@ -71,7 +71,7 @@ func (s *Service) DeleteAdminResources(actor *model.User, req AdminResourceDelet
 		for resourceID, references := range adminResourceReferences(snapshot, userResources) {
 			blocking := make([]AdminResourceReferenceView, 0, len(references))
 			for _, reference := range references {
-				if reference.Kind == "公告草稿" {
+				if reference.Kind == "公告草稿" || reference.Kind == "精选灵感草稿" {
 					// 公告草稿及其资源绑定在删除事务内级联清理，不构成阻塞引用。
 					continue
 				}

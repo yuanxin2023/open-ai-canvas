@@ -4,6 +4,7 @@ const workspaceRouteLoaders = {
     create: () => import("@/pages/create"),
     projects: () => import("@/pages/projects"),
     projectDetail: () => import("@/pages/projects/detail"),
+    prompts: () => import("@/pages/prompts"),
 };
 
 export const loadAssetsPage = workspaceRouteLoaders.assets;

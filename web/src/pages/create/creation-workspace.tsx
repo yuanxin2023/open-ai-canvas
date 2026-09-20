@@ -43,7 +43,7 @@ import { creationAttachmentKind, creationMediaAspectRatio, removeCreationAttachm
 import { conversationTimestamp, isImageAttachment, isVideoAttachment } from "./creation-conversations";
 import { conversationTimeFormatter, countOptions, historyDayFormatter, messageTimeFormatter, modeLabels, qualityOptions, ratioOptions, resolutionOptions, shotScriptLabels, type CreationConversation, type CreationMessage, type CreationShotRailEntry, type CreationStatus } from "./creation-types";
 import "./creation-product.css";
-import { creationFeaturedWorks } from "./creation-inspirations";
+import { inspirationCoverUrl, listInspirations, type Inspiration } from "@/services/api/inspirations";
 
 const CanvasPromptOptimizerDrawer = lazy(() => import("@/components/canvas/canvas-prompt-optimizer-drawer").then((module) => ({ default: module.CanvasPromptOptimizerDrawer })));
 
@@ -796,21 +796,38 @@ export function CreationEmptySuggest({ onStartPrompt, onOpenLibrary }: { onStart
 export function CreationFeaturedWorks({ onStartPrompt }: { onStartPrompt: (mode: CreationMode, prompt: string) => void }) {
     const [filter, setFilter] = useState<"all" | CreationMode>("all");
     const [limit, setLimit] = useState(12);
-    const filtered = creationFeaturedWorks.filter((item) => filter === "all" || item.mode === filter);
+    const [inspirations, setInspirations] = useState<Inspiration[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState("");
+    const [reloadToken, setReloadToken] = useState(0);
+    useEffect(() => {
+        let active = true;
+        setLoading(true);
+        setError("");
+        void listInspirations().then((result) => {
+            if (active) setInspirations(result.inspirations || []);
+        }).catch((reason) => {
+            if (active) setError(reason instanceof Error ? reason.message : "精选灵感暂时无法加载");
+        }).finally(() => {
+            if (active) setLoading(false);
+        });
+        return () => { active = false; };
+    }, [reloadToken]);
+    const filtered = inspirations.filter((item) => filter === "all" || item.mode === filter);
     return <section className="creation-featured-works" aria-labelledby="creation-featured-title">
         <div className="creation-featured-heading">
             <div><h2 id="creation-featured-title">精选灵感</h2></div>
         </div>
         <div className="creation-inspiration-filters" role="group" aria-label="灵感类型">
-            {(["all", "video", "image", "text"] as const).map((value) => <button key={value} type="button" aria-pressed={filter === value} onClick={() => { setFilter(value); setLimit(12); }}>{value === "all" ? "全部灵感" : modeLabels[value]}<span>{creationFeaturedWorks.filter((item) => value === "all" || item.mode === value).length}</span></button>)}
+            {(["all", "video", "image", "text"] as const).map((value) => <button key={value} type="button" aria-pressed={filter === value} onClick={() => { setFilter(value); setLimit(12); }}>{value === "all" ? "全部灵感" : modeLabels[value]}<span>{inspirations.filter((item) => value === "all" || item.mode === value).length}</span></button>)}
         </div>
-        <div className="creation-featured-layout">
-                {filtered.slice(0, limit).map((item, index) => <button key={item.title} type="button" className={`product-collection-card creation-featured-card ${index === 0 ? "is-featured-hero" : ""}`} onClick={() => onStartPrompt(item.mode, item.prompt)}>
-                    <span className="creation-featured-media"><img src={item.image} alt="" loading="lazy" /><span className="creation-inspiration-overlay"><ArrowUp />使用这个创意</span></span>
+        {loading ? <div className="creation-inspiration-state">正在加载精选灵感…</div> : error ? <div className="creation-inspiration-state"><span>{error}</span><Button onClick={() => setReloadToken((value) => value + 1)}>重新加载</Button></div> : !filtered.length ? <div className="creation-inspiration-state">当前分类暂无已启用的灵感</div> : <div className="creation-featured-layout">
+                {filtered.slice(0, limit).map((item, index) => <button key={item.id} type="button" className={`product-collection-card creation-featured-card ${index === 0 ? "is-featured-hero" : ""}`} onClick={() => onStartPrompt(item.mode, item.prompt)}>
+                    <span className="creation-featured-media"><img src={inspirationCoverUrl(item)} alt="" loading="lazy" referrerPolicy="no-referrer" onError={(event) => { const image = event.currentTarget; image.onerror = null; image.src = "/welcome/wing-it/barn.webp"; }} /><span className="creation-inspiration-overlay"><ArrowUp />使用这个创意</span></span>
                     <span className="creation-featured-copy"><strong>{item.title}</strong><span>{item.description}</span><em><Sparkles />{item.source ? "开源改编 · CC0" : "原创提示词"} · {modeLabels[item.mode]}</em></span>
                 </button>)}
-        </div>
-        <footer className="creation-inspiration-footer">{limit < filtered.length ? <Button onClick={() => setLimit((count) => count + 12)}>展开更多灵感<ChevronDown /></Button> : <span>已展示全部 {filtered.length} 个创意</span>}</footer>
+        </div>}
+        {!loading && !error && filtered.length ? <footer className="creation-inspiration-footer">{limit < filtered.length ? <Button onClick={() => setLimit((count) => count + 12)}>展开更多灵感<ChevronDown /></Button> : <span>已展示全部 {filtered.length} 个创意</span>}</footer> : null}
     </section>;
 }
 

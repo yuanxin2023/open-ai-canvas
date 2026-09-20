@@ -1,7 +1,7 @@
 import { AlipayCircleFilled, WechatFilled } from "@ant-design/icons";
 import { Callout } from "@/pages/admin/ui/controls";
 import { App, Button, DatePicker, Descriptions, Drawer, Form, Input, InputNumber, Select, Tabs, Typography } from "antd";
-import { AdminDrawer } from "@/pages/admin/ui/overlays";
+import { AdminDrawer, AdminModal } from "@/pages/admin/ui/overlays";
 import { Switch } from "@/pages/admin/ui/controls";
 import type { ColumnsType } from "antd/es/table";
 import dayjs, { type Dayjs } from "dayjs";
@@ -815,16 +815,25 @@ export default function AdminPaymentsPage() {
                 ) : null}
             </Drawer>
 
-            <Drawer
+            <AdminModal
+                centered
                 title={productDrawer ? "编辑充值商品" : "新增充值商品"}
-                width={520}
+                width="min(680px, calc(100vw - 32px))"
                 open={productDrawer !== undefined}
-                destroyOnHidden
-                onClose={() => setProductDrawer(undefined)}
-                extra={
-                    <Button type="primary" loading={productSaving} onClick={() => void saveProduct()}>
-                        保存
-                    </Button>
+                rootClassName="admin-payment-product-modal"
+                closable={!productSaving}
+                keyboard={!productSaving}
+                maskClosable={!productSaving}
+                onCancel={() => setProductDrawer(undefined)}
+                footer={
+                    <div className="flex justify-end gap-2">
+                        <Button disabled={productSaving} onClick={() => setProductDrawer(undefined)}>
+                            取消
+                        </Button>
+                        <Button type="primary" loading={productSaving} onClick={() => void saveProduct()}>
+                            保存商品
+                        </Button>
+                    </div>
                 }
             >
                 <Form form={productForm} layout="vertical" requiredMark="optional">
@@ -865,7 +874,7 @@ export default function AdminPaymentsPage() {
                         <Switch />
                     </Form.Item>
                 </Form>
-            </Drawer>
+            </AdminModal>
 
             <Drawer
                 title={detailRun ? `${providerNames[detailRun.providerId] || detailRun.providerId} · ${detailRun.billDate} 对账明细` : "对账明细"}

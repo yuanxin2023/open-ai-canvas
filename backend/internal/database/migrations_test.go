@@ -59,6 +59,16 @@ func TestMigrateSchemaRecordsAndValidatesVersion(t *testing.T) {
 	if !db.Migrator().HasColumn(&model.TopupProduct{}, "Benefits") {
 		t.Fatal("schema migration v24 did not create top-up product benefits")
 	}
+	if !db.Migrator().HasTable(&model.Inspiration{}) || !db.Migrator().HasTable(&model.InspirationCoverDraft{}) {
+		t.Fatal("schema migration v25 did not create inspiration tables")
+	}
+	var inspirationCount int64
+	if err := db.Model(&model.Inspiration{}).Count(&inspirationCount).Error; err != nil || inspirationCount != 22 {
+		t.Fatalf("schema migration v25 inspiration seed count = %d, error = %v", inspirationCount, err)
+	}
+	if !db.Migrator().HasTable(&model.UserPrompt{}) {
+		t.Fatal("schema migration v26 did not create user prompts")
+	}
 	if err := MigrateSchema(db); err != nil {
 		t.Fatalf("migration should be idempotent: %v", err)
 	}

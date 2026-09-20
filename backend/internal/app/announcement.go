@@ -360,12 +360,12 @@ DirectLoop:
 		break
 	}
 	if hasBlocking {
-		return BadAuthRequest("公告配图仍被其他业务数据引用，已停止删除")
+		return BadAuthRequest("资源仍被其他业务数据引用，已停止删除")
 	}
 	resourceIDs := map[string]struct{}{resource.ID: {}}
 	for _, document := range snapshot.Documents {
 		if documentReferencesResources(document.PrimaryJSON, resourceIDs) || documentReferencesResources(document.SecondaryJSON, resourceIDs) {
-			return BadAuthRequest("公告配图仍被其他业务数据引用，已停止删除")
+			return BadAuthRequest("资源仍被其他业务数据引用，已停止删除")
 		}
 	}
 	return nil

@@ -3,6 +3,7 @@ package service
 import "infinite-canvas/backend/internal/app"
 
 const (
+	InspirationCoverMaxBytes           = app.InspirationCoverMaxBytes
 	AnnouncementImageMaxBytes          = app.AnnouncementImageMaxBytes
 	AppearanceAssetDarkLogo            = app.AppearanceAssetDarkLogo
 	AppearanceAssetLogo                = app.AppearanceAssetLogo

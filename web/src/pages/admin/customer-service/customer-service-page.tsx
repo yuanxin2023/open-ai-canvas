@@ -155,7 +155,7 @@ export default function CustomerServicePage() {
                 </Button>
             }
         >
-            <div className="admin-settings-stack mx-auto w-full max-w-6xl space-y-4 pb-8">
+            <div className="admin-settings-stack admin-customer-service-settings mx-auto w-full max-w-6xl space-y-4 pb-8">
                 {loadError ? (
                     <section className="admin-settings-section border border-destructive/25 p-6">
                         <p className="text-sm text-destructive">{loadError}</p>
