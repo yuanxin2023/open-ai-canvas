@@ -14,6 +14,8 @@ export type Inspiration = {
     source?: string;
     coverResourceId?: string;
     coverUrl: string;
+    coverWidth: number;
+    coverHeight: number;
     status: InspirationStatus;
     sortOrder: number;
     createdBy: string;
@@ -26,6 +28,8 @@ export type InspirationInput = Pick<Inspiration, "title" | "description" | "mode
     source?: string;
     coverResourceId?: string;
     coverUrl?: string;
+    coverWidth: number;
+    coverHeight: number;
 };
 
 function absoluteAPIURL(path: string) {
@@ -42,8 +46,8 @@ export function inspirationDraftCoverUrl(resourceId: string) {
     return absoluteAPIURL(`/api/admin/inspiration-covers/${encodeURIComponent(resourceId)}`);
 }
 
-export function listInspirations() {
-    return http.get<{ inspirations: Inspiration[] }>("/inspirations");
+export function listInspirations(signal?: AbortSignal) {
+    return http.get<{ inspirations: Inspiration[] }>("/inspirations", { signal });
 }
 
 export function listAdminInspirations(params: { keyword?: string; mode?: InspirationMode; status?: InspirationStatus; page?: number; pageSize?: number } = {}) {
@@ -78,9 +82,11 @@ export function saveAdminInspirationOrder(ids: string[], expectedIds: string[]) 
     return http.put<{ saved: boolean }>("/admin/inspirations/order", { ids, expectedIds });
 }
 
-export function uploadAdminInspirationCover(file: File) {
+export function uploadAdminInspirationCover(file: File, dimensions: { width: number; height: number }) {
     const body = new FormData();
     body.append("file", file, file.name);
+    body.append("width", String(dimensions.width));
+    body.append("height", String(dimensions.height));
     return http.post<{ resource: RemoteResource }>("/admin/inspiration-covers", body);
 }
 

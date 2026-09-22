@@ -907,9 +907,11 @@ paths:
           multipart/form-data:
             schema:
               type: object
-              required: [file]
+              required: [file, width, height]
               properties:
                 file: { type: string, format: binary }
+                width: { type: integer, minimum: 1, maximum: 100000 }
+                height: { type: integer, minimum: 1, maximum: 100000 }
       responses:
         "200": { $ref: "#/components/responses/Envelope" }
   /admin/inspiration-covers/{id}:
@@ -945,7 +947,7 @@ components:
     InspirationInput:
       type: object
       additionalProperties: false
-      required: [title, description, mode, prompt, tags]
+      required: [title, description, mode, prompt, tags, coverWidth, coverHeight]
       properties:
         title: { type: string, maxLength: 120 }
         description: { type: string, maxLength: 240 }
@@ -958,6 +960,8 @@ components:
         source: { type: string, maxLength: 120 }
         coverResourceId: { type: string }
         coverUrl: { type: string, format: uri, maxLength: 1000 }
+        coverWidth: { type: integer, minimum: 1, maximum: 100000 }
+        coverHeight: { type: integer, minimum: 1, maximum: 100000 }
     AgentProfileRequest:
       type: object
       additionalProperties: false

@@ -4,6 +4,7 @@ import { Check, CircleCheck, CreditCard, Gift, Sparkles } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { CreditProductCard, findBestValueProductId } from "@/components/payments/credit-product-card";
 import { AppModal } from "@/components/ui/product/app-modal";
 import { formatCredits } from "@/constant/credits";
 import { useWalletBalance } from "@/hooks/use-wallet-balance";
@@ -32,7 +33,6 @@ export function WorkspaceCreditPopover({ userId }: { userId: string }) {
     const completedPaymentOrderId = useRef("");
     const balance = availableMicrocredits === null ? "--" : formatCredits(availableMicrocredits);
     const normalizedCode = code.trim().toLowerCase();
-    const productBenefits = (product: TopupProduct) => (product.benefits || "").split(/\r?\n/).map((item) => item.trim()).filter(Boolean);
     const paymentCatalogQuery = useQuery({
         queryKey: ["payment-catalog", userId],
         queryFn: async () => {
@@ -44,6 +44,8 @@ export function WorkspaceCreditPopover({ userId }: { userId: string }) {
     });
     const products = useMemo(() => paymentCatalogQuery.data?.products ?? [], [paymentCatalogQuery.data?.products]);
     const providers = useMemo(() => paymentCatalogQuery.data?.providers ?? [], [paymentCatalogQuery.data?.providers]);
+    const maxProductCredits = useMemo(() => products.reduce((maximum, product) => Math.max(maximum, product.creditsMicrocredits), 0), [products]);
+    const bestValueProductId = useMemo(() => findBestValueProductId(products), [products]);
     const productsLoading = paymentCatalogQuery.isPending;
     const productsError = !paymentCatalogQuery.data && paymentCatalogQuery.error
         ? paymentCatalogQuery.error instanceof Error ? paymentCatalogQuery.error.message : "读取商品套餐失败"
@@ -269,14 +271,15 @@ export function WorkspaceCreditPopover({ userId }: { userId: string }) {
                 open={productsOpen}
                 title={null}
                 footer={null}
-                width="min(1240px, calc(100vw - 24px))"
+                width="min(1480px, calc(100vw - 32px))"
                 rootClassName="workspace-credit-products-modal"
                 onCancel={() => setProductsOpen(false)}
             >
                 <section className="workspace-credit-products-shell">
                     <header className="workspace-credit-products-header">
-                        <h2>购买积分与套餐</h2>
-                        <p>选择管理员已上架的积分商品，支付成功后积分将自动到账。</p>
+                        <h2>选择您的套餐</h2>
+                        <p>选择适合你的积分套餐，购买成功后积分将自动到账</p>
+                        <span className="workspace-credit-products-balance"><Sparkles aria-hidden />当前余额 {balance} 积分</span>
                     </header>
 
                     {productsLoading ? (
@@ -289,31 +292,22 @@ export function WorkspaceCreditPopover({ userId }: { userId: string }) {
                             <span>{productsError}</span>
                             <Button onClick={() => void paymentCatalogQuery.refetch()}>重新加载</Button>
                         </div>
-                    ) : (
+                    ) : products.length ? (
                         <div className="workspace-credit-products-grid">
                             {products.map((product) => (
-                                <article key={product.id} className="workspace-credit-product-card">
-                                    <div className="workspace-credit-product-card-heading">
-                                        <Sparkles aria-hidden />
-                                        <h3>{product.name}</h3>
-                                    </div>
-                                    <div className="workspace-credit-product-price">
-                                        <small>¥</small>
-                                        <strong>{(product.amountFen / 100).toFixed(2)}</strong>
-                                    </div>
-                                    <p className="workspace-credit-product-description">{product.description || "管理员配置的积分充值商品"}</p>
-                                    <div className="workspace-credit-product-credits">
-                                        <Sparkles aria-hidden />
-                                        <strong>{formatCredits(product.creditsMicrocredits)} 积分</strong>
-                                    </div>
-                                    {productBenefits(product).length ? <div className="workspace-credit-product-facts">
-                                        {productBenefits(product).map((benefit, index) => <span key={`${product.id}-benefit-${index}`}><Check aria-hidden />{benefit}</span>)}
-                                    </div> : null}
-                                    <Button type="primary" block disabled={!providers.length} onClick={() => openPaymentSelector(product)}>{providers.length ? "选择套餐" : "暂无可用支付方式"}</Button>
-                                </article>
+                                <CreditProductCard
+                                    key={product.id}
+                                    product={product}
+                                    isBestValue={product.id === bestValueProductId}
+                                    maxCreditsMicrocredits={maxProductCredits}
+                                    actionLabel={providers.length ? "立即购买" : "暂无可用支付方式"}
+                                    actionDisabled={!providers.length}
+                                    onAction={() => openPaymentSelector(product)}
+                                />
                             ))}
-
                         </div>
+                    ) : (
+                        <div className="workspace-credit-products-state"><strong>暂无可购买套餐</strong><span>管理员尚未上架积分商品，请稍后再试。</span></div>
                     )}
                 </section>
             </AppModal>

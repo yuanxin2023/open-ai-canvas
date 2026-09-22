@@ -69,6 +69,9 @@ func TestMigrateSchemaRecordsAndValidatesVersion(t *testing.T) {
 	if !db.Migrator().HasTable(&model.UserPrompt{}) {
 		t.Fatal("schema migration v26 did not create user prompts")
 	}
+	if !db.Migrator().HasColumn(&model.Inspiration{}, "CoverWidth") || !db.Migrator().HasColumn(&model.Inspiration{}, "CoverHeight") {
+		t.Fatal("schema migration v27 did not create inspiration cover dimensions")
+	}
 	if err := MigrateSchema(db); err != nil {
 		t.Fatalf("migration should be idempotent: %v", err)
 	}

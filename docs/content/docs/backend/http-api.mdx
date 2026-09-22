@@ -17,7 +17,7 @@ description: 信封、错误码与 OpenAPI
 
 登录用户通过 `GET /api/inspirations` 读取按运营顺序排列的已启用内容；托管封面从 `GET /api/inspirations/:id/cover` 读取，普通用户不能借此访问停用内容。HTTPS 外链由浏览器直接加载，后端不代理或抓取。
 
-管理员使用 `/api/admin/inspirations` 分页查询、新增和编辑，使用 `PATCH /api/admin/inspirations/:id/status` 启停，使用单条 DELETE 或 `POST /api/admin/inspirations/batch-delete` 永久删除。`GET/PUT /api/admin/inspirations/order` 使用 `ids + expectedIds` 全量快照保存顺序，列表发生并发变化时拒绝覆盖。`POST /api/admin/inspiration-covers` 上传封面草稿，取消时调用对应 DELETE；新建记录始终以 `disabled` 状态保存。
+管理员使用 `/api/admin/inspirations` 分页查询、新增和编辑，使用 `PATCH /api/admin/inspirations/:id/status` 启停，使用单条 DELETE 或 `POST /api/admin/inspirations/batch-delete` 永久删除。新增和编辑请求携带 `coverWidth` / `coverHeight`；托管封面最终以资源记录中的真实尺寸为准。`GET/PUT /api/admin/inspirations/order` 使用 `ids + expectedIds` 全量快照保存顺序，列表发生并发变化时拒绝覆盖。`POST /api/admin/inspiration-covers` 上传封面草稿时通过 multipart 同时提交 `width` / `height`，取消时调用对应 DELETE；新建记录始终以 `disabled` 状态保存。
 
 ## 画布保存、历史与恢复
 

@@ -4,6 +4,7 @@ import { ArrowDown, ArrowUp, GripVertical, ListOrdered, PencilLine, Plus, Refres
 import { useEffect, useRef, useState, type Key } from "react";
 
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
+import { readImageFileSize } from "@/lib/image-utils";
 import { AdminModal } from "@/pages/admin/ui/overlays";
 import {
     batchDeleteAdminInspirations,
@@ -36,6 +37,8 @@ type EditorValues = {
     coverKind: "upload" | "url";
     coverUrl?: string;
 };
+
+type CoverDimensions = { source: string; width: number; height: number };
 
 const modeLabels: Record<InspirationMode, string> = { text: "文本创作", image: "图片创作", video: "视频创作" };
 
@@ -83,6 +86,7 @@ export default function AdminInspirationsPanel() {
     const [editing, setEditing] = useState<Inspiration | null>(null);
     const [saving, setSaving] = useState(false);
     const [draftCoverId, setDraftCoverId] = useState("");
+    const [coverDimensions, setCoverDimensions] = useState<CoverDimensions | null>(null);
     const [uploading, setUploading] = useState(false);
     const [orderOpen, setOrderOpen] = useState(false);
     const [orderItems, setOrderItems] = useState<Array<{ id: string; name: string; enabled: boolean }>>([]);
@@ -113,6 +117,7 @@ export default function AdminInspirationsPanel() {
     const openCreate = () => {
         setEditing(null);
         setDraftCoverId("");
+        setCoverDimensions(null);
         form.setFieldsValue({ title: "", mode: "image", tags: "", description: "", prompt: "", source: "", coverKind: "upload", coverUrl: "" });
         setEditorOpen(true);
     };
@@ -120,6 +125,7 @@ export default function AdminInspirationsPanel() {
     const openEdit = (item: Inspiration) => {
         setEditing(item);
         setDraftCoverId("");
+        setCoverDimensions(item.coverWidth > 0 && item.coverHeight > 0 ? { source: item.coverResourceId || item.coverUrl, width: item.coverWidth, height: item.coverHeight } : null);
         form.setFieldsValue({ title: item.title, mode: item.mode, tags: item.tags.join("，"), description: item.description, prompt: item.prompt, source: item.source || "", coverKind: item.coverResourceId ? "upload" : "url", coverUrl: item.coverResourceId ? "" : item.coverUrl });
         setEditorOpen(true);
     };
@@ -142,10 +148,13 @@ export default function AdminInspirationsPanel() {
         const coverResourceId = values.coverKind === "upload" ? (draftCoverId || editing?.coverResourceId || "") : "";
         const coverUrl = values.coverKind === "url" ? values.coverUrl?.trim() || "" : "";
         if (!coverResourceId && !coverUrl) { message.error("请上传封面或填写 HTTPS 封面地址"); return; }
+        const coverIdentity = coverResourceId || coverUrl;
+        const dimensions = coverDimensions?.source === coverIdentity ? coverDimensions : null;
+        if (!dimensions) { message.error("正在读取封面尺寸，请确认图片可以正常显示后再保存"); return; }
         const payload: InspirationInput = {
             title: values.title.trim(), description: values.description.trim(), mode: values.mode, prompt: values.prompt.trim(),
             tags: parseTags(values.tags), source: values.source?.trim() || "",
-            coverResourceId, coverUrl,
+            coverResourceId, coverUrl, coverWidth: dimensions.width, coverHeight: dimensions.height,
         };
         setSaving(true);
         try {
@@ -165,9 +174,11 @@ export default function AdminInspirationsPanel() {
     const uploadCover = async (file: File) => {
         setUploading(true);
         try {
+            const dimensions = await readImageFileSize(file);
             if (draftCoverId) await discardAdminInspirationCover(draftCoverId).catch(() => undefined);
-            const result = await uploadAdminInspirationCover(file);
+            const result = await uploadAdminInspirationCover(file, dimensions);
             setDraftCoverId(result.resource.id);
+            setCoverDimensions({ source: result.resource.id, width: result.resource.width || dimensions.width, height: result.resource.height || dimensions.height });
             form.setFieldValue("coverKind", "upload");
             message.success("封面已上传，保存后正式使用");
         } catch (error) { message.error(error instanceof Error ? error.message : "上传失败"); }
@@ -214,6 +225,8 @@ export default function AdminInspirationsPanel() {
     ];
 
     const previewCover = draftCoverId ? inspirationDraftCoverUrl(draftCoverId) : watched?.coverKind === "url" ? watched.coverUrl || "" : editing ? inspirationCoverUrl(editing) : "";
+    const previewCoverIdentity = draftCoverId || (watched?.coverKind === "url" ? watched.coverUrl?.trim() || "" : editing?.coverResourceId || "");
+    const previewDimensions = coverDimensions?.source === previewCoverIdentity ? coverDimensions : null;
     const selectedItems = items.filter((item) => selected.includes(item.id));
     return <>
         <AdminDataTable
@@ -237,13 +250,13 @@ export default function AdminInspirationsPanel() {
                     <Form.Item label="卡片说明" name="description" rules={[{required:true,message:"请输入卡片说明"},{max:240}]}><Input.TextArea rows={3} placeholder="用于首页卡片的简短预览说明" /></Form.Item>
                     <Form.Item label="来源署名" name="source" rules={[{max:120}]}><Input placeholder="可选；留空时首页显示原创提示词" /></Form.Item>
                 </Form>
-                <aside className="admin-inspiration-preview"><span>首页卡片实时预览</span><div className="admin-inspiration-preview-card">{previewCover ? <img src={previewCover} alt="" referrerPolicy="no-referrer" /> : <div className="admin-inspiration-preview-empty">等待选择封面</div>}<div><strong>{watched?.title || "提示词标题"}</strong><p>{watched?.description || "卡片说明会显示在这里"}</p><small>{watched?.source ? "开源改编 · CC0" : "原创提示词"} · {modeLabels[watched?.mode || "image"]}</small></div></div><p>预览不等于发布。新增内容保存后默认为停用状态。</p></aside>
+                <aside className="admin-inspiration-preview"><span>首页卡片实时预览</span><div className="admin-inspiration-preview-card">{previewCover ? <img src={previewCover} alt="" width={previewDimensions?.width} height={previewDimensions?.height} style={previewDimensions ? { aspectRatio: `${previewDimensions.width} / ${previewDimensions.height}` } : undefined} referrerPolicy="no-referrer" onLoad={(event) => { if (!previewCoverIdentity) return; const image = event.currentTarget; if (image.naturalWidth > 0 && image.naturalHeight > 0) setCoverDimensions({ source: previewCoverIdentity, width: image.naturalWidth, height: image.naturalHeight }); }} /> : <div className="admin-inspiration-preview-empty">等待选择封面</div>}<div><strong>{watched?.title || "提示词标题"}</strong><p>{watched?.description || "卡片说明会显示在这里"}</p><small>{watched?.source ? "开源改编 · CC0" : "原创提示词"} · {modeLabels[watched?.mode || "image"]}</small></div></div><p>图片按原始比例展示。预览不等于发布，新增内容保存后默认为停用状态。</p></aside>
             </div>
         </AdminModal>
 
         <Modal title="调整精选灵感顺序" open={orderOpen} onCancel={() => setOrderOpen(false)} width={620} confirmLoading={orderSaving} onOk={() => void saveOrder()} okButtonProps={{disabled:orderLoading || orderItems.every((item,index)=>item.id===orderOriginal[index])}} okText="保存排序" cancelText="取消">
-            <p className="text-sm text-foreground/60">拖动条目或使用箭头调整全量顺序；第一条已启用内容是首页主卡。</p>
-            <Spin spinning={orderLoading}><div className="admin-inspiration-order-list">{orderItems.map((item,index)=><div key={item.id} draggable={!orderSaving} onDragStart={()=>{dragged.current=item.id;}} onDragOver={(event)=>event.preventDefault()} onDrop={()=>{if(dragged.current)setOrderItems((current)=>moveOrderItem(current,dragged.current!,index));dragged.current=null;}}><GripVertical className="size-4" /><span>{item.name}{!item.enabled ? <small>已停用</small> : index === orderItems.findIndex((row)=>row.enabled) ? <small>首页主卡</small> : null}</span><Button icon={<ArrowUp className="size-4" />} disabled={index===0} onClick={()=>setOrderItems((current)=>moveOrderItem(current,item.id,index-1))} /><Button icon={<ArrowDown className="size-4" />} disabled={index===orderItems.length-1} onClick={()=>setOrderItems((current)=>moveOrderItem(current,item.id,index+1))} /></div>)}</div></Spin>
+            <p className="text-sm text-foreground/60">拖动条目或使用箭头调整全量顺序；第一条已启用内容显示在首页首位。</p>
+            <Spin spinning={orderLoading}><div className="admin-inspiration-order-list">{orderItems.map((item,index)=><div key={item.id} draggable={!orderSaving} onDragStart={()=>{dragged.current=item.id;}} onDragOver={(event)=>event.preventDefault()} onDrop={()=>{if(dragged.current)setOrderItems((current)=>moveOrderItem(current,dragged.current!,index));dragged.current=null;}}><GripVertical className="size-4" /><span>{item.name}{!item.enabled ? <small>已停用</small> : index === orderItems.findIndex((row)=>row.enabled) ? <small>首页首位</small> : null}</span><Button icon={<ArrowUp className="size-4" />} disabled={index===0} onClick={()=>setOrderItems((current)=>moveOrderItem(current,item.id,index-1))} /><Button icon={<ArrowDown className="size-4" />} disabled={index===orderItems.length-1} onClick={()=>setOrderItems((current)=>moveOrderItem(current,item.id,index+1))} /></div>)}</div></Spin>
         </Modal>
     </>;
 }

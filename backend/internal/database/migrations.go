@@ -12,7 +12,7 @@ import (
 	"gorm.io/gorm"
 )
 
-const CurrentSchemaVersion int64 = 26
+const CurrentSchemaVersion int64 = 27
 
 //go:embed seed/inspirations.json
 var inspirationSeedJSON []byte
@@ -103,6 +103,9 @@ var schemaMigrations = []migration{
 	{version: 25, name: "featured_inspirations", checksum: "sha256:featured-inspirations-v25-20260920", apply: migrateSchemaV25},
 	{version: 26, name: "user_prompt_library", checksum: "sha256:user-prompt-library-v26-20260920", apply: func(tx *gorm.DB) error {
 		return tx.AutoMigrate(&model.UserPrompt{})
+	}},
+	{version: 27, name: "inspiration_cover_dimensions", checksum: "sha256:inspiration-cover-dimensions-v27-20260921", apply: func(tx *gorm.DB) error {
+		return tx.AutoMigrate(&model.Inspiration{})
 	}},
 }
 

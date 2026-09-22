@@ -1,6 +1,9 @@
 import { fitNodeSize } from "@/lib/canvas/canvas-node-size";
 import { NODE_DEFAULT_SIZE } from "@/constant/canvas";
+import { readImageFileSize } from "@/lib/image-utils";
 import { CanvasNodeType, type CanvasNodeData, type Position } from "@/types/canvas";
+
+export const readUploadImageSize = readImageFileSize;
 
 export const CANVAS_UPLOAD_ACCEPT = "image/*,video/*,audio/*,.mp3,.wav,text/plain,text/markdown,.txt,.md,.markdown";
 export function isTextUploadFile(file: Pick<File, "name" | "type">) {
@@ -53,20 +56,6 @@ async function readUploadVideoSize(file: File): Promise<[number, number]> {
         video.onerror = null;
         video.removeAttribute("src");
         video.load();
-        URL.revokeObjectURL(url);
-    }
-}
-
-// 不使用 readImageMeta 的默认尺寸兜底：上传占位必须来自实际解码尺寸。
-export async function readUploadImageSize(file: File): Promise<{ width: number; height: number }> {
-    const url = URL.createObjectURL(file);
-    const image = new Image();
-    try {
-        image.src = url;
-        await image.decode();
-        if (!image.naturalWidth || !image.naturalHeight) throw new Error("无法读取图片尺寸，请重新选择图片");
-        return { width: image.naturalWidth, height: image.naturalHeight };
-    } finally {
         URL.revokeObjectURL(url);
     }
 }

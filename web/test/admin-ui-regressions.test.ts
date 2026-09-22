@@ -177,11 +177,15 @@ test("top-up product editor uses a centered responsive modal", async () => {
 
     expect(productEditor).toContain('title={productDrawer ? "编辑充值商品" : "新增充值商品"}');
     expect(productEditor).toContain('rootClassName="admin-payment-product-modal"');
-    expect(productEditor).toContain('width="min(680px, calc(100vw - 32px))"');
+    expect(productEditor).toContain('width="min(1180px, calc(100vw - 32px))"');
     expect(productEditor).toContain("maskClosable={!productSaving}");
+    expect(productEditor).toContain('className="admin-payment-product-preview"');
+    expect(productEditor).toContain("<CreditProductCard");
+    expect(source).toContain("Form.useWatch([], productForm)");
     expect(productEditor).toContain("保存商品");
     expect(productEditor).not.toContain("<Drawer");
     expect(compactSource(css)).toContain(".admin-payment-product-modal .ant-modal-body { max-height: min(72vh, 680px);");
+    expect(compactSource(css)).toContain(".admin-payment-product-editor-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 370px);");
     expect(compactSource(css)).toContain(".admin-payment-product-modal .grid.grid-cols-2 { grid-template-columns: minmax(0, 1fr);");
 });
 
@@ -220,8 +224,11 @@ test("featured inspiration operations stay connected from admin to the creation 
     expect(panelSource).toContain("saveAdminInspirationOrder(orderItems.map((item) => item.id), orderOriginal)");
     expect(panelSource).toContain('message.success(editing ? "精选灵感已更新" : "精选灵感已保存为停用状态")');
     expect(apiSource).toContain('http.put<{ saved: boolean }>("/admin/inspirations/order", { ids, expectedIds })');
-    expect(workspaceSource).toContain("listInspirations()");
-    expect(workspaceSource).toContain('setError(reason instanceof Error ? reason.message : "精选灵感暂时无法加载")');
+    expect(workspaceSource).toContain("listInspirations(controller.signal)");
+    expect(workspaceSource).toContain("creationInspirationDimensions(item)");
+    expect(panelSource).toContain("readImageFileSize(file)");
+    expect(apiSource).toContain('body.append("width", String(dimensions.width))');
+    expect(workspaceSource).toContain('reason instanceof Error ? reason.message : `${source === "featured" ? "全部" : "个人"}灵感暂时无法加载`');
     expect(workspaceSource).not.toContain("creationFeaturedWorks");
 });
 

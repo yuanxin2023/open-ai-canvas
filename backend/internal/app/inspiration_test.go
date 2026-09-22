@@ -19,6 +19,8 @@ func TestNormalizeInspirationRequest(t *testing.T) {
 		Prompt:      "  生成一张电影感海报  ",
 		Tags:        []string{" 海报 ", "海报", "CINEMA", "cinema"},
 		CoverURL:    "https://example.com/cover.webp",
+		CoverWidth:  900,
+		CoverHeight: 1200,
 	}
 	normalized, tagsJSON, err := normalizeInspirationRequest(request, false)
 	if err != nil {
@@ -41,6 +43,10 @@ func TestNormalizeInspirationRequest(t *testing.T) {
 	if _, _, err := normalizeInspirationRequest(request, true); err != nil {
 		t.Fatalf("existing migrated cover should remain editable: %v", err)
 	}
+	request.CoverWidth = 0
+	if _, _, err := normalizeInspirationRequest(request, true); err == nil || !strings.Contains(err.Error(), "尺寸") {
+		t.Fatalf("inspirations must require confirmed cover dimensions: %v", err)
+	}
 }
 
 func TestInspirationCreateEnableAndOrderLifecycle(t *testing.T) {
@@ -54,7 +60,7 @@ func TestInspirationCreateEnableAndOrderLifecycle(t *testing.T) {
 	svc := New(repository.New(db), t.TempDir())
 	admin := &model.User{ID: "admin", Role: model.UserRoleAdmin, Status: model.UserStatusActive}
 	user := &model.User{ID: "user", Role: model.UserRoleUser, Status: model.UserStatusActive}
-	first, err := svc.CreateInspiration(admin, InspirationRequest{Title: "第一条", Description: "卡片说明", Mode: model.InspirationModeImage, Prompt: "生成提示词", CoverURL: "https://example.com/one.webp", Tags: []string{" 海报 ", "海报"}})
+	first, err := svc.CreateInspiration(admin, InspirationRequest{Title: "第一条", Description: "卡片说明", Mode: model.InspirationModeImage, Prompt: "生成提示词", CoverURL: "https://example.com/one.webp", CoverWidth: 900, CoverHeight: 1200, Tags: []string{" 海报 ", "海报"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +74,7 @@ func TestInspirationCreateEnableAndOrderLifecycle(t *testing.T) {
 	if _, err := svc.SetInspirationStatus(admin, first.ID, model.InspirationStatusActive); err != nil {
 		t.Fatal(err)
 	}
-	second, err := svc.CreateInspiration(admin, InspirationRequest{Title: "第二条", Description: "另一张卡片", Mode: model.InspirationModeText, Prompt: "写一段文字", CoverURL: "https://example.com/two.webp"})
+	second, err := svc.CreateInspiration(admin, InspirationRequest{Title: "第二条", Description: "另一张卡片", Mode: model.InspirationModeText, Prompt: "写一段文字", CoverURL: "https://example.com/two.webp", CoverWidth: 1600, CoverHeight: 900})
 	if err != nil {
 		t.Fatal(err)
 	}

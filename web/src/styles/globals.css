@@ -2273,123 +2273,224 @@
     height: 40px;
     }
 
+    .workspace-credit-products-modal .ant-modal-container {
+    border-radius: 28px !important;
+    }
+
+    .workspace-credit-products-modal .ant-modal-close {
+    top: 18px;
+    inset-inline-end: 20px;
+    border-radius: var(--r-full);
+    color: color-mix(in srgb, var(--foreground) 48%, transparent);
+    }
+
     .workspace-credit-products-shell {
-    max-height: calc(100vh - 48px);
-    min-height: min(680px, calc(100vh - 48px));
+    max-height: calc(100vh - 40px);
+    min-height: min(760px, calc(100vh - 40px));
     overflow-y: auto;
-    padding: 38px 32px 32px;
-    background: color-mix(in srgb, var(--background) 95%, var(--foreground));
+    padding: 48px 34px 38px;
+    background: color-mix(in srgb, var(--background) 97%, var(--foreground));
     }
 
     .workspace-credit-products-header {
+    display: flex;
+    align-items: center;
+    flex-direction: column;
     text-align: center;
     }
 
     .workspace-credit-products-header h2 {
-    font-size: clamp(24px, 3vw, 32px);
-    font-weight: 650;
-    letter-spacing: -0.02em;
+    margin: 0;
+    font-family: "Source Han Serif SC", "Noto Serif CJK SC", "Songti SC", STSong, SimSun, serif;
+    font-size: clamp(34px, 4vw, 48px);
+    font-weight: 400;
+    letter-spacing: -0.045em;
+    line-height: 1.15;
     }
 
     .workspace-credit-products-header p {
-    margin-top: 10px;
-    color: color-mix(in srgb, var(--foreground) 58%, transparent);
-    font-size: var(--fs-body);
+    margin: 14px 0 0;
+    color: color-mix(in srgb, var(--foreground) 56%, transparent);
+    font-size: var(--fs-body-lg);
+    line-height: 1.6;
+    }
+
+    .workspace-credit-products-balance {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    margin-top: 20px;
+    border: 1px solid var(--workspace-border);
+    border-radius: var(--r-full);
+    padding: 8px 14px;
+    background: var(--workspace-surface-strong);
+    color: color-mix(in srgb, var(--foreground) 66%, transparent);
+    font-size: var(--fs-label);
+    font-variant-numeric: tabular-nums;
+    }
+
+    .workspace-credit-products-balance svg {
+    width: 15px;
+    height: 15px;
+    color: var(--workspace-accent);
     }
 
     .workspace-credit-products-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(min(250px, 100%), 1fr));
-    justify-content: center;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     align-items: stretch;
     gap: 16px;
-    margin-top: 30px;
+    margin-top: 42px;
     }
 
     .workspace-credit-product-card {
     display: flex;
-    min-height: 440px;
+    min-width: 0;
+    min-height: 610px;
     flex-direction: column;
     border: 1px solid var(--workspace-border);
-    border-radius: var(--r-xl);
-    padding: 22px 20px 20px;
+    border-radius: 20px;
+    padding: 28px 26px 24px;
     background: var(--workspace-surface-strong);
-    box-shadow: 0 10px 30px color-mix(in srgb, var(--foreground) 7%, transparent), 0 1px 3px color-mix(in srgb, var(--foreground) 5%, transparent);
+    transition: border-color var(--motion-fast) ease, box-shadow var(--motion-fast) ease, transform var(--motion-fast) ease;
+    }
+
+    .workspace-credit-product-card:hover {
+    border-color: color-mix(in srgb, var(--foreground) 24%, var(--workspace-border));
+    box-shadow: 0 18px 44px color-mix(in srgb, var(--foreground) 8%, transparent);
+    transform: translateY(-2px);
+    }
+
+    .workspace-credit-product-card.is-best-value {
+    border-color: color-mix(in srgb, var(--workspace-accent) 62%, var(--workspace-border));
+    box-shadow: inset 0 3px 0 color-mix(in srgb, var(--workspace-accent) 72%, transparent);
     }
 
     .workspace-credit-product-card-heading {
     display: flex;
+    min-width: 0;
+    min-height: 28px;
     align-items: center;
-    gap: 9px;
-    }
-
-    .workspace-credit-product-card-heading svg {
-    width: 18px;
-    height: 18px;
-    flex: 0 0 auto;
-    color: var(--workspace-accent);
+    justify-content: space-between;
+    gap: 10px;
     }
 
     .workspace-credit-product-card-heading h3 {
     min-width: 0;
     overflow: hidden;
-    font-size: var(--fs-body-lg);
-    font-weight: 650;
+    font-size: 24px;
+    font-weight: 520;
+    letter-spacing: -0.025em;
     text-overflow: ellipsis;
     white-space: nowrap;
     }
 
+    .workspace-credit-product-card-heading span {
+    flex: 0 0 auto;
+    border-radius: var(--r-md);
+    padding: 5px 8px;
+    background: color-mix(in srgb, var(--workspace-accent) 18%, var(--workspace-surface-strong));
+    color: var(--workspace-accent);
+    font-size: var(--fs-micro);
+    font-weight: 650;
+    }
+
     .workspace-credit-product-price {
     display: flex;
-    align-items: baseline;
+    align-items: flex-start;
     gap: 5px;
-    margin-top: 22px;
+    margin-top: 28px;
     font-variant-numeric: tabular-nums;
     }
 
     .workspace-credit-product-price small {
-    color: color-mix(in srgb, var(--foreground) 54%, transparent);
-    font-size: var(--fs-body);
+    margin-top: 8px;
+    color: var(--foreground);
+    font-size: 20px;
+    font-weight: 550;
     }
 
     .workspace-credit-product-price strong {
-    font-size: 34px;
-    font-weight: 650;
-    letter-spacing: -0.035em;
+    font-size: clamp(40px, 4vw, 52px);
+    font-weight: 560;
+    letter-spacing: -0.055em;
+    line-height: 1;
     }
 
     .workspace-credit-product-description {
-    min-height: 42px;
-    margin-top: 8px;
-    color: color-mix(in srgb, var(--foreground) 52%, transparent);
+    min-height: 44px;
+    margin-top: 12px;
+    color: color-mix(in srgb, var(--foreground) 48%, transparent);
     font-size: var(--fs-label);
     line-height: 1.65;
     white-space: pre-line;
     }
 
-    .workspace-credit-product-credits {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-top: 20px;
-    font-size: var(--fs-body-lg);
+    .workspace-credit-product-action.ant-btn {
+    height: 46px;
+    margin-top: 22px;
+    border-radius: var(--r-full);
+    font-weight: 620;
     }
 
-    .workspace-credit-product-credits svg {
-    width: 18px;
-    height: 18px;
-    color: var(--workspace-accent);
+    .workspace-credit-product-card.is-best-value .workspace-credit-product-action.ant-btn-primary {
+    border-color: var(--foreground);
+    background: var(--foreground);
+    color: var(--background);
+    box-shadow: none;
+    }
+
+    .workspace-credit-product-quota {
+    display: grid;
+    gap: 5px;
+    margin-top: 26px;
+    border-top: 1px solid var(--workspace-border);
+    padding-top: 24px;
+    }
+
+    .workspace-credit-product-quota strong {
+    font-size: var(--fs-body);
+    font-weight: 650;
+    }
+
+    .workspace-credit-product-quota span {
+    color: color-mix(in srgb, var(--foreground) 46%, transparent);
+    font-size: var(--fs-micro);
+    line-height: 1.5;
+    }
+
+    .workspace-credit-product-meter {
+    display: grid;
+    grid-template-columns: repeat(28, minmax(2px, 1fr));
+    gap: 3px;
+    margin-top: 15px;
+    }
+
+    .workspace-credit-product-meter i {
+    height: 14px;
+    border-radius: var(--r-full);
+    background: color-mix(in srgb, var(--foreground) 10%, transparent);
+    }
+
+    .workspace-credit-product-meter i.is-active {
+    background: var(--foreground);
     }
 
     .workspace-credit-product-facts {
     display: grid;
-    gap: 10px;
-    margin: 20px 0 18px;
-    padding-top: 18px;
-    border-top: 1px solid var(--workspace-border);
-    color: color-mix(in srgb, var(--foreground) 72%, transparent);
+    align-content: start;
+    gap: 11px;
+    margin-top: 24px;
+    border-radius: var(--r-lg);
+    padding: 17px 16px;
+    background: color-mix(in srgb, var(--foreground) 3.5%, transparent);
+    color: color-mix(in srgb, var(--foreground) 74%, transparent);
     font-size: var(--fs-label);
     line-height: 1.55;
+    }
+
+    .workspace-credit-product-card.is-best-value .workspace-credit-product-facts {
+    background: color-mix(in srgb, var(--workspace-accent) 7%, var(--workspace-surface-strong));
     }
 
     .workspace-credit-product-facts span {
@@ -2399,16 +2500,11 @@
     }
 
     .workspace-credit-product-facts svg {
-    width: 15px;
-    height: 15px;
-    margin-top: 2px;
+    width: 14px;
+    height: 14px;
+    margin-top: 3px;
     flex: 0 0 auto;
-    color: color-mix(in srgb, var(--foreground) 48%, transparent);
-    }
-
-    .workspace-credit-product-card > .ant-btn {
-    height: 40px;
-    margin-top: auto;
+    color: var(--foreground);
     }
 
     .workspace-credit-products-state {
@@ -2434,8 +2530,8 @@
     .workspace-credit-product-skeleton.ant-skeleton-element,
     .workspace-credit-product-skeleton .ant-skeleton-image {
     width: 100% !important;
-    height: 440px !important;
-    border-radius: var(--r-xl) !important;
+    height: 610px !important;
+    border-radius: 20px !important;
     }
 
     .workspace-credit-checkout-shell {
@@ -2609,22 +2705,31 @@
     .workspace-credit-payment-details dd { min-width: 0; overflow: hidden; color: color-mix(in srgb, var(--foreground) 70%, transparent); font-family: var(--font-mono); text-overflow: ellipsis; white-space: nowrap; }
     .workspace-credit-payment-details > .ant-btn { min-width: 150px; }
 
+    @media (max-width: 1100px) {
+    .workspace-credit-products-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+
     @media (max-width: 640px) {
     .workspace-credit-products-shell {
     max-height: calc(100vh - 24px);
     min-height: 0;
     overflow-y: auto;
-    padding: 34px 16px 20px;
+    padding: 42px 16px 20px;
     }
 
     .workspace-credit-products-grid {
+    grid-template-columns: minmax(0, 1fr);
     gap: 14px;
-    margin-top: 26px;
+    margin-top: 32px;
     }
 
     .workspace-credit-product-card {
-    min-height: 440px;
+    min-height: 0;
+    padding: 24px 20px 20px;
     }
+
+    .workspace-credit-products-header h2 { font-size: 34px; }
+    .workspace-credit-products-header p { max-width: 28ch; font-size: var(--fs-body); }
 
     .workspace-credit-checkout-shell { padding: 24px 18px 20px; }
     .workspace-credit-provider-options { grid-template-columns: minmax(0, 1fr); }
@@ -17596,8 +17701,9 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap { box-shadow: 0 
 
 .creation-featured-layout {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-    gap: 16px;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-auto-rows: 2px;
+    gap: 12px;
 }
 
 .creation-featured-grid {
@@ -17609,6 +17715,9 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap { box-shadow: 0 
 .creation-featured-card {
     display: flex;
     min-width: 0;
+    width: 100%;
+    height: max-content;
+    align-self: start;
     flex-direction: column;
     overflow: hidden;
     border: 1px solid rgba(28, 28, 32, .075);
@@ -17637,14 +17746,9 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap { box-shadow: 0 
     position: relative;
     display: block;
     width: 100%;
-    aspect-ratio: 16 / 9;
+    aspect-ratio: 16 / 10;
     overflow: hidden;
     background: #ececef;
-}
-
-.creation-featured-card.is-hero .creation-featured-media {
-    flex: 1 1 auto;
-    min-height: 322px;
 }
 
 .creation-featured-media::after {
@@ -17660,8 +17764,7 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap { box-shadow: 0 
 .creation-featured-media img {
     display: block;
     width: 100%;
-    height: 100%;
-    object-fit: cover;
+    height: auto;
     transition: transform 500ms cubic-bezier(.16, 1, .3, 1), filter 220ms ease;
 }
 
@@ -18405,8 +18508,6 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap { box-shadow: 0 
 
 @media (max-width: 980px) {
     .app-user-workspace .creation-empty-workspace { width: min(100% - 28px, 860px); }
-    .creation-featured-layout { grid-template-columns: 1fr; }
-    .creation-featured-card.is-hero .creation-featured-media { min-height: 0; aspect-ratio: 16 / 8; }
 }
 
 @media (max-width: 700px) {
@@ -19577,30 +19678,22 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap { box-shadow: 0 
 .app-user-workspace .creation-featured-heading span { color: var(--user-ink-soft) !important; font-size: 13px !important; }
 .app-user-workspace .creation-featured-heading h2 { color: var(--user-ink) !important; font-size: 22px !important; letter-spacing: -.025em !important; }
 .app-user-workspace .creation-featured-heading p { color: var(--user-ink-muted) !important; }
-.app-user-workspace .creation-featured-layout { gap: 18px !important; }
+.app-user-workspace .creation-featured-layout { gap: 12px !important; }
 .app-user-workspace .creation-featured-card { border: 0 !important; border-radius: var(--user-radius-card) !important; background: var(--user-surface) !important; box-shadow: var(--user-shadow-card) !important; }
 .app-user-workspace .creation-featured-card:hover,
 .app-user-workspace .creation-featured-card:focus-visible { border-color: var(--user-border-strong) !important; box-shadow: var(--user-shadow-hover) !important; transform: translateY(-2px) !important; }
+.app-user-workspace .creation-featured-card:hover .creation-featured-media img,
+.app-user-workspace .creation-featured-card:focus-visible .creation-featured-media img { transform: none; }
 .app-user-workspace .creation-featured-copy strong { color: var(--user-ink) !important; }
 .app-user-workspace .creation-featured-copy > span { color: var(--user-ink-muted) !important; }
 .app-user-workspace .creation-featured-copy em { color: var(--user-accent) !important; }
 
-/* 首页精选灵感：一张主推荐带动右侧节奏，避免机械等宽网格。 */
+/* 首页灵感保留原图比例，以等宽瀑布流承接横图、方图与竖图。 */
 .app-user-workspace .creation-featured-layout {
-    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
-    grid-auto-rows: auto;
-    align-items: stretch;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
 }
-.app-user-workspace .creation-featured-card.is-featured-hero { grid-column: span 2; grid-row: span 2; }
-.app-user-workspace .creation-featured-card.is-featured-hero .creation-featured-media { flex: 1 1 auto; min-height: 0; aspect-ratio: auto; }
-.app-user-workspace .creation-featured-card.is-featured-hero .creation-featured-media img { position: absolute; inset: 0; }
-.app-user-workspace .creation-featured-card:not(.is-featured-hero) .creation-featured-media { aspect-ratio: 1.55 / 1; }
-.app-user-workspace .creation-featured-layout > .creation-featured-card:nth-child(4) { grid-column: span 2; min-height: clamp(160px, 14vw, 210px); flex-direction: row; }
-.app-user-workspace .creation-featured-layout > .creation-featured-card:nth-child(4) .creation-featured-media { width: 48%; height: 100%; flex: 0 0 48%; aspect-ratio: auto; }
-.app-user-workspace .creation-featured-layout > .creation-featured-card:nth-child(4) .creation-featured-media img { position: absolute; inset: 0; }
-.app-user-workspace .creation-featured-layout > .creation-featured-card:nth-child(4) .creation-featured-copy { align-content: center; flex: 1; padding: 18px 22px; }
-.app-user-workspace .creation-featured-card:not(.is-featured-hero) .creation-featured-copy { padding: 12px 14px 14px; }
-.app-user-workspace .creation-featured-card:not(.is-featured-hero) .creation-featured-copy > span { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.app-user-workspace .creation-featured-copy { padding: 12px 14px 14px; }
+.app-user-workspace .creation-featured-copy > span { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: normal; }
 
 /* 对话记录统一成窄而有层次的工作区，不让输入区吞掉首屏。 */
 .app-user-workspace .creation-thread-toolbar,
@@ -19645,17 +19738,15 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap { box-shadow: 0 
 .app-user-workspace .creation-history-drawer .ant-drawer-body { background: var(--user-bg); }
 
 @media (max-width: 720px) {
-    .app-user-workspace .creation-featured-layout { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; grid-auto-rows: auto; }
-    .app-user-workspace .creation-featured-card.is-featured-hero { grid-column: 1 / -1; grid-row: auto; }
-    .app-user-workspace .creation-featured-card.is-featured-hero .creation-featured-media { flex: none; aspect-ratio: 1.7 / 1; }
-    .app-user-workspace .creation-featured-card.is-featured-hero .creation-featured-media img { position: static; }
-    .app-user-workspace .creation-featured-layout > .creation-featured-card:nth-child(4) { grid-column: auto; min-height: 0; flex-direction: column; }
-    .app-user-workspace .creation-featured-layout > .creation-featured-card:nth-child(4) .creation-featured-media { width: 100%; height: auto; flex: none; aspect-ratio: 1.55 / 1; }
-    .app-user-workspace .creation-featured-layout > .creation-featured-card:nth-child(4) .creation-featured-media img { position: static; }
+    .app-user-workspace .creation-featured-layout { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     .app-user-workspace .creation-thread-toolbar,
     .app-user-workspace .creation-thread-stage,
     .app-user-workspace .creation-thread-composer { width: calc(100% - 28px); }
     .app-user-workspace .creation-home .creation-user-message { width: 90%; }
+}
+
+@media (max-width: 480px) {
+    .app-user-workspace .creation-featured-layout { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 /* Shared library surfaces: no dark-mode geometry fork, only token changes. */
@@ -19788,6 +19879,7 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap { box-shadow: 0 
     width: min(360px, calc(100vw - 24px)) !important;
     padding: 10px !important;
 }
+
 .creation-model-picker-surface .creation-model-picker-menu.is-direct-list {
     max-height: min(520px, calc(100vh - 24px)) !important;
     overflow-x: hidden !important;

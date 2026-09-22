@@ -8,6 +8,7 @@ import dayjs, { type Dayjs } from "dayjs";
 import { Eye, Plus, RefreshCw, Search, Settings2, XCircle } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { CreditProductCard, findBestValueProductId, type CreditProductCardData } from "@/components/payments/credit-product-card";
 import { PaginationBar } from "@/pages/admin/components/admin-ui";
 import { formatCredits } from "@/constant/credits";
 import {
@@ -89,6 +90,25 @@ export default function AdminPaymentsPage() {
     const [productDrawer, setProductDrawer] = useState<TopupProduct | null | undefined>();
     const [productSaving, setProductSaving] = useState(false);
     const [productForm] = Form.useForm<ProductFormValues>();
+    const watchedProduct = Form.useWatch([], productForm) as ProductFormValues | undefined;
+    const productPreview = useMemo<CreditProductCardData>(() => {
+        const amountYuan = finiteNumber(watchedProduct?.amountYuan, productDrawer?.amountFen ? productDrawer.amountFen / 100 : 10);
+        const credits = finiteNumber(watchedProduct?.credits, productDrawer?.creditsMicrocredits ? productDrawer.creditsMicrocredits / 1_000_000 : 10);
+        return {
+            id: productDrawer?.id || "admin-product-preview",
+            name: watchedProduct?.name?.trim() || "套餐名称",
+            description: watchedProduct?.description?.trim(),
+            benefits: watchedProduct?.benefits,
+            amountFen: Math.max(0, Math.round(amountYuan * 100)),
+            creditsMicrocredits: Math.max(0, Math.round(credits * 1_000_000)),
+        };
+    }, [productDrawer, watchedProduct]);
+    const productPreviewCatalog = useMemo(
+        () => [...products.filter((product) => product.enabled && product.id !== productPreview.id), productPreview],
+        [productPreview, products],
+    );
+    const productPreviewMaxCredits = useMemo(() => productPreviewCatalog.reduce((maximum, product) => Math.max(maximum, product.creditsMicrocredits), 0), [productPreviewCatalog]);
+    const productPreviewIsBestValue = watchedProduct?.enabled !== false && findBestValueProductId(productPreviewCatalog) === productPreview.id;
 
     const [orders, setOrders] = useState<AdminPaymentOrder[]>([]);
     const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
@@ -818,7 +838,7 @@ export default function AdminPaymentsPage() {
             <AdminModal
                 centered
                 title={productDrawer ? "编辑充值商品" : "新增充值商品"}
-                width="min(680px, calc(100vw - 32px))"
+                width="min(1180px, calc(100vw - 32px))"
                 open={productDrawer !== undefined}
                 rootClassName="admin-payment-product-modal"
                 closable={!productSaving}
@@ -837,42 +857,64 @@ export default function AdminPaymentsPage() {
                 }
             >
                 <Form form={productForm} layout="vertical" requiredMark="optional">
-                    <Form.Item name="name" label="商品名称" rules={[{ required: true, max: 120 }]}>
-                        <Input placeholder="例如：100 积分" />
-                    </Form.Item>
-                    <Form.Item name="description" label="商品说明" rules={[{ max: 500 }]}>
-                        <Input.TextArea rows={3} />
-                    </Form.Item>
-                    <Form.Item name="benefits" label="套餐权益（每行一项）" rules={[{ max: 1000 }]} extra="用户端商品卡片会将每一行显示为一条勾选说明；留空则不显示权益区域。">
-                        <Input.TextArea rows={4} placeholder={'例如：\n支持图片与文本生成\n支付成功后积分自动到账'} />
-                    </Form.Item>
-                    <div className="grid grid-cols-2 gap-3">
-                        <Form.Item name="amountYuan" label="售价（元）" rules={[{ required: true }, { type: "number", min: 0.01, max: 1_000_000 }]}>
-                            <InputNumber min={0.01} max={1_000_000} precision={2} className="w-full" />
-                        </Form.Item>
-                        <Form.Item
-                            name="credits"
-                            label="到账积分"
-                            rules={[
-                                { required: true },
-                                {
-                                    validator: (_, value) => {
-                                        const credits = Number(value);
-                                        const microcredits = Math.round(credits * 1_000_000);
-                                        return Number.isFinite(credits) && credits >= 0.01 && credits <= 1_000_000_000 && Number.isSafeInteger(microcredits) ? Promise.resolve() : Promise.reject(new Error("请输入 0.01 至 10 亿之间且可安全处理的积分"));
-                                    },
-                                },
-                            ]}
-                        >
-                            <InputNumber min={0.01} max={1_000_000_000} precision={2} className="w-full" />
-                        </Form.Item>
+                    <div className="admin-payment-product-editor-layout">
+                        <div className="admin-payment-product-editor-fields">
+                            <Form.Item name="name" label="商品名称" rules={[{ required: true, max: 120 }]}>
+                                <Input placeholder="例如：100 积分" />
+                            </Form.Item>
+                            <Form.Item name="description" label="商品说明" rules={[{ max: 500 }]}>
+                                <Input.TextArea rows={3} />
+                            </Form.Item>
+                            <Form.Item name="benefits" label="套餐权益（每行一项）" rules={[{ max: 1000 }]} extra="用户端商品卡片会将每一行显示为一条勾选说明；留空则不显示权益区域。">
+                                <Input.TextArea rows={4} placeholder={'例如：\n支持图片与文本生成\n支付成功后积分自动到账'} />
+                            </Form.Item>
+                            <div className="grid grid-cols-2 gap-3">
+                                <Form.Item name="amountYuan" label="售价（元）" rules={[{ required: true }, { type: "number", min: 0.01, max: 1_000_000 }]}>
+                                    <InputNumber min={0.01} max={1_000_000} precision={2} className="w-full" />
+                                </Form.Item>
+                                <Form.Item
+                                    name="credits"
+                                    label="到账积分"
+                                    rules={[
+                                        { required: true },
+                                        {
+                                            validator: (_, value) => {
+                                                const credits = Number(value);
+                                                const microcredits = Math.round(credits * 1_000_000);
+                                                return Number.isFinite(credits) && credits >= 0.01 && credits <= 1_000_000_000 && Number.isSafeInteger(microcredits) ? Promise.resolve() : Promise.reject(new Error("请输入 0.01 至 10 亿之间且可安全处理的积分"));
+                                            },
+                                        },
+                                    ]}
+                                >
+                                    <InputNumber min={0.01} max={1_000_000_000} precision={2} className="w-full" />
+                                </Form.Item>
+                            </div>
+                            <Form.Item name="sortOrder" label="排序" rules={[{ required: true }]}>
+                                <InputNumber precision={0} className="w-full" />
+                            </Form.Item>
+                            <Form.Item name="enabled" label="上架销售" valuePropName="checked">
+                                <Switch />
+                            </Form.Item>
+                        </div>
+                        <aside className="admin-payment-product-preview" aria-label="前端支付套餐卡片预览">
+                            <header>
+                                <div>
+                                    <strong>前端卡片实时预览</strong>
+                                    <span>内容和样式与用户端购买弹窗一致</span>
+                                </div>
+                                <span className="admin-payment-product-preview-status">{watchedProduct?.enabled === false ? "未上架" : "上架后展示"}</span>
+                            </header>
+                            <div className="admin-payment-product-preview-card">
+                                <CreditProductCard
+                                    product={productPreview}
+                                    isBestValue={productPreviewIsBestValue}
+                                    maxCreditsMicrocredits={productPreviewMaxCredits}
+                                    preview
+                                />
+                            </div>
+                            <p>“积分更划算”会按当前已上架商品的积分与价格比例自动计算。</p>
+                        </aside>
                     </div>
-                    <Form.Item name="sortOrder" label="排序" rules={[{ required: true }]}>
-                        <InputNumber precision={0} className="w-full" />
-                    </Form.Item>
-                    <Form.Item name="enabled" label="上架销售" valuePropName="checked">
-                        <Switch />
-                    </Form.Item>
                 </Form>
             </AdminModal>
 
@@ -949,4 +991,9 @@ function PaymentBrandIcon({ providerId, compact = false }: { providerId: string;
 
 function formatDateTime(value: string) {
     return dayjs(value).format("YYYY-MM-DD HH:mm:ss");
+}
+
+function finiteNumber(value: unknown, fallback: number) {
+    const number = Number(value);
+    return Number.isFinite(number) ? number : fallback;
 }

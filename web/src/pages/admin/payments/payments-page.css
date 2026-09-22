@@ -23,9 +23,108 @@
     padding-right: 6px;
 }
 
+.admin-payment-product-editor-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(320px, 370px);
+    align-items: start;
+    gap: 28px;
+}
+
+.admin-payment-product-editor-fields {
+    min-width: 0;
+}
+
+.admin-payment-product-preview {
+    position: sticky;
+    top: 0;
+    min-width: 0;
+    border-left: 1px solid var(--admin-divider);
+    padding-left: 28px;
+}
+
+.admin-payment-product-preview > header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.admin-payment-product-preview > header > div {
+    display: grid;
+    min-width: 0;
+    gap: 4px;
+}
+
+.admin-payment-product-preview > header strong {
+    color: var(--admin-text);
+    font-size: 14px;
+    font-weight: 650;
+}
+
+.admin-payment-product-preview > header span,
+.admin-payment-product-preview > p {
+    color: var(--admin-text-muted);
+    font-size: 12px;
+    line-height: 1.55;
+}
+
+.admin-payment-product-preview-status {
+    flex: 0 0 auto;
+    border-radius: 999px;
+    padding: 3px 8px;
+    background: var(--admin-surface-2);
+}
+
+.admin-payment-product-preview-card {
+    pointer-events: none;
+}
+
+.admin-payment-product-preview-card .workspace-credit-product-card {
+    min-height: 540px;
+    border-radius: 16px;
+    padding: 24px 22px 22px;
+    box-shadow: none;
+    transform: none;
+}
+
+.admin-payment-product-preview-card .workspace-credit-product-card-heading h3 {
+    font-size: 21px;
+}
+
+.admin-payment-product-preview-card .workspace-credit-product-price strong {
+    font-size: 44px;
+}
+
+.admin-payment-product-preview > p {
+    margin-top: 12px;
+}
+
+@media (max-width: 900px) {
+    .admin-payment-product-editor-layout {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .admin-payment-product-preview {
+        position: static;
+        border-top: 1px solid var(--admin-divider);
+        border-left: 0;
+        padding-top: 24px;
+        padding-left: 0;
+    }
+
+    .admin-payment-product-preview-card {
+        max-width: 380px;
+    }
+}
+
 @media (max-width: 600px) {
     .admin-payment-product-modal .grid.grid-cols-2 {
         grid-template-columns: minmax(0, 1fr);
         gap: 0;
+    }
+
+    .admin-payment-product-preview-card {
+        max-width: none;
     }
 }

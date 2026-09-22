@@ -472,6 +472,8 @@ type Inspiration struct {
 	Source          string            `json:"source,omitempty" gorm:"size:120"`
 	CoverResourceID string            `json:"coverResourceId,omitempty" gorm:"index;size:36"`
 	CoverURL        string            `json:"coverUrl" gorm:"size:1000"`
+	CoverWidth      int               `json:"coverWidth"`
+	CoverHeight     int               `json:"coverHeight"`
 	Status          InspirationStatus `json:"status" gorm:"size:16;index"`
 	SortOrder       int64             `json:"sortOrder" gorm:"index"`
 	CreatedBy       string            `json:"createdBy" gorm:"size:36;index"`

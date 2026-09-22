@@ -1066,7 +1066,8 @@
 .admin-inspiration-preview > span { display: block; margin-bottom: 10px; color: var(--admin-text-secondary); font-weight: 650; }
 .admin-inspiration-preview > p { margin-top: 10px; line-height: 1.6; }
 .admin-inspiration-preview-card { overflow: hidden; border: 1px solid var(--admin-border); border-radius: var(--admin-radius-lg); background: var(--admin-surface); box-shadow: var(--admin-shadow-card); }
-.admin-inspiration-preview-card > img, .admin-inspiration-preview-empty { width: 100%; aspect-ratio: 16 / 10; background: var(--admin-surface-2); object-fit: cover; }
+.admin-inspiration-preview-card > img { display: block; width: 100%; height: auto; max-height: 520px; background: var(--admin-surface-2); object-fit: contain; }
+.admin-inspiration-preview-empty { width: 100%; aspect-ratio: 16 / 10; background: var(--admin-surface-2); }
 .admin-inspiration-preview-empty { display: grid; place-items: center; color: var(--admin-text-muted); }
 .admin-inspiration-preview-card > div:last-child { padding: 14px; }
 .admin-inspiration-preview-card strong { display: block; color: var(--admin-text); font-size: 15px; }

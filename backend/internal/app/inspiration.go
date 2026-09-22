@@ -29,6 +29,8 @@ type InspirationRequest struct {
 	Source          string                `json:"source"`
 	CoverResourceID string                `json:"coverResourceId"`
 	CoverURL        string                `json:"coverUrl"`
+	CoverWidth      int                   `json:"coverWidth"`
+	CoverHeight     int                   `json:"coverHeight"`
 }
 
 type InspirationPage struct {
@@ -115,6 +117,9 @@ func normalizeInspirationRequest(req InspirationRequest, allowBuiltInURL bool) (
 	if req.CoverResourceID == "" && req.CoverURL == "" {
 		return req, "", BadAuthRequest("请上传封面或填写 HTTPS 封面地址")
 	}
+	if req.CoverWidth <= 0 || req.CoverHeight <= 0 || req.CoverWidth > 100000 || req.CoverHeight > 100000 {
+		return req, "", BadAuthRequest("无法确认封面尺寸，请重新选择图片")
+	}
 	if req.CoverURL != "" {
 		if len(req.CoverURL) > 1000 {
 			return req, "", BadAuthRequest("封面地址不能超过 1000 个字符")
@@ -162,15 +167,19 @@ func (s *Service) CreateInspiration(actor *model.User, req InspirationRequest) (
 		s.storageMu.Lock()
 		defer s.storageMu.Unlock()
 	}
-	if req.CoverResourceID, err = s.validateInspirationCoverDraft(actor, req.CoverResourceID); err != nil {
-		return nil, err
+	if req.CoverResourceID != "" {
+		resource, validateErr := s.validateInspirationCoverDraft(actor, req.CoverResourceID)
+		if validateErr != nil {
+			return nil, validateErr
+		}
+		req.CoverResourceID, req.CoverWidth, req.CoverHeight = resource.ID, resource.Width, resource.Height
 	}
 	sortOrder, err := s.repo.NextInspirationSortOrder()
 	if err != nil {
 		return nil, err
 	}
 	now := time.Now()
-	row := &model.Inspiration{ID: newID(), Title: req.Title, Description: req.Description, Mode: req.Mode, Prompt: req.Prompt, Tags: req.Tags, TagsJSON: tagsJSON, Source: req.Source, CoverResourceID: req.CoverResourceID, CoverURL: req.CoverURL, Status: model.InspirationStatusDisabled, SortOrder: sortOrder, CreatedBy: actor.ID, UpdatedBy: actor.ID, CreatedAt: now, UpdatedAt: now}
+	row := &model.Inspiration{ID: newID(), Title: req.Title, Description: req.Description, Mode: req.Mode, Prompt: req.Prompt, Tags: req.Tags, TagsJSON: tagsJSON, Source: req.Source, CoverResourceID: req.CoverResourceID, CoverURL: req.CoverURL, CoverWidth: req.CoverWidth, CoverHeight: req.CoverHeight, Status: model.InspirationStatusDisabled, SortOrder: sortOrder, CreatedBy: actor.ID, UpdatedBy: actor.ID, CreatedAt: now, UpdatedAt: now}
 	if err := s.repo.CreateInspiration(row); err != nil {
 		if errors.Is(err, repository.ErrInspirationCoverDraftUnavailable) {
 			return nil, BadAuthRequest("封面草稿已失效，请重新上传")
@@ -202,11 +211,15 @@ func (s *Service) UpdateInspiration(actor *model.User, id string, req Inspiratio
 		return nil, err
 	}
 	newDraft := ""
-	if req.CoverResourceID != row.CoverResourceID {
-		if req.CoverResourceID, err = s.validateInspirationCoverDraft(actor, req.CoverResourceID); err != nil {
-			return nil, err
+	if req.CoverResourceID != "" && req.CoverResourceID != row.CoverResourceID {
+		resource, validateErr := s.validateInspirationCoverDraft(actor, req.CoverResourceID)
+		if validateErr != nil {
+			return nil, validateErr
 		}
+		req.CoverResourceID, req.CoverWidth, req.CoverHeight = resource.ID, resource.Width, resource.Height
 		newDraft = req.CoverResourceID
+	} else if req.CoverResourceID != "" && row.CoverWidth > 0 && row.CoverHeight > 0 {
+		req.CoverWidth, req.CoverHeight = row.CoverWidth, row.CoverHeight
 	}
 	var oldResource *model.Resource
 	var deletionJob *model.ResourceDeletionJob
@@ -231,7 +244,7 @@ func (s *Service) UpdateInspiration(actor *model.User, id string, req Inspiratio
 	}
 	row.Title, row.Description, row.Mode, row.Prompt = req.Title, req.Description, req.Mode, req.Prompt
 	row.Tags, row.TagsJSON, row.Source = req.Tags, tagsJSON, req.Source
-	row.CoverResourceID, row.CoverURL, row.UpdatedBy, row.UpdatedAt = req.CoverResourceID, req.CoverURL, actor.ID, time.Now()
+	row.CoverResourceID, row.CoverURL, row.CoverWidth, row.CoverHeight, row.UpdatedBy, row.UpdatedAt = req.CoverResourceID, req.CoverURL, req.CoverWidth, req.CoverHeight, actor.ID, time.Now()
 	if err := s.repo.UpdateInspiration(row, actor.ID, newDraft, oldResource, deletionJob); err != nil {
 		if errors.Is(err, repository.ErrInspirationCoverDraftUnavailable) {
 			return nil, BadAuthRequest("封面草稿已失效，请重新上传")
@@ -359,7 +372,7 @@ func (s *Service) DeleteInspirations(actor *model.User, ids []string) error {
 	return nil
 }
 
-func (s *Service) UploadInspirationCover(actor *model.User, header *multipart.FileHeader) (*model.Resource, error) {
+func (s *Service) UploadInspirationCover(actor *model.User, header *multipart.FileHeader, width, height int) (*model.Resource, error) {
 	if err := s.RequireAdmin(actor); err != nil {
 		return nil, err
 	}
@@ -368,6 +381,9 @@ func (s *Service) UploadInspirationCover(actor *model.User, header *multipart.Fi
 	}
 	if header.Size <= 0 || header.Size > InspirationCoverMaxBytes {
 		return nil, BadAuthRequest("封面图片大小必须在 10MB 以内")
+	}
+	if width <= 0 || height <= 0 || width > 100000 || height > 100000 {
+		return nil, BadAuthRequest("无法确认封面尺寸，请重新选择图片")
 	}
 	file, err := header.Open()
 	if err != nil {
@@ -383,7 +399,7 @@ func (s *Service) UploadInspirationCover(actor *model.User, header *multipart.Fi
 	if detected != "image/jpeg" && detected != "image/png" && detected != "image/webp" {
 		return nil, BadAuthRequest("封面仅支持 JPEG、PNG 或 WebP")
 	}
-	resource, err := s.UploadResource(actor.ID, header, "image", 0, 0, 0)
+	resource, err := s.UploadResource(actor.ID, header, "image", width, height, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -402,19 +418,19 @@ func (s *Service) UploadInspirationCover(actor *model.User, header *multipart.Fi
 	return resource, nil
 }
 
-func (s *Service) validateInspirationCoverDraft(actor *model.User, id string) (string, error) {
+func (s *Service) validateInspirationCoverDraft(actor *model.User, id string) (*model.Resource, error) {
 	id = strings.TrimSpace(id)
 	if id == "" {
-		return "", nil
+		return nil, nil
 	}
 	if _, err := s.repo.InspirationCoverDraftForUser(actor.ID, id); err != nil {
-		return "", BadAuthRequest("封面草稿不存在或不属于当前管理员")
+		return nil, BadAuthRequest("封面草稿不存在或不属于当前管理员")
 	}
 	resource, err := s.repo.ResourceForUser(actor.ID, id)
-	if err != nil || resource.Kind != "image" || resource.Status != model.ResourceStatusReady || !strings.HasPrefix(strings.ToLower(resource.MimeType), "image/") {
-		return "", BadAuthRequest("封面必须是上传完成的图片")
+	if err != nil || resource.Kind != "image" || resource.Status != model.ResourceStatusReady || !strings.HasPrefix(strings.ToLower(resource.MimeType), "image/") || resource.Width <= 0 || resource.Height <= 0 {
+		return nil, BadAuthRequest("封面必须是已确认尺寸并上传完成的图片")
 	}
-	return id, nil
+	return resource, nil
 }
 
 func (s *Service) DiscardInspirationCover(actor *model.User, id string) error {

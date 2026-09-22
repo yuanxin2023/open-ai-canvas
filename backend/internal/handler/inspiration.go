@@ -2,6 +2,7 @@ package handler
 
 import (
 	"net/http"
+	"strconv"
 	"time"
 
 	"infinite-canvas/backend/internal/model"
@@ -201,7 +202,9 @@ func RegisterInspirationRoutes(r *gin.RouterGroup, svc *service.Service) {
 			fail(c, http.StatusBadRequest, err)
 			return
 		}
-		resource, err := svc.UploadInspirationCover(user, file)
+		width, _ := strconv.Atoi(c.PostForm("width"))
+		height, _ := strconv.Atoi(c.PostForm("height"))
+		resource, err := svc.UploadInspirationCover(user, file, width, height)
 		if err != nil {
 			failService(c, err)
 			return

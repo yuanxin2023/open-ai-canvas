@@ -27,3 +27,20 @@ describe("wallet history pagination", () => {
         expect(css).toMatch(/\.workspace-wallet-pagination\s*\{[^}]*margin-top:\s*auto/s);
     });
 });
+
+describe("workspace credit products", () => {
+    test("uses the editorial heading and four-column quota cards", () => {
+        const component = readFileSync(resolve(import.meta.dir, "../src/components/layout/workspace-credit-popover.tsx"), "utf8");
+        const card = readFileSync(resolve(import.meta.dir, "../src/components/payments/credit-product-card.tsx"), "utf8");
+        const css = readFileSync(resolve(import.meta.dir, "../src/styles/globals.css"), "utf8");
+        expect(component).toContain("选择您的套餐");
+        expect(component).toContain("bestValueProductId");
+        expect(component).toContain("立即购买");
+        expect(component).toContain("<CreditProductCard");
+        expect(card).toContain("workspace-credit-product-meter");
+        expect(card).toContain("积分更划算");
+        expect(css).toMatch(/\.workspace-credit-products-grid\s*\{[^}]*grid-template-columns:\s*repeat\(4, minmax\(0, 1fr\)\)/s);
+        expect(css).toMatch(/\.workspace-credit-products-header h2\s*\{[^}]*Source Han Serif SC/s);
+        expect(css).toMatch(/\.workspace-credit-product-meter\s*\{[^}]*repeat\(28, minmax\(2px, 1fr\)\)/s);
+    });
+});

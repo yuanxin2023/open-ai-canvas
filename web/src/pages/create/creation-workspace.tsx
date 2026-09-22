@@ -1,7 +1,7 @@
 import { ImageSizePicker } from "@/components/image-size-picker";
 import { imageResolutionUsesQuality } from "@/lib/image-size-presets";
 import { createPortal } from "react-dom";
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode, type RefObject } from "react";
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode, type RefObject } from "react";
 import { App, Button, Dropdown, Popover } from "antd";
 import { AppDrawer } from "@/components/ui/product/app-drawer";
 import { AppModal } from "@/components/ui/product/app-modal";
@@ -22,6 +22,7 @@ import { CachedResourceImage } from "@/components/cached-resource-image";
 import { CanvasImagePreview } from "@/components/canvas/canvas-image-preview";
 import { CanvasResourceMentionTextarea } from "@/components/canvas/canvas-resource-mention-textarea";
 import { VoiceRecordingButton } from "@/components/conversation/voice-recording-button";
+import { UserPromptEditorModal } from "@/components/user-prompt-editor-modal";
 import { HoverBorderGradient } from "@/components/ui/aceternity/hover-border-gradient";
 import { ModelPicker } from "@/components/model-picker";
 import { aceternityMotion } from "@/lib/aceternity-motion";
@@ -33,7 +34,7 @@ import { buildImageResolutionOptions, formatImageResolutionSize, supportsImageRe
 import { modelCapabilityConfigFor, normalizeVideoValue, videoDurationOptions, type ImageCapabilityConfig, type VideoCapabilityConfig } from "@/lib/model-capabilities";
 import { mergedImageCapabilityConfig, type ModelRequirements } from "@/lib/model-selection";
 import type { Skill } from "@/services/api/skills";
-import { resolveResourceUrl } from "@/services/api/resources";
+import { resolveResourceUrl, resourceFileUrl } from "@/services/api/resources";
 import { modelOptionName, resolveModelChannel, type AiConfig } from "@/stores/use-config-store";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
 import { useUserStore } from "@/stores/use-user-store";
@@ -44,6 +45,7 @@ import { conversationTimestamp, isImageAttachment, isVideoAttachment } from "./c
 import { conversationTimeFormatter, countOptions, historyDayFormatter, messageTimeFormatter, modeLabels, qualityOptions, ratioOptions, resolutionOptions, shotScriptLabels, type CreationConversation, type CreationMessage, type CreationShotRailEntry, type CreationStatus } from "./creation-types";
 import "./creation-product.css";
 import { inspirationCoverUrl, listInspirations, type Inspiration } from "@/services/api/inspirations";
+import { listUserPrompts, type UserPrompt } from "@/services/api/user-prompts";
 
 const CanvasPromptOptimizerDrawer = lazy(() => import("@/components/canvas/canvas-prompt-optimizer-drawer").then((module) => ({ default: module.CanvasPromptOptimizerDrawer })));
 
@@ -793,41 +795,132 @@ export function CreationEmptySuggest({ onStartPrompt, onOpenLibrary }: { onStart
 }
 
 
+type CreationInspirationSource = "featured" | "personal";
+type CreationInspiration = Inspiration | UserPrompt;
+
+async function listAllUserPrompts(signal: AbortSignal) {
+    const firstPage = await listUserPrompts({ page: 1, pageSize: 100 }, signal);
+    const pageCount = Math.ceil(firstPage.total / firstPage.pageSize);
+    if (pageCount <= 1) return firstPage.prompts;
+    const remainingPages = await Promise.all(Array.from({ length: pageCount - 1 }, (_, index) => listUserPrompts({ page: index + 2, pageSize: firstPage.pageSize }, signal)));
+    return [firstPage, ...remainingPages].flatMap((page) => page.prompts).slice(0, firstPage.total);
+}
+
+function creationInspirationCover(item: CreationInspiration) {
+    if ("status" in item) return inspirationCoverUrl(item);
+    if (item.coverResourceId) return resourceFileUrl(item.coverResourceId);
+    return item.coverUrl || "/welcome/wing-it/barn.webp";
+}
+
+function creationInspirationDimensions(item: CreationInspiration) {
+    if (!("status" in item) || item.coverWidth <= 0 || item.coverHeight <= 0) return undefined;
+    return { width: item.coverWidth, height: item.coverHeight };
+}
+
+function CreationInspirationCard({ item, source, onStartPrompt }: { item: CreationInspiration; source: CreationInspirationSource; onStartPrompt: (mode: CreationMode, prompt: string) => void }) {
+    const dimensions = creationInspirationDimensions(item);
+    const cardRef = useRef<HTMLButtonElement>(null);
+    const [rowSpan, setRowSpan] = useState(1);
+    useLayoutEffect(() => {
+        const card = cardRef.current;
+        if (!card) return;
+        const update = () => {
+            const grid = card.parentElement;
+            const gridStyle = grid ? getComputedStyle(grid) : null;
+            const rowHeight = Number.parseFloat(gridStyle?.gridAutoRows || "") || 2;
+            const rowGap = Number.parseFloat(gridStyle?.rowGap || "") || 12;
+            setRowSpan(Math.max(1, Math.ceil((card.getBoundingClientRect().height + rowGap) / (rowHeight + rowGap))));
+        };
+        update();
+        if (typeof ResizeObserver === "undefined") return;
+        const observer = new ResizeObserver(update);
+        observer.observe(card);
+        return () => observer.disconnect();
+    }, []);
+    return <button ref={cardRef} type="button" className="product-collection-card creation-featured-card" style={{ gridRowEnd: `span ${rowSpan}` }} onClick={() => onStartPrompt(item.mode, item.prompt)}>
+        <span className="creation-featured-media" style={dimensions ? { aspectRatio: `${dimensions.width} / ${dimensions.height}` } : undefined}>
+            <img src={creationInspirationCover(item)} alt="" width={dimensions?.width} height={dimensions?.height} loading="lazy" referrerPolicy="no-referrer" onLoad={(event) => { const image = event.currentTarget; if (image.naturalWidth > 0 && image.naturalHeight > 0) image.parentElement?.style.setProperty("aspect-ratio", `${image.naturalWidth} / ${image.naturalHeight}`); }} onError={(event) => { const image = event.currentTarget; image.onerror = null; image.src = "/welcome/wing-it/barn.webp"; }} />
+            <span className="creation-inspiration-overlay"><ArrowUp />使用这个创意</span>
+        </span>
+        <span className="creation-featured-copy"><strong>{item.title}</strong>{item.description ? <span>{item.description}</span> : null}<em><Sparkles />{source === "personal" ? item.source?.trim() || "个人灵感" : item.source ? "开源改编 · CC0" : "原创提示词"} · {modeLabels[item.mode]}</em></span>
+    </button>;
+}
+
 export function CreationFeaturedWorks({ onStartPrompt }: { onStartPrompt: (mode: CreationMode, prompt: string) => void }) {
+    const [source, setSource] = useState<CreationInspirationSource>("featured");
+    const [promptEditorOpen, setPromptEditorOpen] = useState(false);
     const [filter, setFilter] = useState<"all" | CreationMode>("all");
     const [limit, setLimit] = useState(12);
-    const [inspirations, setInspirations] = useState<Inspiration[]>([]);
+    const [inspirations, setInspirations] = useState<CreationInspiration[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [reloadToken, setReloadToken] = useState(0);
+    const sourceItems = [
+        { value: "featured" as const, label: "全部灵感", icon: Sparkles },
+        { value: "personal" as const, label: "个人灵感", icon: UserRound },
+    ];
+    const typeItems = [
+        { value: "video" as const, label: modeLabels.video, icon: Film },
+        { value: "image" as const, label: modeLabels.image, icon: ImageIcon },
+        { value: "text" as const, label: modeLabels.text, icon: MessageSquareText },
+    ];
     useEffect(() => {
         let active = true;
+        const controller = new AbortController();
         setLoading(true);
         setError("");
-        void listInspirations().then((result) => {
-            if (active) setInspirations(result.inspirations || []);
+        const request = source === "featured"
+            ? listInspirations(controller.signal).then((result) => result.inspirations || [])
+            : listAllUserPrompts(controller.signal);
+        void request.then((result) => {
+            if (active) setInspirations(result);
         }).catch((reason) => {
-            if (active) setError(reason instanceof Error ? reason.message : "精选灵感暂时无法加载");
+            if (active && !controller.signal.aborted) setError(reason instanceof Error ? reason.message : `${source === "featured" ? "全部" : "个人"}灵感暂时无法加载`);
         }).finally(() => {
             if (active) setLoading(false);
         });
-        return () => { active = false; };
-    }, [reloadToken]);
+        return () => {
+            active = false;
+            controller.abort();
+        };
+    }, [reloadToken, source]);
     const filtered = inspirations.filter((item) => filter === "all" || item.mode === filter);
-    return <section className="creation-featured-works" aria-labelledby="creation-featured-title">
-        <div className="creation-featured-heading">
-            <div><h2 id="creation-featured-title">精选灵感</h2></div>
-        </div>
-        <div className="creation-inspiration-filters" role="group" aria-label="灵感类型">
-            {(["all", "video", "image", "text"] as const).map((value) => <button key={value} type="button" aria-pressed={filter === value} onClick={() => { setFilter(value); setLimit(12); }}>{value === "all" ? "全部灵感" : modeLabels[value]}<span>{inspirations.filter((item) => value === "all" || item.mode === value).length}</span></button>)}
-        </div>
-        {loading ? <div className="creation-inspiration-state">正在加载精选灵感…</div> : error ? <div className="creation-inspiration-state"><span>{error}</span><Button onClick={() => setReloadToken((value) => value + 1)}>重新加载</Button></div> : !filtered.length ? <div className="creation-inspiration-state">当前分类暂无已启用的灵感</div> : <div className="creation-featured-layout">
-                {filtered.slice(0, limit).map((item, index) => <button key={item.id} type="button" className={`product-collection-card creation-featured-card ${index === 0 ? "is-featured-hero" : ""}`} onClick={() => onStartPrompt(item.mode, item.prompt)}>
-                    <span className="creation-featured-media"><img src={inspirationCoverUrl(item)} alt="" loading="lazy" referrerPolicy="no-referrer" onError={(event) => { const image = event.currentTarget; image.onerror = null; image.src = "/welcome/wing-it/barn.webp"; }} /><span className="creation-inspiration-overlay"><ArrowUp />使用这个创意</span></span>
-                    <span className="creation-featured-copy"><strong>{item.title}</strong><span>{item.description}</span><em><Sparkles />{item.source ? "开源改编 · CC0" : "原创提示词"} · {modeLabels[item.mode]}</em></span>
+    return <section className="creation-featured-works" aria-label="精选灵感">
+        <div className="creation-inspiration-filters">
+            <div className="creation-inspiration-filter-row is-source" role="group" aria-label="灵感来源">
+                {sourceItems.map(({ value, label, icon: Icon }) => <button key={value} type="button" aria-pressed={source === value} onClick={() => {
+                    if (source !== value) setInspirations([]);
+                    setSource(value);
+                    setFilter("all");
+                    setLimit(12);
+                }}>
+                    <Icon aria-hidden="true" />
+                    <span className="creation-inspiration-filter-label">{label}</span>
                 </button>)}
+            </div>
+            <div className="creation-inspiration-filter-row is-type" role="group" aria-label="灵感类型">
+                {typeItems.map(({ value, label, icon: Icon }) => <button key={value} type="button" aria-pressed={filter === value} onClick={() => { setFilter(value); setLimit(12); }}>
+                    <Icon aria-hidden="true" />
+                    <span className="creation-inspiration-filter-label">{label}</span>
+                    <span className="creation-inspiration-filter-count">{inspirations.filter((item) => item.mode === value).length}</span>
+                </button>)}
+                {source === "personal" ? <button type="button" className="creation-inspiration-add" aria-label="新增个人提示词" title="新增个人提示词" onClick={() => setPromptEditorOpen(true)}><Plus aria-hidden="true" /></button> : null}
+            </div>
+        </div>
+        {loading ? <div className="creation-inspiration-state">正在加载{source === "featured" ? "全部" : "个人"}灵感…</div> : error ? <div className="creation-inspiration-state"><span>{error}</span><Button onClick={() => setReloadToken((value) => value + 1)}>重新加载</Button></div> : !filtered.length ? <div className="creation-inspiration-state">当前分类暂无{source === "featured" ? "已启用的" : "个人"}灵感</div> : <div className="creation-featured-layout">
+                {filtered.slice(0, limit).map((item) => <CreationInspirationCard key={item.id} item={item} source={source} onStartPrompt={onStartPrompt} />)}
         </div>}
         {!loading && !error && filtered.length ? <footer className="creation-inspiration-footer">{limit < filtered.length ? <Button onClick={() => setLimit((count) => count + 12)}>展开更多灵感<ChevronDown /></Button> : <span>已展示全部 {filtered.length} 个创意</span>}</footer> : null}
+        <UserPromptEditorModal
+            open={promptEditorOpen}
+            onClose={() => setPromptEditorOpen(false)}
+            onSaved={(created) => {
+                setSource("personal");
+                setFilter("all");
+                setLimit(12);
+                setInspirations((current) => [created, ...current.filter((item) => item.id !== created.id)]);
+            }}
+        />
     </section>;
 }
 

@@ -23,7 +23,7 @@ description: 影策后端核心持久化表与状态边界
 
 容器内命令 `migrate-schema up` 应用缺失迁移，`migrate-schema status` 输出当前和期望版本，`migrate-schema verify` 只检查兼容性。`CANVAS_AUTO_MIGRATE=true` 仅用于开发和旧部署兼容；受管生产部署设置为 `false`，并由 Compose 的一次性 `migrate` 服务先完成迁移。后续迁移必须新增版本，不得修改已经发布迁移的实现或校验和。
 
-当前结构版本为 26。版本 2 为 `schema_migrations.applied_at` 增加 `idx_schema_migrations_applied_at` 索引；版本 3 `asset_taxonomy_candidate_identity` 为资产候选增加规范化名称和来源，收敛资产分类，并为待确认候选建立项目内部分唯一索引；版本 4 `resource_upload_key` 为资源上传幂等补充 `resources.upload_key` 列和用户维度唯一索引；版本 5 `payment_topup` 创建积分充值、支付通知和对账所需结构；版本 6 `resource_playback_variant` 增加资源播放副本状态；版本 7 `asset_library_folders` 增加用户素材自定义分类及 `assets.folder_id`；版本 8 `logical_model_active_code` 将前台模型 code 的唯一约束限定为未归档记录；版本 9 `channel_presentation` 为渠道添加 `public_alias` 与 `sort_order`；版本 10 `creation_runtime` 创建创作运行与提交表；版本 11 `cloud_agent_runtime` 创建 `cloud_agent_executions`；版本 12 `agent_token_charge_limit` 为账单增加 Agent Token 收费上限；版本 13 `cloud_agent_canvas_mutation` 持久化 Agent 画布变更；版本 14 `cloud_agent_recovery_control` 增加运行恢复控制字段和旧运行回填；版本 15 `agent_profiles` 创建常驻偏好表；版本 16 `agent_lessons` 创建用户记忆表；版本 17 `agent_lessons_owner_index` 增加作者与状态复合索引；版本 18 `agent_memory_settings` 创建用户记忆压缩设置；版本 19 `payment_plugin_version` 为支付配置和订单补充插件版本；版本 20–22 创建并扩展首页常驻通知；版本 23 `canvas_revision_history` 增加画布历史快照与资源引用；版本 24 `topup_product_benefits` 为充值商品增加可选多行套餐权益；版本 25 `featured_inspirations` 创建精选灵感及封面草稿表，并写入原首页的 22 条内容；版本 26 `user_prompt_library` 创建用户私有提示词表。曾由本地版本以 v16 应用 `topup_product_benefits` 的数据库会在同一事务中把该迁移记录重映射到 v24，再执行官方 v16–v23；未知名称、校验和或重复记录仍会拒绝迁移。已发布迁移的实现和校验和不得修改。
+当前结构版本为 27。版本 2 为 `schema_migrations.applied_at` 增加 `idx_schema_migrations_applied_at` 索引；版本 3 `asset_taxonomy_candidate_identity` 为资产候选增加规范化名称和来源，收敛资产分类，并为待确认候选建立项目内部分唯一索引；版本 4 `resource_upload_key` 为资源上传幂等补充 `resources.upload_key` 列和用户维度唯一索引；版本 5 `payment_topup` 创建积分充值、支付通知和对账所需结构；版本 6 `resource_playback_variant` 增加资源播放副本状态；版本 7 `asset_library_folders` 增加用户素材自定义分类及 `assets.folder_id`；版本 8 `logical_model_active_code` 将前台模型 code 的唯一约束限定为未归档记录；版本 9 `channel_presentation` 为渠道添加 `public_alias` 与 `sort_order`；版本 10 `creation_runtime` 创建创作运行与提交表；版本 11 `cloud_agent_runtime` 创建 `cloud_agent_executions`；版本 12 `agent_token_charge_limit` 为账单增加 Agent Token 收费上限；版本 13 `cloud_agent_canvas_mutation` 持久化 Agent 画布变更；版本 14 `cloud_agent_recovery_control` 增加运行恢复控制字段和旧运行回填；版本 15 `agent_profiles` 创建常驻偏好表；版本 16 `agent_lessons` 创建用户记忆表；版本 17 `agent_lessons_owner_index` 增加作者与状态复合索引；版本 18 `agent_memory_settings` 创建用户记忆压缩设置；版本 19 `payment_plugin_version` 为支付配置和订单补充插件版本；版本 20–22 创建并扩展首页常驻通知；版本 23 `canvas_revision_history` 增加画布历史快照与资源引用；版本 24 `topup_product_benefits` 为充值商品增加可选多行套餐权益；版本 25 `featured_inspirations` 创建精选灵感及封面草稿表，并写入原首页的 22 条内容；版本 26 `user_prompt_library` 创建用户私有提示词表；版本 27 `inspiration_cover_dimensions` 为精选灵感增加封面原始宽高。曾由本地版本以 v16 应用 `topup_product_benefits` 的数据库会在同一事务中把该迁移记录重映射到 v24，再执行官方 v16–v23；未知名称、校验和或重复记录仍会拒绝迁移。已发布迁移的实现和校验和不得修改。
 
 历史发布曾使用版本 6 `asset_library_folders`，之后合并引入了上述 6/7 顺序冲突。迁移器仅在该历史记录的名称和校验和均精确匹配时选择历史顺序：保留版本 6 的素材目录记录及时间，在版本 7 应用 `resource_playback_variant`，再继续版本 8。新数据库及已采用“6 播放副本、7 素材目录”的数据库保持原顺序；状态检查与启动校验采用同一套识别规则。未知名称、被改动的校验和或冲突的版本 7 记录仍会拒绝迁移，不通过删除、改名或伪造已应用记录绕过检查。
 
@@ -218,10 +218,10 @@ docker compose -f docker-compose.deploy.yml up -d backend web
 
 | 表 | 用途 | 关键边界 |
 | --- | --- | --- |
-| `inspirations` | 保存创作首页“精选灵感”的卡片、提示词、类型、来源、发布状态与全局顺序 | `status` 仅为 `active` / `disabled`；新建默认停用；普通用户只读取已启用记录；标签以 JSON 文本保存，仅用于后台管理和搜索 |
+| `inspirations` | 保存创作首页“精选灵感”的卡片、提示词、封面原始宽高、类型、来源、发布状态与全局顺序 | `status` 仅为 `active` / `disabled`；新建默认停用；普通用户只读取已启用记录；标签以 JSON 文本保存，仅用于后台管理和搜索；`cover_width` / `cover_height` 用于首页在图片加载前保留真实比例 |
 | `inspiration_cover_drafts` | 标记尚未被精选灵感消费的上传封面 | 新增/更新事务消费草稿；取消显式回收，超过 24 小时由后台清理；上传封面和 HTTPS 外链二选一 |
 
-版本 25 将原前端常量中的 22 条内容按原顺序写入 `inspirations` 并默认启用。内置相对路径封面只允许迁移数据继续使用；管理员新建时只能上传 JPEG/PNG/WebP（最大 10 MB）或填写 HTTPS 地址。托管封面替换、灵感永久删除、资源记录删除和物理对象清理任务保持事务边界，资源管理页不能绕过引用检查。
+版本 25 将原前端常量中的 22 条内容按原顺序写入 `inspirations` 并默认启用。内置相对路径封面只允许迁移数据继续使用；管理员新建时只能上传 JPEG/PNG/WebP（最大 10 MB）或填写 HTTPS 地址。版本 27 起新增和编辑时必须确认封面原始宽高；托管封面从资源记录复制尺寸，外链封面由管理端成功加载后提交尺寸。托管封面替换、灵感永久删除、资源记录删除和物理对象清理任务保持事务边界，资源管理页不能绕过引用检查。
 
 ## 系统公告
 

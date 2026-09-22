@@ -133,7 +133,8 @@ func (r *Repository) UpdateInspiration(row *model.Inspiration, draftUserID, newD
 		result := tx.Model(&model.Inspiration{}).Where("id = ?", row.ID).Updates(map[string]any{
 			"title": row.Title, "description": row.Description, "mode": row.Mode, "prompt": row.Prompt,
 			"tags_json": row.TagsJSON, "source": row.Source, "cover_resource_id": row.CoverResourceID,
-			"cover_url": row.CoverURL, "updated_by": row.UpdatedBy, "updated_at": row.UpdatedAt,
+			"cover_url": row.CoverURL, "cover_width": row.CoverWidth, "cover_height": row.CoverHeight,
+			"updated_by": row.UpdatedBy, "updated_at": row.UpdatedAt,
 		})
 		if result.Error != nil {
 			return result.Error
