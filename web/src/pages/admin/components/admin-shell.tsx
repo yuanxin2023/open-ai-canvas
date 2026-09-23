@@ -28,6 +28,7 @@ import {
     PlugZap,
     RadioTower,
     RefreshCw,
+    Rows3,
     Sparkles,
     Settings2,
     ShieldAlert,
@@ -50,6 +51,7 @@ import { useAppearanceStore } from "@/stores/use-appearance-store";
 import { readAdminNavigationGroupState, writeAdminNavigationGroupState, type AdminNavigationGroupId } from "../lib/admin-navigation-state";
 import { getIsolatedAdminAntTheme } from "../theme/admin-ant-theme";
 import { AdminTooltip } from "../ui/controls";
+import { AdminDensityProvider, useAdminDensity } from "./admin-density";
 import "@/styles/admin-ui.css";
 import "../theme/admin-tokens.css";
 import "../theme/admin-chrome.css";
@@ -116,7 +118,7 @@ const adminNavigation: AdminNavigationGroup[] = [
         label: "系统配置",
         collapsible: true,
         items: [
-            { path: "/admin/settings/appearance", label: "站点及外观", description: "品牌、SEO 与备案", icon: <Palette className="size-4" /> },
+            { path: "/admin/settings/appearance", label: "站点及外观", description: "品牌、Canvas/Live2D、SEO 与备案", icon: <Palette className="size-4" /> },
             { path: "/admin/settings/features", label: "功能开放", description: "工作台、插件与模型能力", icon: <ToggleLeft className="size-4" /> },
             { path: "/admin/settings/drawing-engine", label: "绘图工具", description: "画布绘图节点默认引擎", icon: <Paintbrush className="size-4" /> },
             { path: "/admin/settings/system-performance", label: "系统性能", description: "主机、数据库与缓存状态", icon: <Activity className="size-4" /> },
@@ -152,6 +154,16 @@ function adminPopupContainer(node?: HTMLElement) {
 }
 
 export function AdminShell() {
+    const userId = useUserStore((state) => state.user?.id);
+    return (
+        <AdminDensityProvider key={userId || "anonymous"} userId={userId}>
+            <AdminShellLayout />
+        </AdminDensityProvider>
+    );
+}
+
+function AdminShellLayout() {
+    const { density } = useAdminDensity();
     const appearance = useAppearanceStore((state) => state.appearance);
     const [collapsed, setCollapsed] = useState(readWorkspaceSidebarCollapsed);
     const dark = useThemeStore((state) => state.theme === "dark");
@@ -174,7 +186,7 @@ export function AdminShell() {
     return (
         <ConfigProvider theme={getIsolatedAdminAntTheme(dark)} getPopupContainer={(node) => adminPopupContainer(node)}>
             <App>
-                <main id="admin-root" data-admin-root className="admin-shell flex h-full min-h-0 overflow-hidden">
+                <main id="admin-root" data-admin-root data-admin-density={density} className="admin-shell flex h-full min-h-0 overflow-hidden">
                     <aside className={cn("admin-sidebar hidden shrink-0 flex-col overflow-hidden lg:flex", collapsed && "is-collapsed")}>
                         <div className="admin-sidebar-identity shrink-0">
                             <AdminTooltip title={collapsed ? "查看更新日志" : undefined} placement="right">
@@ -256,12 +268,25 @@ export function AdminPageFrame({ title, description, actions, back, scroll = fal
                     </div>
                     <div className="admin-page-actions flex shrink-0 flex-wrap items-center">
                         {actions}
+                        <AdminDensityButton />
                         <AdminThemeButton />
                     </div>
                 </header>
                 {children}
             </div>
         </div>
+    );
+}
+
+function AdminDensityButton() {
+    const { density, toggleDensity } = useAdminDensity();
+    return (
+        <AdminTooltip title={density === "compact" ? "切换为舒适行距" : "切换为紧凑行距"}>
+            <button type="button" className="admin-density-toggle" onClick={toggleDensity} aria-label="紧凑表格行距" aria-pressed={density === "compact"}>
+                <Rows3 className="size-4" aria-hidden="true" />
+                {density === "compact" ? "紧凑" : "舒适"}
+            </button>
+        </AdminTooltip>
     );
 }
 

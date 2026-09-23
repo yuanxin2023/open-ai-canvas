@@ -31,7 +31,7 @@ const (
 )
 
 const (
-	appearanceSchemaVersion        = 8
+	appearanceSchemaVersion        = 9
 	appearanceLogoMaxBytes   int64 = 5 << 20
 	appearancePosterMaxBytes int64 = 10 << 20
 	appearanceVideoMaxBytes  int64 = 256 << 20
@@ -47,50 +47,52 @@ const (
 )
 
 type AppearanceSetting struct {
-	SchemaVersion             int    `json:"schemaVersion"`
-	BrandName                 string `json:"brandName"`
-	BrandSlug                 string `json:"brandSlug"`
-	AuthHeroTitle             string `json:"authHeroTitle"`
-	AuthHeroDescription       string `json:"authHeroDescription"`
-	LogoResourceID            string `json:"logoResourceId"`
-	DarkLogoResourceID        string `json:"darkLogoResourceId"`
-	LogoFrameEnabled          bool   `json:"logoFrameEnabled"`
-	AuthVideoResourceID       string `json:"authVideoResourceId"`
-	AuthVideoPosterResourceID string `json:"authVideoPosterResourceId"`
-	AuthVideoAutoplay         bool   `json:"authVideoAutoplay"`
-	SEOTitle                  string `json:"seoTitle"`
-	SEODescription            string `json:"seoDescription"`
-	SEOKeywords               string `json:"seoKeywords"`
-	FooterCopyright           string `json:"footerCopyright"`
-	ICPFilingEnabled          bool   `json:"icpFilingEnabled"`
-	ICPFilingNumber           string `json:"icpFilingNumber"`
+	Canvas                    CanvasAppearance `json:"canvas"`
+	SchemaVersion             int              `json:"schemaVersion"`
+	BrandName                 string           `json:"brandName"`
+	BrandSlug                 string           `json:"brandSlug"`
+	AuthHeroTitle             string           `json:"authHeroTitle"`
+	AuthHeroDescription       string           `json:"authHeroDescription"`
+	LogoResourceID            string           `json:"logoResourceId"`
+	DarkLogoResourceID        string           `json:"darkLogoResourceId"`
+	LogoFrameEnabled          bool             `json:"logoFrameEnabled"`
+	AuthVideoResourceID       string           `json:"authVideoResourceId"`
+	AuthVideoPosterResourceID string           `json:"authVideoPosterResourceId"`
+	AuthVideoAutoplay         bool             `json:"authVideoAutoplay"`
+	SEOTitle                  string           `json:"seoTitle"`
+	SEODescription            string           `json:"seoDescription"`
+	SEOKeywords               string           `json:"seoKeywords"`
+	FooterCopyright           string           `json:"footerCopyright"`
+	ICPFilingEnabled          bool             `json:"icpFilingEnabled"`
+	ICPFilingNumber           string           `json:"icpFilingNumber"`
 }
 
 type PublicAppearanceSetting struct {
-	SchemaVersion             int       `json:"schemaVersion"`
-	BrandName                 string    `json:"brandName"`
-	BrandSlug                 string    `json:"brandSlug"`
-	AuthHeroTitle             string    `json:"authHeroTitle"`
-	AuthHeroDescription       string    `json:"authHeroDescription"`
-	LogoURL                   string    `json:"logoUrl"`
-	DarkLogoURL               string    `json:"darkLogoUrl"`
-	LogoFrameEnabled          bool      `json:"logoFrameEnabled"`
-	AuthVideoURL              string    `json:"authVideoUrl"`
-	AuthVideoPosterURL        string    `json:"authVideoPosterUrl"`
-	AuthVideoAutoplay         bool      `json:"authVideoAutoplay"`
-	SEOTitle                  string    `json:"seoTitle"`
-	SEODescription            string    `json:"seoDescription"`
-	SEOKeywords               string    `json:"seoKeywords"`
-	FooterCopyright           string    `json:"footerCopyright"`
-	ICPFilingEnabled          bool      `json:"icpFilingEnabled"`
-	ICPFilingNumber           string    `json:"icpFilingNumber"`
-	LogoConfigured            bool      `json:"logoConfigured"`
-	DarkLogoConfigured        bool      `json:"darkLogoConfigured"`
-	AuthVideoConfigured       bool      `json:"authVideoConfigured"`
-	AuthVideoPosterConfigured bool      `json:"authVideoPosterConfigured"`
-	Configured                bool      `json:"configured"`
-	Revision                  string    `json:"revision"`
-	UpdatedAt                 time.Time `json:"updatedAt,omitempty"`
+	Canvas                    CanvasAppearance `json:"canvas"`
+	SchemaVersion             int              `json:"schemaVersion"`
+	BrandName                 string           `json:"brandName"`
+	BrandSlug                 string           `json:"brandSlug"`
+	AuthHeroTitle             string           `json:"authHeroTitle"`
+	AuthHeroDescription       string           `json:"authHeroDescription"`
+	LogoURL                   string           `json:"logoUrl"`
+	DarkLogoURL               string           `json:"darkLogoUrl"`
+	LogoFrameEnabled          bool             `json:"logoFrameEnabled"`
+	AuthVideoURL              string           `json:"authVideoUrl"`
+	AuthVideoPosterURL        string           `json:"authVideoPosterUrl"`
+	AuthVideoAutoplay         bool             `json:"authVideoAutoplay"`
+	SEOTitle                  string           `json:"seoTitle"`
+	SEODescription            string           `json:"seoDescription"`
+	SEOKeywords               string           `json:"seoKeywords"`
+	FooterCopyright           string           `json:"footerCopyright"`
+	ICPFilingEnabled          bool             `json:"icpFilingEnabled"`
+	ICPFilingNumber           string           `json:"icpFilingNumber"`
+	LogoConfigured            bool             `json:"logoConfigured"`
+	DarkLogoConfigured        bool             `json:"darkLogoConfigured"`
+	AuthVideoConfigured       bool             `json:"authVideoConfigured"`
+	AuthVideoPosterConfigured bool             `json:"authVideoPosterConfigured"`
+	Configured                bool             `json:"configured"`
+	Revision                  string           `json:"revision"`
+	UpdatedAt                 time.Time         `json:"updatedAt,omitempty"`
 }
 
 type AdminAppearanceSetting struct {
@@ -104,6 +106,7 @@ type AdminAppearanceSetting struct {
 
 func defaultAppearanceSetting() AppearanceSetting {
 	return AppearanceSetting{
+		Canvas:            defaultCanvasAppearance(),
 		SchemaVersion:     appearanceSchemaVersion,
 		BrandName:         defaultAppearanceBrandName,
 		BrandSlug:         defaultAppearanceBrandSlug,
@@ -162,6 +165,11 @@ func (s *Service) UpdateAppearance(actor *model.User, value AppearanceSetting) (
 		return nil, err
 	}
 	value.SchemaVersion = appearanceSchemaVersion
+	canvas, canvasErr := normalizeCanvasAppearance(value.Canvas)
+	if canvasErr != nil {
+		return nil, canvasErr
+	}
+	value.Canvas = canvas
 	value.BrandName = strings.TrimSpace(value.BrandName)
 	value.BrandSlug = strings.ToLower(strings.TrimSpace(value.BrandSlug))
 	value.AuthHeroTitle = normalizeAppearanceCopy(value.AuthHeroTitle)
@@ -184,6 +192,13 @@ func (s *Service) UpdateAppearance(actor *model.User, value AppearanceSetting) (
 	current, before, err := s.readAppearance()
 	if err != nil {
 		return nil, err
+	}
+	if value.Canvas.Live2DResourceID != "" {
+		entry, err := s.validateLive2DResource(actor, value.Canvas.Live2DResourceID, before.Canvas.Live2DResourceID)
+		if err != nil {
+			return nil, err
+		}
+		value.Canvas.Live2DEntry = entry
 	}
 	for _, candidate := range []struct {
 		slot       string
@@ -309,6 +324,7 @@ func (s *Service) appearanceResourceReferences(resourceIDs []string) map[string]
 		{resourceID: value.DarkLogoResourceID, title: "深色模式品牌 Logo"},
 		{resourceID: value.AuthVideoResourceID, title: "登录页品牌视频"},
 		{resourceID: value.AuthVideoPosterResourceID, title: "登录页视频封面"},
+		{resourceID: value.Canvas.Live2DResourceID, title: "画布 Agent Live2D 形象"},
 	}
 	wanted := make(map[string]struct{}, len(resourceIDs))
 	for _, resourceID := range resourceIDs {
@@ -589,6 +605,7 @@ func publicAppearanceSetting(setting *model.SystemSetting, value AppearanceSetti
 		revision = strconv.FormatInt(setting.UpdatedAt.UTC().UnixNano(), 36)
 	}
 	result := &PublicAppearanceSetting{
+		Canvas:              value.Canvas,
 		SchemaVersion:       appearanceSchemaVersion,
 		BrandName:           value.BrandName,
 		BrandSlug:           value.BrandSlug,

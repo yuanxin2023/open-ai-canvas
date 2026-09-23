@@ -51,6 +51,7 @@ export function CanvasToolbar({
     onSaveAppearanceDefault,
     onBackgroundModeChange,
     onShowImageInfoChange,
+    onOpenWorkspace,
     onOpenMyAssets,
     onOpenProjectCharacters,
 }: {
@@ -86,6 +87,7 @@ export function CanvasToolbar({
     onSaveAppearanceDefault: (appearance: CanvasAppearance) => void;
     onBackgroundModeChange: (mode: CanvasBackgroundMode) => void;
     onShowImageInfoChange: (show: boolean) => void;
+    onOpenWorkspace?: () => void;
     onOpenMyAssets: () => void;
     onOpenProjectCharacters: () => void;
 }) {
@@ -150,7 +152,8 @@ export function CanvasToolbar({
         onChooseStyle,
         onOpenDirector,
         onUpload,
-        onOpenMyAssets,
+        onOpenWorkspace,
+    onOpenMyAssets,
         onOpenProjectCharacters,
         onBackgroundModeChange,
         onShowImageInfoChange,
@@ -162,7 +165,7 @@ export function CanvasToolbar({
         onAlign: () => {}, onArrange: () => {}, onCreateStoryboard: () => {}, onCreateReferenceGroup: () => {}, onBatchConnect: () => {}, onMergeVideos: () => {}, onSendSelectionToAgent: () => {},
         onNodeInfo: () => {}, onNodeDelete: () => {}, onNodeRetry: () => {}, onNodeEditText: () => {}, onNodeDecreaseFont: () => {}, onNodeIncreaseFont: () => {},
         onNodeToggleDialog: () => {}, onNodeAnnotate: () => {}, onNodeGenerateImage: () => {}, onNodeUpload: () => {}, onNodeDownload: () => {}, onNodeSaveAsset: () => {},
-        onNodeMaskEdit: () => {}, onNodeEmotion: () => {}, onNodePortraitTexture: () => {}, onNodeCrop: () => {}, onNodeSplit: () => {}, onNodeUpscale: () => {},
+        onNodeMaskEdit: () => {}, onNodeImageEdit: () => {}, onNodeRemoveBackground: () => {}, onNodeEmotion: () => {}, onNodePortraitTexture: () => {}, onNodeCrop: () => {}, onNodeSplit: () => {}, onNodeUpscale: () => {},
         onNodeSuperResolve: () => {}, onNodeAngle: () => {}, onNodeViewImage: () => {}, onNodeExtractVideoFrames: () => {}, onNodeExtractAudioFromVideo: () => {}, onNodeTrimVideoSegments: () => {}, onNodeSubtitles: () => {}, onNodeTimeline: () => {}, onNodeReversePrompt: () => {},
         onNodeToggleFreeResize: () => {}, onNodeToggleLocked: () => {}, onNodeCopyPrompt: () => {},
     } as ToolbarHandlers;

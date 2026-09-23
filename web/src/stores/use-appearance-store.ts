@@ -1,9 +1,11 @@
 import { create } from "zustand";
+import { DEFAULT_CANVAS_APPEARANCE } from "@/lib/canvas/agent-appearance";
 
 import type { PublicAppearance } from "@/services/api/appearance";
 
 export const DEFAULT_PUBLIC_APPEARANCE: PublicAppearance = {
-    schemaVersion: 8,
+	canvas: DEFAULT_CANVAS_APPEARANCE,
+	schemaVersion: 9,
     brandName: "影策",
     brandSlug: "open-ai-canvas",
     authHeroTitle: "让一个故事，\n从文字走向银幕。",
@@ -53,9 +55,12 @@ export function normalizePublicAppearance(value?: Partial<PublicAppearance> | nu
     const seoDescription = normalizeAppearanceCopy(value?.seoDescription, `${resolvedBrandName}，面向 AI 影视与短剧创作的工作台。`, true);
     const seoKeywords = normalizeAppearanceCopy(value?.seoKeywords, "", true);
     const footerCopyright = normalizeAppearanceCopy(value?.footerCopyright, `© ${new Date().getFullYear()} ${resolvedBrandName}. All rights reserved.`);
-    const icpFilingNumber = normalizeAppearanceCopy(value?.icpFilingNumber, "", true);
-    return {
-        schemaVersion: 8,
+	const icpFilingNumber = normalizeAppearanceCopy(value?.icpFilingNumber, "", true);
+	return {
+		...DEFAULT_PUBLIC_APPEARANCE,
+		...value,
+		schemaVersion: 9,
+		canvas: { ...DEFAULT_CANVAS_APPEARANCE, ...value?.canvas },
         brandName: resolvedBrandName,
         brandSlug,
         authHeroTitle,

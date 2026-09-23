@@ -17,7 +17,10 @@ import (
 func Models() []any {
 	return []any{
 		&model.CloudAgentExecution{},
+		&model.CloudAgentEventRecord{},
+		&model.CloudAgentMessageRecord{},
 		&model.CloudAgentCanvasMutation{},
+		&model.CloudAgentResourceLease{},
 		&model.AgentProfile{},
 		&model.AgentLesson{},
 		&model.AgentMemorySetting{},
@@ -60,6 +63,8 @@ func Models() []any {
 		&model.SkillVersion{},
 		&model.SkillFile{},
 		&model.UserSkillState{},
+		&model.Tool{},
+		&model.ToolFavorite{},
 		&model.Resource{},
 		&model.ResourceDeletionJob{},
 		&model.AnnouncementImageDraft{},

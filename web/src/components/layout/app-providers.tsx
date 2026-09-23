@@ -8,6 +8,7 @@ import { AuthSessionHydrator } from "@/components/auth/auth-session-hydrator";
 import { FullScreenLoader } from "@/components/ui/aceternity/full-screen-loader";
 import { getAntThemeConfig } from "@/lib/app-theme";
 import { appQueryClient } from "@/lib/query-client";
+import { isIsolatedDirectorRepro } from "@/lib/dev-repro";
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import { applyAppearanceMetadata, useAppearanceStore } from "@/stores/use-appearance-store";
 import { useUserStore } from "@/stores/use-user-store";
@@ -33,11 +34,11 @@ export function AppProviders({ children }: { children: ReactNode }) {
 
     // DEV 复现台必须是同源本地确定性场景：AuthSessionHydrator 会打 /api/auth/session，
     // ClientRootInit 会打 /api/model-catalog，没有后端时产生真实 502，与导演台无关却会污染判据。
-    // 只精确匹配该路径；生产构建中 import.meta.env.DEV 为 false，本分支被摇树删除。
-    const isolateDevRepro = import.meta.env.DEV && typeof window !== "undefined" && window.location.pathname === "/dev/director-repro";
+    // 与启动入口共用精确路径边界；生产构建中 import.meta.env.DEV 为 false，始终不启用隔离。
+    const isolateDevRepro = typeof window !== "undefined" && isIsolatedDirectorRepro(import.meta.env.DEV, window.location.pathname);
 
-    return (
-        <ConfigProvider locale={zhCN} theme={getAntThemeConfig(dark)}>
+	return (
+		<ConfigProvider locale={zhCN} theme={getAntThemeConfig(dark)} wave={{ disabled: true }}>
             <App message={{ duration: 3, maxCount: 3 }} notification={{ duration: 4.5, maxCount: 3, placement: "topRight" }}>
                 <QueryClientProvider client={appQueryClient}>
                     {isolateDevRepro ? (

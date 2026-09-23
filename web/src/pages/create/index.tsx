@@ -33,6 +33,8 @@ import { defaultCreationMode, modeLabels, type CreationConversation, type Creati
 import { attachCreationTaskContexts, completedCreationGenerationTask, conversationTimestamp, creationShotRail, creationVideoShotOrdinal, isImageAttachment, isVideoAttachment, materializeCreationTaskResults, newConversation, newMessage, reconcileCreationTaskMessages } from "./creation-conversations";
 import { CreationComposer, CreationEmptySuggest, CreationFeaturedWorks, CreationHistoryDrawer, CreationMessageView, CreationModeTabs, CreationWorkspaceToolbar, creationAssetCategoryLabels } from "./creation-workspace";
 import { CreationAgentEntry } from "./creation-agent-entry";
+import { createCreationSubmitGate } from "./creation-submit-gate";
+import { creationVideoConfig } from "./creation-generation-config";
 
 const AssetLibraryPickerModal = lazy(() => import("@/components/assets/asset-library-picker-modal").then((module) => ({ default: module.AssetLibraryPickerModal })));
 const loadCreationRuntime = () => import("./creation-runtime");
@@ -113,6 +115,7 @@ export default function CreatePage() {
     const taskSyncWarningRef = useRef(false);
     const activeGenerationTaskIdsRef = useRef(new Set<string>());
     const retryPreparingRef = useRef(new Set<string>());
+    const submitGateRef = useRef(createCreationSubmitGate());
     const pendingRetryRef = useRef<{ context: CreationRetryContext; lockKey: string } | null>(null);
     const [retrySequence, setRetrySequence] = useState(0);
     const [composerPreferencesInitialized, setComposerPreferencesInitialized] = useState(false);
@@ -140,10 +143,13 @@ export default function CreatePage() {
 		options: mode === "image"
 			? { size: ratio, quality, count: Number(count), transparentBackground: config.transparentBackground === "true" }
 			: mode === "video"
-				? { size: ratio, videoSeconds: Number(seconds), vquality: videoQuality, videoGenerateAudio: config.videoGenerateAudio === "true", videoWatermark: config.videoWatermark === "true" }
+				? { size: ratio, videoSeconds: Number(seconds), vquality: videoQuality }
 				: {},
-	}), [attachments, config.transparentBackground, config.videoGenerateAudio, config.videoWatermark, count, hasPrompt, mode, quality, ratio, seconds, videoQuality]);
+	}), [attachments, config.transparentBackground, count, hasPrompt, mode, quality, ratio, seconds, videoQuality]);
     const selectedModel = resolveCompatibleModel(config, preferredModel, modelRequirements) || preferredModel;
+    const generationConfig = useMemo(() => mode === "video"
+        ? creationVideoConfig(config, selectedModel, { ratio, seconds, videoQuality })
+        : config, [config, mode, ratio, seconds, selectedModel, videoQuality]);
     const imageProfile = useMemo(() => modelCapabilityConfigFor(config, selectedModel).image!, [config, selectedModel]);
     const videoProfile = useMemo(() => modelCapabilityConfigFor(config, selectedModel).video!, [config, selectedModel]);
     const maxReferences = mode === "video" ? videoProfile.operations.includes("image_to_video") ? videoProfile.references.maxImages : 0 : mode === "image" ? imageProfile.references.maxImages : 6;
@@ -527,24 +533,33 @@ export default function CreatePage() {
         const releaseRetryLock = () => {
             if (retryLockKey) retryPreparingRef.current.delete(retryLockKey);
         };
+        if (!submitGateRef.current.tryAcquire()) {
+            releaseRetryLock();
+            return;
+        }
+        const releaseSubmitGate = () => submitGateRef.current.release();
         const text = prompt.trim();
         if (!text || busy || !activeConversation) {
             releaseRetryLock();
+            releaseSubmitGate();
             return;
         }
         if (!selectedModel) {
             toast.warning(`请先在设置中配置${modeLabels[mode]}模型`);
             releaseRetryLock();
+            releaseSubmitGate();
             return;
         }
         if (mode === "video" && !videoDurationAllowed(videoProfile, Number(seconds))) {
             toast.error("当前模型不支持所选视频时长，请重新选择");
             releaseRetryLock();
+            releaseSubmitGate();
             return;
         }
         if (attachments.length > maxReferences) {
             toast.warning("参考内容正在按当前模型能力调整，请稍后重试");
             releaseRetryLock();
+            releaseSubmitGate();
             return;
         }
         const settings = { ratio, seconds, quality, videoQuality, count };
@@ -559,7 +574,15 @@ export default function CreatePage() {
             characterCount: 0,
         });
         const skillReferences = references.flatMap((reference) => (reference.skill ? [reference.skill] : []));
-        const runtime = await loadCreationRuntime();
+        let runtime: CreationRuntime;
+        try {
+            runtime = await loadCreationRuntime();
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : "生成运行时加载失败");
+            releaseRetryLock();
+            releaseSubmitGate();
+            return;
+        }
         let skillExecution: Awaited<ReturnType<typeof runtime.skillRuntime.prepare>>;
         try {
             skillExecution = await runtime.skillRuntime.prepare({
@@ -571,6 +594,7 @@ export default function CreatePage() {
         } catch (error) {
             toast.error(error instanceof Error ? error.message : "技能上下文加载失败");
             releaseRetryLock();
+            releaseSubmitGate();
             return;
         }
         const expandedPrompt = skillExecution.prompt;
@@ -608,18 +632,15 @@ export default function CreatePage() {
         const requestLifecycle = runtime.beginGenerationConsumer(controller.signal);
         abortRef.current = controller;
         const normalizedImage = mode === "image" ? normalizeImageValue(imageProfile, { size: ratio, quality, count }) : undefined;
-        const normalizedVideo = mode === "video" ? normalizeVideoValue(videoProfile, { seconds, ratio, resolution: videoQuality }) : undefined;
         const requestConfig = {
-            ...config,
+            ...generationConfig,
             model: selectedModel,
             imageModel: selectedModel,
             videoModel: selectedModel,
             textModel: selectedModel,
             ...(mode === "image"
                 ? { size: normalizedImage?.size || ratio, quality: normalizedImage?.quality || quality, count: normalizedImage?.count || count, videoSeconds: config.videoSeconds }
-                : mode === "video"
-                  ? { size: normalizedVideo?.ratio ?? ratio, videoSeconds: normalizedVideo?.seconds || seconds, vquality: (normalizedVideo?.resolution ?? videoQuality).replace(/p$/i, "") }
-                  : {}),
+                : {}),
         };
         try {
             if (mode === "text") {
@@ -719,6 +740,7 @@ export default function CreatePage() {
             for (const taskId of boundTaskIds) activeGenerationTaskIdsRef.current.delete(taskId);
             requestLifecycle.release();
             releaseRetryLock();
+            releaseSubmitGate();
             if (abortRef.current === controller) {
                 abortRef.current = null;
                 setBusy(false);
@@ -936,7 +958,7 @@ export default function CreatePage() {
         modelRequirements,
         imageProfile,
         videoProfile,
-        config,
+        config: generationConfig,
         onModelChange: (value: string) => updateConfig(mode === "text" ? "textModel" : mode === "image" ? "imageModel" : "videoModel", value),
         ratio,
         setRatio: setComposerRatio,

@@ -1,7 +1,7 @@
 import { App, Button, InputNumber } from "antd";
 import { SettingsRow } from "@/components/ui/product/settings-row";
 import { ArrowLeft, Boxes, Brain, Bug, CircleDollarSign, Cloud, MessageSquareText, RadioTower, ReceiptText, SlidersHorizontal, Workflow } from "lucide-react";
-import { useEffect, useLayoutEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 
 import { UserOSSSettingsForm } from "@/components/layout/user-oss-settings-form";
@@ -60,11 +60,6 @@ export default function SettingsPage() {
     const shouldPromptContinue = searchParams.get("continue") === "1";
     const userId = useUserStore((state) => state.user?.id);
     const userChannels = config.channels.filter((channel) => channel.scope !== "system");
-
-    useLayoutEffect(() => {
-        document.body.classList.add("app-user-overlays");
-        return () => document.body.classList.remove("app-user-overlays");
-    }, []);
 
     useEffect(() => {
         if (isVisibleConfigSection(requestedSection)) {

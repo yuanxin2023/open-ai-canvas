@@ -8,10 +8,16 @@ const (
 	PaymentPluginWeChatNative = "official-payment-wechat-native"
 	PaymentPluginAlipayPage   = "official-payment-alipay-page"
 	PaymentPluginZPay         = "official-payment-zpay"
+	PaymentPluginXunHuPay     = "official-payment-xunhupay"
+	PaymentPluginZhiFuFM      = "official-payment-zhifufm"
+	PaymentPluginEpay         = "official-payment-epay"
 	PaymentProviderWeChat     = "wechat-native"
 	PaymentProviderAlipay     = "alipay-page-pay"
 	PaymentProviderZPayAlipay = "zpay-alipay-qr"
 	PaymentProviderZPayWeChat = "zpay-wechat-qr"
+	PaymentProviderXunHuPay   = "xunhupay-aggregate"
+	PaymentProviderZhiFuFM    = "zhifufm-pay"
+	PaymentProviderEpay       = "epay"
 )
 
 func bundledPaymentPluginManifests() []protocol.Manifest {

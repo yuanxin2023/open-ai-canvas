@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import type { ModelTag } from "@/lib/model-tags";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { nanoid } from "nanoid";
@@ -344,7 +345,6 @@ export const PUBLIC_MODEL_CATALOG_ID = "managed";
 export type ModelChannel = {
     id: string;
     name: string;
-    publicAlias?: string;
     sortOrder?: number;
     baseUrl: string;
     apiKey: string;
@@ -363,6 +363,8 @@ export type ModelChannel = {
     modelCosts?: Array<{
         model: string;
         displayName?: string;
+        channelLabel?: string;
+        tags?: ModelTag[];
         description?: string;
         icon?: string;
         capability: ModelCapability;

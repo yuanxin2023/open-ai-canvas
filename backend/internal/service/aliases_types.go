@@ -98,6 +98,8 @@ type (
 	ChannelModelCatalogOptions             = app.ChannelModelCatalogOptions
 	ChannelModelPriceTierRequest           = app.ChannelModelPriceTierRequest
 	ChannelModelRequest                    = app.ChannelModelRequest
+	ChannelModelRepriceRequest             = app.ChannelModelRepriceRequest
+	ChannelModelQuoteRequest               = app.ChannelModelQuoteRequest
 	ChannelModelSortRequest                = app.ChannelModelSortRequest
 	ChannelModelsRequest                   = app.ChannelModelsRequest
 	ChannelOrderItem                       = app.ChannelOrderItem
@@ -285,6 +287,11 @@ type (
 	StorageMigrationSummary                = app.StorageMigrationSummary
 	StyleProfileFavoriteRequest            = app.StyleProfileFavoriteRequest
 	StyleProfileRequest                    = app.StyleProfileRequest
+	ToolItem                               = app.ToolItem
+	ToolList                               = app.ToolList
+	ToolListRequest                        = app.ToolListRequest
+	ToolMutationRequest                    = app.ToolMutationRequest
+	ToolSummary                            = app.ToolSummary
 	SystemPerformanceCacheGroup            = app.SystemPerformanceCacheGroup
 	SystemPerformanceDisk                  = app.SystemPerformanceDisk
 	SystemPerformanceHost                  = app.SystemPerformanceHost

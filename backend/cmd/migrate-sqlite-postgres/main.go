@@ -218,6 +218,8 @@ func verifyMigrationCoverage(db *gorm.DB) error {
 
 func migrations() []tableMigration {
 	return []tableMigration{
+		migrateTable[model.Tool]("tools"),
+		migrateTable[model.ToolFavorite]("tool_favorites"),
 		migrateTable[model.User]("users"),
 		migrateTable[model.AuthSession]("auth_sessions"),
 		migrateTable[model.UserIdentity]("user_identities"),
@@ -298,7 +300,10 @@ func migrations() []tableMigration {
 		migrateTable[model.CreationSubmission]("creation_submissions"),
 		migrateTable[model.Task]("tasks"),
 		migrateTable[model.CloudAgentExecution]("cloud_agent_executions"),
+		migrateTable[model.CloudAgentEventRecord]("cloud_agent_event_records"),
+		migrateTable[model.CloudAgentMessageRecord]("cloud_agent_message_records"),
 		migrateTable[model.CloudAgentCanvasMutation]("cloud_agent_canvas_mutations"),
+		migrateTable[model.CloudAgentResourceLease]("cloud_agent_resource_leases"),
 		migrateTable[model.AgentProfile]("agent_profiles"),
 		migrateTable[model.AgentLesson]("agent_lessons"),
 		migrateTable[model.AgentMemorySetting]("agent_memory_settings"),

@@ -12,7 +12,7 @@ import (
 	"gorm.io/gorm"
 )
 
-const CurrentSchemaVersion int64 = 27
+const CurrentSchemaVersion int64 = 36
 
 //go:embed seed/inspirations.json
 var inspirationSeedJSON []byte
@@ -107,6 +107,23 @@ var schemaMigrations = []migration{
 	{version: 27, name: "inspiration_cover_dimensions", checksum: "sha256:inspiration-cover-dimensions-v27-20260921", apply: func(tx *gorm.DB) error {
 		return tx.AutoMigrate(&model.Inspiration{})
 	}},
+	{version: 28, name: "channel_model_label", checksum: "sha256:channel-model-label-v24", apply: migrateChannelModelLabel},
+	{version: 29, name: "video_token_formula_snapshot", checksum: "sha256:video-token-formula-snapshot-v25", apply: migrateVideoTokenFormulaSnapshot},
+	{version: 30, name: "channel_model_description", checksum: "sha256:channel-model-description-v26", apply: migrateChannelModelDescription},
+	{version: 31, name: "channel_credit_cost", checksum: "sha256:channel-credit-cost-v27", apply: migrateChannelCreditCost},
+	{version: 32, name: "agent_execution_journal", checksum: "sha256:agent-execution-journal-v28", apply: func(tx *gorm.DB) error {
+		return tx.AutoMigrate(&model.CloudAgentExecution{}, &model.CloudAgentEventRecord{}, &model.CloudAgentMessageRecord{}, &model.Task{}, &model.BillingOrder{})
+	}},
+	{version: 33, name: "agent_resource_leases", checksum: "sha256:agent-resource-leases-v29-20260919", apply: func(tx *gorm.DB) error {
+		return tx.AutoMigrate(&model.CloudAgentResourceLease{})
+	}},
+	{version: 34, name: "builtin_tools", checksum: "sha256:builtin-tools-v30", apply: func(tx *gorm.DB) error {
+		return tx.AutoMigrate(&model.Tool{})
+	}},
+	{version: 35, name: "tool_favorites", checksum: "sha256:tool-favorites-v31", apply: func(tx *gorm.DB) error {
+		return tx.AutoMigrate(&model.ToolFavorite{})
+	}},
+	{version: 36, name: "channel_model_tags", checksum: "sha256:channel-model-tags-v32", apply: migrateChannelModelTags},
 }
 
 func migrateSchemaV25(tx *gorm.DB) error {
@@ -139,6 +156,58 @@ func migrateSchemaV25(tx *gorm.DB) error {
 		return fmt.Errorf("精选灵感种子数量异常：%d", len(rows))
 	}
 	return tx.Create(&rows).Error
+}
+
+func migrateChannelModelTags(tx *gorm.DB) error {
+	if tx.Migrator().HasColumn(&model.ChannelModel{}, "Tags") {
+		return nil
+	}
+	return tx.Migrator().AddColumn(&model.ChannelModel{}, "Tags")
+}
+
+func migrateChannelCreditCost(tx *gorm.DB) error {
+	for _, entity := range []any{&model.ChannelModelPriceTier{}, &model.BillingOrder{}} {
+		for _, column := range []string{"cost_configured", "cost_unit_price_microcredits", "cost_input_token_price_microcredits", "cost_output_token_price_microcredits", "cost_cached_token_price_microcredits"} {
+			if !tx.Migrator().HasColumn(entity, column) {
+				if err := tx.Migrator().AddColumn(entity, column); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	for _, column := range []string{"CostBillingMode", "CostQuantity", "CostVideoFormulaTokens"} {
+		if !tx.Migrator().HasColumn(&model.BillingOrder{}, column) {
+			if err := tx.Migrator().AddColumn(&model.BillingOrder{}, column); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func migrateChannelModelDescription(tx *gorm.DB) error {
+	if tx.Migrator().HasColumn(&model.ChannelModel{}, "Description") {
+		return nil
+	}
+	return tx.Migrator().AddColumn(&model.ChannelModel{}, "Description")
+}
+
+func migrateVideoTokenFormulaSnapshot(tx *gorm.DB) error {
+	for _, field := range []string{"VideoFormulaTokens", "UsageSource"} {
+		if !tx.Migrator().HasColumn(&model.BillingOrder{}, field) {
+			if err := tx.Migrator().AddColumn(&model.BillingOrder{}, field); err != nil {
+				return fmt.Errorf("增加视频 Token 结算字段 %s：%w", field, err)
+			}
+		}
+	}
+	return nil
+}
+
+func migrateChannelModelLabel(tx *gorm.DB) error {
+	if tx.Migrator().HasColumn(&model.ChannelModel{}, "ChannelLabel") {
+		return nil
+	}
+	return tx.Migrator().AddColumn(&model.ChannelModel{}, "ChannelLabel")
 }
 
 func migrateSchemaV14(tx *gorm.DB) error {
@@ -203,22 +272,39 @@ func migrateChannelPresentation(tx *gorm.DB) error {
 }
 
 func migrationsForDatabase(db *gorm.DB) ([]migration, error) {
+	plan := append([]migration(nil), schemaMigrations...)
+	var appliedV24 schemaMigration
+	err := db.First(&appliedV24, "version = ?", 24).Error
+	if err == nil {
+		localExpected := schemaMigrations[23]
+		upstreamPlan := upstreamFirstMigrationPlan()
+		upstreamExpected := upstreamPlan[23]
+		switch {
+		case migrationRecordMatches(appliedV24, localExpected):
+		case migrationRecordMatches(appliedV24, upstreamExpected):
+			plan = upstreamPlan
+		default:
+			return nil, fmt.Errorf("数据库迁移 24 不属于已知本地或官方谱系：记录为 %s（%s）", appliedV24.Name, appliedV24.Checksum)
+		}
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, fmt.Errorf("读取数据库迁移 24：%w", err)
+	}
+
 	var applied schemaMigration
-	err := db.First(&applied, "version = ?", 6).Error
+	err = db.First(&applied, "version = ?", 6).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return schemaMigrations, nil
+		return plan, nil
 	}
 	if err != nil {
 		return nil, fmt.Errorf("读取数据库迁移 6：%w", err)
 	}
 	if applied.Name != "asset_library_folders" {
-		return schemaMigrations, nil
+		return plan, nil
 	}
 	legacy := migration{version: 6, name: "asset_library_folders", checksum: assetLibraryFoldersChecksum, apply: migrateSchemaV7}
 	if err := validateMigrationRecord(applied, legacy); err != nil {
 		return nil, err
 	}
-	plan := append([]migration(nil), schemaMigrations...)
 	for index, item := range plan {
 		switch item.version {
 		case 6:
@@ -228,6 +314,25 @@ func migrationsForDatabase(db *gorm.DB) ([]migration, error) {
 		}
 	}
 	return plan, nil
+}
+
+func upstreamFirstMigrationPlan() []migration {
+	const sharedCount = 23
+	const localCount = 4
+	plan := append([]migration(nil), schemaMigrations[:sharedCount]...)
+	for index, item := range schemaMigrations[sharedCount+localCount:] {
+		item.version = int64(24 + index)
+		plan = append(plan, item)
+	}
+	for index, item := range schemaMigrations[sharedCount : sharedCount+localCount] {
+		item.version = int64(33 + index)
+		plan = append(plan, item)
+	}
+	return plan
+}
+
+func migrationRecordMatches(applied schemaMigration, expected migration) bool {
+	return applied.Name == expected.name && applied.Checksum == expected.checksum
 }
 
 func migrateSchemaV2(tx *gorm.DB) error {
