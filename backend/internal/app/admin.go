@@ -405,6 +405,78 @@ func (s *Service) DeleteUser(actor *model.User, userID string) error {
 	return s.appendAdminAudit(actor, "user.disable", "user", user.ID, "停用用户并清除登录态", nil)
 }
 
+func (s *Service) PurgeUser(actor *model.User, userID string) error {
+	if err := s.RequireAdmin(actor); err != nil {
+		return err
+	}
+	if actor.ID == userID {
+		return BadAuthRequest("不能注销当前登录的管理员账号")
+	}
+	user, err := s.repo.User(userID)
+	if err != nil {
+		return err
+	}
+	if user.Role == model.UserRoleAdmin {
+		count, err := s.repo.ActiveAdminCountExcluding(user.ID)
+		if err != nil {
+			return err
+		}
+		if count == 0 {
+			return BadAuthRequest("至少需要保留一个可用管理员")
+		}
+	}
+
+	s.storageMu.Lock()
+	defer s.storageMu.Unlock()
+	snapshot, err := s.repo.UserPurgeSnapshot(user.ID)
+	if err != nil {
+		return err
+	}
+	for _, taskID := range snapshot.TaskIDs {
+		s.cancelActiveTask(taskID)
+	}
+	resourceIDs := make([]string, 0, len(snapshot.Resources))
+	for _, resource := range snapshot.Resources {
+		resourceIDs = append(resourceIDs, resource.ID)
+	}
+	if len(s.appearanceResourceReferences(resourceIDs)) > 0 || len(s.customerServiceResourceReferences(resourceIDs)) > 0 {
+		return BadAuthRequest("该用户的资源仍被平台外观或客服配置使用，请先替换相关资源后再注销")
+	}
+	physicalObjects := make(map[string]*model.Resource, len(snapshot.Resources))
+	for index := range snapshot.Resources {
+		resource := &snapshot.Resources[index]
+		if strings.TrimSpace(resource.ObjectKey) == "" {
+			continue
+		}
+		sharedCount, countErr := s.repo.ResourceStorageReferenceCount(resource, resourceIDs)
+		if countErr != nil {
+			return countErr
+		}
+		if sharedCount == 0 {
+			physicalObjects[resourceStorageIdentity(resource)] = resource
+		}
+	}
+	metadata, err := json.Marshal(map[string]any{"resourceCount": len(snapshot.Resources), "taskCount": len(snapshot.TaskIDs)})
+	if err != nil {
+		return err
+	}
+	deletionJobs := resourceDeletionJobs(user.ID, physicalObjects)
+	audit := model.AdminAuditEvent{
+		ID: newID(), ActorUserID: actor.ID, Action: "user.purge", TargetType: "user", TargetID: user.ID,
+		Summary: "注销用户并清理全部用户数据", MetadataJSON: string(metadata), CreatedAt: time.Now(),
+	}
+	if err := s.repo.PurgeUserData(user.ID, resourceIDs, deletionJobs, audit); err != nil {
+		if errors.Is(err, repository.ErrUserPurgeChanged) {
+			return BadAuthRequest("用户数据正在变化，请稍后重试注销")
+		}
+		return err
+	}
+	if len(deletionJobs) > 0 {
+		s.runWorkerTask(func() { s.drainResourceDeletionJobs(len(deletionJobs)) })
+	}
+	return nil
+}
+
 func (s *Service) BulkDisableUsers(actor *model.User, req BulkDisableUsersRequest) (*BulkDisableUsersResult, error) {
 	if err := s.RequireAdmin(actor); err != nil {
 		return nil, err

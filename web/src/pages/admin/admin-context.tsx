@@ -8,6 +8,7 @@ type AdminContextValue = {
     referencesLoading: boolean;
     reloadReferences: () => Promise<void>;
     updateUserReference: (user: LocalUser) => void;
+    removeUserReference: (userId: string) => void;
 };
 
 const emptyReferences: AdminReferenceData = { users: [], channels: [] };
@@ -40,7 +41,11 @@ export function AdminProvider({ children }: { children: ReactNode }) {
         }));
     }, []);
 
-    const value = useMemo(() => ({ references, referencesLoading, reloadReferences, updateUserReference }), [references, referencesLoading, reloadReferences, updateUserReference]);
+    const removeUserReference = useCallback((userId: string) => {
+        setReferences((current) => ({ ...current, users: current.users.filter((item) => item.id !== userId) }));
+    }, []);
+
+    const value = useMemo(() => ({ references, referencesLoading, reloadReferences, updateUserReference, removeUserReference }), [references, referencesLoading, reloadReferences, updateUserReference, removeUserReference]);
     return <AdminContext.Provider value={value}>{children}</AdminContext.Provider>;
 }
 

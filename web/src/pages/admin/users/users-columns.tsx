@@ -1,5 +1,5 @@
 import type { ColumnsType } from "antd/es/table";
-import { Eye, Pencil, Power } from "lucide-react";
+import { Eye, SlidersHorizontal, UserRoundX } from "lucide-react";
 
 import { formatCredits } from "@/constant/credits";
 import { IdentityProviderBadge } from "@/components/layout/identity-provider-badge";
@@ -23,13 +23,13 @@ export function createUserColumns({
     visibleColumns,
     onView,
     onEdit,
-    onToggleStatus,
+    onPurge,
 }: {
     actorId?: string;
     visibleColumns: Set<UserColumnKey>;
     onView: (user: AdminUser) => void;
     onEdit: (user: AdminUser) => void;
-    onToggleStatus: (user: AdminUser) => Promise<void>;
+    onPurge: (user: AdminUser) => Promise<void>;
 }): ColumnsType<AdminUser> {
     const columns: Array<ColumnsType<AdminUser>[number] & { key: UserColumnKey }> = [
         {
@@ -58,27 +58,27 @@ export function createUserColumns({
         {
             key: "actions",
             title: "操作",
-            width: 184,
+            width: 230,
             align: "center",
             render: (_, user) => (
                 <AdminRowActions
                     primary={{ label: "详情", icon: <Eye className="size-3.5" />, onClick: () => onView(user) }}
-                    visibleActionCount={1}
+                    visibleActionCount={2}
                     actions={[
+                        { key: "manage", label: "管理", icon: <SlidersHorizontal className="size-3.5" />, onClick: () => onEdit(user) },
                         {
-                            key: "toggle-status",
-                            label: user.status === "active" ? "停用用户" : "重新启用",
-                            icon: <Power className="size-3.5" />,
-                            danger: user.status === "active",
+                            key: "purge",
+                            label: "注销",
+                            icon: <UserRoundX className="size-3.5" />,
+                            danger: true,
                             disabled: user.id === actorId,
                             confirm: {
-                                title: user.status === "active" ? "停用这个用户？" : "重新启用这个用户？",
-                                description: user.status === "active" ? "停用后会清除该用户登录态，但保留身份、任务和积分流水。" : "启用后，该用户可以重新登录并继续使用原有数据。",
-                                okText: user.status === "active" ? "确认停用" : "确认启用",
+                                title: `确认注销“${user.displayName || user.username}”？`,
+                                description: "注销后将永久删除该用户账号，以及该用户产生的画布、项目、素材、任务、积分、支付记录和其他全部资料。此操作不可恢复。",
+                                okText: "确认注销并删除",
                             },
-                            onClick: () => onToggleStatus(user),
+                            onClick: () => onPurge(user),
                         },
-                        { key: "edit", label: "编辑用户", icon: <Pencil className="size-3.5" />, onClick: () => onEdit(user) },
                     ]}
                 />
             ),

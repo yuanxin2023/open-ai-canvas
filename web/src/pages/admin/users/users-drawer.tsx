@@ -1,6 +1,7 @@
 import { App, Button, Drawer, Form, Input, Tooltip } from "antd";
 import { Copy, RefreshCw } from "lucide-react";
 import { Select } from "@/pages/admin/ui/controls";
+import { AdminModal } from "@/pages/admin/ui/overlays";
 import { useEffect, useState, type ChangeEvent } from "react";
 
 import { useCopyText } from "@/hooks/use-copy-text";
@@ -9,7 +10,7 @@ import { generateAdminPassword } from "./admin-password";
 
 type UserFormValues = Pick<LocalUser, "displayName" | "email" | "role" | "status"> & { password?: string };
 
-export function AdminUserEditDrawer({
+export function AdminUserEditModal({
     user,
     actorId,
     onClose,
@@ -79,14 +80,21 @@ export function AdminUserEditDrawer({
     };
 
     return (
-        <Drawer
+        <AdminModal
             title={user ? `编辑用户 · ${user.displayName || user.username}` : "编辑用户"}
             open={Boolean(user)}
-            size="min(520px, 100vw)"
-            onClose={close}
+            centered
+            width="min(520px, calc(100vw - 32px))"
+            onCancel={close}
             mask={{ closable: !saving }}
-            destroyOnHidden
-            extra={<Button type="primary" loading={saving} onClick={() => void save()}>保存</Button>}
+            keyboard={!saving}
+            closable={!saving}
+            footer={(
+                <div className="flex justify-end gap-2">
+                    <Button disabled={saving} onClick={close}>取消</Button>
+                    <Button type="primary" loading={saving} onClick={() => void save()}>保存</Button>
+                </div>
+            )}
         >
             <Form form={form} layout="vertical" requiredMark={false}>
                 <Form.Item label="用户名">
@@ -127,7 +135,7 @@ export function AdminUserEditDrawer({
                     <Select disabled={editingSelf} options={[{ label: "已启用", value: "active" }, { label: "已停用", value: "disabled" }]} />
                 </Form.Item>
             </Form>
-        </Drawer>
+        </AdminModal>
     );
 }
 

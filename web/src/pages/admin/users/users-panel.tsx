@@ -5,18 +5,18 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { PaginationBar } from "@/pages/admin/components/admin-ui";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
-import { bulkDisableAdminUsers, deleteAdminUser, listAdminUsers, updateAdminUser, type AdminUser, type LocalUser } from "@/services/api/auth";
+import { bulkDisableAdminUsers, listAdminUsers, purgeAdminUser, type AdminUser, type LocalUser } from "@/services/api/auth";
 import { useUserStore } from "@/stores/use-user-store";
 import { AdminBatchBar, AdminDataTable, AdminTableEmpty } from "../components/admin-ui";
 import { useTableUrlState } from "../lib/use-table-url-state";
-import { AdminUserDetailDrawer } from "../components/admin-user-detail-drawer";
+import { AdminUserDetailModal } from "../components/admin-user-detail-drawer";
 import { createUserColumns, userColumnOptions, type UserColumnKey } from "./users-columns";
-import { AdminUserCreateDrawer, AdminUserEditDrawer } from "./users-drawer";
+import { AdminUserCreateDrawer, AdminUserEditModal } from "./users-drawer";
 
 const columnStorageKey = "admin-users-visible-columns";
 const allColumnKeys = userColumnOptions.map((item) => item.key);
 
-export default function UsersPanel({ onUserChanged }: { onUserChanged?: (user: LocalUser) => void }) {
+export default function UsersPanel({ onUserChanged, onUserDeleted }: { onUserChanged?: (user: LocalUser) => void; onUserDeleted?: (userId: string) => void }) {
     const actor = useUserStore((state) => state.user);
     const { message, modal } = App.useApp();
     const { state, update } = useTableUrlState();
@@ -94,29 +94,26 @@ export default function UsersPanel({ onUserChanged }: { onUserChanged?: (user: L
         setCreateUserOpen(false);
     }, [onUserChanged, state.pageSize]);
 
-    const toggleStatus = useCallback(async (user: AdminUser) => {
-        try {
-            if (user.status === "active") {
-                await deleteAdminUser(user.id);
-                replaceUser({ ...user, status: "disabled" });
-                message.success("用户已停用并清除登录状态");
-                return;
-            }
-            const result = await updateAdminUser(user.id, { status: "active" });
-            replaceUser(result.user);
-            message.success("用户已重新启用");
-        } catch (error) {
-            message.error(error instanceof Error ? error.message : "更新用户状态失败");
-        }
-    }, [message, replaceUser]);
-
     const columns = useMemo(() => createUserColumns({
         actorId: actor?.id,
         visibleColumns,
         onView: (user) => setDetailUserId(user.id),
         onEdit: (user) => { setCreateUserOpen(false); setEditingUser(user); },
-        onToggleStatus: toggleStatus,
-    }), [actor?.id, toggleStatus, visibleColumns]);
+        onPurge: async (user) => {
+            try {
+                await purgeAdminUser(user.id);
+                setUsers((items) => items.filter((item) => item.id !== user.id));
+                setTotal((value) => Math.max(0, value - 1));
+                setSelectedUserIds((ids) => ids.filter((id) => id !== user.id));
+                if (detailUserId === user.id) setDetailUserId(null);
+                if (editingUser?.id === user.id) setEditingUser(null);
+                onUserDeleted?.(user.id);
+                message.success("用户已注销，账号及关联数据已删除");
+            } catch (error) {
+                message.error(error instanceof Error ? error.message : "注销用户失败");
+            }
+        },
+    }), [actor?.id, detailUserId, editingUser?.id, message, onUserDeleted, visibleColumns]);
 
     const resetFilters = () => update({ filter: "", role: "all", status: "all", page: 1 });
 
@@ -234,9 +231,9 @@ export default function UsersPanel({ onUserChanged }: { onUserChanged?: (user: L
                 footer={<PaginationBar alwaysShow current={state.page} pageSize={state.pageSize} total={total} onChange={(page, pageSize) => update({ page: pageSize !== state.pageSize ? 1 : page, pageSize })} />}
             />
 
-            <AdminUserDetailDrawer userId={detailUserId} previousUserId={previousUserId} nextUserId={nextUserId} onNavigate={setDetailUserId} onClose={() => setDetailUserId(null)} />
+            <AdminUserDetailModal userId={detailUserId} previousUserId={previousUserId} nextUserId={nextUserId} onNavigate={setDetailUserId} onClose={() => setDetailUserId(null)} />
             <AdminUserCreateDrawer open={createUserOpen} onClose={() => setCreateUserOpen(false)} onCreated={addUser} />
-            <AdminUserEditDrawer user={editingUser} actorId={actor?.id} onClose={() => setEditingUser(null)} onSaved={replaceUser} />
+            <AdminUserEditModal user={editingUser} actorId={actor?.id} onClose={() => setEditingUser(null)} onSaved={replaceUser} />
         </>
     );
 }

@@ -110,6 +110,8 @@ docker compose -f docker-compose.deploy.yml up -d backend web
 
 密码重置在单个数据库事务中条件消费 `password_reset` 验证码、更新 `users.password_hash` 并删除 `auth_sessions`。任一步失败都会回滚，不能出现密码已修改但旧会话仍有效，或验证码已消耗但密码未更新的部分状态。
 
+管理员停用账号只更新 `users.status` 并撤销会话，不删除业务数据。永久注销走独立事务，按用户归属删除账号及关联数据；资源数据库记录与 `resource_deletion_jobs` 同事务交接，物理对象清理成功后再删除暂时保留的个人存储位置。仍被平台外观或客服配置引用的资源会阻止注销，避免全局配置出现悬空引用。
+
 邮件系统设置还保存电子邮件域名白名单。新配置默认填入 Gmail、163、126、QQ、Outlook、Hotmail、iCloud、Yahoo 和 Foxmail；管理员可按行编辑完整域名。白名单为空时不限制邮箱域名，非空时只有精确匹配的域名可注册。该规则只作用于新用户注册和注册验证码，不限制 SMTP 发件邮箱，也不影响已有账号找回密码。
 
 ## 技能包与版本

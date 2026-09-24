@@ -38,7 +38,7 @@ import {
 
 import { AdminPageFrame } from "../components/admin-shell";
 import { AdminDataTable, AdminExportButton, AdminRowActions, AdminStatusBadge, AdminTableEmpty, configuredSecretText } from "../components/admin-ui";
-import { AdminUserDetailDrawer } from "../components/admin-user-detail-drawer";
+import { AdminUserDetailModal } from "../components/admin-user-detail-drawer";
 import "./payments-page.css";
 
 type ProviderFormValues = {
@@ -786,7 +786,7 @@ export default function AdminPaymentsPage() {
                     ...([{ key: "createdAt", label: "创建时间" }, { key: "expiresAt", label: "过期时间" }, { key: "providerPaidAt", label: "支付时间" }, { key: "creditedAt", label: "入账时间" }, { key: "closedAt", label: "关闭时间" }] as const).map(({ key, label }) => ({ key, label, children: selectedOrder[key] ? formatDateTime(selectedOrder[key]!) : "--" })),
                 ]} />}
             </AdminDrawer>
-            <AdminUserDetailDrawer userId={selectedUserId} onClose={() => setSelectedUserId(null)} />
+            <AdminUserDetailModal userId={selectedUserId} onClose={() => setSelectedUserId(null)} />
 
             <Drawer
                 title={providerDrawer ? `配置 ${providerDrawer.name}` : "配置支付渠道"}

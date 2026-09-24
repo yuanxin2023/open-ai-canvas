@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { App, Button, Descriptions, Progress, Skeleton, Tabs } from "antd";
-import { AdminDrawer } from "@/pages/admin/ui/overlays";
+import { AdminModal } from "@/pages/admin/ui/overlays";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 import { formatCredits } from "@/constant/credits";
@@ -9,7 +9,7 @@ import { AdminDataTable, AdminEmpty, AdminStatusBadge, AdminTableEmpty, Paginati
 import { getAdminUserDetail, listAdminUserAuditEvents, listAdminUserLedger, listAdminUserTasks, type AdminAuditEvent, type AdminUserDetail, type AdminUserTask } from "@/services/api/auth";
 import type { CreditLedgerEntry } from "@/services/api/wallet";
 
-export function AdminUserDetailDrawer({ userId, onClose, previousUserId, nextUserId, onNavigate }: { userId: string | null; onClose: () => void; previousUserId?: string; nextUserId?: string; onNavigate?: (userId: string) => void }) {
+export function AdminUserDetailModal({ userId, onClose, previousUserId, nextUserId, onNavigate }: { userId: string | null; onClose: () => void; previousUserId?: string; nextUserId?: string; onNavigate?: (userId: string) => void }) {
     const { message } = App.useApp();
     const [detail, setDetail] = useState<AdminUserDetail | null>(null);
     const [ledger, setLedger] = useState<CreditLedgerEntry[]>([]);
@@ -89,18 +89,24 @@ export function AdminUserDetailDrawer({ userId, onClose, previousUserId, nextUse
     }, [auditPage, message, userId]);
 
     return (
-        <AdminDrawer
-            title={detail ? `${detail.user.displayName || detail.user.username} · 用户详情` : "用户详情"}
-            open={Boolean(userId)}
-            onClose={onClose}
-            size="min(920px, 100vw)"
-            rootClassName="admin-drawer"
-            extra={onNavigate ? (
-                <div className="flex items-center gap-1">
-                    <IconButton size="sm" variant="ghost" aria-label="上一条用户" disabled={!previousUserId} icon={ChevronLeft} onClick={() => previousUserId && onNavigate(previousUserId)} />
-                    <IconButton size="sm" variant="ghost" aria-label="下一条用户" disabled={!nextUserId} icon={ChevronRight} onClick={() => nextUserId && onNavigate(nextUserId)} />
+        <AdminModal
+            title={(
+                <div className="flex items-center justify-between gap-4">
+                    <span className="min-w-0 truncate">{detail ? `${detail.user.displayName || detail.user.username} · 用户详情` : "用户详情"}</span>
+                    {onNavigate ? (
+                        <div className="flex shrink-0 items-center gap-1">
+                            <IconButton size="sm" variant="ghost" aria-label="上一条用户" disabled={!previousUserId} icon={ChevronLeft} onClick={() => previousUserId && onNavigate(previousUserId)} />
+                            <IconButton size="sm" variant="ghost" aria-label="下一条用户" disabled={!nextUserId} icon={ChevronRight} onClick={() => nextUserId && onNavigate(nextUserId)} />
+                        </div>
+                    ) : null}
                 </div>
-            ) : null}
+            )}
+            open={Boolean(userId)}
+            centered
+            width="min(920px, calc(100vw - 32px))"
+            onCancel={onClose}
+            footer={null}
+            styles={{ body: { maxHeight: "calc(100vh - 160px)", overflowY: "auto", paddingBottom: 20 } }}
         >
             {loading && !detail ? (
                 <Skeleton active paragraph={{ rows: 10 }} />
@@ -227,7 +233,7 @@ export function AdminUserDetailDrawer({ userId, onClose, previousUserId, nextUse
             ) : (
                 <AdminEmpty size="compact" title="没有用户详情" />
             )}
-        </AdminDrawer>
+        </AdminModal>
     );
 }
 

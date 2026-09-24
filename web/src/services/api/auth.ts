@@ -474,6 +474,10 @@ export function deleteAdminUser(id: string) {
     return http.delete<{ ok: boolean }>(`/admin/users/${encodeURIComponent(id)}`);
 }
 
+export function purgeAdminUser(id: string) {
+    return http.delete<{ ok: boolean }>(`/admin/users/${encodeURIComponent(id)}/purge`);
+}
+
 export function bulkDisableAdminUsers(userIds: string[]) {
     return http.post<{ users: LocalUser[]; disabledCount: number }>("/admin/users/bulk-disable", { userIds });
 }
