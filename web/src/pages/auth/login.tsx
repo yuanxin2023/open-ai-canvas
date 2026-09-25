@@ -66,7 +66,7 @@ export default function LoginPage() {
                 action={
                     <Link
                         to={forgotPasswordURL}
-                        className="-my-2 inline-flex min-h-8 items-center rounded-sm text-xs font-medium text-blue-300/80 transition-colors hover:text-blue-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300/45"
+                        className="auth-forgot-password-link -my-2 inline-flex min-h-8 items-center rounded-sm text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300/45"
                     >
                         忘记密码？
                     </Link>

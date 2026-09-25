@@ -25,6 +25,10 @@ test("滚动条样式按复用边界拆分，并保持全局入口可用", async
     expect(shared).toContain(".storyboard-scrollbar {");
     expect(shared).toContain(".hover-scrollbar {");
     expect(creation).toContain(".creation-scrollbar {");
+    expect(creation).toContain(".creation-scrollbar::-webkit-scrollbar-button { display: none; width: 0; height: 0; }");
+    expect(creation).toContain(".creation-scrollbar.creation-conversation-sidebar-scroll,");
+    expect(creation).toContain(".creation-conversation-sidebar:hover .creation-conversation-sidebar-scroll");
+    expect(creation).toContain("scrollbar-color: transparent transparent;");
     expect(creationWorkspace).toContain('import "./creation-scrollbars.css";');
     expect(editor).toContain(".director-scroll {");
     expect(editor).toContain(".editor-slider {");

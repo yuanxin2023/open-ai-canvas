@@ -32,7 +32,7 @@ export type CreationMessage = {
     generationStage?: string;
     generationEffectKeys?: string[];
 };
-export type CreationConversation = { id: string; title: string; updatedAt: string; canvasId?: string; messages: CreationMessage[] };
+export type CreationConversation = { id: string; title: string; titleEdited?: boolean; pinned?: boolean; updatedAt: string; canvasId?: string; messages: CreationMessage[] };
 
 export const modeLabels: Record<CreationMode, string> = { text: "文本", image: "图片", video: "视频" };
 export const defaultCreationMode: CreationMode = "image";

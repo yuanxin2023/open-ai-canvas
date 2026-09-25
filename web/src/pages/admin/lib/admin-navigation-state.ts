@@ -1,9 +1,12 @@
 export const ADMIN_NAVIGATION_GROUPS_STORAGE_KEY = "infinite-canvas:admin-navigation-groups";
 
 export const DEFAULT_ADMIN_NAVIGATION_GROUP_STATE = {
+    analytics: true,
     platform: true,
-    operations: true,
-    announcements: true,
+    users: true,
+    commerce: true,
+    finance: true,
+    content: true,
     settings: true,
     storage: true,
 };

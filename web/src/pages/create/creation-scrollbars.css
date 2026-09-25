@@ -1,23 +1,37 @@
 @layer utilities {
     /* Creation surfaces use a compact, theme-aware scrollbar. */
     .creation-scrollbar {
-        scrollbar-color: color-mix(in srgb, var(--user-ink, #fff) 22%, transparent) transparent;
+        --creation-scrollbar-thumb: color-mix(in srgb, var(--user-ink, #fff) 22%, transparent);
+        --creation-scrollbar-thumb-hover: color-mix(in srgb, var(--user-ink, #fff) 32%, transparent);
+        scrollbar-color: var(--creation-scrollbar-thumb) transparent;
         scrollbar-gutter: auto;
         scrollbar-width: thin;
     }
 
     .creation-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+    .creation-scrollbar::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
     .creation-scrollbar::-webkit-scrollbar-track { background: transparent; }
     .creation-scrollbar::-webkit-scrollbar-thumb {
         border: 0;
         border-radius: 999px;
-        background: color-mix(in srgb, var(--user-ink, #fff) 18%, transparent);
+        background: var(--creation-scrollbar-thumb);
     }
-    .creation-scrollbar::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--user-ink, #fff) 32%, transparent); }
+    .creation-scrollbar::-webkit-scrollbar-thumb:hover { background: var(--creation-scrollbar-thumb-hover); }
 
     html:not(.dark) .creation-scrollbar {
-        scrollbar-color: color-mix(in srgb, var(--user-ink, #1b1b1f) 22%, transparent) transparent;
+        --creation-scrollbar-thumb: color-mix(in srgb, var(--user-ink, #1b1b1f) 22%, transparent);
+        --creation-scrollbar-thumb-hover: color-mix(in srgb, var(--user-ink, #1b1b1f) 32%, transparent);
     }
-    html:not(.dark) .creation-scrollbar::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--user-ink, #1b1b1f) 16%, transparent); }
-    html:not(.dark) .creation-scrollbar::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--user-ink, #1b1b1f) 28%, transparent); }
+
+    /* Conversation history keeps the native interaction but tucks a hover-only thumb into the panel padding. */
+    .creation-scrollbar.creation-conversation-sidebar-scroll,
+    html:not(.dark) .creation-scrollbar.creation-conversation-sidebar-scroll {
+        --creation-scrollbar-thumb: transparent;
+        scrollbar-color: transparent transparent;
+    }
+    .creation-conversation-sidebar:hover .creation-conversation-sidebar-scroll,
+    .creation-conversation-sidebar-scroll:focus-within {
+        --creation-scrollbar-thumb: color-mix(in srgb, var(--user-ink) 24%, transparent);
+        scrollbar-color: color-mix(in srgb, var(--user-ink) 24%, transparent) transparent;
+    }
 }

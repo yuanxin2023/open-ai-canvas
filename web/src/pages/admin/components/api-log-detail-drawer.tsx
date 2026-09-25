@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
-import { App, Button, Descriptions, Drawer, Skeleton, Tabs, Typography } from "antd";
+import { App, Button, Descriptions, Skeleton, Tabs, Typography } from "antd";
 import { AdminEmpty } from "@/pages/admin/components/admin-ui";
+import { AdminModal } from "@/pages/admin/ui/overlays";
 import { RefreshCw } from "lucide-react";
 
 import { formatCredits } from "@/constant/credits";
 import { getAdminApiLog, queryAdminApiLogTask, type ApiCallLog } from "@/services/api/auth";
 import { AdminStatusBadge } from "./admin-ui";
 
-export function ApiLogDetailDrawer({ logId, onClose, onLogUpdated }: { logId: string | null; onClose: () => void; onLogUpdated?: (log: ApiCallLog) => void }) {
+export function ApiLogDetailModal({ logId, onClose, onLogUpdated }: { logId: string | null; onClose: () => void; onLogUpdated?: (log: ApiCallLog) => void }) {
     const { message } = App.useApp();
     const [log, setLog] = useState<ApiCallLog | null>(null);
     const [loading, setLoading] = useState(false);
@@ -49,9 +50,18 @@ export function ApiLogDetailDrawer({ logId, onClose, onLogUpdated }: { logId: st
     };
 
     return (
-        <Drawer title="请求详情" open={Boolean(logId)} onClose={onClose} width="min(1200px, 90vw)" destroyOnHidden rootClassName="admin-drawer">
+        <AdminModal
+            title="请求详情"
+            open={Boolean(logId)}
+            centered
+            width="min(1200px, calc(100vw - 32px))"
+            onCancel={onClose}
+            footer={null}
+            rootClassName="admin-api-log-detail-modal"
+            styles={{ body: { maxHeight: "min(76vh, 760px)", overflowX: "hidden", overflowY: "auto" } }}
+        >
             {loading ? <Skeleton active paragraph={{ rows: 12 }} /> : log ? <LogDetail log={log} querying={querying} onQueryProviderTask={queryProviderTask} /> : <AdminEmpty size="compact" title="没有请求详情" />}
-        </Drawer>
+        </AdminModal>
     );
 }
 

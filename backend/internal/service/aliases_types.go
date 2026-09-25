@@ -43,7 +43,11 @@ type (
 	AdminPaymentReconciliationPage         = app.AdminPaymentReconciliationPage
 	AdminPluginStateView                   = app.AdminPluginStateView
 	AdminRedeemCodeDetail                  = app.AdminRedeemCodeDetail
+	AdminRedeemCodeLookupRequest           = app.AdminRedeemCodeLookupRequest
+	AdminRedeemCodeLookupResult            = app.AdminRedeemCodeLookupResult
 	AdminRedeemCodePage                    = app.AdminRedeemCodePage
+	AdminRedeemCodeSearchRequest           = app.AdminRedeemCodeSearchRequest
+	AdminRedeemCodeSearchResult            = app.AdminRedeemCodeSearchResult
 	AdminReferenceData                     = app.AdminReferenceData
 	AdminResourceDeleteBlocked             = app.AdminResourceDeleteBlocked
 	AdminResourceDeleteRequest             = app.AdminResourceDeleteRequest

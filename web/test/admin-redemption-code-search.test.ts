@@ -1,0 +1,26 @@
+import { expect, test } from "bun:test";
+
+test("admin redemption search keeps plaintext codes out of URLs and exposes audit details", async () => {
+    const [panelSource, apiSource] = await Promise.all([Bun.file(new URL("../src/pages/admin/components/redemption-codes-panel.tsx", import.meta.url)).text(), Bun.file(new URL("../src/services/api/wallet.ts", import.meta.url)).text()]);
+
+    expect(apiSource).toContain('http.post<AdminRedeemCodeSearchResult>("/admin/redeem-codes/search", { query })');
+    expect(apiSource).toContain('http.post<{ batches: RedeemBatch[]; total: number; page: number; pageSize: number }>("/admin/redeem-batches/search", params)');
+    expect(panelSource).toContain("const result = queryKeyword ? await searchAdminRedeemBatches(params) : await listAdminRedeemBatches(params);");
+    expect(panelSource).toContain("normalized.length >= 1 && normalized.length <= 32");
+    expect(panelSource).toContain('placeholder="搜索兑换码片段、批次备注、积分或数量"');
+    expect(panelSource).toContain('label="核销用户"');
+    expect(panelSource).toContain('label="核销时间"');
+    expect(panelSource).toContain('label="核销 IP"');
+    expect(panelSource).toContain('item?.status === "unused"');
+    expect(panelSource).toContain("disableAdminRedeemCode(batch.id, item.id)");
+});
+
+test("redemption batch creation uses a centered modal instead of a drawer", async () => {
+    const panelSource = await Bun.file(new URL("../src/pages/admin/components/redemption-codes-panel.tsx", import.meta.url)).text();
+    const createSection = panelSource.slice(panelSource.indexOf("function CreateRedeemBatchModal"), panelSource.indexOf("function BatchStatusDistribution"));
+
+    expect(createSection).toContain("<AdminModal");
+    expect(createSection).toContain("centered");
+    expect(createSection).toContain('rootClassName="admin-redemption-create-modal"');
+    expect(createSection).not.toContain("<Drawer");
+});

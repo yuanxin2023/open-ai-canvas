@@ -488,8 +488,9 @@
     inset: 0;
     z-index: 0;
     border-radius: inherit;
-    background: var(--user-surface-muted);
+    background: var(--workspace-nav-active-bg);
     pointer-events: none;
+    transition: background var(--product-state) var(--product-ease);
 }
 .app-user-workspace .app-workspace-nav-link > :not(.app-workspace-nav-active-pill) {
     position: relative;
@@ -518,6 +519,9 @@
 }
 .app-user-workspace .app-workspace-nav-link.is-active {
     background: transparent !important;
+}
+.app-user-workspace .app-workspace-nav-link.is-active:hover .app-workspace-nav-active-pill {
+    background: var(--workspace-nav-active-hover-bg);
 }
 .app-user-workspace .app-workspace-nav-link.is-active .app-workspace-nav-icon {
     background: transparent;

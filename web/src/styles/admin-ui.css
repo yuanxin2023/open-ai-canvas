@@ -7439,56 +7439,35 @@
     list-style: decimal;
 }
 
-.admin-redemption-drawer .ant-drawer-content {
-    background: var(--admin-layer-0);
+.admin-redemption-create-modal .ant-modal-container {
+    display: flex;
+    max-height: min(88dvh, 760px);
+    flex-direction: column;
 }
 
-.admin-redemption-drawer .ant-drawer-header {
-    min-height: 64px;
-    border-bottom: 1px solid var(--admin-divider);
-    background: var(--admin-layer-1);
-    padding: 16px 20px;
+.admin-redemption-create-modal .ant-modal-body {
+    min-height: 0;
+    overflow-y: auto;
+    padding-bottom: 20px;
 }
 
-.admin-redemption-drawer .ant-drawer-title {
-    color: var(--admin-text-primary);
-    font-size: 16px;
-    font-weight: 650;
-}
-
-.admin-redemption-drawer .ant-drawer-body {
-    padding: 20px;
-}
-
-.admin-redemption-drawer .ant-drawer-footer {
-    min-height: 64px;
-    background: var(--admin-layer-1);
-    padding: 14px 20px;
-}
-
-.admin-redemption-drawer .ant-drawer-footer .ant-btn {
-    min-width: 80px;
-    min-height: 36px;
-    border-radius: 7px;
-}
-
-.admin-redemption-drawer :is(.ant-input-number, .ant-input-number-affix-wrapper) {
+.admin-redemption-create-modal :is(.ant-input-number, .ant-input-number-affix-wrapper) {
     width: 100%;
 }
 
-.admin-redemption-drawer .ant-form-item-label > label {
+.admin-redemption-create-modal .ant-form-item-label > label {
     color: var(--admin-text-secondary);
     font-size: 12px;
     font-weight: 600;
 }
 
-.admin-redemption-drawer :is(.ant-form-item-extra, .ant-form-item-explain) {
+.admin-redemption-create-modal :is(.ant-form-item-extra, .ant-form-item-explain) {
     color: var(--admin-text-muted);
     font-size: 11px;
     line-height: 1.55;
 }
 
-.admin-redemption-drawer-intro {
+.admin-redemption-create-intro {
     display: flex;
     align-items: flex-start;
     gap: 11px;
@@ -7499,7 +7478,7 @@
     padding: 14px 16px;
 }
 
-.admin-redemption-drawer-intro-icon {
+.admin-redemption-create-intro-icon {
     display: grid;
     width: 30px;
     height: 30px;
@@ -7511,20 +7490,20 @@
     color: var(--admin-status-warning);
 }
 
-.admin-redemption-drawer-intro strong {
+.admin-redemption-create-intro strong {
     color: var(--admin-text-primary);
     font-size: 13px;
     font-weight: 650;
 }
 
-.admin-redemption-drawer-intro p {
+.admin-redemption-create-intro p {
     margin-top: 4px;
     color: var(--admin-text-secondary);
     font-size: 12px;
     line-height: 1.65;
 }
 
-.admin-redemption-drawer-section {
+.admin-redemption-create-section {
     overflow: hidden;
     border: 1px solid var(--admin-card-border);
     border-radius: 10px;
@@ -7533,20 +7512,20 @@
     box-shadow: var(--admin-card-shadow);
 }
 
-.admin-redemption-drawer-section-heading {
+.admin-redemption-create-section-heading {
     margin-bottom: 16px;
     border-bottom: 1px solid var(--admin-divider);
     padding-bottom: 12px;
 }
 
-.admin-redemption-drawer-section-heading h3 {
+.admin-redemption-create-section-heading h3 {
     color: var(--admin-text-primary);
     font-size: 13px;
     font-weight: 650;
     line-height: 1.45;
 }
 
-.admin-redemption-drawer-section-heading p {
+.admin-redemption-create-section-heading p {
     margin-top: 3px;
     color: var(--admin-text-muted);
     font-size: 11px;
@@ -7597,6 +7576,17 @@
 
 .admin-redemption-live-summary > .is-emphasis dd {
     color: var(--admin-status-success);
+}
+
+@media (max-width: 600px) {
+    .admin-redemption-create-modal .ant-modal-container {
+        max-height: calc(100dvh - 24px);
+    }
+
+    .admin-redemption-form-grid,
+    .admin-redemption-live-summary {
+        grid-template-columns: minmax(0, 1fr);
+    }
 }
 
 .admin-redemption-sensitive-notice {

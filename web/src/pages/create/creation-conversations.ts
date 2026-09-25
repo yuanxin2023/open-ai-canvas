@@ -3,13 +3,49 @@ import { generationErrorMessage } from "@/lib/generation-error";
 import type { BackendGenerationResult } from "@/services/api/generation-task";
 import type { GenerationTask } from "@/services/api/task-center";
 import { creationAttachmentKind, type CreationAttachment } from "./creation-assets";
-import type { CreationConversation, CreationMessage, CreationShotRailEntry } from "./creation-types";
+import { modeLabels, type CreationConversation, type CreationMessage, type CreationMode, type CreationShotRailEntry } from "./creation-types";
 
 type CreationRuntime = typeof import("./creation-runtime");
 type PersistedCreationTask = GenerationTask & { creationResultUrls?: string[]; creationError?: string };
 
 export function newConversation(): CreationConversation {
-    return { id: createClientId(), title: "新创作", updatedAt: new Date().toISOString(), messages: [] };
+    return { id: createClientId(), title: "新创作", titleEdited: false, pinned: false, updatedAt: new Date().toISOString(), messages: [] };
+}
+
+const genericCreationTitles = new Set(["", "新创作", "你好", "您好", "嗨", "哈喽", "hello", "hi", "hey", "在吗"]);
+const creationTitleTimeFormatter = new Intl.DateTimeFormat("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false });
+
+function normalizedCreationTitle(value: string) {
+    return value.replace(/\s+/g, " ").trim();
+}
+
+function isGenericCreationTitle(value: string) {
+    const normalized = normalizedCreationTitle(value).replace(/[，。！？、,.!?~～·\-—_]+$/g, "").toLowerCase();
+    return genericCreationTitles.has(normalized);
+}
+
+export function creationConversationTitle(prompt: string, mode: CreationMode, updatedAt = new Date().toISOString()) {
+    const normalized = normalizedCreationTitle(prompt);
+    if (isGenericCreationTitle(normalized)) {
+        const timestamp = conversationTimestamp(updatedAt);
+        const time = timestamp ? creationTitleTimeFormatter.format(timestamp) : "新会话";
+        return `${modeLabels[mode]}创作 · ${time}`;
+    }
+    const characters = Array.from(normalized);
+    return characters.length > 28 ? `${characters.slice(0, 28).join("")}…` : normalized;
+}
+
+export function creationConversationDisplayTitle(conversation: CreationConversation) {
+    const storedTitle = normalizedCreationTitle(conversation.title);
+    if (conversation.titleEdited || !isGenericCreationTitle(storedTitle)) return storedTitle || "新创作";
+    const firstUserMessage = conversation.messages.find((message) => message.role === "user" && message.content.trim());
+    if (!firstUserMessage) return "新创作";
+    return creationConversationTitle(firstUserMessage.content, firstUserMessage.mode || "text", firstUserMessage.createdAt || conversation.updatedAt);
+}
+
+export function compareCreationConversations(left: CreationConversation, right: CreationConversation) {
+    if (Boolean(left.pinned) !== Boolean(right.pinned)) return left.pinned ? -1 : 1;
+    return conversationTimestamp(right.updatedAt) - conversationTimestamp(left.updatedAt);
 }
 
 export function newMessage(role: CreationMessage["role"], content: string, extra: Partial<CreationMessage> = {}): CreationMessage {

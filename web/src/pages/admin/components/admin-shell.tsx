@@ -8,6 +8,7 @@ import {
     ChevronLeft,
     ChevronRight,
     ChevronDown,
+    ClipboardCheck,
     CloudUpload,
     Coins,
     CreditCard,
@@ -28,11 +29,13 @@ import {
     PlugZap,
     RadioTower,
     RefreshCw,
+    ReceiptText,
     Rows3,
     Sparkles,
     Settings2,
     ShieldAlert,
     ShieldCheck,
+    ShoppingBag,
     Sun,
     TicketCheck,
     ToggleLeft,
@@ -69,21 +72,23 @@ type AdminNavigationGroupBase = {
     items: AdminNavigationItem[];
 };
 
-type AdminNavigationGroup = AdminNavigationGroupBase & ({ id: "overview"; collapsible: false } | { id: AdminNavigationGroupId; collapsible: true });
+type AdminNavigationGroup = AdminNavigationGroupBase & { id: AdminNavigationGroupId; collapsible: true };
 
 const adminNavigation: AdminNavigationGroup[] = [
     {
-        id: "overview",
-        label: "概览",
-        collapsible: false,
-        items: [{ path: "/admin", label: "数据概览", description: "活跃、调用与成本趋势", icon: <BarChart3 className="size-4" /> }],
+        id: "analytics",
+        label: "经营分析",
+        collapsible: true,
+        items: [
+            { path: "/admin", label: "数据概览", description: "活跃、调用与成本趋势", icon: <BarChart3 className="size-4" /> },
+            { path: "/admin/logs", label: "请求明细", description: "上游调用与费用", icon: <FileClock className="size-4" /> },
+        ],
     },
     {
         id: "platform",
         label: "平台资源",
         collapsible: true,
         items: [
-            { path: "/admin/users", label: "用户管理", description: "账号、角色与状态", icon: <UsersRound className="size-4" /> },
             { path: "/admin/channels", label: "系统渠道", description: "渠道、模型与售价", icon: <RadioTower className="size-4" /> },
             { path: "/admin/models", label: "前台模型", description: "展示、线路与用户价格", icon: <Layers3 className="size-4" />, requireFeature: "frontendModelsEnabled" },
             { path: "/admin/plugins", label: "插件管理", description: "平台可用性、上传与卸载", icon: <PlugZap className="size-4" /> },
@@ -91,24 +96,41 @@ const adminNavigation: AdminNavigationGroup[] = [
         ],
     },
     {
-        id: "operations",
-        label: "运营",
+        id: "users",
+        label: "用户与服务",
         collapsible: true,
         items: [
+            { path: "/admin/users", label: "用户管理", description: "账号、角色与状态", icon: <UsersRound className="size-4" /> },
             { path: "/admin/customer-service", label: "客服配置", description: "客服入口、样式与移动", icon: <Headphones className="size-4" /> },
-            { path: "/admin/inspirations", label: "提示词运营", description: "维护首页精选灵感", icon: <MessageSquareText className="size-4" /> },
             { path: "/admin/agent-lessons", label: "Agent 记忆", description: "按用户查看个人记忆", icon: <Sparkles className="size-4" /> },
-            { path: "/admin/payments", label: "支付充值", description: "支付渠道、订单与对账", icon: <CreditCard className="size-4" /> },
-            { path: "/admin/credit-operations", label: "积分运营", description: "人工调账与异常计费", icon: <Coins className="size-4" /> },
-            { path: "/admin/redemption-codes", label: "兑换码", description: "生成与查看兑换码批次", icon: <TicketCheck className="size-4" /> },
-            { path: "/admin/logs", label: "请求明细", description: "上游调用与费用", icon: <FileClock className="size-4" /> },
         ],
     },
     {
-        id: "announcements",
-        label: "公告通知",
+        id: "commerce",
+        label: "商品运营",
         collapsible: true,
         items: [
+            { path: "/admin/product-operations", label: "商品管理", description: "充值套餐与销售配置", icon: <ShoppingBag className="size-4" /> },
+            { path: "/admin/redemption-codes", label: "兑换码", description: "生成与查看兑换码批次", icon: <TicketCheck className="size-4" /> },
+        ],
+    },
+    {
+        id: "finance",
+        label: "财务管理",
+        collapsible: true,
+        items: [
+            { path: "/admin/payments", label: "支付渠道", description: "支付渠道配置", icon: <CreditCard className="size-4" /> },
+            { path: "/admin/payment-orders", label: "支付订单", description: "订单查询与状态同步", icon: <ReceiptText className="size-4" /> },
+            { path: "/admin/payment-reconciliation", label: "支付对账", description: "账单执行与异常核对", icon: <ClipboardCheck className="size-4" /> },
+            { path: "/admin/credit-operations", label: "积分运营", description: "人工调账与异常计费", icon: <Coins className="size-4" /> },
+        ],
+    },
+    {
+        id: "content",
+        label: "内容与通知",
+        collapsible: true,
+        items: [
+            { path: "/admin/inspirations", label: "提示词运营", description: "维护首页精选灵感", icon: <MessageSquareText className="size-4" /> },
             { path: "/admin/announcements", label: "系统公告", description: "发布、关闭与历史公告", icon: <BellRing className="size-4" /> },
             { path: "/admin/banner-announcements", label: "常驻通知", description: "首页顶部常驻滚动通知", icon: <Megaphone className="size-4" /> },
         ],
@@ -389,14 +411,6 @@ function AdminNavigation({ collapsed }: { collapsed: boolean }) {
                         <div key={group.id} className="admin-nav-group">
                             {groupIndex > 0 ? <div className="admin-nav-collapsed-separator" /> : null}
                             <div className="admin-nav-group-items is-collapsed">{links}</div>
-                        </div>
-                    );
-                }
-
-                if (!group.collapsible) {
-                    return (
-                        <div key={group.id} className="admin-nav-group admin-nav-group-standalone">
-                            <div className="admin-nav-group-items">{links}</div>
                         </div>
                     );
                 }

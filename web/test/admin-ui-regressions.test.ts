@@ -157,8 +157,8 @@ test("customer service settings keep comfortable card padding", async () => {
 
 test("top-up product editor uses a centered responsive modal", async () => {
     const [source, css] = await Promise.all([
-        Bun.file(new URL("../src/pages/admin/payments/payments-page.tsx", import.meta.url)).text(),
-        Bun.file(new URL("../src/pages/admin/payments/payments-page.css", import.meta.url)).text(),
+        Bun.file(new URL("../src/pages/admin/product-operations/product-operations-page.tsx", import.meta.url)).text(),
+        Bun.file(new URL("../src/pages/admin/product-operations/product-operations-page.css", import.meta.url)).text(),
     ]);
     const productEditor = sourceSection(source, '<AdminModal\n                centered\n                title={productDrawer', "</AdminModal>");
 
@@ -176,6 +176,45 @@ test("top-up product editor uses a centered responsive modal", async () => {
     expect(compactSource(css)).toContain(".admin-payment-product-modal .grid.grid-cols-2 { grid-template-columns: minmax(0, 1fr);");
 });
 
+test("commerce and finance are separate collapsible navigation groups", async () => {
+    const [shell, router, payments, productOperations] = await Promise.all([
+        Bun.file(new URL("../src/pages/admin/components/admin-shell.tsx", import.meta.url)).text(),
+        Bun.file(new URL("../src/router.tsx", import.meta.url)).text(),
+        Bun.file(new URL("../src/pages/admin/payments/payments-page.tsx", import.meta.url)).text(),
+        Bun.file(new URL("../src/pages/admin/product-operations/product-operations-page.tsx", import.meta.url)).text(),
+    ]);
+
+    const commerceGroup = sourceSection(shell, 'id: "commerce"', 'id: "finance"');
+    const financeGroup = sourceSection(shell, 'id: "finance"', 'id: "content"');
+
+    expect(commerceGroup).toContain('label: "商品运营"');
+    expect(commerceGroup).toContain('collapsible: true');
+    expect(commerceGroup).toContain('{ path: "/admin/product-operations", label: "商品管理"');
+    expect(commerceGroup).toContain('{ path: "/admin/redemption-codes", label: "兑换码"');
+    expect(financeGroup).toContain('label: "财务管理"');
+    expect(financeGroup).toContain('collapsible: true');
+    expect(financeGroup).toContain('{ path: "/admin/payments", label: "支付渠道"');
+    expect(financeGroup).toContain('{ path: "/admin/payment-orders", label: "支付订单"');
+    expect(financeGroup).toContain('{ path: "/admin/payment-reconciliation", label: "支付对账"');
+    expect(financeGroup).toContain('{ path: "/admin/credit-operations", label: "积分运营"');
+    expect(commerceGroup).not.toContain('path: "/admin/payments"');
+    expect(commerceGroup).not.toContain('path: "/admin/payment-orders"');
+    expect(commerceGroup).not.toContain('path: "/admin/payment-reconciliation"');
+    expect(commerceGroup).not.toContain('path: "/admin/credit-operations"');
+    expect(router).toContain('{ path: "product-operations", element: <ProductOperationsPage /> }');
+    expect(router).toContain('{ path: "payments", element: <AdminPaymentsPage view="providers" /> }');
+    expect(router).toContain('{ path: "payment-orders", element: <AdminPaymentsPage view="orders" /> }');
+    expect(router).toContain('{ path: "payment-reconciliation", element: <AdminPaymentsPage view="reconciliation" /> }');
+    expect(productOperations).toContain('title="商品管理"');
+    expect(productOperations).toContain('label: "商品管理"');
+    expect(payments).not.toContain('label: "充值商品"');
+    expect(payments).not.toContain("listAdminTopupProducts");
+    expect(payments).not.toContain("<Tabs");
+    expect(payments).toContain('providers: { title: "支付渠道"');
+    expect(payments).toContain('orders: { title: "支付订单"');
+    expect(payments).toContain('reconciliation: { title: "支付对账"');
+});
+
 test("admin navigation keeps the storage resource page reachable", async () => {
     const [source, chromeCss] = await Promise.all([Bun.file(new URL("../src/pages/admin/components/admin-shell.tsx", import.meta.url)).text(), Bun.file(new URL("../src/pages/admin/theme/admin-chrome.css", import.meta.url)).text()]);
     const storageGroup = sourceSection(source, 'id: "storage"', "\n];");
@@ -191,6 +230,26 @@ test("admin navigation keeps the storage resource page reachable", async () => {
     expect(compactSource(chromeCss)).toContain(".admin-sidebar-nav::-webkit-scrollbar { display: none;");
 });
 
+test("business analytics keeps overview and request details while user tools stay separate", async () => {
+    const source = await Bun.file(new URL("../src/pages/admin/components/admin-shell.tsx", import.meta.url)).text();
+    const analyticsGroup = sourceSection(source, 'id: "analytics"', 'id: "platform"');
+
+    expect(analyticsGroup).toContain('label: "经营分析"');
+    expect(analyticsGroup).toContain("collapsible: true");
+    expect(analyticsGroup).toContain('{ path: "/admin", label: "数据概览"');
+    expect(analyticsGroup).toContain('{ path: "/admin/logs", label: "请求明细"');
+    const platformGroup = sourceSection(source, 'id: "platform"', 'id: "users"');
+    const usersGroup = sourceSection(source, 'id: "users"', 'id: "commerce"');
+    expect(usersGroup).toContain('label: "用户与服务"');
+    expect(usersGroup).toContain('{ path: "/admin/users", label: "用户管理"');
+    expect(usersGroup).toContain('{ path: "/admin/customer-service", label: "客服配置"');
+    expect(usersGroup).toContain('{ path: "/admin/agent-lessons", label: "Agent 记忆"');
+    expect(analyticsGroup).not.toContain('path: "/admin/users"');
+    expect(platformGroup).not.toContain('path: "/admin/users"');
+    expect(source).not.toContain('id: "overview"');
+    expect(source).not.toContain('label: "概览"');
+});
+
 test("featured inspiration operations stay connected from admin to the creation workspace", async () => {
     const [shellSource, routeSource, panelSource, apiSource, workspaceSource] = await Promise.all([
         Bun.file(new URL("../src/pages/admin/components/admin-shell.tsx", import.meta.url)).text(),
@@ -199,10 +258,13 @@ test("featured inspiration operations stay connected from admin to the creation 
         Bun.file(new URL("../src/services/api/inspirations.ts", import.meta.url)).text(),
         Bun.file(new URL("../src/pages/create/creation-workspace.tsx", import.meta.url)).text(),
     ]);
-    const operationsGroup = sourceSection(shellSource, 'id: "operations"', 'id: "announcements"');
+    const contentGroup = sourceSection(shellSource, 'id: "content"', 'id: "settings"');
 
-    expect(operationsGroup).toContain('path: "/admin/inspirations"');
-    expect(operationsGroup).toContain('label: "提示词运营"');
+    expect(contentGroup).toContain('label: "内容与通知"');
+    expect(contentGroup).toContain('path: "/admin/inspirations"');
+    expect(contentGroup).toContain('label: "提示词运营"');
+    expect(contentGroup).toContain('path: "/admin/announcements"');
+    expect(contentGroup).toContain('path: "/admin/banner-announcements"');
     expect(routeSource).toContain('{ path: "inspirations", element: <InspirationsPage /> }');
     expect(panelSource).toContain("<AdminModal centered");
     expect(panelSource).toContain('rootClassName="admin-inspiration-editor-modal"');
@@ -448,17 +510,18 @@ test("admin console tokens and shell stay isolated from the user workspace", asy
     expect(chrome).toContain(".admin-drawer .ant-drawer-content");
     expect(globals).not.toContain("/* 管理端专用视觉收口：不覆盖创作端 workspace 的导航、状态和图表样式。 */");
 
-    const [overlays, userDetail, prompts, payments, modelEditor] = await Promise.all([
+    const [overlays, userDetail, prompts, payments, productOperations, modelEditor] = await Promise.all([
         Bun.file(new URL("../src/pages/admin/ui/overlays.tsx", import.meta.url)).text(),
         Bun.file(new URL("../src/pages/admin/components/admin-user-detail-drawer.tsx", import.meta.url)).text(),
         Bun.file(new URL("../src/pages/admin/storyboard-prompts/storyboard-prompts-page.tsx", import.meta.url)).text(),
         Bun.file(new URL("../src/pages/admin/payments/payments-page.tsx", import.meta.url)).text(),
+        Bun.file(new URL("../src/pages/admin/product-operations/product-operations-page.tsx", import.meta.url)).text(),
         Bun.file(new URL("../src/pages/admin/components/channel-model-editor.tsx", import.meta.url)).text(),
     ]);
     expect(overlays).toContain('rootClassName={cn("admin-drawer"');
     expect(overlays).toContain('rootClassName={cn("admin-modal-root"');
     expect(overlays).not.toContain("@/components/ui/product");
-    for (const source of [userDetail, prompts, payments, modelEditor]) {
+    for (const source of [userDetail, prompts, payments, productOperations, modelEditor]) {
         expect(source).not.toContain("@/components/ui/product");
         expect(source).not.toContain("AppDrawer");
         expect(source).not.toContain("AppModal");

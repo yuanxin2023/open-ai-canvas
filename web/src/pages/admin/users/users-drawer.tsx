@@ -1,35 +1,49 @@
-import { App, Button, Drawer, Form, Input, Tooltip } from "antd";
-import { Copy, RefreshCw } from "lucide-react";
+import { App, Button, Drawer, Form, Input, InputNumber, Modal, Tooltip } from "antd";
+import { Coins, Copy, RefreshCw } from "lucide-react";
 import { Select } from "@/pages/admin/ui/controls";
 import { AdminModal } from "@/pages/admin/ui/overlays";
 import { useEffect, useState, type ChangeEvent } from "react";
 
 import { useCopyText } from "@/hooks/use-copy-text";
+import { formatCredits } from "@/constant/credits";
 import { createAdminUser, updateAdminUser, type AdminUser, type LocalUser } from "@/services/api/auth";
+import { adjustAdminUserCredits, type CreditAccount } from "@/services/api/wallet";
 import { generateAdminPassword } from "./admin-password";
 
 type UserFormValues = Pick<LocalUser, "displayName" | "email" | "role" | "status"> & { password?: string };
+type CreditAdjustmentFormValues = { amount: number; note: string };
 
 export function AdminUserEditModal({
     user,
     actorId,
     onClose,
     onSaved,
+    onCreditsAdjusted,
 }: {
     user: AdminUser | null;
     actorId?: string;
     onClose: () => void;
     onSaved: (user: LocalUser) => void;
+    onCreditsAdjusted: (account: CreditAccount) => void;
 }) {
     const { message, modal } = App.useApp();
     const [saving, setSaving] = useState(false);
+    const [adjusting, setAdjusting] = useState(false);
+    const [pendingAdjustment, setPendingAdjustment] = useState<CreditAdjustmentFormValues | null>(null);
+    const [availableMicrocredits, setAvailableMicrocredits] = useState(0);
+    const [reservedMicrocredits, setReservedMicrocredits] = useState(0);
     const [form] = Form.useForm<UserFormValues>();
+    const [adjustmentForm] = Form.useForm<CreditAdjustmentFormValues>();
     const copyText = useCopyText();
     const editingSelf = user?.id === actorId;
 
     useEffect(() => {
         if (!user) return;
         form.resetFields();
+        adjustmentForm.resetFields();
+        setPendingAdjustment(null);
+        setAvailableMicrocredits(user.availableMicrocredits);
+        setReservedMicrocredits(user.reservedMicrocredits);
         form.setFieldsValue({
             displayName: user.displayName,
             email: user.email || "",
@@ -37,17 +51,17 @@ export function AdminUserEditModal({
             role: user.role,
             status: user.status,
         });
-    }, [form, user]);
+    }, [adjustmentForm, form, user]);
 
     const close = () => {
-        if (saving) return;
-        if (!form.isFieldsTouched()) {
+        if (saving || adjusting || pendingAdjustment) return;
+        if (!form.isFieldsTouched() && !adjustmentForm.isFieldsTouched()) {
             onClose();
             return;
         }
         modal.confirm({
             title: "放弃用户修改？",
-            content: "尚未保存的账号、密码、角色或状态修改将丢失。",
+            content: "尚未保存的账号、密码、角色、状态或积分调整内容将丢失。",
             okText: "放弃修改",
             cancelText: "继续编辑",
             okButtonProps: { danger: true },
@@ -57,6 +71,11 @@ export function AdminUserEditModal({
 
     const save = async () => {
         if (!user) return;
+        const adjustmentDraft = adjustmentForm.getFieldsValue();
+        if (adjustmentDraft.amount !== undefined || adjustmentDraft.note?.trim()) {
+            message.warning("请先完成或清空积分调账内容，再保存用户信息");
+            return;
+        }
         const values = await form.validateFields();
         const password = values.password || "";
         setSaving(true);
@@ -79,20 +98,64 @@ export function AdminUserEditModal({
         }
     };
 
+    const previewCreditAdjustment = async () => {
+        const values = await adjustmentForm.validateFields();
+        const amount = Number(values.amount);
+        if (!Number.isFinite(amount) || amount === 0) {
+            message.error("积分变化不能为 0");
+            return;
+        }
+        let amountMicrocredits: number;
+        try {
+            amountMicrocredits = toMicrocredits(amount);
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "积分变化超出可处理范围");
+            return;
+        }
+        if (amount < 0 && availableMicrocredits + amountMicrocredits < 0) {
+            message.error("扣减后可用积分不能低于 0");
+            return;
+        }
+        setPendingAdjustment({ amount, note: values.note.trim() });
+    };
+
+    const applyCreditAdjustment = async () => {
+        if (!user || !pendingAdjustment) return;
+        setAdjusting(true);
+        try {
+            const result = await adjustAdminUserCredits(user.id, {
+                amountMicrocredits: toMicrocredits(pendingAdjustment.amount),
+                note: pendingAdjustment.note,
+            });
+            setAvailableMicrocredits(result.account.availableMicrocredits);
+            setReservedMicrocredits(result.account.reservedMicrocredits);
+            onCreditsAdjusted(result.account);
+            adjustmentForm.resetFields();
+            setPendingAdjustment(null);
+            message.success(`用户积分已调整，当前可用积分 ${formatCredits(result.account.availableMicrocredits)}`);
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "调整积分失败");
+        } finally {
+            setAdjusting(false);
+        }
+    };
+
     return (
+        <>
         <AdminModal
             title={user ? `编辑用户 · ${user.displayName || user.username}` : "编辑用户"}
             open={Boolean(user)}
             centered
-            width="min(520px, calc(100vw - 32px))"
+            width="min(620px, calc(100vw - 32px))"
             onCancel={close}
-            mask={{ closable: !saving }}
-            keyboard={!saving}
-            closable={!saving}
+            mask={{ closable: !saving && !adjusting && !pendingAdjustment }}
+            keyboard={!saving && !adjusting && !pendingAdjustment}
+            closable={!saving && !adjusting && !pendingAdjustment}
+            styles={{ body: { maxHeight: "min(72vh, 720px)", overflowX: "hidden", overflowY: "auto" } }}
             footer={(
                 <div className="flex justify-end gap-2">
-                    <Button disabled={saving} onClick={close}>取消</Button>
-                    <Button type="primary" loading={saving} onClick={() => void save()}>保存</Button>
+                    <Button disabled={saving || adjusting} onClick={close}>取消</Button>
+                    <Button type="primary" loading={saving} disabled={adjusting} onClick={() => void save()}>保存</Button>
                 </div>
             )}
         >
@@ -135,8 +198,101 @@ export function AdminUserEditModal({
                     <Select disabled={editingSelf} options={[{ label: "已启用", value: "active" }, { label: "已停用", value: "disabled" }]} />
                 </Form.Item>
             </Form>
+
+            <section className="mt-2 border-t border-border/60 pt-5" aria-labelledby="admin-user-credit-adjustment-heading">
+                <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                        <h3 id="admin-user-credit-adjustment-heading" className="text-sm font-semibold text-foreground">人工调账</h3>
+                        <p className="mt-1 text-xs text-foreground/55">提交后会立即写入积分流水和管理员审计记录。</p>
+                    </div>
+                    <div className="text-right text-xs text-foreground/55">
+                        <div>可用积分 <strong className="tabular-nums text-foreground/80">{formatCredits(availableMicrocredits)}</strong></div>
+                        <div className="mt-1">冻结积分 <strong className="tabular-nums text-foreground/80">{formatCredits(reservedMicrocredits)}</strong></div>
+                    </div>
+                </div>
+                <Form form={adjustmentForm} layout="vertical" requiredMark={false} onFinish={() => void previewCreditAdjustment()}>
+                    <Form.Item
+                        name="amount"
+                        label="积分变化"
+                        extra="正数增加，负数扣减；扣减只能使用可用积分。"
+                        rules={[
+                            { required: true, message: "请填写积分变化" },
+                            {
+                                validator: (_, value) => typeof value === "number" && Number.isFinite(value) && value !== 0
+                                    ? Promise.resolve()
+                                    : Promise.reject(new Error("积分变化不能为 0")),
+                            },
+                        ]}
+                    >
+                        <InputNumber className="w-full" precision={2} prefix={<Coins className="size-3.5 text-foreground/45" />} placeholder="例如 10 或 -2.50" />
+                    </Form.Item>
+                    <Form.Item name="note" label="调整原因" rules={[{ required: true, whitespace: true, message: "请填写工单号或处理依据" }]}>
+                        <Input.TextArea rows={4} maxLength={500} showCount placeholder="例如：工单 YC-20260828，补偿失败任务费用" />
+                    </Form.Item>
+                    <div className="flex justify-end">
+                        <Button icon={<Coins className="size-4" />} loading={adjusting} disabled={saving} onClick={() => adjustmentForm.submit()}>
+                            核对并调账
+                        </Button>
+                    </div>
+                </Form>
+            </section>
         </AdminModal>
+
+        <Modal
+            title={pendingAdjustment?.amount && pendingAdjustment.amount < 0 ? "确认扣减用户积分" : "确认增加用户积分"}
+            open={Boolean(pendingAdjustment)}
+            okText={pendingAdjustment?.amount && pendingAdjustment.amount < 0 ? "确认扣减" : "确认增加"}
+            cancelText="返回修改"
+            onCancel={() => {
+                if (!adjusting) setPendingAdjustment(null);
+            }}
+            onOk={() => void applyCreditAdjustment()}
+            confirmLoading={adjusting}
+            mask={{ closable: !adjusting }}
+            closable={!adjusting}
+            destroyOnHidden
+            rootClassName="admin-modal-root"
+            okButtonProps={{ danger: Boolean(pendingAdjustment && pendingAdjustment.amount < 0) }}
+        >
+            {pendingAdjustment && user ? (
+                <div className="admin-operation-confirmation">
+                    <p className="admin-operation-confirmation-copy">请再次核对用户、积分变化和处理依据。确认后将立即写入账务流水。</p>
+                    <dl className="admin-operation-confirmation-grid">
+                        <div>
+                            <dt>目标用户</dt>
+                            <dd>{user.displayName || user.username} · @{user.username}</dd>
+                        </div>
+                        <div>
+                            <dt>积分变化</dt>
+                            <dd className={pendingAdjustment.amount < 0 ? "is-negative" : "is-positive"}>
+                                {pendingAdjustment.amount > 0 ? "+" : ""}
+                                {formatCredits(toMicrocredits(pendingAdjustment.amount))}
+                            </dd>
+                        </div>
+                        <div>
+                            <dt>当前可用</dt>
+                            <dd>{formatCredits(availableMicrocredits)}</dd>
+                        </div>
+                        <div>
+                            <dt>预计可用</dt>
+                            <dd>{formatCredits(availableMicrocredits + toMicrocredits(pendingAdjustment.amount))}</dd>
+                        </div>
+                        <div className="is-wide">
+                            <dt>处理依据</dt>
+                            <dd>{pendingAdjustment.note}</dd>
+                        </div>
+                    </dl>
+                </div>
+            ) : null}
+        </Modal>
+        </>
     );
+}
+
+function toMicrocredits(value: number) {
+    const result = Math.round(Number(value) * 1_000_000);
+    if (!Number.isSafeInteger(result)) throw new Error("积分变化超出可处理范围");
+    return result;
 }
 
 function AdminPasswordField({

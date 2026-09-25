@@ -40,6 +40,103 @@
 .creation-agent-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .creation-agent-error { grid-column: 1 / -1; color: var(--status-error); font-size: 12px; margin: 0; }
 .creation-home .creation-empty-composer[hidden] { display: none; }
+.app-user-workspace .creation-home .creation-thread-workbench { flex-direction: row; }
+.creation-thread-main { position: relative; display: flex; min-width: 0; min-height: 0; flex: 1 1 auto; flex-direction: column; }
+.creation-conversation-sidebar { display: flex; width: clamp(304px, 22vw, 336px); min-width: 0; min-height: 0; flex: 0 0 clamp(304px, 22vw, 336px); flex-direction: column; border-right: 1px solid var(--user-panel-divider, var(--user-border)); background: var(--user-context-panel-bg, var(--user-surface)); padding: 14px 12px 16px; color: var(--user-ink); }
+.creation-conversation-sidebar-header { display: flex; min-height: 38px; flex: 0 0 auto; align-items: center; justify-content: space-between; gap: 8px; padding: 0 4px 10px 8px; }
+.creation-conversation-sidebar-header > span { display: inline-flex; min-width: 0; align-items: center; gap: 8px; }
+.creation-conversation-sidebar-header strong { overflow: hidden; font-size: 14px; font-weight: 680; text-overflow: ellipsis; white-space: nowrap; }
+.creation-conversation-sidebar-header small { display: inline-flex; min-width: 20px; height: 20px; align-items: center; justify-content: center; border-radius: 999px; background: var(--user-surface-hover); color: var(--user-ink-muted); padding-inline: 6px; font-size: 10px; font-variant-numeric: tabular-nums; }
+.creation-conversation-sidebar-header-actions { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 2px; }
+.creation-conversation-sidebar-collapse { display: grid; width: 32px; height: 32px; flex: 0 0 auto; place-items: center; border: 0; border-radius: 10px; background: transparent; color: var(--user-ink-muted); cursor: pointer; transition: background var(--user-motion), color var(--user-motion); }
+.creation-conversation-sidebar-collapse:hover { background: var(--user-surface-hover); color: var(--user-ink); }
+.creation-conversation-sidebar-collapse:focus-visible { outline: 2px solid var(--user-accent); outline-offset: 2px; }
+.creation-conversation-sidebar-collapse svg { width: 16px; height: 16px; }
+.creation-conversation-sidebar-new { display: flex; width: 100%; min-height: 44px; flex: 0 0 auto; align-items: center; gap: 10px; border: 0; border-radius: 13px; background: transparent; padding: 6px 10px; color: var(--user-ink); text-align: left; cursor: pointer; transition: background var(--user-motion), color var(--user-motion); }
+.creation-conversation-sidebar-new:hover { background: var(--user-surface-hover); }
+.creation-conversation-sidebar-new:focus-visible { outline: 2px solid var(--user-accent); outline-offset: 2px; }
+.creation-conversation-sidebar-new > span { display: grid; width: 28px; height: 28px; flex: 0 0 auto; place-items: center; border-radius: 9px; background: var(--user-surface); color: var(--user-ink); }
+.creation-conversation-sidebar-new svg { width: 15px; height: 15px; }
+.creation-conversation-sidebar-new strong { font-size: 13px; font-weight: 650; }
+.creation-conversation-sidebar-search { display: flex; height: 36px; flex: 0 0 auto; align-items: center; gap: 8px; margin: 8px 4px 4px; border: 1px solid var(--user-border); border-radius: 11px; background: var(--user-surface); padding: 0 9px; color: var(--user-ink-soft); transition: border-color var(--user-motion), background var(--user-motion); }
+.creation-conversation-sidebar-search:focus-within { border-color: var(--user-border-strong); background: var(--user-surface-hover); }
+.creation-conversation-sidebar-search > svg { width: 14px; height: 14px; flex: 0 0 auto; }
+.creation-conversation-sidebar-search input { min-width: 0; flex: 1 1 auto; border: 0; outline: 0; background: transparent; color: var(--user-ink); font: inherit; font-size: 11px; }
+.creation-conversation-sidebar-search input::placeholder { color: var(--user-ink-soft); }
+.creation-conversation-sidebar-search button { display: grid; width: 22px; height: 22px; flex: 0 0 auto; place-items: center; border: 0; border-radius: 7px; background: transparent; color: var(--user-ink-soft); cursor: pointer; }
+.creation-conversation-sidebar-search button:hover { background: var(--user-surface); color: var(--user-ink); }
+.creation-conversation-sidebar-search button:focus-visible { outline: 2px solid var(--user-accent); outline-offset: 1px; }
+.creation-conversation-sidebar-search button svg { width: 12px; height: 12px; }
+.creation-conversation-sidebar-scroll { min-height: 0; flex: 1 1 auto; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; margin: 4px -8px 0 0; padding-right: 8px; }
+.creation-conversation-sidebar-list { display: grid; gap: 3px; margin: 0; padding: 0; list-style: none; }
+.creation-conversation-sidebar-list > li { position: relative; min-width: 0; }
+.creation-conversation-sidebar-group { position: sticky !important; z-index: 3; top: 0; padding: 10px 7px 4px; background: linear-gradient(to bottom, var(--user-context-panel-bg, var(--user-surface)) 78%, transparent); }
+.creation-conversation-sidebar-group h4 { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--user-ink-soft); font-size: 9px; font-weight: 650; letter-spacing: .05em; }
+.creation-conversation-sidebar-group h4::after { content: ""; height: 1px; flex: 1 1 auto; background: var(--user-border); }
+.creation-conversation-sidebar-row { position: relative; display: flex; min-width: 0; align-items: center; border-radius: 13px; transition: background var(--user-motion), color var(--user-motion); }
+.creation-conversation-sidebar-row:hover { background: var(--user-surface-hover); }
+.creation-conversation-sidebar-list > li.is-active .creation-conversation-sidebar-row { background: var(--user-context-panel-selected, var(--user-surface-muted)); color: var(--user-ink); }
+.creation-conversation-sidebar-item-main { display: flex; width: 100%; min-width: 0; align-items: center; gap: 10px; border: 0; border-radius: 13px; background: transparent; padding: 8px 52px 8px 8px; color: var(--user-ink-muted); text-align: left; cursor: pointer; }
+.creation-conversation-sidebar-item-main:hover { color: var(--user-ink); }
+.creation-conversation-sidebar-item-main:focus-visible { outline: 2px solid var(--user-accent); outline-offset: -2px; }
+.creation-conversation-sidebar-icon { display: grid; width: 36px; height: 36px; flex: 0 0 auto; place-items: center; border-radius: 11px; background: var(--user-surface-hover); color: var(--user-ink-muted); }
+.creation-conversation-sidebar-icon.has-preview { overflow: hidden; background: var(--user-surface); }
+.creation-conversation-sidebar-icon img { width: 100%; height: 100%; object-fit: cover; }
+.creation-conversation-sidebar-list li.is-active .creation-conversation-sidebar-icon { background: var(--user-accent-soft); color: var(--user-accent); }
+.creation-conversation-sidebar-icon svg { width: 16px; height: 16px; }
+.creation-conversation-sidebar-copy { display: flex; min-width: 0; flex: 1 1 auto; flex-direction: column; gap: 4px; }
+.creation-conversation-sidebar-heading { display: flex; min-width: 0; align-items: center; gap: 5px; }
+.creation-conversation-sidebar-heading > strong { min-width: 0; flex: 1 1 auto; overflow: hidden; color: currentColor; font-size: 12px; font-weight: 620; text-overflow: ellipsis; white-space: nowrap; }
+.creation-conversation-sidebar-heading > svg { width: 11px; height: 11px; flex: 0 0 auto; color: var(--user-accent); transform: rotate(-18deg); }
+.creation-conversation-sidebar-copy > small { overflow: hidden; color: var(--user-ink-soft); font-size: 10px; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+.creation-conversation-sidebar-time { position: absolute; z-index: 1; top: 50%; right: 8px; color: var(--user-ink-soft); font-size: 9px; font-variant-numeric: tabular-nums; white-space: nowrap; pointer-events: none; transform: translateY(-50%); transition: opacity var(--user-motion); }
+.creation-conversation-sidebar-more { position: absolute; z-index: 2; top: 50%; right: 6px; display: grid; width: 28px; height: 28px; place-items: center; border: 0; border-radius: 9px; background: transparent; color: var(--user-ink-muted); opacity: 0; transform: translateY(-50%); cursor: pointer; transition: opacity var(--user-motion), background var(--user-motion), color var(--user-motion); }
+.creation-conversation-sidebar-row:hover .creation-conversation-sidebar-time,
+.creation-conversation-sidebar-row:focus-within .creation-conversation-sidebar-time,
+.creation-conversation-sidebar-row.is-menu-open .creation-conversation-sidebar-time { opacity: 0; }
+.creation-conversation-sidebar-row:hover .creation-conversation-sidebar-more,
+.creation-conversation-sidebar-row:focus-within .creation-conversation-sidebar-more,
+.creation-conversation-sidebar-more.is-open { opacity: 1; }
+.creation-conversation-sidebar-more:hover,
+.creation-conversation-sidebar-more.is-open { background: var(--user-surface); color: var(--user-ink); }
+.creation-conversation-sidebar-more:focus-visible { outline: 2px solid var(--user-accent); outline-offset: 1px; }
+.creation-conversation-sidebar-more svg { width: 15px; height: 15px; }
+.creation-conversation-sidebar-rename { display: flex; min-height: 52px; align-items: center; border-radius: 13px; background: var(--user-surface-hover); padding: 7px; }
+.creation-conversation-sidebar-rename input { width: 100%; border: 1px solid var(--user-border-strong); border-radius: 9px; outline: 0; background: var(--user-surface); padding: 7px 8px; color: var(--user-ink); font: inherit; font-size: 11px; font-weight: 600; }
+.creation-conversation-sidebar-rename input:focus-visible { outline: 2px solid var(--user-accent); outline-offset: 1px; }
+.creation-conversation-sidebar-empty { padding: 32px 12px; color: var(--user-ink-soft); font-size: 11px; text-align: center; }
+.creation-conversation-sidebar-expand { position: absolute; z-index: 25; top: 12px; left: 12px; display: grid; width: 34px; height: 34px; place-items: center; border: 1px solid var(--user-border); border-radius: 11px; background: var(--user-surface); color: var(--user-ink-muted); box-shadow: var(--user-shadow-card); cursor: pointer; transition: background var(--user-motion), color var(--user-motion), border-color var(--user-motion); }
+.creation-conversation-sidebar-expand:hover { border-color: var(--user-border-strong); background: var(--user-surface-hover); color: var(--user-ink); }
+.creation-conversation-sidebar-expand:focus-visible { outline: 2px solid var(--user-accent); outline-offset: 2px; }
+.creation-conversation-sidebar-expand svg { width: 16px; height: 16px; }
+.creation-thread-empty-state { display: flex; min-height: 100%; align-items: center; justify-content: center; flex-direction: column; padding: 72px 24px 180px; color: var(--user-ink-muted); text-align: center; }
+.creation-thread-empty-state > span { display: grid; width: 44px; height: 44px; place-items: center; border-radius: 14px; background: var(--user-accent-soft); color: var(--user-accent); }
+.creation-thread-empty-state svg { width: 20px; height: 20px; }
+.creation-thread-empty-state h1 { margin: 16px 0 6px; color: var(--user-ink); font-size: 18px; font-weight: 650; }
+.creation-thread-empty-state p { margin: 0; font-size: 13px; line-height: 1.7; }
+.creation-toolbar-conversation-actions { display: none; align-items: center; gap: var(--space-1); }
+@media (hover: none) {
+    .creation-conversation-sidebar-more { opacity: 1; }
+    .creation-conversation-sidebar-time { opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .creation-conversation-sidebar-row,
+    .creation-conversation-sidebar-more,
+    .creation-conversation-sidebar-time { transition: none; }
+}
+@media (max-width: 1180px) {
+    .creation-conversation-sidebar {
+        position: absolute;
+        z-index: 40;
+        inset: 0 auto 0 0;
+        display: flex;
+        width: min(336px, 100%);
+        flex-basis: auto;
+        box-shadow: var(--user-shadow-card);
+    }
+    .creation-conversation-sidebar-expand { display: grid; }
+    .creation-toolbar-conversation-actions { display: inline-flex; }
+}
 .creation-submit { margin-left: auto; flex: 0 0 auto; display: inline-flex; gap: 8px; }
 .creation-submit-cost { display: inline-flex; align-items: center; gap: 4px; color: var(--user-ink-muted); font-size: 12px; padding-inline: 8px; }
 .creation-submit-cost svg { width: 14px; height: 14px; }

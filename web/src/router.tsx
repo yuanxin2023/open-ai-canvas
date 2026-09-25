@@ -24,6 +24,7 @@ const ChannelsPage = lazy(() => import("@/pages/admin/channels/channels-page"));
 const LogicalModelsPage = lazy(() => import("@/pages/admin/logical-models/logical-models-page"));
 const AdminPluginsPage = lazy(() => import("@/pages/admin/plugins/plugins-page"));
 const AdminPaymentsPage = lazy(() => import("@/pages/admin/payments/payments-page"));
+const ProductOperationsPage = lazy(() => import("@/pages/admin/product-operations/product-operations-page"));
 const CustomerServicePage = lazy(() => import("@/pages/admin/customer-service/customer-service-page"));
 const LogsPage = lazy(() => import("@/pages/admin/logs/logs-page"));
 const RedemptionCodesPage = lazy(() => import("@/pages/admin/redemption-codes/redemption-codes-page"));
@@ -194,7 +195,10 @@ export const router = createBrowserRouter([
                     { path: "channels", element: <ChannelsPage /> },
                     { path: "models", element: <RequireFeature feature="frontendModelsEnabled"><LogicalModelsPage /></RequireFeature> },
                     { path: "plugins", element: <AdminPluginsPage /> },
-                    { path: "payments", element: <AdminPaymentsPage /> },
+                    { path: "payments", element: <AdminPaymentsPage view="providers" /> },
+                    { path: "payment-orders", element: <AdminPaymentsPage view="orders" /> },
+                    { path: "payment-reconciliation", element: <AdminPaymentsPage view="reconciliation" /> },
+                    { path: "product-operations", element: <ProductOperationsPage /> },
                     { path: "prompt-templates", element: <StoryboardPromptsPage /> },
                     { path: "storyboard-prompts", element: <Navigate to="/admin/prompt-templates" replace /> },
                     { path: "announcements", element: <AnnouncementsPage /> },

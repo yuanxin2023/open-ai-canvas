@@ -1296,6 +1296,50 @@ func (r *Repository) AdminRedeemCodes(batchID string, status string, limit int, 
 	return items, total, err
 }
 
+func (r *Repository) AdminRedeemCodeByHash(codeHash string) (*AdminRedeemCodeRow, error) {
+	var item AdminRedeemCodeRow
+	result := r.db.Model(&model.RedeemCode{}).
+		Select("redeem_codes.*, users.username AS redeemed_username, users.display_name AS redeemed_display_name").
+		Joins("LEFT JOIN users ON users.id = redeem_codes.redeemed_by").
+		Where("redeem_codes.code_hash = ?", codeHash).
+		Limit(1).
+		Scan(&item)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	if result.RowsAffected == 0 {
+		return nil, gorm.ErrRecordNotFound
+	}
+	return &item, nil
+}
+
+func (r *Repository) AdminRedeemCodesByHashes(codeHashes []string) ([]AdminRedeemCodeRow, error) {
+	if len(codeHashes) == 0 {
+		return []AdminRedeemCodeRow{}, nil
+	}
+	var items []AdminRedeemCodeRow
+	err := r.db.Model(&model.RedeemCode{}).
+		Select("redeem_codes.*, users.username AS redeemed_username, users.display_name AS redeemed_display_name").
+		Joins("LEFT JOIN users ON users.id = redeem_codes.redeemed_by").
+		Where("redeem_codes.code_hash IN ?", codeHashes).
+		Scan(&items).Error
+	return items, err
+}
+
+func (r *Repository) AdminRedeemBatchesWithCodeSecrets() ([]model.RedeemBatch, error) {
+	var items []model.RedeemBatch
+	now := time.Now()
+	err := r.db.Model(&model.RedeemBatch{}).Select(`redeem_batches.*,
+		(SELECT COUNT(*) FROM redeem_codes rc WHERE rc.batch_id = redeem_batches.id AND rc.status = 'unused' AND (rc.expires_at IS NULL OR rc.expires_at > ?)) AS available_count,
+		(SELECT COUNT(*) FROM redeem_codes rc WHERE rc.batch_id = redeem_batches.id AND rc.status = 'redeemed') AS redeemed_count,
+		(SELECT COUNT(*) FROM redeem_codes rc WHERE rc.batch_id = redeem_batches.id AND rc.status = 'disabled') AS disabled_count,
+		(SELECT COUNT(*) FROM redeem_codes rc WHERE rc.batch_id = redeem_batches.id AND rc.status = 'unused' AND rc.expires_at IS NOT NULL AND rc.expires_at <= ?) AS expired_count`, now, now).
+		Where("codes_cipher <> ''").
+		Order("created_at desc").
+		Find(&items).Error
+	return items, err
+}
+
 func (r *Repository) RedeemCode(userID string, codeHash string, redeemedIP string) (*model.CreditAccount, error) {
 	var account model.CreditAccount
 	err := r.db.Transaction(func(tx *gorm.DB) error {

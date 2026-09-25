@@ -1,13 +1,25 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { App, Button, Drawer, Form, Input, InputNumber, Modal, Popconfirm, Select, Space } from "antd";
+import { App, Button, Form, Input, InputNumber, Modal, Popconfirm, Select, Space } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { Ban, Copy, Eye, KeyRound, RefreshCw, Search, TicketCheck } from "lucide-react";
 
 import { PaginationBar } from "@/pages/admin/components/admin-ui";
+import { AdminModal } from "@/pages/admin/ui/overlays";
 import { formatCredits } from "@/constant/credits";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { ApiError } from "@/services/api/request";
-import { createAdminRedeemBatch, disableAdminRedeemBatch, disableAdminRedeemCode, listAdminRedeemBatchCodes, listAdminRedeemBatches, type AdminRedeemCode, type RedeemBatch } from "@/services/api/wallet";
+import {
+    createAdminRedeemBatch,
+    disableAdminRedeemBatch,
+    disableAdminRedeemCode,
+    listAdminRedeemBatchCodes,
+    listAdminRedeemBatches,
+    searchAdminRedeemBatches,
+    searchAdminRedeemCodes,
+    type AdminRedeemCode,
+    type AdminRedeemCodeSearchResult,
+    type RedeemBatch,
+} from "@/services/api/wallet";
 import { AdminDataTable, AdminExportButton, AdminRowActions, AdminStatusBadge, AdminTableEmpty, type AdminStatusTone } from "./admin-ui";
 
 type RedeemFormValues = { amount?: number | null; count?: number | null; note?: string; expiresAt?: string };
@@ -38,6 +50,9 @@ export default function RedemptionCodesPanel({ createOpen, onCreateOpenChange, o
     const [generatedCodes, setGeneratedCodes] = useState<string[]>([]);
     const [generatedBatchId, setGeneratedBatchId] = useState("");
     const [selectedBatch, setSelectedBatch] = useState<RedeemBatch | null>(null);
+    const [lookupResult, setLookupResult] = useState<AdminRedeemCodeSearchResult | null>(null);
+    const [lookupOpen, setLookupOpen] = useState(false);
+    const [lookupNotFound, setLookupNotFound] = useState(false);
     const [pendingCreate, setPendingCreate] = useState<PendingRedeemBatch | null>(null);
     const [loading, setLoading] = useState(true);
     const [listError, setListError] = useState("");
@@ -52,6 +67,7 @@ export default function RedemptionCodesPanel({ createOpen, onCreateOpenChange, o
     const [total, setTotal] = useState(0);
     const [form] = Form.useForm<RedeemFormValues>();
     const listRequestRef = useRef(0);
+    const lookupRequestRef = useRef(0);
     const createInFlightRef = useRef(false);
     const batchMutationsRef = useRef(new Set<string>());
     const watchedAmount = Form.useWatch("amount", form);
@@ -68,19 +84,23 @@ export default function RedemptionCodesPanel({ createOpen, onCreateOpenChange, o
 
     const reload = async (targetPage = page, targetPageSize = pageSize, queryOverride?: { keyword?: string; validity?: BatchValidity }) => {
         const requestId = ++listRequestRef.current;
-        const queryKeyword = (queryOverride?.keyword ?? debouncedKeyword).trim();
+        const rawQueryKeyword = (queryOverride?.keyword ?? debouncedKeyword).trim();
+        // 非空搜索统一使用 POST，避免兑换码或片段进入批次列表 URL。
+        const queryKeyword = rawQueryKeyword;
         const queryValidity = queryOverride?.validity ?? validity;
         setLoading(true);
         setListError("");
+        setLookupNotFound(false);
         setBatches([]);
         setTotal(0);
         try {
-            const result = await listAdminRedeemBatches({
+            const params = {
                 keyword: queryKeyword || undefined,
                 validity: queryValidity === "all" ? undefined : queryValidity,
                 page: targetPage,
                 pageSize: targetPageSize,
-            });
+            };
+            const result = queryKeyword ? await searchAdminRedeemBatches(params) : await listAdminRedeemBatches(params);
             if (requestId !== listRequestRef.current) return false;
             const lastPage = Math.max(1, Math.ceil(result.total / targetPageSize));
             if (targetPage > lastPage) {
@@ -102,11 +122,45 @@ export default function RedemptionCodesPanel({ createOpen, onCreateOpenChange, o
         }
     };
 
+    const lookupCode = async (rawCode: string) => {
+        const requestId = ++lookupRequestRef.current;
+        try {
+            const result = await searchAdminRedeemCodes(rawCode.trim().toLowerCase());
+            if (requestId !== lookupRequestRef.current) return false;
+            setLookupResult(result);
+            setLookupOpen(result.matches.length > 0);
+            setLookupNotFound(result.matches.length === 0);
+            return true;
+        } catch (error) {
+            if (requestId === lookupRequestRef.current) {
+                setLookupResult(null);
+                setLookupOpen(false);
+                const detail = error instanceof Error ? error.message : "查询兑换码失败";
+                setListError(detail);
+                const notFound = error instanceof ApiError && error.reason === "not_found";
+                setLookupNotFound(notFound);
+                if (notFound) message.warning(detail);
+                else message.error(detail);
+            }
+            return false;
+        }
+    };
+
     useEffect(() => {
         if (createOpen) form.setFieldsValue(DEFAULT_CREATE_VALUES);
     }, [createOpen, form]);
 
     useEffect(() => {
+        const search = debouncedKeyword.trim();
+        if (isRedeemCodeSearchCandidate(search)) {
+            void reload(page, pageSize);
+            void lookupCode(search);
+            return;
+        }
+        lookupRequestRef.current += 1;
+        setLookupOpen(false);
+        setLookupResult(null);
+        setLookupNotFound(false);
         void reload(page, pageSize);
     }, [debouncedKeyword, validity, page, pageSize]);
 
@@ -245,6 +299,7 @@ export default function RedemptionCodesPanel({ createOpen, onCreateOpenChange, o
         },
     ];
     const hasFilters = Boolean(keyword.trim() || validity !== "all");
+    const codeQuery = isRedeemCodeSearchCandidate(keyword);
 
     return (
         <div className="admin-redemption-codes flex min-h-0 flex-1 flex-col">
@@ -278,11 +333,11 @@ export default function RedemptionCodesPanel({ createOpen, onCreateOpenChange, o
                     toolbar={
                         <Input
                             allowClear
-                            aria-label="搜索兑换码批次"
+                            aria-label="搜索兑换码或批次"
                             className="app-list-search"
                             prefix={<Search className="size-4 text-foreground/40" />}
                             value={keyword}
-                            placeholder="搜索批次备注、积分或数量"
+                            placeholder="搜索兑换码片段、批次备注、积分或数量"
                             onChange={(event) => {
                                 setKeyword(event.target.value);
                                 setPage(1);
@@ -294,6 +349,7 @@ export default function RedemptionCodesPanel({ createOpen, onCreateOpenChange, o
                         <Select<BatchValidity>
                             aria-label="按批次到期状态筛选"
                             className="w-44"
+                            disabled={codeQuery}
                             value={validity}
                             onChange={(value) => {
                                 setValidity(value);
@@ -328,10 +384,37 @@ export default function RedemptionCodesPanel({ createOpen, onCreateOpenChange, o
                     empty={
                         <AdminTableEmpty
                             filtered={hasFilters}
-                            title={listError ? "批次读取失败" : !hasFilters ? "暂无兑换码批次" : undefined}
-                            description={listError || (!hasFilters ? "生成后的批次会在这里集中展示和追踪。" : undefined)}
+                            title={
+                                listError
+                                    ? codeQuery
+                                        ? lookupNotFound
+                                            ? "未找到兑换码"
+                                            : "兑换码查询失败"
+                                        : "批次读取失败"
+                                    : codeQuery && lookupResult?.matches.length
+                                      ? `已找到 ${lookupResult.total} 个兑换码`
+                                      : codeQuery && lookupResult
+                                        ? "未找到匹配的兑换码"
+                                        : !hasFilters
+                                          ? "暂无兑换码批次"
+                                          : undefined
+                            }
+                            description={
+                                listError ||
+                                (codeQuery && lookupResult?.matches.length
+                                    ? "可重新打开查询结果，查看状态和核销信息。"
+                                    : codeQuery && lookupResult
+                                      ? "批次列表仍按相同关键词筛选；可输入更多兑换码字符后重试。"
+                                      : !hasFilters
+                                        ? "生成后的批次会在这里集中展示和追踪。"
+                                        : undefined)
+                            }
                             action={
-                                !listError && !hasFilters && !uncertainCreateNotice ? (
+                                !listError && codeQuery && lookupResult?.matches.length ? (
+                                    <Button icon={<Eye className="size-4" />} onClick={() => setLookupOpen(true)}>
+                                        查看查询结果
+                                    </Button>
+                                ) : !listError && !hasFilters && !uncertainCreateNotice ? (
                                     <Button type="primary" icon={<TicketCheck className="size-4" />} onClick={() => onCreateOpenChange(true)}>
                                         生成首个批次
                                     </Button>
@@ -354,7 +437,7 @@ export default function RedemptionCodesPanel({ createOpen, onCreateOpenChange, o
                 />
             </section>
 
-            <CreateRedeemBatchDrawer
+            <CreateRedeemBatchModal
                 open={createOpen}
                 creating={creating}
                 pending={pendingCreate}
@@ -376,12 +459,13 @@ export default function RedemptionCodesPanel({ createOpen, onCreateOpenChange, o
                     setGeneratedBatchId("");
                 }}
             />
+            <RedeemCodeLookupModal open={lookupOpen} result={lookupResult} onClose={() => setLookupOpen(false)} onChanged={() => lookupCode(keyword)} />
             <RedeemBatchCodesModal key={selectedBatch?.id || "closed"} batch={selectedBatch} onClose={() => setSelectedBatch(null)} onBatchChanged={() => reload(page, pageSize)} />
         </div>
     );
 }
 
-function CreateRedeemBatchDrawer({
+function CreateRedeemBatchModal({
     open,
     creating,
     pending,
@@ -408,12 +492,13 @@ function CreateRedeemBatchDrawer({
 }) {
     return (
         <>
-            <Drawer
+            <AdminModal
                 title="生成兑换码批次"
                 open={open && !pending}
-                size="min(600px, 100vw)"
-                onClose={onClose}
-                rootClassName="admin-drawer admin-redemption-drawer"
+                centered
+                width="min(680px, calc(100vw - 32px))"
+                onCancel={onClose}
+                rootClassName="admin-redemption-create-modal"
                 destroyOnHidden
                 mask={{ closable: !creating && !pending }}
                 keyboard={!creating && !pending}
@@ -429,8 +514,8 @@ function CreateRedeemBatchDrawer({
                     </div>
                 }
             >
-                <div className="admin-redemption-drawer-intro">
-                    <span className="admin-redemption-drawer-intro-icon" aria-hidden="true">
+                <div className="admin-redemption-create-intro">
+                    <span className="admin-redemption-create-intro-icon" aria-hidden="true">
                         <KeyRound className="size-4" />
                     </span>
                     <div>
@@ -439,8 +524,8 @@ function CreateRedeemBatchDrawer({
                     </div>
                 </div>
                 <Form form={form} layout="vertical" requiredMark={false} initialValues={DEFAULT_CREATE_VALUES} onFinish={onPreview}>
-                    <section className="admin-redemption-drawer-section">
-                        <div className="admin-redemption-drawer-section-heading">
+                    <section className="admin-redemption-create-section">
+                        <div className="admin-redemption-create-section-heading">
                             <h3>批次参数</h3>
                             <p>积分最多保留 2 位小数；单批最多生成 5,000 个兑换码。</p>
                         </div>
@@ -509,11 +594,12 @@ function CreateRedeemBatchDrawer({
                         </dl>
                     </section>
                 </Form>
-            </Drawer>
+            </AdminModal>
 
             <Modal
                 title="确认生成兑换码批次"
                 open={Boolean(pending)}
+                centered
                 okText="确认生成"
                 cancelText="返回修改"
                 onCancel={() => {
@@ -615,6 +701,137 @@ function GeneratedCodesModal({ codes, batchId, onClose }: { codes: string[]; bat
             ) : null}
             <Input.TextArea aria-label="新生成的兑换码预览" value={previewContent} readOnly autoSize={{ minRows: 10, maxRows: 18 }} className="font-mono text-xs" />
         </Modal>
+    );
+}
+
+function RedeemCodeLookupModal({ open, result, onClose, onChanged }: { open: boolean; result: AdminRedeemCodeSearchResult | null; onClose: () => void; onChanged: () => Promise<unknown> }) {
+    const { message } = App.useApp();
+    const [disabling, setDisabling] = useState(false);
+    const [selectedCodeID, setSelectedCodeID] = useState("");
+    const matches = result?.matches ?? [];
+    const selected = matches.find((match) => match.code.id === selectedCodeID) || matches[0];
+    const item = selected?.code;
+    const batch = selected?.batch;
+
+    useEffect(() => {
+        if (matches.length > 0 && !matches.some((match) => match.code.id === selectedCodeID)) {
+            setSelectedCodeID(matches[0].code.id);
+        }
+    }, [matches, selectedCodeID]);
+
+    const copyCode = async () => {
+        if (!item?.code) return;
+        try {
+            await navigator.clipboard.writeText(item.code);
+            message.success("兑换码已复制");
+        } catch {
+            message.error("复制失败，请检查浏览器剪贴板权限");
+        }
+    };
+
+    const disableCode = async () => {
+        if (!item || !batch || disabling) return;
+        setDisabling(true);
+        try {
+            await disableAdminRedeemCode(batch.id, item.id);
+            message.success("兑换码已禁用");
+        } catch (error) {
+            const detail = error instanceof Error ? error.message : "禁用兑换码失败";
+            if (isMutationResultUncertain(error)) message.warning({ content: `禁用结果暂时无法确认：${detail}。正在重新查询兑换码状态。`, duration: 6 });
+            else message.error(detail);
+        } finally {
+            await onChanged();
+            setDisabling(false);
+        }
+    };
+
+    return (
+        <Modal
+            title={result && result.total > 1 ? `兑换码查询结果 · ${result.total} 条` : "兑换码查询结果"}
+            open={open && matches.length > 0}
+            onCancel={() => {
+                if (!disabling) onClose();
+            }}
+            destroyOnHidden
+            mask={{ closable: !disabling }}
+            keyboard={!disabling}
+            closable={!disabling}
+            width={720}
+            rootClassName="admin-modal-root"
+            footer={
+                <Space>
+                    {item?.status === "unused" ? (
+                        <Popconfirm
+                            title={`禁用尾号 ${item.codeSuffix} 的兑换码？`}
+                            description={`该兑换码面值 ${formatCredits(item.amountMicrocredits)} 积分，禁用后无法恢复。`}
+                            okText="确认禁用"
+                            cancelText="取消"
+                            okButtonProps={{ danger: true }}
+                            disabled={disabling}
+                            onConfirm={() => disableCode()}
+                        >
+                            <Button danger loading={disabling} icon={<Ban className="size-4" />}>
+                                禁用兑换码
+                            </Button>
+                        </Popconfirm>
+                    ) : null}
+                    <Button type="primary" disabled={disabling} onClick={onClose}>
+                        关闭
+                    </Button>
+                </Space>
+            }
+        >
+            {item && batch ? (
+                <div className="space-y-4">
+                    {matches.length > 1 ? (
+                        <Select
+                            className="w-full"
+                            aria-label="选择匹配的兑换码"
+                            value={item.id}
+                            onChange={setSelectedCodeID}
+                            options={matches.map((match) => ({ value: match.code.id, label: `${match.code.code} · ${formatCodeStatusLabel(match.code.status)}` }))}
+                        />
+                    ) : null}
+                    {result?.truncated ? (
+                        <div className="admin-redemption-sensitive-notice is-warning">
+                            共匹配 {result.total} 个兑换码，当前仅展示前 {matches.length} 个。请继续输入更多字符缩小范围。
+                        </div>
+                    ) : null}
+                    <div className="flex items-center gap-2 rounded-lg border border-border/70 bg-muted/25 px-3 py-2.5">
+                        <KeyRound className="size-4 shrink-0 text-foreground/45" aria-hidden />
+                        <code className="min-w-0 flex-1 break-all text-sm">{item.code}</code>
+                        <Button type="text" size="small" aria-label="复制兑换码" icon={<Copy className="size-3.5" />} disabled={disabling} onClick={() => void copyCode()} />
+                    </div>
+                    <div className="admin-redemption-detail-summary">
+                        {renderCodeStatus(item.status)}
+                        <span>单码 {formatCredits(item.amountMicrocredits)} 积分</span>
+                        <span>{item.expiresAt ? `到期 ${formatTime(item.expiresAt)}` : "永久有效"}</span>
+                    </div>
+                    <dl className="grid grid-cols-1 gap-px overflow-hidden rounded-lg border border-border/70 bg-border/60 sm:grid-cols-2">
+                        <LookupField
+                            label="核销用户"
+                            value={item.redeemedBy ? item.redeemedDisplayName || item.redeemedUsername || item.redeemedBy : "--"}
+                            detail={item.redeemedBy ? (item.redeemedUsername ? `@${item.redeemedUsername}` : item.redeemedBy) : undefined}
+                        />
+                        <LookupField label="核销时间" value={formatTime(item.redeemedAt)} />
+                        <LookupField label="核销 IP" value={item.redeemedIp || "--"} />
+                        <LookupField label="所属批次" value={batch.note || "未备注批次"} detail={`批次 ${batch.id.slice(0, 8)}`} />
+                        <LookupField label="批次创建时间" value={formatTime(batch.createdAt)} />
+                        <LookupField label="批次状态分布" value={`可用 ${batch.availableCount} · 核销 ${batch.redeemedCount} · 过期 ${batch.expiredCount} · 禁用 ${batch.disabledCount}`} />
+                    </dl>
+                </div>
+            ) : null}
+        </Modal>
+    );
+}
+
+function LookupField({ label, value, detail }: { label: string; value: string; detail?: string }) {
+    return (
+        <div className="min-w-0 bg-background px-4 py-3">
+            <dt className="text-xs text-foreground/45">{label}</dt>
+            <dd className="mt-1 break-words text-sm text-foreground/85">{value}</dd>
+            {detail ? <dd className="mt-0.5 truncate text-xs text-foreground/40">{detail}</dd> : null}
+        </div>
     );
 }
 
@@ -859,9 +1076,23 @@ function renderCodeStatus(status: AdminRedeemCode["status"]) {
     return <AdminStatusBadge label={configForStatus.label} tone={configForStatus.tone} />;
 }
 
+function formatCodeStatusLabel(status: AdminRedeemCode["status"]) {
+    return {
+        unused: "可用",
+        redeemed: "已核销",
+        disabled: "已禁用",
+        expired: "已过期",
+    }[status];
+}
+
 function isMutationResultUncertain(error: unknown) {
     if (!(error instanceof ApiError)) return true;
     return error.status === undefined || error.retryable || error.status >= 500;
+}
+
+function isRedeemCodeSearchCandidate(value: string) {
+    const normalized = value.trim();
+    return normalized.length >= 1 && normalized.length <= 32 && !/\s/.test(normalized);
 }
 
 function formatBatchDisableImpact(batch: RedeemBatch) {

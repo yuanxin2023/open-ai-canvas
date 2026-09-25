@@ -82,6 +82,14 @@ test("auth scene consumes resolved appearance instead of hardcoded media constan
     expect(source).not.toContain("AUTH_VIDEO_POSTER");
 });
 
+test("auth footer follows the form content instead of covering the scroll area", async () => {
+    const source = await Bun.file(new URL("../src/pages/auth/auth-scene.tsx", import.meta.url)).text();
+
+    expect(source).toContain('className="flex flex-1 items-center justify-center');
+    expect(source).toContain('<SiteComplianceFooter variant="auth" className="shrink-0" />');
+    expect(source).not.toContain('<SiteComplianceFooter variant="auth" className="absolute');
+});
+
 test("appearance management exposes light and dark logo uploads plus the frame switch", async () => {
     const [pageSource, brandSource, adminStyles, globalStyles] = await Promise.all([
         Bun.file(new URL("../src/pages/admin/settings/appearance-settings-page.tsx", import.meta.url)).text(),

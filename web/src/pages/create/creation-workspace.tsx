@@ -3,12 +3,11 @@ import { imageResolutionUsesQuality } from "@/lib/image-size-presets";
 import { createPortal } from "react-dom";
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode, type RefObject } from "react";
 import { App, Button, Dropdown, Popover } from "antd";
-import { AppDrawer } from "@/components/ui/product/app-drawer";
 import { AppModal } from "@/components/ui/product/app-modal";
 import { useWorkspaceTopBarMount } from "@/components/layout/workspace-top-bar-extension";
 import { Tooltip } from "@/components/ui/base/tooltip";
 import { Reorder, LayoutGroup, motion, useReducedMotion } from "motion/react";
-import { ArrowDown, ArrowUp, Brain, ChevronDown, ChevronLeft, ChevronRight, Clapperboard, Clock3, Copy, Download, FileText, Film, History, Image as ImageIcon, LoaderCircle, Maximize2, MessageSquareText, Minimize2, MoreHorizontal, Music2, Pencil, Plus, RefreshCw, Search, SlidersHorizontal, Sparkles, Trash2, UserRound, WandSparkles, Waves, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Brain, ChevronDown, ChevronLeft, ChevronRight, Clapperboard, Clock3, Copy, Download, FileText, Film, Image as ImageIcon, LoaderCircle, Maximize2, MessageSquareText, Minimize2, MoreHorizontal, Music2, Pencil, Pin, Plus, RefreshCw, Search, SlidersHorizontal, Sparkles, Trash2, UserRound, WandSparkles, Waves, X } from "lucide-react";
 
 import { AIMessageMarkdown } from "@/components/ai/ai-message-markdown";
 import { GenerationToolCard, type GenerationToolStatus } from "@/components/ai/generation-tool-card";
@@ -20,7 +19,7 @@ import { formatVideoResolutionLabel as videoResolutionLabel } from "@/lib/video-
 import { useAssetStore } from "@/stores/use-asset-store";
 import { CachedResourceImage } from "@/components/cached-resource-image";
 import { CanvasImagePreview } from "@/components/canvas/canvas-image-preview";
-import { CanvasResourceMentionTextarea } from "@/components/canvas/canvas-resource-mention-textarea";
+import { CanvasResourceMentionTextarea, type CanvasSlashCommandGroup, type CanvasSlashCommandItem } from "@/components/canvas/canvas-resource-mention-textarea";
 import { VoiceRecordingButton } from "@/components/conversation/voice-recording-button";
 import { UserPromptEditorModal } from "@/components/user-prompt-editor-modal";
 import { HoverBorderGradient } from "@/components/ui/aceternity/hover-border-gradient";
@@ -43,7 +42,7 @@ import { useUserStore } from "@/stores/use-user-store";
 import type { PromptOptimizerProvider } from "@/lib/plugins/plugin-types";
 import { displayCreationPrompt, type CreationReference } from "./creation-references";
 import { creationAttachmentKind, creationMediaAspectRatio, removeCreationAttachment, type CreationAttachment, type CreationMode } from "./creation-assets";
-import { conversationTimestamp, isImageAttachment, isVideoAttachment } from "./creation-conversations";
+import { creationConversationDisplayTitle, conversationTimestamp, isImageAttachment, isVideoAttachment } from "./creation-conversations";
 import { conversationTimeFormatter, countOptions, historyDayFormatter, messageTimeFormatter, modeLabels, qualityOptions, ratioOptions, resolutionOptions, shotScriptLabels, type CreationConversation, type CreationMessage, type CreationShotRailEntry, type CreationStatus } from "./creation-types";
 import "./creation-product.css";
 import { inspirationCoverUrl, listInspirations, type Inspiration } from "@/services/api/inspirations";
@@ -69,111 +68,139 @@ function creationConversationBucket(updatedAt: string): "today" | "yesterday" | 
     return "earlier";
 }
 
-const creationBucketLabels: Record<"today" | "yesterday" | "week" | "earlier", string> = { today: "今天", yesterday: "昨天", week: "近 7 天", earlier: "更早" };
-export function CreationHistoryDrawer({ open, conversations, activeId, onNew, onClose, onSelect, onDelete, onRename }: { open: boolean; conversations: CreationConversation[]; activeId: string; onNew: () => void; onClose: () => void; onSelect: (conversation: CreationConversation) => void; onDelete: (conversation: CreationConversation) => void; onRename: (conversation: CreationConversation, title: string) => void }) {
+type CreationConversationGroup = "pinned" | "today" | "yesterday" | "week" | "earlier";
+const creationBucketLabels: Record<CreationConversationGroup, string> = { pinned: "置顶", today: "今天", yesterday: "昨天", week: "近 7 天", earlier: "更早" };
+function creationConversationGroup(conversation: CreationConversation): CreationConversationGroup {
+    return conversation.pinned ? "pinned" : creationConversationBucket(conversation.updatedAt);
+}
+
+function filterCreationConversations(conversations: CreationConversation[], keyword: string) {
+    const query = keyword.trim().toLowerCase();
+    if (!query) return conversations;
+    return conversations.filter((conversation) => {
+        const latest = conversationPreviewMessage(conversation);
+        const searchable = [
+            conversation.title,
+            creationConversationDisplayTitle(conversation),
+            ...conversation.messages.flatMap((message) => [message.content, displayCreationPrompt(message.content, message.references || [])]),
+            latest?.mode ? modeLabels[latest.mode] : "创作",
+            formatConversationTime(conversation.updatedAt),
+        ].filter(Boolean).join(" ").toLowerCase();
+        return searchable.includes(query);
+    });
+}
+
+function CreationConversationPreview({ imageUrl, fallback }: { imageUrl: string; fallback: ReactNode }) {
+    const [failed, setFailed] = useState(false);
+    useEffect(() => setFailed(false), [imageUrl]);
+    const showImage = Boolean(imageUrl && !failed);
+    return <span className={showImage ? "creation-conversation-sidebar-icon has-preview" : "creation-conversation-sidebar-icon"} aria-hidden="true">
+        {showImage ? <img src={imageUrl} alt="" loading="lazy" decoding="async" onError={() => setFailed(true)} /> : fallback}
+    </span>;
+}
+
+export function CreationConversationSidebar({ conversations, activeId, onNew, onCollapse, onSelect, onDelete, onRename, onTogglePin }: { conversations: CreationConversation[]; activeId: string; onNew: () => void; onCollapse: () => void; onSelect: (conversation: CreationConversation) => void; onDelete: (conversation: CreationConversation) => void; onRename: (conversation: CreationConversation, title: string) => void; onTogglePin: (conversation: CreationConversation) => void }) {
     const [keyword, setKeyword] = useState("");
     const [renamingId, setRenamingId] = useState<string | null>(null);
     const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
     const renameInputRef = useRef<HTMLInputElement>(null);
     const skipRenameCommitRef = useRef(false);
-
     const assistantName = useAppearanceStore((state) => state.appearance.brandName);
     const exportUser = useUserStore((state) => state.user);
-
-    const { message: drawerToast } = App.useApp();
-
-    useEffect(() => {
-        if (!open) return;
-        setKeyword("");
-        setRenamingId(null);
-        setMenuOpenId(null);
-    }, [open]);
+    const { message: sidebarToast } = App.useApp();
+    const visibleConversations = useMemo(() => filterCreationConversations(conversations, keyword), [conversations, keyword]);
 
     const commitRename = (conversation: CreationConversation) => {
         const shouldSkip = skipRenameCommitRef.current;
         skipRenameCommitRef.current = false;
         const value = renameInputRef.current?.value.trim() || "";
         setRenamingId(null);
-        if (shouldSkip || !value) return;
-        const original = conversation.title.trim() || "新创作";
-        if (value === original) return;
+        if (shouldSkip || !value || value === creationConversationDisplayTitle(conversation)) return;
         onRename(conversation, value);
     };
-
     const cancelRename = () => {
         skipRenameCommitRef.current = true;
         setRenamingId(null);
     };
-
     const beginRename = (conversation: CreationConversation) => {
         skipRenameCommitRef.current = false;
         setMenuOpenId(null);
         setRenamingId(conversation.id);
     };
 
-    const visibleConversations = useMemo(() => {
-        const query = keyword.trim().toLowerCase();
-        if (!query) return conversations;
-        return conversations.filter((conversation) => {
-            const latest = conversationPreviewMessage(conversation);
-            const searchable = [
-                conversation.title,
-                ...conversation.messages.flatMap((message) => [message.content, displayCreationPrompt(message.content, message.references || [])]),
-                latest?.mode ? modeLabels[latest.mode] : "创作",
-                formatConversationTime(conversation.updatedAt),
-            ].filter(Boolean).join(" ").toLowerCase();
-            return searchable.includes(query);
-        });
-    }, [conversations, keyword]);
+    return (
+        <aside className="creation-conversation-sidebar" aria-label="创作对话">
+            <header className="creation-conversation-sidebar-header">
+                <span>
+                    <strong>创作对话</strong>
+                    <small>{conversations.length}</small>
+                </span>
+                <span className="creation-conversation-sidebar-header-actions">
+                    <Tooltip title="收起创作对话">
+                        <button type="button" aria-label="收起创作对话" className="creation-conversation-sidebar-collapse" onClick={onCollapse}>
+                            <ChevronLeft />
+                        </button>
+                    </Tooltip>
+                </span>
+            </header>
 
+            <button type="button" className="creation-conversation-sidebar-new" onClick={onNew}>
+                <span aria-hidden="true"><Plus /></span>
+                <strong>新建对话</strong>
+            </button>
 
-    return <AppDrawer flush open={open} onClose={onClose} placement="right" size="min(440px, 100vw)" closeIcon={<X className="size-4" />} className="creation-history-drawer" rootClassName="creation-history-drawer-root" title={<div className="creation-history-title"><span>历史对话</span><small>{conversations.length} 个对话</small></div>}>
-        <div className="creation-history-content">
-            <label className="creation-history-search">
+            <div className="creation-conversation-sidebar-search" role="search">
                 <Search aria-hidden="true" />
-                <input value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="搜索对话标题或内容" aria-label="搜索历史对话" />
-            </label>
+                <input value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="搜索对话" aria-label="搜索创作对话" />
+                {keyword ? <button type="button" aria-label="清空搜索" onClick={() => setKeyword("")}><X /></button> : null}
+            </div>
 
-            <button type="button" className="creation-history-new" onClick={onNew}><span className="creation-history-new-icon"><Plus /></span><span className="creation-history-new-copy"><strong>新建创作</strong><small>开启一个新的创作对话</small></span></button>
-            {visibleConversations.length ? <ul className="creation-history-list" aria-label="历史对话，按更新时间倒序排列">
-                {visibleConversations.flatMap((conversation, index) => {
-                    const showGroupHead = !keyword.trim() && (index === 0 || creationConversationBucket(conversation.updatedAt) !== creationConversationBucket(visibleConversations[index - 1].updatedAt));
-                    const latest = conversationPreviewMessage(conversation);
-                    const active = conversation.id === activeId;
-                    const HistoryTypeIcon = latest?.mode === "video" ? Clapperboard : latest?.mode === "image" ? ImageIcon : latest?.mode === "text" ? MessageSquareText : Sparkles;
-                    return [
-                        showGroupHead ? <li key={`${conversation.id}-group`} className="creation-history-group-head"><h4>{creationBucketLabels[creationConversationBucket(conversation.updatedAt)]}</h4></li> : null,
-                        <li key={conversation.id} className={active ? "is-active" : undefined}>
-                            {renamingId === conversation.id ? (
-                                <div className="creation-history-rename">
-                                    <input ref={renameInputRef} className="creation-history-rename-input" defaultValue={conversation.title.trim() || "新创作"} aria-label="重命名对话标题" autoFocus onFocus={(event) => event.currentTarget.select()} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); event.currentTarget.blur(); } else if (event.key === "Escape") { cancelRename(); } }} onBlur={() => commitRename(conversation)} />
-                                </div>
-                            ) : (
-                                <div className={menuOpenId === conversation.id ? "creation-history-row is-menu-open" : "creation-history-row"}>
-                                    <button type="button" className="creation-history-item-main" aria-current={active ? "page" : undefined} onClick={() => { setMenuOpenId(null); onSelect(conversation); }}>
-                                        <span className="creation-history-item-icon" aria-hidden="true"><HistoryTypeIcon /></span>
-                                        <span className="creation-history-item-text">
-                                            <strong className="creation-history-item-heading">{conversation.title.trim() || "新创作"}</strong>
-                                        <span className="creation-history-snippet">{latest ? <><em>{latest.mode ? modeLabels[latest.mode] : "创作"}</em><span>{displayCreationPrompt(latest.content, latest.references || []).trim() || "还没有开始创作"}</span></> : <><em>创作</em><span>还没有开始创作</span></>}</span>
-                                        </span>
-                                    </button>
-                                    <span className="creation-history-time-slot" aria-hidden={menuOpenId === conversation.id}><time dateTime={conversation.updatedAt}>{formatHistoryRelativeTime(conversation.updatedAt)}</time></span>
-                                    <Dropdown trigger={["click"]} placement="bottomRight" open={menuOpenId === conversation.id} onOpenChange={(open) => setMenuOpenId(open ? conversation.id : null)} overlayClassName="creation-history-menu-overlay" menu={{ items: [{ key: "rename", label: "重命名", icon: <Pencil /> }, { key: "export", label: "导出对话", icon: <Download /> }, { key: "delete", label: "删除对话", danger: true, icon: <Trash2 /> }], onClick: ({ key }) => { setMenuOpenId(null); if (key === "rename") { beginRename(conversation); } else if (key === "export") { downloadCreationConversation(conversation, assistantName, exportUser?.displayName || "你"); drawerToast.success("对话已导出为 Markdown"); } else { onDelete(conversation); } } }}>
-                                        <button type="button" className={menuOpenId === conversation.id ? "creation-history-more is-open" : "creation-history-more"} aria-label={`更多操作：${conversation.title.trim() || "新创作"}`} onClick={(event) => event.preventDefault()}><MoreHorizontal /></button>
-                                    </Dropdown>
-                                </div>
-                            )}
-                        </li>,
-                    ];
-                })}
-            </ul> : <div className="creation-history-empty">{keyword.trim() ? "没有找到匹配的对话" : "暂无历史对话"}</div>}
-        </div>
-    </AppDrawer>;
+            <nav className="creation-conversation-sidebar-scroll creation-scrollbar" aria-label="历史对话">
+                {visibleConversations.length ? (
+                    <ul className="creation-conversation-sidebar-list">
+                        {visibleConversations.flatMap((conversation, index) => {
+                            const latest = conversationPreviewMessage(conversation);
+                            const active = conversation.id === activeId;
+                            const HistoryTypeIcon = latest?.mode === "video" ? Clapperboard : latest?.mode === "image" ? ImageIcon : latest?.mode === "text" ? MessageSquareText : Sparkles;
+                            const preview = latest ? displayCreationPrompt(latest.content, latest.references || []).trim() : "还没有开始创作";
+                            const previewImage = conversationPreviewImage(conversation);
+                            const displayTitle = creationConversationDisplayTitle(conversation);
+                            const showGroupHead = !keyword.trim() && (index === 0 || creationConversationGroup(conversation) !== creationConversationGroup(visibleConversations[index - 1]));
+                            return [
+                                showGroupHead ? <li key={`${conversation.id}-group`} className="creation-conversation-sidebar-group"><h4>{creationBucketLabels[creationConversationGroup(conversation)]}</h4></li> : null,
+                                <li key={conversation.id} className={active ? "is-active" : undefined}>
+                                    {renamingId === conversation.id ? <div className="creation-conversation-sidebar-rename">
+                                        <input ref={renameInputRef} defaultValue={displayTitle} aria-label="重命名对话标题" autoFocus onFocus={(event) => event.currentTarget.select()} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); event.currentTarget.blur(); } else if (event.key === "Escape") cancelRename(); }} onBlur={() => commitRename(conversation)} />
+                                    </div> : <div className={menuOpenId === conversation.id ? "creation-conversation-sidebar-row is-menu-open" : "creation-conversation-sidebar-row"}>
+                                        <button type="button" className="creation-conversation-sidebar-item-main" aria-current={active ? "page" : undefined} onClick={() => { setMenuOpenId(null); onSelect(conversation); }}>
+                                            <CreationConversationPreview imageUrl={previewImage} fallback={<HistoryTypeIcon />} />
+                                            <span className="creation-conversation-sidebar-copy">
+                                                <span className="creation-conversation-sidebar-heading"><strong>{displayTitle}</strong>{conversation.pinned ? <Pin aria-label="已置顶" /> : null}</span>
+                                                <small>{preview || "还没有开始创作"}</small>
+                                            </span>
+                                        </button>
+                                        <span className="creation-conversation-sidebar-time" aria-hidden={menuOpenId === conversation.id}><time dateTime={conversation.updatedAt}>{formatHistoryRelativeTime(conversation.updatedAt)}</time></span>
+                                        <Dropdown trigger={["click"]} placement="bottomRight" open={menuOpenId === conversation.id} onOpenChange={(open) => setMenuOpenId(open ? conversation.id : null)} overlayClassName="creation-history-menu-overlay" menu={{ items: [{ key: "pin", label: conversation.pinned ? "取消置顶" : "置顶对话", icon: <Pin /> }, { key: "rename", label: "重命名", icon: <Pencil /> }, { key: "export", label: "导出对话", icon: <Download /> }, { key: "delete", label: "删除对话", danger: true, icon: <Trash2 /> }], onClick: ({ key }) => { setMenuOpenId(null); if (key === "pin") onTogglePin(conversation); else if (key === "rename") beginRename(conversation); else if (key === "export") { downloadCreationConversation(conversation, assistantName, exportUser?.displayName || "你"); sidebarToast.success("对话已导出为 Markdown"); } else onDelete(conversation); } }}>
+                                            <button type="button" className={menuOpenId === conversation.id ? "creation-conversation-sidebar-more is-open" : "creation-conversation-sidebar-more"} aria-label={`更多操作：${displayTitle}`}><MoreHorizontal /></button>
+                                        </Dropdown>
+                                    </div>}
+                                </li>,
+                            ];
+                        })}
+                    </ul>
+                ) : <div className="creation-conversation-sidebar-empty">{keyword.trim() ? "没有找到匹配的对话" : "暂无历史对话"}</div>}
+            </nav>
+        </aside>
+    );
 }
 
-export function CreationWorkspaceToolbar({ shots, onJumpToShot, onNewConversation, onOpenHistory, onContinueCanvas, openingCanvas }: { shots: CreationShotRailEntry[]; onJumpToShot: (shot: CreationShotRailEntry) => void; onNewConversation: () => void; onOpenHistory: () => void; onContinueCanvas: () => void; openingCanvas: boolean }) {
+export function CreationWorkspaceToolbar({ shots, onJumpToShot, onNewConversation, onContinueCanvas, openingCanvas }: { shots: CreationShotRailEntry[]; onJumpToShot: (shot: CreationShotRailEntry) => void; onNewConversation: () => void; onContinueCanvas: () => void; openingCanvas: boolean }) {
     const [railOpen, setRailOpen] = useState(false);
     const railRef = useRef<HTMLDivElement>(null);
+    const shortDramaEnabled = useUserStore((state) => state.features.shortDramaEnabled);
+    useEffect(() => {
+        if (!shortDramaEnabled) setRailOpen(false);
+    }, [shortDramaEnabled]);
     useEffect(() => {
         if (!railOpen) return;
         const onPointerDown = (event: MouseEvent) => { if (railRef.current && !railRef.current.contains(event.target as Node)) setRailOpen(false); };
@@ -182,7 +209,7 @@ export function CreationWorkspaceToolbar({ shots, onJumpToShot, onNewConversatio
     }, [railOpen]);
     const mount = useWorkspaceTopBarMount();
     const toolbar = <header className="creation-thread-toolbar">
-        <div className="creation-toolbar-shots" ref={railRef}>
+        {shortDramaEnabled ? <div className="creation-toolbar-shots" ref={railRef}>
             <button type="button" className="creation-rail-trigger" aria-expanded={railOpen} aria-haspopup="listbox" onClick={() => setRailOpen((open) => !open)}><Clapperboard />镜头时间线{shots.length > 0 ? <em className="creation-rail-count">{shots.length}</em> : null}</button>
             {railOpen ? <div className="creation-rail-pop" role="listbox" aria-label="镜头时间线">
                 <div className="creation-rail-pop-head"><span className="creation-rail-pop-title">镜头时间线<small>{shots.length ? `共 ${shots.length} 镜` : "空轨道"}</small></span><button type="button" className="creation-rail-pop-close" aria-label="关闭镜头列表" onClick={() => setRailOpen(false)}><X /></button></div>
@@ -196,11 +223,12 @@ export function CreationWorkspaceToolbar({ shots, onJumpToShot, onNewConversatio
                     </button></li>;
                 })}</ol> : <p className="creation-rail-empty">在下方发送一条视频消息，就会自动成为第 1 镜。</p>}
             </div> : null}
-        </div>
+        </div> : null}
         <div className="creation-toolbar-actions">
             <Button size="small" loading={openingCanvas} onClick={onContinueCanvas}>画布中继续</Button>
-            <Tooltip title="新建创作"><button type="button" aria-label="新建创作" className="creation-toolbar-action" onClick={onNewConversation}><Plus /></button></Tooltip>
-            <Tooltip title="历史对话"><button type="button" aria-label="查看历史对话" className="creation-toolbar-action" onClick={onOpenHistory}><History /></button></Tooltip>
+            <span className="creation-toolbar-conversation-actions">
+                <Tooltip title="新建创作"><button type="button" aria-label="新建创作" className="creation-toolbar-action" onClick={onNewConversation}><Plus /></button></Tooltip>
+            </span>
         </div>
     </header>;
     if (mount) return createPortal(toolbar, mount);
@@ -355,6 +383,11 @@ type ComposerProps = {
 
 type CreationReferenceFilter = "all" | "image" | "video" | "audio" | "file";
 
+const creationPromptSlashGroups: CanvasSlashCommandGroup[] = [
+    { id: "personal", label: "我的提示词", emptyLabel: "还没有个人提示词" },
+    { id: "public", label: "公共提示词", emptyLabel: "当前没有公共提示词" },
+];
+
 export function CreationComposer(props: ComposerProps) {
     const [previewUrl, setPreviewUrl] = useState("");
     const [previewType, setPreviewType] = useState<"image" | "video">("image");
@@ -362,6 +395,8 @@ export function CreationComposer(props: ComposerProps) {
     const [referenceFilter, setReferenceFilter] = useState<CreationReferenceFilter>("all");
     const [canDragReferences, setCanDragReferences] = useState(false);
     const [dropTargetReferenceId, setDropTargetReferenceId] = useState<string | null>(null);
+    const [promptLibrary, setPromptLibrary] = useState<{ personal: UserPrompt[]; public: Inspiration[]; loading: boolean; loaded: boolean; error: string }>({ personal: [], public: [], loading: false, loaded: false, error: "" });
+    const promptLibraryRequestRef = useRef<AbortController | null>(null);
     const attachmentTrackRef = useRef<HTMLUListElement>(null);
     const cardDragRef = useRef<{ startX: number; startY: number; moved: boolean } | null>(null);
     const suppressAttachmentClickRef = useRef(false);
@@ -375,6 +410,47 @@ export function CreationComposer(props: ComposerProps) {
     const [routeQuote, setRouteQuote] = useState<LogicalModelQuote | null>(null);
     const canOptimizePrompt = Boolean(props.promptOptimizerProvider) && (props.mode === "image" || props.mode === "video");
     const optimizerReferences = props.references.filter((reference) => reference.active && reference.kind !== "skill");
+    const slashCommandItems = useMemo<CanvasSlashCommandItem[]>(() => {
+        const toItem = (item: UserPrompt | Inspiration, groupId: "personal" | "public"): CanvasSlashCommandItem => {
+            const previewUrl = "status" in item
+                ? (item.coverUrl ? inspirationCoverUrl(item) : "")
+                : item.coverResourceId
+                    ? resourceFileUrl(item.coverResourceId)
+                    : item.coverUrl || "";
+            return {
+                id: item.id,
+                groupId,
+                label: item.title,
+                description: item.description || item.prompt,
+                badge: modeLabels[item.mode],
+                value: item.prompt,
+                searchText: [item.title, item.description, item.prompt, item.source, modeLabels[item.mode], ...(item.tags || [])].filter(Boolean).join(" "),
+                previewUrl,
+            };
+        };
+        const prioritizeCurrentMode = <T extends UserPrompt | Inspiration>(items: T[]) => [...items].sort((left, right) => Number(right.mode === props.mode) - Number(left.mode === props.mode));
+        return [
+            ...prioritizeCurrentMode(promptLibrary.personal).filter((item) => item.prompt.trim()).map((item) => toItem(item, "personal")),
+            ...prioritizeCurrentMode(promptLibrary.public).filter((item) => item.prompt.trim()).map((item) => toItem(item, "public")),
+        ];
+    }, [promptLibrary.personal, promptLibrary.public, props.mode]);
+    const loadPromptLibrary = useCallback(() => {
+        if (promptLibrary.loading || promptLibrary.loaded) return;
+        promptLibraryRequestRef.current?.abort();
+        const controller = new AbortController();
+        promptLibraryRequestRef.current = controller;
+        setPromptLibrary((current) => ({ ...current, loading: true, error: "" }));
+        Promise.all([listAllUserPrompts(controller.signal), listInspirations(controller.signal)])
+            .then(([personal, publicResult]) => {
+                if (controller.signal.aborted) return;
+                setPromptLibrary({ personal, public: publicResult.inspirations, loading: false, loaded: true, error: "" });
+            })
+            .catch(() => {
+                if (controller.signal.aborted) return;
+                setPromptLibrary((current) => ({ ...current, loading: false, loaded: false, error: "提示词加载失败，请关闭后重新输入 / 重试" }));
+            });
+    }, [promptLibrary.loaded, promptLibrary.loading]);
+    useEffect(() => () => promptLibraryRequestRef.current?.abort(), []);
     const credits = requestCreditCost({
         channelMode: priceChannel.scope === "system" ? "remote" : "local",
         modelCosts: priceChannel.modelCosts,
@@ -519,7 +595,7 @@ export function CreationComposer(props: ComposerProps) {
         <div className={`creation-chat-composer is-${props.variant}`}>
         <div className="creation-chat-writing-surface">
             <div className="creation-chat-editor">
-                <CanvasResourceMentionTextarea ref={props.composerFocusRef} value={props.prompt} references={props.references} mentionMenuWidth={400} sendOnEnter onFocus={props.onPromptFocus} onChange={props.setPrompt} onSubmit={props.onSubmit} containerClassName="creation-chat-mention-container" className="creation-chat-mention-editor creation-scrollbar" style={{ color: "var(--creation-text)" }} placeholder={props.placeholderOverride || (props.variant === "empty" ? emptyPlaceholder : placeholder)} aria-label="创作提示词，可使用 @ 引用当前参考内容或技能；回车发送，Shift+回车换行" spellCheck disabled={interactionBusy} activeDropReferenceId={dropTargetReferenceId} onReferenceFilesDrop={(reference, files) => { const target = props.references.find((item) => item.id === reference.id); if (target?.attachmentId) props.onReplaceReferenceFiles(target.attachmentId, files); }} />
+                <CanvasResourceMentionTextarea ref={props.composerFocusRef} value={props.prompt} references={props.references} mentionMenuWidth={400} slashCommandMenuWidth={420} slashCommandGroups={creationPromptSlashGroups} slashCommandItems={slashCommandItems} slashCommandLoading={promptLibrary.loading} slashCommandError={promptLibrary.error} onSlashCommandOpen={loadPromptLibrary} sendOnEnter onFocus={props.onPromptFocus} onChange={props.setPrompt} onSubmit={props.onSubmit} containerClassName="creation-chat-mention-container" className="creation-chat-mention-editor creation-scrollbar" style={{ color: "var(--creation-text)" }} placeholder={props.placeholderOverride || (props.variant === "empty" ? emptyPlaceholder : placeholder)} aria-label="创作提示词，可使用 / 调用提示词、@ 引用当前参考内容或技能；回车发送，Shift+回车换行" spellCheck disabled={interactionBusy} activeDropReferenceId={dropTargetReferenceId} onReferenceFilesDrop={(reference, files) => { const target = props.references.find((item) => item.id === reference.id); if (target?.attachmentId) props.onReplaceReferenceFiles(target.attachmentId, files); }} />
                 {props.attachments.length || referencesSupported ? <div className={`creation-reference-panel${trackState.isExpanded ? " is-expanded" : ""}`} aria-busy={interactionBusy}>
                     {trackState.isExpanded ? <div className="creation-reference-panel-header">
                         <div className="creation-reference-filter-tabs" role="group" aria-label="筛选参考内容">
@@ -960,7 +1036,7 @@ function formatMessageTime(value: string) {
 }
 
 function buildConversationExportMarkdown(conversation: CreationConversation, assistantName: string, userName: string) {
-    const lines: string[] = [`# ${conversation.title.trim() || "新创作"}`, ""];
+    const lines: string[] = [`# ${creationConversationDisplayTitle(conversation)}`, ""];
     for (const message of conversation.messages) {
         const stamp = formatMessageTime(message.createdAt);
         const modeTag = message.mode && message.mode !== "text" ? (message.mode === "image" ? "[图像生成] " : "[视频生成] ") : "";
@@ -980,7 +1056,7 @@ function buildConversationExportMarkdown(conversation: CreationConversation, ass
     return lines.join("\n").trim() + "\n";
 }
 function downloadCreationConversation(conversation: CreationConversation, assistantName: string, userName: string) {
-    const safeTitle = (conversation.title.trim() || "新创作").replace(/[\\/:*?"<>|]/g, "_").slice(0, 60) || "新创作";
+    const safeTitle = creationConversationDisplayTitle(conversation).replace(/[\\/:*?"<>|]/g, "_").slice(0, 60) || "新创作";
     const blob = new Blob([buildConversationExportMarkdown(conversation, assistantName, userName)], { type: "text/markdown;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
@@ -1000,6 +1076,14 @@ function conversationPreviewMessage(conversation: CreationConversation) {
         if (message.role === "user") return message;
     }
     return fallback;
+}
+
+function conversationPreviewImage(conversation: CreationConversation) {
+    for (let index = conversation.messages.length - 1; index >= 0; index -= 1) {
+        const message = conversation.messages[index];
+        if (message.mode === "image" && message.resultUrls?.[0]) return message.resultUrls[0];
+    }
+    return "";
 }
 
 function formatHistoryRelativeTime(value: string) {

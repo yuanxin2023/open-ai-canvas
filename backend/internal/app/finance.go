@@ -74,6 +74,25 @@ type AdminRedeemCodePage struct {
 	Limit              int                     `json:"pageSize"`
 }
 
+type AdminRedeemCodeLookupRequest struct {
+	Code string `json:"code"`
+}
+
+type AdminRedeemCodeLookupResult struct {
+	Batch model.RedeemBatch     `json:"batch"`
+	Code  AdminRedeemCodeDetail `json:"code"`
+}
+
+type AdminRedeemCodeSearchRequest struct {
+	Query string `json:"query"`
+}
+
+type AdminRedeemCodeSearchResult struct {
+	Matches   []AdminRedeemCodeLookupResult `json:"matches"`
+	Total     int                           `json:"total"`
+	Truncated bool                          `json:"truncated"`
+}
+
 type BillingOrderPage struct {
 	Orders []model.BillingOrder `json:"orders"`
 	Total  int64                `json:"total"`
@@ -246,18 +265,122 @@ func (s *Service) AdminRedeemCodePage(actor *model.User, batchID string, status 
 	now := time.Now()
 	details := make([]AdminRedeemCodeDetail, 0, len(rows))
 	for _, row := range rows {
-		status := string(row.Status)
-		if row.Status == model.RedeemCodeUnused && row.ExpiresAt != nil && !row.ExpiresAt.After(now) {
-			status = "expired"
-		}
-		details = append(details, AdminRedeemCodeDetail{
-			ID: row.ID, Code: plainByHash[row.CodeHash], CodeSuffix: row.CodeSuffix, Status: status,
-			RedeemedBy: row.RedeemedBy, RedeemedUsername: row.RedeemedUsername, RedeemedDisplayName: row.RedeemedDisplayName,
-			RedeemedAt: row.RedeemedAt, RedeemedIP: row.RedeemedIP, ExpiresAt: row.ExpiresAt, AmountMicrocredits: row.AmountMicrocredits,
-		})
+		details = append(details, adminRedeemCodeDetail(row, plainByHash[row.CodeHash], now))
 	}
 	batch.CodesCipher = ""
 	return &AdminRedeemCodePage{Batch: *batch, Codes: details, PlaintextAvailable: len(plainCodes) > 0, Total: total, Page: page, Limit: limit}, nil
+}
+
+func (s *Service) AdminLookupRedeemCode(actor *model.User, req AdminRedeemCodeLookupRequest) (*AdminRedeemCodeLookupResult, error) {
+	if err := s.RequireAdmin(actor); err != nil {
+		return nil, err
+	}
+	code := strings.ToLower(strings.TrimSpace(req.Code))
+	if len(code) != 32 {
+		return nil, BadAuthRequest("请输入完整的 32 位兑换码")
+	}
+	row, err := s.repo.AdminRedeemCodeByHash(hashRedeemCode(code))
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, NotFound("未找到该兑换码")
+	}
+	if err != nil {
+		return nil, err
+	}
+	batch, err := s.repo.RedeemBatch(row.BatchID)
+	if err != nil {
+		return nil, err
+	}
+	batch.CodesCipher = ""
+	return &AdminRedeemCodeLookupResult{
+		Batch: *batch,
+		Code:  adminRedeemCodeDetail(*row, code, time.Now()),
+	}, nil
+}
+
+func (s *Service) AdminSearchRedeemCodes(actor *model.User, req AdminRedeemCodeSearchRequest) (*AdminRedeemCodeSearchResult, error) {
+	if err := s.RequireAdmin(actor); err != nil {
+		return nil, err
+	}
+	query := strings.ToLower(strings.TrimSpace(req.Query))
+	if len(query) < 1 || len(query) > 32 {
+		return nil, BadAuthRequest("请输入兑换码中的任意 1-32 位字符")
+	}
+	if len(query) == 32 {
+		result, err := s.AdminLookupRedeemCode(actor, AdminRedeemCodeLookupRequest{Code: query})
+		if err == nil {
+			return &AdminRedeemCodeSearchResult{Matches: []AdminRedeemCodeLookupResult{*result}, Total: 1}, nil
+		}
+		var appErr *kernel.AppError
+		if !errors.As(err, &appErr) || appErr.Status != kernel.CodeNotFound {
+			return nil, err
+		}
+	}
+
+	batches, err := s.repo.AdminRedeemBatchesWithCodeSecrets()
+	if err != nil {
+		return nil, err
+	}
+	type candidate struct {
+		code    string
+		hash    string
+		batchID string
+	}
+	const resultLimit = 50
+	candidates := make([]candidate, 0, resultLimit)
+	total := 0
+	batchByID := make(map[string]model.RedeemBatch, len(batches))
+	for _, batch := range batches {
+		plainCodes, decryptErr := s.redeemBatchPlainCodes(batch.CodesCipher)
+		if decryptErr != nil {
+			return nil, decryptErr
+		}
+		batch.CodesCipher = ""
+		batchByID[batch.ID] = batch
+		for _, code := range plainCodes {
+			if !strings.Contains(strings.ToLower(code), query) {
+				continue
+			}
+			total++
+			if len(candidates) < resultLimit {
+				candidates = append(candidates, candidate{code: code, hash: hashRedeemCode(code), batchID: batch.ID})
+			}
+		}
+	}
+	hashes := make([]string, 0, len(candidates))
+	for _, item := range candidates {
+		hashes = append(hashes, item.hash)
+	}
+	rows, err := s.repo.AdminRedeemCodesByHashes(hashes)
+	if err != nil {
+		return nil, err
+	}
+	rowByHash := make(map[string]repository.AdminRedeemCodeRow, len(rows))
+	for _, row := range rows {
+		rowByHash[row.CodeHash] = row
+	}
+	now := time.Now()
+	matches := make([]AdminRedeemCodeLookupResult, 0, len(candidates))
+	for _, item := range candidates {
+		row, exists := rowByHash[item.hash]
+		batch, batchExists := batchByID[item.batchID]
+		if !exists || !batchExists {
+			continue
+		}
+		matches = append(matches, AdminRedeemCodeLookupResult{Batch: batch, Code: adminRedeemCodeDetail(row, item.code, now)})
+	}
+	return &AdminRedeemCodeSearchResult{Matches: matches, Total: total, Truncated: total > len(matches)}, nil
+}
+
+func adminRedeemCodeDetail(row repository.AdminRedeemCodeRow, code string, now time.Time) AdminRedeemCodeDetail {
+	status := string(row.Status)
+	if row.Status == model.RedeemCodeUnused && row.ExpiresAt != nil && !row.ExpiresAt.After(now) {
+		status = "expired"
+	}
+	return AdminRedeemCodeDetail{
+		ID: row.ID, Code: code, CodeSuffix: row.CodeSuffix, Status: status,
+		RedeemedBy: row.RedeemedBy, RedeemedUsername: row.RedeemedUsername, RedeemedDisplayName: row.RedeemedDisplayName,
+		RedeemedAt: row.RedeemedAt, RedeemedIP: row.RedeemedIP, ExpiresAt: row.ExpiresAt, AmountMicrocredits: row.AmountMicrocredits,
+	}
 }
 
 func (s *Service) redeemBatchPlainCodes(ciphertext string) ([]string, error) {

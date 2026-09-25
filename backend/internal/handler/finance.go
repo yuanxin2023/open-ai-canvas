@@ -368,6 +368,31 @@ func RegisterFinanceRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		ok(c, items)
 	})
+	r.POST("/admin/redeem-batches/search", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 8<<10)
+		var req struct {
+			Keyword  string `json:"keyword"`
+			Validity string `json:"validity"`
+			Page     int    `json:"page"`
+			PageSize int    `json:"pageSize"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		items, err := svc.AdminRedeemBatchPage(user, service.AdminListQuery{Keyword: req.Keyword, Status: req.Validity, Page: req.Page, Limit: req.PageSize})
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		c.Header("Cache-Control", "no-store")
+		ok(c, items)
+	})
 	r.POST("/admin/redeem-batches", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {
@@ -403,6 +428,46 @@ func RegisterFinanceRoutes(r *gin.RouterGroup, svc *service.Service) {
 			return
 		}
 		result, err := svc.AdminRedeemCodePage(user, c.Param("id"), c.Query("status"), page, limit)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		c.Header("Cache-Control", "no-store")
+		ok(c, result)
+	})
+	r.POST("/admin/redeem-codes/lookup", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 4<<10)
+		var req service.AdminRedeemCodeLookupRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		result, err := svc.AdminLookupRedeemCode(user, req)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		c.Header("Cache-Control", "no-store")
+		ok(c, result)
+	})
+	r.POST("/admin/redeem-codes/search", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 4<<10)
+		var req service.AdminRedeemCodeSearchRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		result, err := svc.AdminSearchRedeemCodes(user, req)
 		if err != nil {
 			failService(c, err)
 			return

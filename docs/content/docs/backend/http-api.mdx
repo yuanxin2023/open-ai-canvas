@@ -9,6 +9,16 @@ description: 信封、错误码与 OpenAPI
 
 机器可读规范：运行中的 `GET /api/openapi.yaml`，源文件 `backend/internal/handler/openapi.yaml`。前端 TypeScript 仍走 `web/src/services/api` 的 `http`，不从 OpenAPI 生成客户端。
 
+## 管理员兑换码查询
+
+`POST /admin/redeem-codes/lookup` 接收 `{ "code": "32 位完整兑换码" }`，仅允许管理员调用。查询与用户兑换入口使用相同的格式规则，不额外限定字符集；兑换码在 JSON 请求体中提交，不放入 URL 或查询参数。服务端统一转为小写并按 SHA-256 哈希精确查询，兼容只有哈希、无法恢复明文的旧批次。成功返回 `data.batch` 批次摘要和 `data.code` 单码详情；单码详情包含当前状态、面值、有效期，以及已核销时的用户 ID、用户名、显示名、核销时间和 IP。响应设置 `Cache-Control: no-store`。
+
+未使用且未过期的查询结果可继续调用 `POST /admin/redeem-batches/:id/codes/:codeId/disable` 禁用。服务端以批次 ID、单码 ID、`unused` 状态及有效期做原子条件更新；已核销、已禁用、已过期或不存在的记录一律拒绝，不依赖前端按钮状态。
+
+`POST /admin/redeem-codes/search` 接收 `{ "query": "兑换码片段" }`，支持任意连续 1–32 位字符。完整 32 位优先走哈希精确查询；较短片段在服务端解密仍保留加密明文的批次后匹配，因此旧的仅哈希批次只能使用完整兑换码查询。接口最多返回 50 条 `matches`，并用 `total` 和 `truncated` 表示是否还有更多匹配；查询片段同样只放在 POST 请求体中。
+
+页面存在非空搜索词时，批次备注、积分和数量筛选改用 `POST /admin/redeem-batches/search`，请求字段与原 `GET /admin/redeem-batches` 一致。这样组合搜索兑换码片段和批次时，任何输入内容都不会进入 URL；空搜索仍使用原 GET 列表。
+
 ## 个人提示词
 
 登录用户通过 `GET /api/user-prompts` 分页读取自己的提示词，可按关键词和文本/图片/视频类型过滤；`POST /api/user-prompts` 新增，`PUT /api/user-prompts/:id` 编辑，`DELETE /api/user-prompts/:id` 删除。服务端始终按当前用户校验记录与上传封面归属，不接受其他账号的资源或提示词 ID；每个用户最多保存 500 条。

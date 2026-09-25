@@ -37,7 +37,11 @@ describe("workspace credit products", () => {
         expect(component).toContain("bestValueProductId");
         expect(component).toContain("立即购买");
         expect(component).toContain("<CreditProductCard");
+        expect(component).toContain('className="workspace-credit-products-shell"');
         expect(card).toContain("workspace-credit-product-meter");
+        expect(css).toMatch(/\.workspace-credit-products-shell::-webkit-scrollbar\s*\{[^}]*width:\s*6px/s);
+        expect(css).toMatch(/\.workspace-credit-products-shell:hover,[^}]*--workspace-credit-scrollbar-thumb:/s);
+        expect(css).toMatch(/@supports selector\(::-webkit-scrollbar\)\s*\{\s*\.workspace-credit-products-shell\s*\{[^}]*scrollbar-color:\s*auto;[^}]*scrollbar-width:\s*auto;/s);
         expect(card).toContain("积分更划算");
         expect(css).toMatch(/\.workspace-credit-products-grid\s*\{[^}]*grid-template-columns:\s*repeat\(4, minmax\(0, 1fr\)\)/s);
         expect(css).toMatch(/\.workspace-credit-products-header h2\s*\{[^}]*Source Han Serif SC/s);

@@ -1,7 +1,6 @@
 import { http } from "@/services/api/request";
 import type { ModelTag } from "@/lib/model-tags";
 
-
 export type CreditAccount = {
     userId: string;
     availableMicrocredits: number;
@@ -215,6 +214,17 @@ export type AdminRedeemCodePage = {
     pageSize: number;
 };
 
+export type AdminRedeemCodeLookupResult = {
+    batch: RedeemBatch;
+    code: AdminRedeemCode;
+};
+
+export type AdminRedeemCodeSearchResult = {
+    matches: AdminRedeemCodeLookupResult[];
+    total: number;
+    truncated: boolean;
+};
+
 export type BillingOrder = {
     id: string;
     userId: string;
@@ -347,12 +357,24 @@ export function listAdminRedeemBatches(params: AdminFinanceListParams = {}) {
     return http.get<{ batches: RedeemBatch[]; total: number; page: number; pageSize: number }>("/admin/redeem-batches", { params });
 }
 
+export function searchAdminRedeemBatches(params: AdminFinanceListParams) {
+    return http.post<{ batches: RedeemBatch[]; total: number; page: number; pageSize: number }>("/admin/redeem-batches/search", params);
+}
+
 export function createAdminRedeemBatch(input: { amountMicrocredits: number; count: number; note?: string; expiresAt?: string }) {
     return http.post<{ batch: RedeemBatch; codes: string[] }>("/admin/redeem-batches", input, { timeout: 30_000 });
 }
 
 export function listAdminRedeemBatchCodes(batchId: string, params: { status?: string; page?: number; pageSize?: number } = {}) {
     return http.get<AdminRedeemCodePage>(`/admin/redeem-batches/${encodeURIComponent(batchId)}/codes`, { params });
+}
+
+export function lookupAdminRedeemCode(code: string) {
+    return http.post<AdminRedeemCodeLookupResult>("/admin/redeem-codes/lookup", { code });
+}
+
+export function searchAdminRedeemCodes(query: string) {
+    return http.post<AdminRedeemCodeSearchResult>("/admin/redeem-codes/search", { query });
 }
 
 export function disableAdminRedeemBatch(batchId: string) {

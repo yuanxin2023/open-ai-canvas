@@ -11,7 +11,7 @@ import { MediaPreview } from "@/components/media-preview";
 import { formatCredits } from "@/constant/credits";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { exportAdminApiLogs, listAdminApiLogs, type ApiCallLog } from "@/services/api/auth";
-import { ApiLogDetailDrawer } from "../components/api-log-detail-drawer";
+import { ApiLogDetailModal } from "../components/api-log-detail-drawer";
 import { AdminPageFrame } from "../components/admin-shell";
 import { AdminBatchBar, AdminDataTable, AdminExportButton, AdminFilterChip, AdminStatusBadge, AdminTableEmpty } from "../components/admin-ui";
 import { logBillingLabel, logStatus, normalizeLogView } from "./log-view";
@@ -248,7 +248,7 @@ export default function LogsPage() {
                 empty={loadError ? <span role="status">数据暂不可用，请重试</span> : <AdminTableEmpty filtered={hasFilters} />}
                 footer={<PaginationBar alwaysShow current={page} pageSize={pageSize} total={total} onChange={(nextPage, nextSize) => updateUrl({ page: nextSize !== pageSize ? 1 : nextPage, pageSize: nextSize })} />}
             />
-            <ApiLogDetailDrawer logId={detailLogId} onClose={() => setDetailLogId(null)} onLogUpdated={(next) => setLogs((items) => items.map((item) => (item.id === next.id ? next : item)))} />
+            <ApiLogDetailModal logId={detailLogId} onClose={() => setDetailLogId(null)} onLogUpdated={(next) => setLogs((items) => items.map((item) => (item.id === next.id ? next : item)))} />
             <Modal
                 title={mediaPreview?.title || "媒体预览"}
                 open={Boolean(mediaPreview)}

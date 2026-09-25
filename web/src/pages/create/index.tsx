@@ -3,9 +3,10 @@ import { App, Spin } from "antd";
 import { Tooltip } from "@/components/ui/base/tooltip";
 import { History, Sparkles, Maximize2 } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { useNavigate } from "react-router";
+import { useLocation, useNavigate } from "react-router";
 
 import type { AssetLibraryPickerItem } from "@/components/assets/asset-library-picker-modal";
+import { publishWorkspaceSidebarCollapsed } from "@/components/layout/workspace-sidebar-state";
 import { generationErrorCode, generationErrorMessage } from "@/lib/generation-error";
 import { creationResultAssetIds } from "@/lib/canvas/canvas-asset-handoff";
 import { getActiveUserScope } from "@/lib/user-scope";
@@ -30,8 +31,8 @@ import { usePluginStore } from "@/stores/use-plugin-store";
 import { buildCreationMentionReferences, expandCreationPrompt, reconcileCreationAttachmentLimit, removeCreationReferenceTokens, replaceCreationAttachmentReference, selectedCreationReferences, type CreationReference } from "./creation-references";
 import { creationAttachmentFromAsset, creationAttachmentFromAudio, creationAttachmentFromAudioAsset, creationAttachmentFromDocument, creationAttachmentFromExternalAsset, creationAttachmentFromImage, creationAttachmentFromVideo, creationAttachmentFromVideoAsset, creationAttachmentKind, creationAudioAsset, creationFileAccepted, creationImageAsset, creationMediaAspectRatio, creationUploadAccept, creationVideoAsset, removeCreationAttachment, splitCreationAttachments, type CreationAttachment } from "./creation-assets";
 import { defaultCreationMode, modeLabels, type CreationConversation, type CreationMessage, type CreationMode, type CreationRetryContext, type CreationSettings, type CreationShotRailEntry, type CreationStatus } from "./creation-types";
-import { attachCreationTaskContexts, completedCreationGenerationTask, conversationTimestamp, creationShotRail, creationVideoShotOrdinal, isImageAttachment, isVideoAttachment, materializeCreationTaskResults, newConversation, newMessage, reconcileCreationTaskMessages } from "./creation-conversations";
-import { CreationComposer, CreationEmptySuggest, CreationFeaturedWorks, CreationHistoryDrawer, CreationMessageView, CreationModeTabs, CreationWorkspaceToolbar, creationAssetCategoryLabels } from "./creation-workspace";
+import { attachCreationTaskContexts, compareCreationConversations, completedCreationGenerationTask, creationConversationDisplayTitle, creationConversationTitle, creationShotRail, creationVideoShotOrdinal, isImageAttachment, isVideoAttachment, materializeCreationTaskResults, newConversation, newMessage, reconcileCreationTaskMessages } from "./creation-conversations";
+import { CreationComposer, CreationConversationSidebar, CreationEmptySuggest, CreationFeaturedWorks, CreationMessageView, CreationModeTabs, CreationWorkspaceToolbar, creationAssetCategoryLabels } from "./creation-workspace";
 import { CreationAgentEntry } from "./creation-agent-entry";
 import { createCreationSubmitGate } from "./creation-submit-gate";
 import { creationVideoConfig } from "./creation-generation-config";
@@ -42,6 +43,7 @@ type CreationRuntime = Awaited<ReturnType<typeof loadCreationRuntime>>;
 
 const TEXT_STREAMING_PREF_KEY = "creation.composer.text-streaming";
 const TEXT_THINKING_PREF_KEY = "creation.composer.text-thinking";
+const CONVERSATION_SIDEBAR_OPEN_PREF_KEY = "creation.sidebar.conversations-open";
 function readComposerPref(key: string, fallback: boolean): boolean {
     try {
         const stored = window.localStorage.getItem(key);
@@ -62,6 +64,7 @@ export default function CreatePage() {
     const [agentMode, setAgentMode] = useState(false);
     const { message: toast, modal } = App.useApp();
     const navigate = useNavigate();
+    const location = useLocation();
     const [openingCanvas, setOpeningCanvas] = useState(false);
     const openingCanvasRef = useRef(false);
     const brandName = useAppearanceStore((state) => state.appearance.brandName);
@@ -100,9 +103,10 @@ export default function CreatePage() {
     const [count, setCount] = useState(String(Math.max(1, Math.min(4, Number(config.count) || 1))));
     const [textStreaming, setTextStreaming] = useState(() => readComposerPref(TEXT_STREAMING_PREF_KEY, true));
     const [textThinking, setTextThinking] = useState(() => readComposerPref(TEXT_THINKING_PREF_KEY, false));
+    const [conversationSidebarOpen, setConversationSidebarOpen] = useState(() => readComposerPref(CONVERSATION_SIDEBAR_OPEN_PREF_KEY, true));
     const [busy, setBusy] = useState(false);
     const [referenceReplacementBusy, setReferenceReplacementBusy] = useState(false);
-    const [historyOpen, setHistoryOpen] = useState(false);
+    const [inspirationHomeOpen, setInspirationHomeOpen] = useState(false);
     const [libraryOpen, setLibraryOpen] = useState(false);
     const externalAssetSources = useExternalAssetSources(libraryOpen);
     const abortRef = useRef<AbortController | null>(null);
@@ -124,8 +128,8 @@ export default function CreatePage() {
 
     const activeConversation = useMemo(() => conversations.find((item) => item.id === activeId) || conversations[0], [activeId, conversations]);
     const historyConversations = useMemo(
-        () => conversations.filter((conversation) => conversation.id === activeId || conversation.messages.length > 0).sort((left, right) => conversationTimestamp(right.updatedAt) - conversationTimestamp(left.updatedAt)),
-        [activeId, conversations],
+        () => conversations.filter((conversation) => conversation.messages.length > 0).sort(compareCreationConversations),
+        [conversations],
     );
     const preferredModel = mode === "text" ? config.textModel : mode === "image" ? config.imageModel : config.videoModel;
     const hasPrompt = Boolean(prompt.trim());
@@ -162,6 +166,7 @@ export default function CreatePage() {
     }, [attachments]);
     const mentionReferences = useMemo(() => buildCreationMentionReferences(addedSkills, attachments, draftReferences), [addedSkills, attachments, draftReferences]);
     const isEmpty = !activeConversation?.messages.length;
+    const showThreadWorkspace = !inspirationHomeOpen && (!isEmpty || historyConversations.length > 0);
 
     // 空首页从顶部开始；有消息的对话由跟随消息逻辑管理滚动。
     useLayoutEffect(() => {
@@ -180,7 +185,8 @@ export default function CreatePage() {
     useEffect(() => {
         writeComposerPref(TEXT_STREAMING_PREF_KEY, textStreaming);
         writeComposerPref(TEXT_THINKING_PREF_KEY, textThinking);
-    }, [textStreaming, textThinking]);
+        writeComposerPref(CONVERSATION_SIDEBAR_OPEN_PREF_KEY, conversationSidebarOpen);
+    }, [conversationSidebarOpen, textStreaming, textThinking]);
     useEffect(() => {
         if (!composerPreferencesHydrated || composerPreferencesInitialized) return;
         const saved = useCreationPreferencesStore.getState().preferences;
@@ -530,6 +536,7 @@ export default function CreatePage() {
     }, [addAsset, busy, referenceReplacementBusy, replaceAttachmentReference, toast]);
 
     const submit = async (retryContext?: CreationRetryContext, retryLockKey?: string) => {
+        const enteringThreadFromHome = !showThreadWorkspace;
         const releaseRetryLock = () => {
             if (retryLockKey) retryPreparingRef.current.delete(retryLockKey);
         };
@@ -599,6 +606,10 @@ export default function CreatePage() {
         }
         const expandedPrompt = skillExecution.prompt;
         const referenceMetadata = skillExecution.metadata;
+        if (enteringThreadFromHome) {
+            setConversationSidebarOpen(true);
+            publishWorkspaceSidebarCollapsed(true);
+        }
         followLatestMessageRef.current = true;
         const userMessage = newMessage("user", text, { mode, model: selectedModel, attachments, references, settings });
         const assistantMessage = newMessage("assistant", "", { mode, model: selectedModel, status: mode === "text" && textStreaming ? "streaming" : "pending", settings, ...retryContext });
@@ -620,10 +631,12 @@ export default function CreatePage() {
         };
         updateActive((conversation) => ({
             ...conversation,
-            title: conversation.messages.length ? conversation.title : text.slice(0, 24),
+            title: conversation.messages.length ? conversation.title : creationConversationTitle(text, mode),
+            titleEdited: conversation.messages.length ? conversation.titleEdited : false,
             updatedAt: new Date().toISOString(),
             messages: [...conversation.messages, userMessage, assistantMessage],
         }));
+        setInspirationHomeOpen(false);
         setPrompt("");
         setAttachments([]);
         setDraftReferences([]);
@@ -759,13 +772,31 @@ export default function CreatePage() {
     const startNewConversation = () => {
         const next = newConversation();
         followLatestMessageRef.current = true;
-        setConversations((current) => [next, ...current]);
+        setConversations((current) => [next, ...current.filter((conversation) => conversation.messages.length > 0)]);
         setActiveId(next.id);
+        setInspirationHomeOpen(false);
         setPrompt("");
         setAttachments([]);
         setDraftReferences([]);
-        setHistoryOpen(false);
     };
+
+    const openInspirationHome = useCallback(() => {
+        const next = newConversation();
+        followLatestMessageRef.current = true;
+        setConversations((current) => [next, ...current.filter((conversation) => conversation.messages.length > 0)]);
+        setActiveId(next.id);
+        setInspirationHomeOpen(true);
+        setAgentMode(false);
+        setPrompt("");
+        setAttachments([]);
+        setDraftReferences([]);
+    }, []);
+
+    useEffect(() => {
+        if (!hydrated || new URLSearchParams(location.search).get("home") !== "1") return;
+        openInspirationHome();
+        navigate("/", { replace: true });
+    }, [hydrated, location.search, navigate, openInspirationHome]);
 
     const continueOnCanvas = async (selectedAssetIds?: string[]) => {
         if (!activeConversation || openingCanvasRef.current) return;
@@ -806,14 +837,14 @@ export default function CreatePage() {
     const selectConversation = (conversation: CreationConversation) => {
         followLatestMessageRef.current = true;
         setActiveId(conversation.id);
+        setInspirationHomeOpen(false);
         setPrompt("");
         setAttachments([]);
         setDraftReferences([]);
-        setHistoryOpen(false);
     };
 
     const confirmDeleteConversation = (conversation: CreationConversation) => {
-        const title = conversation.title.trim() || "新创作";
+        const title = creationConversationDisplayTitle(conversation);
         const label = title.length > 32 ? `${title.slice(0, 32)}...` : title;
         modal.confirm({
             className: "workspace-modal workspace-modal-compact",
@@ -825,7 +856,7 @@ export default function CreatePage() {
             onOk: async () => {
                 try {
                     const remaining = removeCreationConversationSnapshot(conversationsRef.current, conversation.id);
-                    const sortedRemaining = [...remaining].sort((left, right) => conversationTimestamp(right.updatedAt) - conversationTimestamp(left.updatedAt));
+                    const sortedRemaining = [...remaining].sort(compareCreationConversations);
                     const fallback = sortedRemaining.find((item) => item.messages.length > 0) || sortedRemaining[0] || newConversation();
                     const next = remaining.length ? remaining : [fallback];
                     await saveCreationConversations(next);
@@ -851,10 +882,17 @@ export default function CreatePage() {
     const renameConversationTitle = (conversation: CreationConversation, title: string) => {
         const nextTitle = title.trim().slice(0, 120);
         if (!nextTitle || nextTitle === conversation.title.trim()) return;
-        const next = updateCreationConversationSnapshot(conversationsRef.current, conversation.id, (item) => ({ ...item, title: nextTitle }));
+        const next = updateCreationConversationSnapshot(conversationsRef.current, conversation.id, (item) => ({ ...item, title: nextTitle, titleEdited: true }));
         conversationsRef.current = next;
         setConversations(next);
         void saveCreationConversations(next).catch((error) => toast.error(error instanceof Error ? error.message : "对话重命名保存失败"));
+    };
+
+    const toggleConversationPin = (conversation: CreationConversation) => {
+        const next = updateCreationConversationSnapshot(conversationsRef.current, conversation.id, (item) => ({ ...item, pinned: !item.pinned }));
+        conversationsRef.current = next;
+        setConversations(next);
+        void saveCreationConversations(next).catch((error) => toast.error(error instanceof Error ? error.message : "对话置顶状态保存失败"));
     };
 
     const restoreMessageDraft = (item: CreationMessage) => {
@@ -983,9 +1021,22 @@ export default function CreatePage() {
 
     return <>
         <div className="creation-home relative flex h-full min-h-0 flex-col overflow-hidden">
-            {isEmpty ? <>
+            {!showThreadWorkspace ? <>
                 <div className="creation-top-actions">
-                    <Tooltip title="历史对话"><button type="button" aria-label="查看历史对话" aria-expanded={historyOpen} className="creation-top-action" onClick={() => setHistoryOpen(true)}><History /></button></Tooltip>
+                    <Tooltip title={historyConversations.length ? "查看创作对话" : "暂无创作对话"}>
+                        <button
+                            type="button"
+                            aria-label="查看创作对话"
+                            className="creation-top-action"
+                            disabled={!historyConversations.length}
+                            onClick={() => {
+                                setConversationSidebarOpen(true);
+                                setInspirationHomeOpen(false);
+                            }}
+                        >
+                            <History />
+                        </button>
+                    </Tooltip>
                 </div>
                 <AnimatePresence>
                     {launchpadCondensed && !agentMode ? <motion.div className="creation-floating-prompt" key="floating-prompt"
@@ -1020,22 +1071,31 @@ export default function CreatePage() {
                 />
             </main>
             </> : <div className="creation-thread-workbench">
-                <CreationWorkspaceToolbar onNewConversation={startNewConversation} onOpenHistory={() => setHistoryOpen(true)} shots={videoShots} onJumpToShot={jumpToShot} onContinueCanvas={() => void continueOnCanvas()} openingCanvas={openingCanvas} />
-                <main ref={threadScrollRef} onScroll={handleThreadScroll} className="creation-thread-scroll creation-scrollbar">
-                    <section className="creation-thread-stage"><div className="creation-results">{activeConversation.messages.map((item, index) => <div key={item.id} id={`creation-shot-${item.id}`} className="creation-thread-message"><CreationMessageView
-                        item={item}
-                        shotNumber={creationVideoShotOrdinal(videoShots, item)}
-                        onRetryFailure={() => retryFailedMessage(item, index)}
-                        onCreateVariant={() => createVariant(item, index)}
-                        onContinueCanvas={(ids) => void continueOnCanvas(ids)}
-                        openingCanvas={openingCanvas}
-                        onEditUserMessage={(text) => { setPrompt(text); window.requestAnimationFrame(() => composerFocusRef.current?.focus()); }}
-                    /></div>)}</div></section>
-                </main>
-                <section className="creation-thread-composer"><CreationComposer {...composerProps} variant="thread" /></section>
+                {conversationSidebarOpen ? <CreationConversationSidebar conversations={historyConversations} activeId={activeConversation.id} onNew={startNewConversation} onCollapse={() => setConversationSidebarOpen(false)} onSelect={selectConversation} onDelete={confirmDeleteConversation} onRename={renameConversationTitle} onTogglePin={toggleConversationPin} /> : null}
+                <div className="creation-thread-main">
+                    {!conversationSidebarOpen ? <Tooltip title="展开创作对话">
+                        <button type="button" aria-label="展开创作对话" className="creation-conversation-sidebar-expand" onClick={() => setConversationSidebarOpen(true)}><History /></button>
+                    </Tooltip> : null}
+                    <CreationWorkspaceToolbar onNewConversation={startNewConversation} shots={videoShots} onJumpToShot={jumpToShot} onContinueCanvas={() => void continueOnCanvas()} openingCanvas={openingCanvas} />
+                    <main ref={threadScrollRef} onScroll={handleThreadScroll} className="creation-thread-scroll creation-scrollbar">
+                        {isEmpty ? <section className="creation-thread-empty-state" aria-label="新对话">
+                            <span aria-hidden="true"><Sparkles /></span>
+                            <h1>开始新的创作对话</h1>
+                            <p>输入一个画面、角色或故事想法，继续你的创作。</p>
+                        </section> : <section className="creation-thread-stage"><div className="creation-results">{activeConversation.messages.map((item, index) => <div key={item.id} id={`creation-shot-${item.id}`} className="creation-thread-message"><CreationMessageView
+                            item={item}
+                            shotNumber={creationVideoShotOrdinal(videoShots, item)}
+                            onRetryFailure={() => retryFailedMessage(item, index)}
+                            onCreateVariant={() => createVariant(item, index)}
+                            onContinueCanvas={(ids) => void continueOnCanvas(ids)}
+                            openingCanvas={openingCanvas}
+                            onEditUserMessage={(text) => { setPrompt(text); window.requestAnimationFrame(() => composerFocusRef.current?.focus()); }}
+                        /></div>)}</div></section>}
+                    </main>
+                    <section className="creation-thread-composer"><CreationComposer {...composerProps} variant="thread" /></section>
+                </div>
             </div>}
         </div>
-        <CreationHistoryDrawer open={historyOpen} conversations={historyConversations} activeId={activeConversation.id} onNew={startNewConversation} onClose={() => setHistoryOpen(false)} onSelect={selectConversation} onDelete={confirmDeleteConversation} onRename={renameConversationTitle} />
         {libraryOpen ? <Suspense fallback={null}><AssetLibraryPickerModal
             remoteLibrary
             open={libraryOpen}

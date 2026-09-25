@@ -1,4 +1,4 @@
-/* Primary toolbar actions inherit the shared site button fill and disabled state. */
+/* Product editor layout and responsive preview. */
 
 .admin-payment-product-modal .ant-modal-body {
     max-height: min(72vh, 680px);

@@ -27,6 +27,69 @@ tags:
   - name: admin
   - name: inspirations
 paths:
+  /admin/redeem-batches/search:
+    post:
+      tags: [admin]
+      summary: 使用请求体筛选兑换码批次
+      description: 与 GET /admin/redeem-batches 的筛选及分页语义相同，供可能包含兑换码片段的组合搜索使用，避免关键词进入 URL。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                keyword: {type: string}
+                validity: {type: string, enum: [active, expired]}
+                page: {type: integer, minimum: 1}
+                pageSize: {type: integer, minimum: 1, maximum: 100}
+      responses:
+        "200": {description: 标准信封 data 包含 batches、total、page 和 pageSize}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+  /admin/redeem-codes/lookup:
+    post:
+      tags: [admin]
+      summary: 使用完整兑换码查询状态和核销审计信息
+      description: 仅管理员可调用。兑换码放在 JSON 请求体中，不进入 URL；服务端规范化后按哈希精确查询，响应禁止缓存。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code:
+                  type: string
+                  minLength: 32
+                  maxLength: 32
+      responses:
+        "200": {description: 标准信封 data 包含 batch 批次摘要与 code 单码状态、核销用户、核销时间和 IP}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+        "404": {$ref: "#/components/responses/Error"}
+  /admin/redeem-codes/search:
+    post:
+      tags: [admin]
+      summary: 使用兑换码片段搜索状态和核销审计信息
+      description: 仅管理员可调用。接收任意连续 1-32 位兑换码片段；最多返回 50 条，并通过 total/truncated 标记更多匹配。完整 32 位优先按哈希精确查询，片段查询仅覆盖保留了加密明文的批次。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [query]
+              properties:
+                query: {type: string, minLength: 1, maxLength: 32}
+      responses:
+        "200": {description: 标准信封 data 包含 matches、total 和 truncated；每个匹配项包含 batch 与 code}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
   /admin/settings/appearance/live2d:
     post:
       tags: [admin]

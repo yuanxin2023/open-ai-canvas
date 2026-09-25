@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PaginationBar } from "@/pages/admin/components/admin-ui";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { bulkDisableAdminUsers, listAdminUsers, purgeAdminUser, type AdminUser, type LocalUser } from "@/services/api/auth";
+import type { CreditAccount } from "@/services/api/wallet";
 import { useUserStore } from "@/stores/use-user-store";
 import { AdminBatchBar, AdminDataTable, AdminTableEmpty } from "../components/admin-ui";
 import { useTableUrlState } from "../lib/use-table-url-state";
@@ -86,6 +87,14 @@ export default function UsersPanel({ onUserChanged, onUserDeleted }: { onUserCha
         setUsers((items) => items.map((item) => item.id === nextUser.id ? { ...item, ...nextUser } : item));
         onUserChanged?.(nextUser);
     }, [onUserChanged]);
+
+    const replaceCreditAccount = useCallback((account: CreditAccount) => {
+        setUsers((items) => items.map((item) => item.id === account.userId ? {
+            ...item,
+            availableMicrocredits: account.availableMicrocredits,
+            reservedMicrocredits: account.reservedMicrocredits,
+        } : item));
+    }, []);
 
     const addUser = useCallback((user: AdminUser) => {
         setUsers((items) => [user, ...items].slice(0, state.pageSize));
@@ -233,7 +242,7 @@ export default function UsersPanel({ onUserChanged, onUserDeleted }: { onUserCha
 
             <AdminUserDetailModal userId={detailUserId} previousUserId={previousUserId} nextUserId={nextUserId} onNavigate={setDetailUserId} onClose={() => setDetailUserId(null)} />
             <AdminUserCreateDrawer open={createUserOpen} onClose={() => setCreateUserOpen(false)} onCreated={addUser} />
-            <AdminUserEditModal user={editingUser} actorId={actor?.id} onClose={() => setEditingUser(null)} onSaved={replaceUser} />
+            <AdminUserEditModal user={editingUser} actorId={actor?.id} onClose={() => setEditingUser(null)} onSaved={replaceUser} onCreditsAdjusted={replaceCreditAccount} />
         </>
     );
 }

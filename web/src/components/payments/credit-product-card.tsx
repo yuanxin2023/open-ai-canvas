@@ -24,7 +24,7 @@ type CreditProductCardProps = {
 
 export function CreditProductCard({ product, isBestValue = false, maxCreditsMicrocredits, actionLabel = "立即购买", actionDisabled = false, onAction, preview = false }: CreditProductCardProps) {
     const benefits = splitProductBenefits(product.benefits);
-    const activeSegments = maxCreditsMicrocredits > 0 ? Math.max(2, Math.round((product.creditsMicrocredits / maxCreditsMicrocredits) * 28)) : 0;
+    const activeSegments = creditProductActiveSegments(product.creditsMicrocredits, maxCreditsMicrocredits);
 
     return (
         <article className={`workspace-credit-product-card ${isBestValue ? "is-best-value" : ""}`}>
@@ -54,6 +54,11 @@ export function CreditProductCard({ product, isBestValue = false, maxCreditsMicr
             ) : null}
         </article>
     );
+}
+
+export function creditProductActiveSegments(creditsMicrocredits: number, maxCreditsMicrocredits: number, segmentCount = 28) {
+    if (creditsMicrocredits <= 0 || maxCreditsMicrocredits <= 0 || segmentCount <= 0) return 0;
+    return Math.min(segmentCount, Math.max(1, Math.round((creditsMicrocredits / maxCreditsMicrocredits) * segmentCount)));
 }
 
 export function splitProductBenefits(benefits?: string) {
