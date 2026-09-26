@@ -14,7 +14,6 @@ import { preloadWorkspaceRoute } from "@/lib/workspace-route-modules";
 import { CUSTOMER_SERVICE_OPEN_EVENT, getPublicCustomerService, type PublicCustomerService } from "@/services/api/customer-service";
 import { useUserStore, type FeatureAvailability } from "@/stores/use-user-store";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
-import { WorkspaceSidebarCheckin } from "./workspace-sidebar-checkin";
 
 export type WorkspaceNavItem = {
     id: string;
@@ -58,14 +57,6 @@ function buildNav(features: FeatureAvailability): { groups: WorkspaceNavGroup[];
     ];
 
     return { groups, footer };
-}
-
-function WorkspaceSidebarAccountUtilities({ collapsed }: { collapsed: boolean }) {
-    return (
-        <div className={cn("app-workspace-sidebar-account", collapsed && "is-collapsed")}>
-            <WorkspaceSidebarCheckin collapsed={collapsed} />
-        </div>
-    );
 }
 
 function WorkspaceSwitcher({ collapsed, onNavigate, onExpand, onCollapse }: { collapsed: boolean; onNavigate: () => void; onExpand: () => void; onCollapse: () => void }) {
@@ -397,8 +388,7 @@ export function WorkspaceSidebarNav({ collapsed, onNavigate, onOpenSearch, onExp
             </LayoutGroup>
 
             <div className="app-workspace-sidebar-footer shrink-0 px-3 py-3">
-                <WorkspaceSidebarAccountUtilities collapsed={collapsed} />
-                {footer.length ? <div className="mt-2 flex flex-col gap-0.5">
+                {footer.length ? <div className="flex flex-col gap-0.5">
                     {footer.map((item) => (
                         item.id === "help"
                             ? <WorkspaceHelpMenu key={item.id} collapsed={collapsed} selected={selectedNavId === item.id} onSelect={() => setSelectedNavId(item.id)} onNavigate={onNavigate} />

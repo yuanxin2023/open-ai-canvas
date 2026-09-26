@@ -3,14 +3,14 @@ import { useState } from "react";
 
 import { formatCredits } from "@/constant/credits";
 import { useWalletBalance } from "@/hooks/use-wallet-balance";
-import { sidebarCheckinTitle, shouldShowSidebarCheckin } from "@/lib/sidebar-checkin";
+import { shouldShowWorkspaceCheckin, workspaceCheckinTitle } from "@/lib/workspace-checkin";
 import { cn } from "@/lib/utils";
 import { ApiError } from "@/services/api/request";
 import { checkinCredits } from "@/services/api/wallet";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
 import { useUserStore } from "@/stores/use-user-store";
 
-export function WorkspaceSidebarCheckin({ collapsed }: { collapsed: boolean }) {
+export function WorkspaceTopBarCheckin() {
     const user = useUserStore((state) => state.user);
     const creditsEnabled = useUserStore((state) => state.features.creditsEnabled);
     const brandName = useAppearanceStore((state) => state.appearance.brandName);
@@ -18,7 +18,7 @@ export function WorkspaceSidebarCheckin({ collapsed }: { collapsed: boolean }) {
     const { message } = App.useApp();
     const [claiming, setClaiming] = useState(false);
 
-    const visible = shouldShowSidebarCheckin({
+    const visible = shouldShowWorkspaceCheckin({
         creditsEnabled,
         checkinBonusMicrocredits: policy?.checkinBonusMicrocredits,
         checkedInToday: policy?.checkedInToday,
@@ -26,7 +26,7 @@ export function WorkspaceSidebarCheckin({ collapsed }: { collapsed: boolean }) {
     if (!user || !visible || !policy) return null;
 
     const amount = formatCredits(policy.checkinBonusMicrocredits, 2);
-    const title = sidebarCheckinTitle(brandName);
+    const title = workspaceCheckinTitle(brandName);
     const summary = `${title}，今日可领 ${amount} 积分`;
 
     const claim = async () => {
@@ -48,23 +48,15 @@ export function WorkspaceSidebarCheckin({ collapsed }: { collapsed: boolean }) {
         }
     };
 
-    if (collapsed) {
-        return (
-            <button type="button" className="app-workspace-sidebar-checkin is-collapsed" title={summary} aria-label={`立即领取今日 ${amount} 积分`} disabled={claiming} onClick={() => void claim()}>
-                {claiming ? "…" : "领"}
-            </button>
-        );
-    }
-
     return (
-        <aside className="app-workspace-sidebar-checkin" aria-label={summary}>
-            <div className="app-workspace-sidebar-checkin-copy">
-                <strong className="app-workspace-sidebar-checkin-title">{title}</strong>
-                <span className="app-workspace-sidebar-checkin-offer">
+        <aside className="app-workspace-topbar-checkin" aria-label={summary}>
+            <div className="app-workspace-topbar-checkin-copy">
+                <strong className="app-workspace-topbar-checkin-title">{title}</strong>
+                <span className="app-workspace-topbar-checkin-offer">
                     今日可领<em>{amount}</em>积分
                 </span>
             </div>
-            <button type="button" className={cn("app-workspace-sidebar-checkin-claim", claiming && "is-loading")} disabled={claiming} aria-label={`立即领取 ${amount} 积分`} onClick={() => void claim()}>
+            <button type="button" className={cn("app-workspace-topbar-checkin-claim", claiming && "is-loading")} disabled={claiming} aria-label={`立即领取 ${amount} 积分`} onClick={() => void claim()}>
                 {claiming ? "领取中" : "立即领取"}
             </button>
         </aside>
