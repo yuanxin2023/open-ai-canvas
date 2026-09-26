@@ -1,13 +1,13 @@
 ---
 title: 后端数据库
-description: 影策后端核心持久化表与状态边界
+description: AI 创作工作台后端核心持久化表与状态边界
 ---
 
 # 后端数据库
 
 ## 画布 Agent 外观配置
 
-`system_settings` 的 `appearance` JSON 合同版本 9 新增 `canvas`：助手名称、入口标签、面板标题、欢迎文案、输入提示、`avatarType`（`orb|live2d`）、`avatarHeight`（120–360）、`live2dResourceId` 和服务端确认的 `live2dEntry`。独立于站点品牌；缺失时读取内置画布默认值。不新增数据库结构迁移，不改变全局 schema 版本。
+`system_settings` 的 `appearance` JSON 当前合同版本为 10。版本 9 新增 `canvas`：助手名称、入口标签、面板标题、欢迎文案、输入提示、`avatarType`（`orb|live2d`）、`avatarHeight`（120–360）、`live2dResourceId` 和服务端确认的 `live2dEntry`；版本 10 自动迁移此前的内置身份默认值，同时保留部署方自定义内容。画布助手独立于站点品牌；缺失时读取内置画布默认值。不新增数据库结构迁移，不改变全局 schema 版本。
 
 模型包复用 `resources` 表，`kind=live2d`、`provider=local`，ZIP 不解压到磁盘。该 kind 仅由验证后的管理员导入路径保留，普通上传不能声明它。外观配置中的模型 ID 参与删除引用检查；清除引用不删除资源。默认球仍可保留模型引用，便于切换。
 

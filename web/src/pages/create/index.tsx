@@ -67,7 +67,7 @@ export default function CreatePage() {
     const location = useLocation();
     const [openingCanvas, setOpeningCanvas] = useState(false);
     const openingCanvasRef = useRef(false);
-    const brandName = useAppearanceStore((state) => state.appearance.brandName);
+    const assistantName = useAppearanceStore((state) => state.appearance.canvas?.agentName || "创作助手");
     const config = useEffectiveConfig();
     const composerPreferencesHydrated = useCreationPreferencesStore((state) => state.hydrated);
     const rememberMode = useCreationPreferencesStore((state) => state.rememberMode);
@@ -1053,7 +1053,7 @@ export default function CreatePage() {
                 </AnimatePresence>
                 <main ref={threadScrollRef} onScroll={handleThreadScroll} className="creation-empty-workspace creation-scrollbar">
                 <div className="creation-home-heading">
-                    <h1>和{brandName}聊聊创作想法</h1>
+                    <h1>和{assistantName}聊聊创作想法</h1>
                     <p>从一个画面、一个角色或一句话开始，继续你的创作。</p>
                 </div>
                 <section ref={launchpadRef} className="creation-launchpad" aria-label="开始创作">

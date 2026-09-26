@@ -20,7 +20,7 @@ type CanvasAppearance struct {
 }
 
 func defaultCanvasAppearance() CanvasAppearance {
-	return CanvasAppearance{AgentName: "影策", LauncherLabel: "Agent", PanelTitle: "画布助手", WelcomeTitle: "在这里，和{agentName}让灵感，慢慢成形", WelcomeDescription: "从一个想法开始，和{agentName}一起创作。", InputPlaceholder: "输入操作指导；用 @ 引用画布节点，用 / 或 、 引用 Skills", AvatarType: "orb", AvatarHeight: 220}
+	return CanvasAppearance{AgentName: "创作助手", LauncherLabel: "Agent", PanelTitle: "画布助手", WelcomeTitle: "在这里，和{agentName}让灵感，慢慢成形", WelcomeDescription: "从一个想法开始，和{agentName}一起创作。", InputPlaceholder: "输入操作指导；用 @ 引用画布节点，用 / 或 、 引用 Skills", AvatarType: "orb", AvatarHeight: 220}
 }
 
 func normalizeCanvasAppearance(value CanvasAppearance) (CanvasAppearance, error) {

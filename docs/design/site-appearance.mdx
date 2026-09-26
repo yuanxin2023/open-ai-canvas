@@ -17,7 +17,7 @@
 | 首页收尾 | 版权信息、备案开关、备案号 | 备案号仅在显式开启且非空时显示，并链接工信部备案系统 |
 | Canvas Agent | 助手名称、入口标签、面板标题、欢迎文案、输入提示、头像类型、高度、Live2D 资源 | Canvas 独立于站点品牌；Live2D 启用前由服务端校验资源归属和入口文件 |
 
-配置继续存储在 `system_settings.appearance` JSON 中，schema version 为 9，不增加关系型数据库迁移。版本 8 删除旧的 `skinId`、`skinThemes` 和 `activeSkin` 合同；版本 9 新增独立的 `canvas` 配置。读取旧 JSON 时未知字段由标准解码忽略，管理员下次保存后旧字段自然消失。
+配置继续存储在 `system_settings.appearance` JSON 中，schema version 为 10，不增加关系型数据库迁移。版本 8 删除旧的 `skinId`、`skinThemes` 和 `activeSkin` 合同；版本 9 新增独立的 `canvas` 配置；版本 10 把此前的内置身份迁移为中性默认值，同时保留部署方自定义内容。读取旧 JSON 时未知字段由标准解码忽略，管理员下次保存后旧字段自然消失。
 
 ## 3. 固定视觉系统
 

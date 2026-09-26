@@ -16,7 +16,7 @@ describe("site appearance", () => {
         });
 
         expect(appearance).toMatchObject({
-            schemaVersion: 8,
+            schemaVersion: 10,
             brandName: "HIMA Studio",
             brandSlug: "hima-studio",
             seoTitle: "HIMA Studio - AI 影视工作台",

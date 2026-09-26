@@ -1,6 +1,7 @@
 package app
 
 import (
+	"crypto/sha256"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
@@ -31,14 +32,14 @@ const (
 )
 
 const (
-	appearanceSchemaVersion        = 9
+	appearanceSchemaVersion        = 10
 	appearanceLogoMaxBytes   int64 = 5 << 20
 	appearancePosterMaxBytes int64 = 10 << 20
 	appearanceVideoMaxBytes  int64 = 256 << 20
 )
 
 const (
-	defaultAppearanceBrandName = "影策"
+	defaultAppearanceBrandName = "AI 创作工作台"
 	defaultAppearanceBrandSlug = "open-ai-canvas"
 	defaultAppearanceLogoURL   = "/logo.svg"
 	defaultAppearanceVideoURL  = "https://boss-shjd.biliapi.net/updream/aniforge/video/video_bbcb00bd-650d-4249-9346-5cd21fd2484c_m1hc-u0-1pu13x-3v1s.mp4"
@@ -92,7 +93,7 @@ type PublicAppearanceSetting struct {
 	AuthVideoPosterConfigured bool             `json:"authVideoPosterConfigured"`
 	Configured                bool             `json:"configured"`
 	Revision                  string           `json:"revision"`
-	UpdatedAt                 time.Time         `json:"updatedAt,omitempty"`
+	UpdatedAt                 time.Time        `json:"updatedAt,omitempty"`
 }
 
 type AdminAppearanceSetting struct {
@@ -246,7 +247,7 @@ func (s *Service) ResetAppearance(actor *model.User) (*AdminAppearanceSetting, e
 		return nil, err
 	}
 	after := defaultAppearanceSetting()
-	if err := s.appendAdminAudit(actor, "appearance.reset", "system_setting", appearanceSettingKey, "恢复影策默认品牌标识", map[string]any{"before": before, "after": after}); err != nil {
+	if err := s.appendAdminAudit(actor, "appearance.reset", "system_setting", appearanceSettingKey, "恢复系统默认品牌标识", map[string]any{"before": before, "after": after}); err != nil {
 		return nil, err
 	}
 	return s.AdminAppearance(actor)
@@ -353,6 +354,16 @@ func (s *Service) readAppearance() (*model.SystemSetting, AppearanceSetting, err
 	if strings.TrimSpace(setting.ValueJSON) == "" || json.Unmarshal([]byte(setting.ValueJSON), &value) != nil {
 		return nil, AppearanceSetting{}, errors.New("外观配置格式无效")
 	}
+	if migrateLegacyAppearanceIdentity(&value) {
+		encoded, err := json.Marshal(value)
+		if err != nil {
+			return nil, AppearanceSetting{}, err
+		}
+		setting.ValueJSON = string(encoded)
+		if err := s.repo.SaveSystemSetting(setting); err != nil {
+			return nil, AppearanceSetting{}, err
+		}
+	}
 	value.SchemaVersion = appearanceSchemaVersion
 	value.BrandName = strings.TrimSpace(value.BrandName)
 	if value.BrandName == "" {
@@ -373,6 +384,53 @@ func (s *Service) readAppearance() (*model.SystemSetting, AppearanceSetting, err
 	value.FooterCopyright = normalizeAppearanceSingleLine(value.FooterCopyright)
 	value.ICPFilingNumber = normalizeAppearanceSingleLine(value.ICPFilingNumber)
 	return setting, value, nil
+}
+
+var legacyAppearanceBrandDigest = [sha256.Size]byte{51, 151, 165, 149, 79, 203, 47, 133, 198, 22, 115, 249, 141, 12, 106, 150, 49, 104, 184, 46, 64, 122, 138, 87, 104, 28, 215, 33, 168, 51, 20, 17}
+var legacyAppearanceDescriptionDigest = [sha256.Size]byte{240, 227, 229, 210, 33, 112, 204, 181, 190, 18, 150, 120, 235, 24, 152, 41, 49, 31, 134, 95, 48, 186, 251, 2, 122, 139, 218, 191, 5, 129, 122, 148}
+
+func migrateLegacyAppearanceIdentity(value *AppearanceSetting) bool {
+	if value == nil || value.SchemaVersion >= appearanceSchemaVersion {
+		return false
+	}
+	if matchesAppearanceDigest(value.BrandName, legacyAppearanceBrandDigest) {
+		value.BrandName = defaultAppearanceBrandName
+	}
+	if matchesAppearanceDigest(value.Canvas.AgentName, legacyAppearanceBrandDigest) {
+		value.Canvas.AgentName = defaultCanvasAppearance().AgentName
+	}
+	if matchesAppearanceDigest(value.SEOTitle, legacyAppearanceBrandDigest) {
+		value.SEOTitle = ""
+	}
+	if matchesAppearanceDigest(value.SEODescription, legacyAppearanceDescriptionDigest) {
+		value.SEODescription = ""
+	}
+	migrateLegacyAppearanceCopyright(&value.FooterCopyright)
+	value.SchemaVersion = appearanceSchemaVersion
+	return true
+}
+
+func matchesAppearanceDigest(value string, expected [sha256.Size]byte) bool {
+	return sha256.Sum256([]byte(strings.TrimSpace(value))) == expected
+}
+
+func migrateLegacyAppearanceCopyright(value *string) bool {
+	if value == nil {
+		return false
+	}
+	const prefix = "© "
+	const suffix = ". All rights reserved."
+	normalized := strings.TrimSpace(*value)
+	if !strings.HasPrefix(normalized, prefix) || !strings.HasSuffix(normalized, suffix) {
+		return false
+	}
+	body := strings.TrimSuffix(strings.TrimPrefix(normalized, prefix), suffix)
+	separator := strings.IndexByte(body, ' ')
+	if separator < 0 || !matchesAppearanceDigest(body[separator+1:], legacyAppearanceBrandDigest) {
+		return false
+	}
+	*value = ""
+	return true
 }
 
 // resolveAvailableAppearanceAssets prevents stale resource references from

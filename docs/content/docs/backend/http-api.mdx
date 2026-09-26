@@ -47,7 +47,7 @@ description: 信封、错误码与 OpenAPI
 - 物理空间由后台删除队列异步释放，失败保留任务重试；接口成功不代表对象存储已经清理完成。未选中素材使用的资源，以及其他 Resource 行（包括其他用户）复用的物理对象继续保留。
 - 旧画布 / 任务 / 历史快照记录本身保留，但被删媒体链接将失效。此操作不可恢复；没有数据库结构迁移。
 
-## 画布配置与 Live2D（外观合同版本 9）
+## 画布配置与 Live2D（外观合同版本 10）
 
 `GET /public/appearance` 和管理员 `GET /admin/settings/appearance` 返回 `canvas`；管理员通过 `PATCH /admin/settings/appearance` 随外观配置统一保存。字段为 `agentName`（1–24 字）、`launcherLabel`（0–24 字）、`panelTitle`（1–40 字）、`welcomeTitle`（1–100 字）、`welcomeDescription`（0–200 字）、`inputPlaceholder`（1–160 字）、`avatarType`（`orb|live2d`）、`avatarHeight`（120–360 整数）、`live2dResourceId`、`live2dEntry`。入口由服务端核验覆盖；Live2D 无有效资源时拒绝启用。配置不修改 Agent 系统提示词。
 
