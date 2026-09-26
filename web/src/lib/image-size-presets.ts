@@ -107,3 +107,10 @@ export function imageSizeConfigWithPresets(profile: ImageCapabilityConfig, prese
     if (!values.length) values.push("auto");
     return { ...profile.size, presets, values, default: values.includes(profile.size.default) ? profile.size.default : values[0] || "auto" };
 }
+
+export function setImageAutoSizeEnabled(size: ImageCapabilityConfig["size"], enabled: boolean): ImageCapabilityConfig["size"] {
+    const concreteValues = size.values.filter((value) => value.trim().toLowerCase() !== "auto");
+    const values = enabled ? ["auto", ...concreteValues] : concreteValues;
+    const defaultValue = values.includes(size.default) ? size.default : enabled ? "auto" : values[0] || "";
+    return { ...size, values, default: defaultValue };
+}

@@ -4,11 +4,13 @@ import { Check, Plus } from "lucide-react";
 import { Switch } from "@/components/ui/base/switch";
 import "./image-size-picker.css";
 import type { ImageCapabilityConfig } from "@/lib/model-capabilities";
-import { IMAGE_RATIOS, IMAGE_RESOLUTIONS, imagePresetForRatio, imageResolutionUsesQuality, imageSizeConfigWithPresets, imageSizePresets, imageTierAvailable } from "@/lib/image-size-presets";
+import { IMAGE_RATIOS, IMAGE_RESOLUTIONS, imagePresetForRatio, imageResolutionUsesQuality, imageSizeConfigWithPresets, imageSizePresets, imageTierAvailable, setImageAutoSizeEnabled } from "@/lib/image-size-presets";
 import type { ImageResolutionTier } from "@/lib/image-resolution-tiers";
 
 export function ImageSizePresetsEditor({ profile, disabled, onChange }: { profile: ImageCapabilityConfig; disabled?: boolean; onChange: (size: ImageCapabilityConfig["size"]) => void }) {
     const presets = imageSizePresets(profile);
+    const autoSizeEnabled = profile.size.values.includes("auto");
+    const hasConcreteSize = profile.size.values.some((value) => value.trim().toLowerCase() !== "auto");
     const id = useId();
     const [drafts, setDrafts] = useState<Partial<Record<ImageResolutionTier, string>>>({});
     const [errors, setErrors] = useState<Partial<Record<ImageResolutionTier, string>>>({});
@@ -120,6 +122,22 @@ export function ImageSizePresetsEditor({ profile, disabled, onChange }: { profil
                     </section>
                 );
             })}
+            <div className="admin-capability-parameter-field flex min-h-12 items-center justify-between gap-3 rounded-md border border-border/60 px-3 py-2.5">
+                <div className="min-w-0">
+                    <div className="text-xs font-medium">自动尺寸</div>
+                    <div className="mt-0.5 text-[var(--fs-tiny)] leading-5 text-foreground/45">允许用户把尺寸交给模型决定；模型不支持 auto 时请关闭</div>
+                </div>
+                <label className="grid shrink-0 justify-items-center gap-1 text-[var(--fs-tiny)] text-foreground/45">
+                    <span>支持</span>
+                    <Switch
+                        aria-label="自动尺寸支持"
+                        size="sm"
+                        checked={autoSizeEnabled}
+                        disabled={disabled || (autoSizeEnabled && !hasConcreteSize)}
+                        onChange={(enabled) => onChange(setImageAutoSizeEnabled(profile.size, enabled))}
+                    />
+                </label>
+            </div>
             <div className="image-size-defaults">
                 <div className="image-size-defaults-heading">
                     <strong>默认输出</strong>
