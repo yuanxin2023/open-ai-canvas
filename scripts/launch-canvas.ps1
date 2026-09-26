@@ -1,20 +1,25 @@
-﻿# 影策画布一键启动器
-# 启动后端(8080) + 前端(3000) + cloudflared 隧道(公网 canvas.yingce.cc.cd)，打开浏览器
+# AI 创作工作台一键启动器
+# 默认启动后端和前端；提供隧道配置时再启动 cloudflared。
 
 [CmdletBinding()]
-param()
+param(
+    [string]$PublicBaseUrl = $env:CANVAS_PUBLIC_BASE_URL,
+    [string]$CloudflaredConfig = $env:CLOUDFLARED_CONFIG
+)
 
 $ErrorActionPreference = "Stop"
 
-$repoRoot = "D:\yingce\open-ai-canvas-main"
+$repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $backendDir = Join-Path $repoRoot "backend"
 $webDir = Join-Path $repoRoot "web"
 $dataDir = Join-Path $repoRoot ".local\project-workbench-debug"
 $goBuildCache = Join-Path $repoRoot ".local\cache\go-build"
 $goModuleCache = Join-Path $repoRoot ".local\cache\go-mod"
-$cloudflaredExe = "C:\Program Files (x86)\cloudflared\cloudflared.exe"
-$bunExe = "C:\Users\Administrator\AppData\Roaming\npm\node_modules\bun\bin\bun.exe"
-if (-not (Test-Path -LiteralPath $bunExe)) { $bunExe = "bun" }
+$cloudflaredCommand = Get-Command cloudflared -ErrorAction SilentlyContinue
+$cloudflaredExe = if ($cloudflaredCommand) { $cloudflaredCommand.Source } else { "C:\Program Files (x86)\cloudflared\cloudflared.exe" }
+$bunCommand = Get-Command bun -ErrorAction SilentlyContinue
+if (-not $bunCommand) { throw "未找到 Bun，请先安装 Bun 后再启动项目。" }
+$bunExe = $bunCommand.Source
 $localUrl = "http://localhost:3000"
 $healthUrl = "http://127.0.0.1:3000/api/health"
 
@@ -37,7 +42,7 @@ function Test-Http([string]$Url) {
 
 # 0) 已全部就绪则直接打开
 if ((Test-PortListen 8080) -and (Test-PortListen 3000)) {
-    Write-Host "影策画布已在运行，正在打开..." -ForegroundColor Green
+    Write-Host "AI 创作工作台已在运行，正在打开..." -ForegroundColor Green
     Start-Process $localUrl
     exit 0
 }
@@ -48,7 +53,9 @@ if (-not (Test-PortListen 8080)) {
     New-Item -ItemType Directory -Force -Path $dataDir, $goBuildCache, $goModuleCache | Out-Null
     $env:CANVAS_BACKEND_ADDR = "127.0.0.1:8080"
     $env:CANVAS_BACKEND_DATA_DIR = $dataDir
-    $env:CANVAS_PUBLIC_BASE_URL = "https://canvas.yingce.cc.cd"
+    if (-not [string]::IsNullOrWhiteSpace($PublicBaseUrl)) {
+        $env:CANVAS_PUBLIC_BASE_URL = $PublicBaseUrl.TrimEnd("/")
+    }
     $env:GOPROXY = "https://goproxy.cn,direct"
     $env:GOCACHE = $goBuildCache
     $env:GOMODCACHE = $goModuleCache
@@ -66,7 +73,7 @@ if (-not (Test-PortListen 3000)) {
     if (-not (Test-Path -LiteralPath $viteBinary)) {
         Write-Host "安装前端依赖..." -ForegroundColor Yellow
         Push-Location $webDir
-        try { & bun install --frozen-lockfile } finally { Pop-Location }
+        try { & $bunExe install --frozen-lockfile } finally { Pop-Location }
     }
     $env:VITE_API_PROXY_TARGET = "http://127.0.0.1:8080"
     Start-Process -FilePath $bunExe -ArgumentList "run", "dev" `
@@ -76,15 +83,15 @@ if (-not (Test-PortListen 3000)) {
         -WindowStyle Hidden | Out-Null
 }
 
-# 3) cloudflared 隧道（公网 canvas.yingce.cc.cd）
-if (-not (Get-Process -Name cloudflared -ErrorAction SilentlyContinue)) {
-    if (Test-Path -LiteralPath $cloudflaredExe) {
+# 3) 可选的 cloudflared 隧道
+if (-not [string]::IsNullOrWhiteSpace($CloudflaredConfig) -and -not (Get-Process -Name cloudflared -ErrorAction SilentlyContinue)) {
+    if ((Test-Path -LiteralPath $cloudflaredExe) -and (Test-Path -LiteralPath $CloudflaredConfig)) {
         Write-Host "启动公网隧道 cloudflared..." -ForegroundColor Cyan
-        Start-Process -FilePath $cloudflaredExe -ArgumentList "--config", "C:\Users\Administrator\.cloudflared\config.yml", "tunnel", "run" -WindowStyle Hidden | Out-Null
+        Start-Process -FilePath $cloudflaredExe -ArgumentList "--config", $CloudflaredConfig, "tunnel", "run" -WindowStyle Hidden | Out-Null
     } else {
-        Write-Host "未找到 cloudflared，跳过公网隧道（本地仍可访问）" -ForegroundColor Yellow
+        Write-Host "未找到 cloudflared 或隧道配置，跳过公网隧道（本地仍可访问）" -ForegroundColor Yellow
     }
-} else {
+} elseif (Get-Process -Name cloudflared -ErrorAction SilentlyContinue) {
     Write-Host "公网隧道 cloudflared 已在运行" -ForegroundColor DarkGray
 }
 
@@ -93,11 +100,13 @@ $deadline = (Get-Date).AddMinutes(3)
 do {
     Start-Sleep -Seconds 2
     if (Test-Http $healthUrl) {
-        Write-Host "影策画布已启动，正在打开浏览器..." -ForegroundColor Green
+        Write-Host "AI 创作工作台已启动，正在打开浏览器..." -ForegroundColor Green
         Start-Sleep -Seconds 1
         Start-Process $localUrl
-        Write-Host "本地: http://localhost:3000" -ForegroundColor Green
-        Write-Host "公网: https://canvas.yingce.cc.cd" -ForegroundColor Green
+        Write-Host "本地: $localUrl" -ForegroundColor Green
+        if (-not [string]::IsNullOrWhiteSpace($PublicBaseUrl)) {
+            Write-Host "公网: $($PublicBaseUrl.TrimEnd('/'))" -ForegroundColor Green
+        }
         exit 0
     }
 } while ((Get-Date) -lt $deadline)

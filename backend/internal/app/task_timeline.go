@@ -131,7 +131,7 @@ func prepareWhisperWav(ctx context.Context, reader io.Reader, mime string) (stri
 	if _, err := exec.LookPath("ffmpeg"); err != nil {
 		return "", nil, fmt.Errorf("音频预处理依赖未安装（需要 ffmpeg）")
 	}
-	tmpDir, err := os.MkdirTemp("", "yingce-whisper-*")
+	tmpDir, err := os.MkdirTemp("", "open-ai-canvas-whisper-*")
 	if err != nil {
 		return "", nil, fmt.Errorf("创建临时目录失败: %w", err)
 	}

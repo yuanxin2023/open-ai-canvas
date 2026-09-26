@@ -11,6 +11,16 @@ description: 当前项目已实现功能的手工验证清单与未确认边界
 - [x] 运行时会迁移上一代注册表、缓存包名和协议字段，并为上一代支付插件保留对应 RPC 版本；97 个正式插件包与规范化源码集合一致。
 - [ ] 备份现有数据目录后启动一次，确认已安装插件、启用状态、官方插件升级和历史支付订单回调/查单正常；再上传一个 `.canvas-plugin` 验证安装、启用和停用。
 
+## 第一方身份中性化与兼容迁移
+
+- [x] 内置站点身份改为“AI 创作工作台”，画布及创作页默认助手改为“创作助手”；站点品牌与助手称呼使用独立配置。
+- [x] 外观合同升级到版本 10，并为此前的内置默认身份增加按精确摘要识别的自动迁移；部署方自定义品牌和用户内容不改写。
+- [x] 插件协议改为 `open-ai-canvas.plugin/v1|v2`、支付 ABI 改为 `open-ai-canvas.payment/v1`、包扩展名改为 `.canvas-plugin`；已有注册表、缓存文件和上一代官方协议在运行时自动迁移。
+- [x] 官方插件包及支付原生执行文件已重新生成；仓库检查器覆盖文件名、普通文件内容和插件压缩包条目。
+- [x] 已在具备 CGO 的 Linux Go 容器运行外观 SQLite 专项测试，包含此前内置身份到合同版本 10 的持久化迁移。
+- [ ] 用已有数据目录启动一次，确认旧外观、旧插件缓存和启用状态完成迁移；执行前先备份数据目录。
+- [ ] 以真实账号检查登录页、工作区、创作页、画布 Agent、管理后台、导出内容、明暗主题及窄屏；本次未启动开发服务。
+
 ## 创作页会话侧栏 P0
 
 - [x] 有历史会话时点击“新建对话”继续停留在对话工作区，侧栏和底部输入区不再消失；连续新建不会累积空白历史项。
@@ -114,7 +124,7 @@ description: 当前项目已实现功能的手工验证清单与未确认边界
 ## 画布 Agent 配置与 Live2D
 
 - [ ] 使用约 50 MiB 的真实模型 ZIP 验收上传和预览；ZIP 上限 128 MiB，解压累计 384 MiB、单文件 128 MiB，超限须拒绝。
-- [ ] 站点仍叫“影策”，助手改为“小鱼”；保存、刷新、撤销和恢复默认后入口、面板、欢迎及输入文案正确，历史对话不改写。
+- [ ] 站点仍叫“AI 创作工作台”，助手改为“小鱼”；保存、刷新、撤销和恢复默认后入口、面板、欢迎及输入文案正确，历史对话不改写。
 - [ ] 使用授权 Core 和真实 Cubism 3/4 模型完成预览、保存、画布播放验收。没有 Core、模型不兼容、网络超时或 WebGL 丢失时显示错误/默认球，不阻止打开对话。
 - [ ] 导入不自动启用；上传期间不可保存/刷新/恢复默认；离开未保存配置不影响线上形象；其他管理员不能预览或启用未发布草稿。
 - [ ] 未启用包不能匿名访问；启用后模型资源正常读取，切回默认球停止公开服务；引用中包无法删除，清除引用并保存后可清理。
@@ -671,7 +681,7 @@ MiniMax Hailuo Video V2 / H3 插件更新至 `2.0.1`，创建和查询均优先�
 
 - `runImageTask` / `runAudioTask` 对白名单官方接口只走声明式插件：`ensureOfficialProtocolAdapter` → declarative；未安装时报「…插件未安装」，不再回退手写组包。
 - 图片白名单：`openai-image`、`grok-image`、`volcengine-ark-image`、`volcengine-jimeng-image`、`gemini-image`。音频白名单：`openai-audio`、`async-audio`。
-- 已从 Builtins 移除对应 host adapter；真相源为 `plugin-packages/*.yingce-plugin`（含新建 `openai-audio` / `async-audio`，以及重写的 openai-images / grok / ark / jimeng）。
+- 已从 Builtins 移除对应 host adapter；真相源为 `plugin-packages/*.canvas-plugin`（含新建 `openai-audio` / `async-audio`，以及重写的 openai-images / grok / ark / jimeng）。
 - 表达式引擎补 `$divide`（配合 `$split` / `$toFloat`）；同步音频支持 `BinaryPayload`。
 - [x] `go test ./internal/protocol/ ./internal/service/ -count=1`：协议与 provider 回归。
 - [ ] 用 OpenAI Images（generations + edits）、Grok Images、方舟 Seedream、即梦图片、Gemini Image 各跑一条，确认创建与结果落库走对应官方包。
@@ -1218,7 +1228,7 @@ MiniMax Hailuo Video V2 / H3 插件更新至 `2.0.1`，创建和查询均优先�
 
 ## 支付插件跨平台构建
 
-- [x] 微信与支付宝 provider 已使用同一 target-aware 构建脚本完成 `CGO_ENABLED=0` 的 linux/amd64、linux/arm64 交叉编译；目录 provider 与 `.yingce-plugin` 内 provider 的 ELF 架构和内容一致性校验通过。
+- [x] 微信与支付宝 provider 已使用同一 target-aware 构建脚本完成 `CGO_ENABLED=0` 的 linux/amd64、linux/arm64 交叉编译；目录 provider 与 `.canvas-plugin` 内 provider 的 ELF 架构和内容一致性校验通过。
 - [x] 包内外产物一致性、完整包摘要缓存、同版本 provider 更新失效、未完成解包恢复等专项测试通过；RPC 错误映射的跨平台单元测试通过。
 - [ ] 在 Linux CI 完成无文件、无权限、错误格式、异常退出与无效 JSON 的 RPC 进程测试，并使用 Docker Buildx/QEMU 执行 `payment-package-smoke` 的 amd64/arm64 双平台构建，确认目标容器内两个 provider 均能真实执行无效 JSON 冒烟请求。
 - [ ] 保留含旧 Mach-O runtime 的生产 `/data` 卷升级到修复镜像，确认启动后自动选择新 package digest，管理后台保存微信和支付宝配置进入真实凭证校验。
@@ -1238,7 +1248,7 @@ MiniMax Hailuo Video V2 / H3 插件更新至 `2.0.1`，创建和查询均优先�
 - [ ] 保存 SEO 标题/描述/关键词、版权与ICP备案开关，确认 metadata 和公共页脚刷新后同步；备案链接只指向 `https://beian.miit.gov.cn/`。
 - [ ] 分别只上传浅色 Logo、只上传深色 Logo、同时上传两套 Logo，并切换浅色/深色主题，确认单图自动复用、双图按主题选择；开启“禁用 Logo 后面的圆角矩形外框”后确认工作台和管理后台导航只显示等比放大到原外框可用区域的 Logo，布局不跳动。
 - [ ] 在“对象存储”中点击“使用品牌标识”，确认只更新当前路径前缀草稿；未点击或未保存时保留服务端已有前缀，历史资源读取不受影响。
-- [ ] 保存一套自定义品牌后点击“恢复影策默认”，确认品牌名称、英文标识、Logo、登录页文案和媒体立即恢复内置值，自定义素材文件仍保留在存储资源中。
+- [ ] 保存一套自定义品牌后点击“恢复AI 创作工作台默认”，确认品牌名称、英文标识、Logo、登录页文案和媒体立即恢复内置值，自定义素材文件仍保留在存储资源中。
 - [ ] 清空浏览器缓存并以慢速网络打开 `/login`、`/register` 和 `/forgot-password`，确认加载阶段不出现内置品牌名、Logo、favicon 或视频封面闪烁。
 - [ ] 更换品牌视频但不上传封面，确认首帧出现前只显示中性深色背景；再配置封面，确认只显示当前自定义封面。
 - [ ] 在存储资源页尝试删除当前浅色 Logo、深色 Logo、视频和封面，确认显示“外观”引用并保留文件；解除绑定后可正常删除。
@@ -1563,7 +1573,7 @@ MiniMax Hailuo Video V2 / H3 插件更新至 `2.0.1`，创建和查询均优先�
 - [x] 轮询使用同一 Base URL 主机的根路径 `/agnesapi`，专项测试确认 `https://apihub.agnes-ai.com/v1` 不会被拼成错误的 `/v1/agnesapi`。
 - [x] Flash 的 720P、最多 5 张图片、禁止参考视频规则已在请求前强校验；协议与 provider service 专项测试通过。
 - [ ] 使用真实 Agnes API Key 分别完成 V2.0 文生视频、单图生视频、2.5 关键帧、2.5 reference、2.5 Flash 的创建与轮询冒烟。
-- [ ] 验证真实失败任务能显示官方 `error.message`，429/5xx 保持现有上游错误语义，生成成功后视频能进入影策资源保存流程。
+- [ ] 验证真实失败任务能显示官方 `error.message`，429/5xx 保持现有上游错误语义，生成成功后视频能进入AI 创作工作台资源保存流程。
 
 用户确认上述场景后，再将对应条目移动到功能文档的已验证范围。
 
@@ -1707,7 +1717,7 @@ MiniMax Hailuo Video V2 / H3 插件更新至 `2.0.1`，创建和查询均优先�
 - [ ] 验证 Path Style 开启时强制路径寻址，关闭时 AWS 使用虚拟主机寻址、其他自定义 Endpoint 自动使用路径寻址。
 - [ ] 验证平台切换到本机后只影响新上传，历史 S3 资源仍可读取和删除；个人 S3 停用后正确回退平台存储。
 - [ ] 验证同一 S3 修改 Bucket、Endpoint、Region、前缀或 Path Style 时，留空 Secret 和 Session Token 可继续复用，并要求重新连接测试。
-- [ ] 使用私网 RustFS 验证浏览器同源代理，以及提交给模型上游时转换为影策公网 HTTPS 短时地址；未配置公网 HTTPS 地址时应明确拒绝。
+- [ ] 使用私网 RustFS 验证浏览器同源代理，以及提交给模型上游时转换为AI 创作工作台公网 HTTPS 短时地址；未配置公网 HTTPS 地址时应明确拒绝。
 - [ ] 验证管理员关闭个人 S3 后不再接受个人新上传，但已有个人 S3 资源仍可读取和删除。
 
 ## 3D 导演台时间轴关键帧删除与快捷键
@@ -2243,7 +2253,7 @@ PR #507 核心能力已按主分支实现保留，并补齐小视口尺寸约束
 - 新增官方协议插件：`volcengine-ark-agent-plan-seedream`（provider `volcengine-ark-agent-plan-image`）与 `volcengine-ark-agent-plan-seedance`（provider `volcengine-ark-agent-plan-video`）。
 - 与官方 Ark 插件的差异只在接入面：默认 Base URL 为 `https://ark.cn-beijing.volces.com/api/plan/v3`，创建路径分别为 `/api/plan/v3/images/generations` 与 `/api/plan/v3/contents/generations/tasks`；请求体、参考素材 role、能力档位与官方 Seedream/Seedance 对齐。必须使用 Agent Plan 专属 API Key，不可与 `/api/v3` 官方 Key 混用。
 - 宿主已把 Agent Plan 协议纳入与官方 Ark 相同的能力默认值、Token 计费校验、方舟素材引用、取消任务与前端 payload 分支。
-- 待管理端安装这两个 `.yingce-plugin` 后：分别创建图片/视频渠道，确认默认 Base URL 为 `/api/plan/v3`；用 Agent Plan Key 文生图、参考图生图、Seedance 文生视频与全模态参考成功；故意混用官方 Key 应失败；官方 `volcengine-ark-*` 渠道行为不受影响。
+- 待管理端安装这两个 `.canvas-plugin` 后：分别创建图片/视频渠道，确认默认 Base URL 为 `/api/plan/v3`；用 Agent Plan Key 文生图、参考图生图、Seedance 文生视频与全模态参考成功；故意混用官方 Key 应失败；官方 `volcengine-ark-*` 渠道行为不受影响。
 
 ## Seedream 声明式结果裸 b64_json（2026-09-17）
 
@@ -2550,7 +2560,7 @@ PR #507 核心能力已按主分支实现保留，并补齐小视口尺寸约束
 
 ## 百炼多模态图像协议插件（dashscope-qwen-image）
 
-- 新增官方协议包 `plugin-packages/dashscope-qwen-image.yingce-plugin`，解决 `qwen-image-3.0-pro` / `wan2.7-image-pro` 无法调用的问题：这两个模型属于百炼多模态模型，走 OpenAI 图片端点会被网关判为“模型与端点不匹配”，官方错误码表现为 `url error, please check url`。
+- 新增官方协议包 `plugin-packages/dashscope-qwen-image.canvas-plugin`，解决 `qwen-image-3.0-pro` / `wan2.7-image-pro` 无法调用的问题：这两个模型属于百炼多模态模型，走 OpenAI 图片端点会被网关判为“模型与端点不匹配”，官方错误码表现为 `url error, please check url`。
 - 协议形态：`POST /api/v1/services/aigc/image-generation/generation`（`X-DashScope-Async: enable`）+ 轮询 `GET /api/v1/tasks/{taskId}`；参考图放在 `input.messages[].content[].image`（优先 Base64 data URL），不使用 `/v1/images/edits` 的 multipart。
 - 已由单元测试覆盖：端点与异步头、文生图只发 text、图生图按 order 排序并优先 Base64、`size` 采用 DashScope 的星号格式且未登记档位省略、`enable_thinking` 固定 false、响应从 `output.choices[0].message.content[].image` 取图、上游失败保留错误信息。`go test ./internal/protocol/` 与 `go build ./...` 通过。
 - 待真实账号验收：用北京地域 Key 走一次文生图与一次图生图（换装），确认出图成功、参考图不报 url error。
@@ -2559,7 +2569,7 @@ PR #507 核心能力已按主分支实现保留，并补齐小视口尺寸约束
 
 ## Agnes 图像协议插件（agnes-image）
 
-- 新增官方协议包 `plugin-packages/agnes-image.yingce-plugin`，解决 Agnes 图片模型无法调用的问题：内置 OpenAI 图片路径会固定发送 `n`，并按渠道能力开关发送 `output_format` 与顶层 `response_format`，而 Agnes 的参数表没有这些字段，`POST /v1/images/generations` 直接返回 HTTP 400 `invalid_request`，上游原话为“output_format 不是文生图队列支持的字段”。`n` 无法通过任何开关摘除，因此必须独立协议。
+- 新增官方协议包 `plugin-packages/agnes-image.canvas-plugin`，解决 Agnes 图片模型无法调用的问题：内置 OpenAI 图片路径会固定发送 `n`，并按渠道能力开关发送 `output_format` 与顶层 `response_format`，而 Agnes 的参数表没有这些字段，`POST /v1/images/generations` 直接返回 HTTP 400 `invalid_request`，上游原话为“output_format 不是文生图队列支持的字段”。`n` 无法通过任何开关摘除，因此必须独立协议。
 - 协议形态：同步 `POST /v1/images/generations`（`originPath`），文生图与图生图共用同一入口。`size` 必填，由统一层质量归一为 `1K`/`2K`/`3K`/`4K` 档位，`WxH` 像素尺寸原样透传；画面比例走独立的 `ratio` 字段；参考图放 `extra_body.image` 并优先 Base64 data URL，多图合成传多张，不使用 `/v1/images/edits` multipart；输出格式只能声明在 `extra_body.response_format`（默认 `url`，可用 `providerOptions.agnes-image.response_format` 覆盖为 `b64_json`）。
 - 前端能力默认值同步新增 `agnes-image` 分支：尺寸按“比例 + 1k/2k/4k 档位”选择，关闭上游不支持的 `output_format`、顶层 `response_format`、透明背景和蒙版编辑，`maxOutputs` 固定为 1（该端点不接受 `n`，单次请求固定返回一张）。官方另有 `3K` 档位，统一层只提供 1k/2k/4k 三档，故界面不露出。
 - 已由单元测试覆盖：逐项断言 `n`、`output_format`、`quality`、`background`、顶层 `response_format` 与顶层 `image` 均不出现在请求体中，参考图进 `extra_body.image` 且按 order 排序并优先 Base64，比例落档位 / 像素原样透传 / `auto` 与空值回落档位，不在官方比例表内的取值在校验阶段拒绝，响应同时读取 `data[0].url` 与 `data[0].b64_json`。`go test ./internal/protocol/`、`go build ./...`、`bun run typecheck` 与相关前端测试均通过。
