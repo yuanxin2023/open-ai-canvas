@@ -288,10 +288,20 @@ test("nested admin pages return to their own parent entry", async () => {
     expect(compacted).toContain("const sectionPath = back ? (currentItem?.path");
 });
 
-test("high impact feature shutdowns require confirmation", async () => {
+test("all feature availability changes require confirmation before saving", async () => {
     const source = await Bun.file(new URL("../src/pages/admin/components/feature-availability-panel.tsx", import.meta.url)).text();
-    expect(source).toContain('title: "关闭用户积分功能？"');
-    expect(source).toContain('title: "关闭前台模型功能？"');
+    expect(source).toContain('title: "确认开启短剧创作？"');
+    expect(source).toContain('title: "确认关闭任务中心？"');
+    expect(source).toContain('title: "确认开启积分计费？"');
+    expect(source).toContain('title: "确认关闭自定义渠道？"');
+    expect(source).toContain('title: "确认开启插件中心？"');
+    expect(source).toContain('title: "确认隐藏系统插件？"');
+    expect(source).toContain('title: "确认切换为前台模型目录？"');
+    expect(source).toContain('title: "确认切换为系统渠道？"');
+    expect(source).toContain("const copy = row.changeCopy[enabled ? \"enabled\" : \"disabled\"]");
+    expect(source).toContain('<strong>前端用户影响：</strong>{copy.userImpact}');
+    expect(source).toContain("onOk: () => setFeature(key, enabled)");
+    expect(source).not.toContain("void setFeature(key, enabled)");
     expect(source).toContain("onChange={requestFeatureChange}");
 });
 
