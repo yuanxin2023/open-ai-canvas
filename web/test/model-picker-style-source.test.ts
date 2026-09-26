@@ -13,6 +13,9 @@ test("模型行只保留选中高亮，价格使用独立的彩色标签", async
     expect(styles).toContain('.canvas-model-picker-brand[aria-pressed="true"]');
     expect(styles).toContain('.canvas-model-picker-option[aria-selected="true"]');
     expect(styles).toContain(".canvas-model-picker-option:focus-visible");
+    expect(styles).toContain(".creation-model-picker-surface .canvas-model-picker-brand { display: flex;");
+    expect(styles).toContain("text-align: left; transition: none;");
+    expect(component).toContain("memo(function ModelPickerGroupButton");
     const price = styles.match(/\.model-picker-price \{([^}]+)\}/)?.[1] || "";
     expect(price).toContain("color: var(--model-price-ink)");
     expect(price).toContain("font-weight: 650");

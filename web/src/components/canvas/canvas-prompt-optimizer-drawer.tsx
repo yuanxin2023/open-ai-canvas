@@ -719,7 +719,6 @@ export function CanvasPromptOptimizerDrawer({ open, children, prompt, generation
                                     variant="creation"
                                     className="canvas-prompt-optimizer-model-picker"
                                     popoverClassName="canvas-prompt-optimizer-model-popover"
-                                    directList
                                 />
                                 <button
                                     type="button"

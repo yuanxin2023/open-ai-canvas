@@ -801,7 +801,7 @@ html:not(.dark) .creation-home .creation-chat-composer .creation-model-picker.ca
 .app-user-workspace .creation-model-picker-menu .canvas-model-picker-brands { display: grid; gap: 5px; }
 .app-user-workspace .creation-model-picker-menu .canvas-model-picker-subheading { display: flex; align-items: baseline; justify-content: space-between; padding: 3px 5px 8px; color: var(--user-ink); font-size: 12px; font-weight: 650; }
 .app-user-workspace .creation-model-picker-menu .canvas-model-picker-subheading small { color: var(--user-ink-soft); font-size: 10px; font-weight: 500; }
-.app-user-workspace .creation-model-picker-menu .canvas-model-picker-brand { display: flex; min-height: 58px; align-items: center; gap: 10px; border: 1px solid transparent; border-radius: 13px; padding: 8px 10px; background: transparent; color: var(--user-ink); text-align: left; transition: background-color 160ms ease, border-color 160ms ease; }
+.app-user-workspace .creation-model-picker-menu .canvas-model-picker-brand { display: flex; min-height: 58px; align-items: center; gap: 10px; border: 1px solid transparent; border-radius: 13px; padding: 8px 10px; background: transparent; color: var(--user-ink); text-align: left; transition: none; }
 .app-user-workspace .creation-model-picker-menu .canvas-model-picker-brand-icon { display: grid; width: 34px; height: 34px; flex: 0 0 34px; place-items: center; border-radius: 11px; background: var(--user-surface-muted); color: var(--user-ink-muted); }
 .app-user-workspace .creation-model-picker-menu .canvas-model-picker-brand-copy { display: grid; min-width: 0; flex: 1; gap: 4px; }
 .app-user-workspace .creation-model-picker-menu .canvas-model-picker-brand-copy strong { overflow: hidden; font-size: 13px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
@@ -841,7 +841,7 @@ html:not(.dark) .creation-home .creation-chat-composer .creation-model-picker.ca
 .creation-model-picker-surface .canvas-model-picker-brands { display: grid; gap: 5px; }
 .creation-model-picker-surface .canvas-model-picker-subheading { display: flex; align-items: baseline; justify-content: space-between; padding: 3px 5px 8px; color: var(--foreground); font-size: 12px; font-weight: 650; }
 .creation-model-picker-surface .canvas-model-picker-subheading small { color: color-mix(in srgb, var(--foreground) 52%, transparent); font-size: 10px; font-weight: 500; }
-.creation-model-picker-surface .canvas-model-picker-brand { display: flex; min-height: 58px; align-items: center; gap: 10px; border: 1px solid transparent; border-radius: 13px; padding: 8px 10px; background: transparent; color: var(--foreground); text-align: left; transition: background-color 160ms ease, border-color 160ms ease; }
+.creation-model-picker-surface .canvas-model-picker-brand { display: flex; min-height: 58px; align-items: center; gap: 10px; border: 1px solid transparent; border-radius: 13px; padding: 8px 10px; background: transparent; color: var(--foreground); text-align: left; transition: none; }
 .creation-model-picker-surface .canvas-model-picker-brand-icon { display: grid; width: 34px; height: 34px; flex: 0 0 34px; place-items: center; border-radius: 11px; background: var(--workspace-surface-hover); color: var(--foreground); }
 .creation-model-picker-surface .canvas-model-picker-brand-copy { display: grid; min-width: 0; flex: 1; gap: 4px; }
 .creation-model-picker-surface .canvas-model-picker-brand-copy strong { overflow: hidden; font-size: 13px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }

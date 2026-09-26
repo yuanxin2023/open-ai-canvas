@@ -194,7 +194,6 @@ export function CanvasNodeMaskEditDialog({ dataUrl, open, config, onClose, onCon
                                             fullWidth
                                             showSelectedPrice={false}
                                             onChange={(model) => setGenerationConfig((current) => ({ ...current, model, imageModel: model, ...defaultImageParamsForModel(current, model) }))}
-                                            directList
                                         />
                                     </div>
                                     <ImageSettingsPanel

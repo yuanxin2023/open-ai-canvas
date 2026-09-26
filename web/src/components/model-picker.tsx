@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
+import { memo, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
 import { Check, ChevronDown, Coins } from "lucide-react";
 import { Popover } from "antd";
 
@@ -6,7 +6,7 @@ import { canvasThemes, type CanvasTheme } from "@/lib/canvas-theme";
 import { modelCapabilityConfigFor, videoDurationOptions } from "@/lib/model-capabilities";
 import { formatPriceRange, modelQuoteDescription, modelQuoteRequest, normalizeTierResolution, priceTierSummaryLabel, priceTiersForCurrentSelection } from "@/lib/model-pricing";
 import { compatibleModelInGroup, configuredModelDisplayName, modelCompatibilityError, resolveCompatibleModel, type ModelRequirements } from "@/lib/model-selection";
-import { groupModelsForPicker, isDirectSystemModel, modelChannelLabel } from "@/lib/model-picker-groups";
+import { groupModelsForPicker, isDirectSystemModel, modelChannelLabel, type ModelPickerGroup } from "@/lib/model-picker-groups";
 import { cn } from "@/lib/utils";
 import { modelDisplayName, modelIcon, modelOptionName, resolveModelChannel, selectableModelsByCapability, type AiConfig, type ModelCapability } from "@/stores/use-config-store";
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
@@ -30,8 +30,15 @@ type ModelPickerProps = {
     variant?: "default" | "creation";
     requirements?: ModelRequirements;
     showConfiguredModelName?: boolean;
-    directList?: boolean;
 };
+
+const ModelPickerGroupButton = memo(function ModelPickerGroupButton({ group, active, dataItem = false, onSelect }: { group: ModelPickerGroup; active: boolean; dataItem?: boolean; onSelect: (key: string) => void }) {
+    return <button key={group.key} type="button" data-model-picker-item={dataItem || undefined} className={cn("canvas-model-picker-brand", active && "is-active")} aria-pressed={active} onClick={() => onSelect(group.key)}>
+        <span className="canvas-model-picker-brand-icon"><ModelLogo icon={group.icon} size={22} /></span>
+        <span className="canvas-model-picker-brand-copy"><strong>{group.label}</strong><small>{group.models.length} 个{group.kind === "product" ? "渠道" : "模型"}{group.scope ? ` · ${group.scope}` : ""}</small></span>
+        <ChevronDown className="canvas-model-picker-brand-arrow" aria-hidden="true" />
+    </button>;
+});
 
 export function ModelPicker({
     config,
@@ -48,7 +55,6 @@ export function ModelPicker({
     variant = "creation",
     requirements,
     showConfiguredModelName = false,
-    directList = false,
 }: ModelPickerProps) {
     const creditsEnabled = useUserStore((state) => state.features.creditsEnabled);
     const pickerId = useId();
@@ -127,13 +133,18 @@ export function ModelPicker({
         }
         setOpen(nextOpen);
     };
-    const focusMenuOption = (last = false) => {
+    const focusMenuOption = useCallback((last = false) => {
         window.requestAnimationFrame(() => {
             const buttons = menuRef.current?.querySelectorAll<HTMLButtonElement>('[data-model-picker-item]:not(:disabled)');
             const target = last ? buttons?.item((buttons?.length || 1) - 1) : buttons?.item(0);
             target?.focus();
         });
-    };
+    }, []);
+    const selectGroup = useCallback((key: string) => setActiveGroupKey(key), []);
+    const selectGroupAndFocus = useCallback((key: string) => {
+        setActiveGroupKey(key);
+        focusMenuOption();
+    }, [focusMenuOption]);
     const handleTriggerKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
         if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
         event.preventDefault();
@@ -167,7 +178,7 @@ export function ModelPicker({
             data-canvas-no-zoom
             className={cn(
                 "canvas-model-picker-menu creation-model-picker-menu max-w-[calc(100vw-24px)]",
-                directList ? "is-direct-list" : activeGroupKey === null ? "is-brand-list" : "is-model-list",
+                activeGroupKey === null ? "is-brand-list" : "is-model-list",
             )}
             style={
                 {
@@ -182,81 +193,18 @@ export function ModelPicker({
             onMouseDown={(event) => event.stopPropagation()}
             onPointerDown={(event) => event.stopPropagation()}
         >
-            {directList ? (
-                <>
-                    {optionGroups.length ? optionGroups.map((group) => (
-                        <section key={group.key} className="canvas-model-picker-group min-w-0 overflow-hidden">
-                            <div className="canvas-model-picker-group-label" style={{ color: theme.node.muted }}>
-                                <span className="truncate">{group.label}</span>
-                                {group.scope ? <span className="shrink-0" style={{ color: theme.node.muted }}>{group.scope}</span> : null}
-                            </div>
-                            <div className="grid min-w-0 gap-1">
-                                {group.models.map((modelGroup) => {
-                                    const selected = modelGroup.models.includes(current);
-                                    const model = compatibleModelInGroup(config, modelGroup.models, selectionRequirements, selected ? current : undefined);
-                                    const displayModel = model || (selected ? current : modelGroup.models[0]);
-                                    const disabledReason = model ? "" : modelCompatibilityError(config, modelGroup.models[0], selectionRequirements) || "当前输入不符合该模型能力";
-                                    return (
-                                        <button
-                                            key={modelGroup.key}
-                                            type="button"
-                                            role="option"
-                                            aria-selected={selected}
-                                            aria-disabled={Boolean(disabledReason)}
-                                            disabled={Boolean(disabledReason)}
-                                            title={disabledReason || pickerModelOptionLabel(config, displayModel, showConfiguredModelName)}
-                                            className="canvas-model-picker-option disabled:cursor-not-allowed disabled:opacity-45"
-                                            style={{ background: selected ? theme.toolbar.activeBg : "transparent", color: theme.node.text }}
-                                            onClick={() => {
-                                                if (!model) return;
-                                                onChange(model);
-                                                setOpen(false);
-                                                window.requestAnimationFrame(() => triggerRef.current?.focus());
-                                            }}
-                                        >
-                                            <ModelLabel
-                                                config={config}
-                                                model={displayModel}
-                                                capability={capability}
-                                                theme={theme}
-                                                creationVariant={creationVariant}
-                                                showConfiguredModelName={showConfiguredModelName}
-                                                showPrice={showOptionPrices && creditsEnabled}
-                                                disabledReason={disabledReason}
-                                                showDescription
-                                            />
-                                            {selected ? <Check className="canvas-model-picker-option-check ml-1 shrink-0" style={{ color: theme.node.activeStroke }} /> : null}
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        </section>
-                    )) : (
-                        <div className="canvas-model-picker-empty" style={{ color: theme.node.muted }}>
-                            {emptyModelLabel(config, capability)}
-                        </div>
-                    )}
-                </>
-            ) : optionGroups.length ? (
+            {optionGroups.length ? (
                 activeGroupKey === null ? (
                     <div className="canvas-model-picker-brands" aria-label="选择产品模型">
                         {optionGroups.map((group) => {
                             const groupCurrent = group.models.find((item) => item.models.includes(current));
-                            return <button key={group.key} type="button" data-model-picker-item className={cn("canvas-model-picker-brand", groupCurrent && "is-active")} aria-pressed={Boolean(groupCurrent)} onClick={() => { setActiveGroupKey(group.key); focusMenuOption(); }}>
-                                <span className="canvas-model-picker-brand-icon"><ModelLogo icon={group.icon} size={22} /></span>
-                                <span className="canvas-model-picker-brand-copy"><strong>{group.label}</strong><small>{group.models.length} 个{group.kind === "product" ? "渠道" : "模型"}{group.scope ? ` · ${group.scope}` : ""}</small></span>
-                                <ChevronDown className="canvas-model-picker-brand-arrow" aria-hidden="true" />
-                            </button>;
+                            return <ModelPickerGroupButton key={group.key} group={group} active={Boolean(groupCurrent)} dataItem onSelect={selectGroupAndFocus} />;
                         })}
                     </div>
                 ) : <div className="canvas-model-picker-two-pane">
                     <div className="canvas-model-picker-brand-rail" aria-label="产品模型">
                         {optionGroups.map((group) => {
-                            return <button key={group.key} type="button" className={cn("canvas-model-picker-brand", activeGroupKey === group.key && "is-active")} aria-pressed={activeGroupKey === group.key} onClick={() => setActiveGroupKey(group.key)}>
-                                <span className="canvas-model-picker-brand-icon"><ModelLogo icon={group.icon} size={22} /></span>
-                                <span className="canvas-model-picker-brand-copy"><strong>{group.label}</strong><small>{group.models.length} 个{group.kind === "product" ? "渠道" : "模型"}{group.scope ? ` · ${group.scope}` : ""}</small></span>
-                                <ChevronDown className="canvas-model-picker-brand-arrow" aria-hidden="true" />
-                            </button>;
+                            return <ModelPickerGroupButton key={group.key} group={group} active={activeGroupKey === group.key} onSelect={selectGroup} />;
                         })}
                     </div>
                     {optionGroups.filter((group) => group.key === activeGroupKey).map((group) => <section key={group.key} className="canvas-model-picker-group canvas-model-picker-model-pane min-w-0 overflow-hidden">
