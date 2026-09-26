@@ -13,7 +13,7 @@ import {
 import { useUserStore } from "@/stores/use-user-store";
 
 const BANNER_AUTO_SLIDE_MS = 4000;
-const BANNER_DISMISS_STORAGE_PREFIX = "yingce.banner-announcements.dismissed";
+const BANNER_DISMISS_STORAGE_PREFIX = "open-ai-canvas.banner-announcements.dismissed";
 
 export function BannerAnnouncementsSlider() {
     const navigate = useNavigate();

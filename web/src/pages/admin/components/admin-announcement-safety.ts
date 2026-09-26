@@ -1,4 +1,4 @@
-const ANNOUNCEMENT_REVIEW_STORAGE_KEY = "yingce.admin.announcements.pending-review";
+const ANNOUNCEMENT_REVIEW_STORAGE_KEY = "open-ai-canvas.admin.announcements.pending-review";
 
 export type AnnouncementPendingReview = {
     operation: "create" | "update" | "close";
