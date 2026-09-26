@@ -39,7 +39,7 @@ func TestOfficialPaymentArtifactsAreCanonicalLinuxAMD64(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			packageData, err := os.ReadFile(filepath.Join(root, packageID+".yingce-plugin"))
+			packageData, err := os.ReadFile(filepath.Join(root, packageID+".canvas-plugin"))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -49,7 +49,7 @@ func TestOfficialPaymentArtifactsAreCanonicalLinuxAMD64(t *testing.T) {
 			}
 			packagedProvider := pkg.Files["backend/provider"]
 			if !bytes.Equal(directoryProvider, packagedProvider) {
-				t.Fatal("directory provider differs from .yingce-plugin backend/provider")
+				t.Fatal("directory provider differs from .canvas-plugin backend/provider")
 			}
 			linuxAMD64 := pkg.Files["backend/provider-linux-amd64"]
 			if !bytes.Equal(directoryProvider, linuxAMD64) {

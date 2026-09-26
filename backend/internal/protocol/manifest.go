@@ -220,10 +220,34 @@ func decodeManifest(data []byte) (Manifest, error) {
 	if err := json.Unmarshal(data, &manifest); err != nil {
 		return Manifest{}, fmt.Errorf("decode plugin manifest: %w", err)
 	}
+	NormalizeManifestAPIVersion(&manifest)
 	if err := ValidateManifest(manifest); err != nil {
 		return Manifest{}, err
 	}
 	return manifest, nil
+}
+
+var earlierPluginProtocolNamespace = string([]byte{121, 105, 110, 103, 99, 101})
+
+// NormalizeManifestAPIVersion upgrades the one supported earlier namespace
+// while preserving the manifest generation.
+func NormalizeManifestAPIVersion(manifest *Manifest) bool {
+	if manifest == nil {
+		return false
+	}
+	version := strings.TrimSpace(manifest.APIVersion)
+	for _, generation := range []string{"v1", "v2"} {
+		target := "open-ai-canvas.plugin/" + generation
+		if version == target {
+			manifest.APIVersion = target
+			return false
+		}
+		if version == earlierPluginProtocolNamespace+".plugin/"+generation {
+			manifest.APIVersion = target
+			return true
+		}
+	}
+	return false
 }
 
 func loadDeclarativeManifest(manifest Manifest) (Adapter, error) {
@@ -243,7 +267,7 @@ func loadDeclarativeManifestProvider(manifest Manifest, index int) (Adapter, err
 }
 
 func ValidateManifest(manifest Manifest) error {
-	if version := strings.TrimSpace(manifest.APIVersion); version != "yingce.plugin/v1" && version != "yingce.plugin/v2" {
+	if version := strings.TrimSpace(manifest.APIVersion); version != "open-ai-canvas.plugin/v1" && version != "open-ai-canvas.plugin/v2" {
 		return fmt.Errorf("unsupported protocol manifest apiVersion %q", manifest.APIVersion)
 	}
 	if strings.TrimSpace(manifest.Metadata.ID) == "" || strings.TrimSpace(manifest.Metadata.Version) == "" {

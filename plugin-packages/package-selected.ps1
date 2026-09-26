@@ -7,9 +7,12 @@ $root = Split-Path -Parent $PSCommandPath
 $ids = if ($args.Count -gt 0) { $args } else { throw 'Pass one or more plugin directory names.' }
 
 foreach ($id in $ids) {
+  if ($id -like 'src-*') {
+    throw "Source mirror directories cannot be packaged directly: $id"
+  }
   $source = Join-Path $root $id
-  $output = Join-Path $root ($id + '.yingce-plugin')
-  $temporary = Join-Path $root ('.' + $id + '.yingce-plugin.tmp')
+  $output = Join-Path $root ($id + '.canvas-plugin')
+  $temporary = Join-Path $root ('.' + $id + '.canvas-plugin.tmp')
   if (-not (Test-Path -LiteralPath (Join-Path $source 'manifest.json'))) {
     throw "Missing manifest.json for $id"
   }

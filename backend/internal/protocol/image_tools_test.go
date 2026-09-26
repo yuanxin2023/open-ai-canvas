@@ -17,7 +17,7 @@ func TestImageToolsProvidersBuildAsyncImageRequests(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			adapter := officialPackageAdapter(t, "image-tools.yingce-plugin", tc.provider)
+			adapter := officialPackageAdapter(t, "image-tools.canvas-plugin", tc.provider)
 			if !adapter.Metadata().RequiresPublicMediaURLs {
 				t.Fatal("image tools must receive hydrated public image URLs")
 			}

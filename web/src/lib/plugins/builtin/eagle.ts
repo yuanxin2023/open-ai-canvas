@@ -96,7 +96,7 @@ export const eagleAssetPlugin: RegisteredPlugin = {
         version: "0.3.0",
         publishedAt: "2026-08-21",
         updatedAt: "2026-08-22",
-        apiVersion: "yingce.plugin/v1",
+        apiVersion: "open-ai-canvas.plugin/v1",
         description: "把 Eagle 作为站点的外部素材来源，直接浏览原始文件夹并读写 Eagle 文件。",
         documentation: eaglePluginDocumentation,
         author: "开源社区",

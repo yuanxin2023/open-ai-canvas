@@ -126,8 +126,8 @@ done
 package_plugin() {
   package_id=$1
   package_dir="$root_dir/$package_id"
-  output_file="$root_dir/$package_id.yingce-plugin"
-  temporary_file="$root_dir/.$package_id.yingce-plugin.tmp"
+  output_file="$root_dir/$package_id.canvas-plugin"
+  temporary_file="$root_dir/.$package_id.canvas-plugin.tmp"
   rm -f "$temporary_file"
   (
     cd "$package_dir"
@@ -150,5 +150,8 @@ done
 for manifest in "$root_dir"/*/manifest.json; do
   package_dir=${manifest%/manifest.json}
   package_id=${package_dir##*/}
+  case "$package_id" in
+    src-*) continue ;;
+  esac
   package_plugin "$package_id"
 done

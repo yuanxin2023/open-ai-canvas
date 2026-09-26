@@ -15,8 +15,8 @@ import (
 func TestWavespeedImageEditConformance(t *testing.T) {
 	allowLoopbackProviderTest(t)
 	manifest := []byte(`{
-		"apiVersion":"yingce.plugin/v2",
-		"id":"test-wavespeed-image-edit","version":"1.0.0","name":"WaveSpeed Image Edit","author":"WaveSpeed / 影策","documentation":"# WaveSpeed Image Edit",
+		"apiVersion":"open-ai-canvas.plugin/v2",
+		"id":"test-wavespeed-image-edit","version":"1.0.0","name":"WaveSpeed Image Edit","author":"WaveSpeed / AI 创作工作台","documentation":"# WaveSpeed Image Edit",
 		"permissions":["generation.run","media.read"],
 		"configuration":{"fields":[{"name":"apiKey","type":"secret","label":"WaveSpeed API Key","required":true}]},
 		"contributes":{"providers":[{
@@ -54,7 +54,7 @@ func TestWavespeedImageEditConformance(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := center.install(testPluginPackage(t, manifest), "wavespeed-image-edit.yingce-plugin"); err != nil {
+	if _, err := center.install(testPluginPackage(t, manifest), "wavespeed-image-edit.canvas-plugin"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -134,8 +134,8 @@ func TestWavespeedImageEditConformance(t *testing.T) {
 func TestWavespeedImageEditPollFailure(t *testing.T) {
 	allowLoopbackProviderTest(t)
 	manifest := []byte(`{
-		"apiVersion":"yingce.plugin/v2",
-		"id":"test-wavespeed-image-edit","version":"1.0.0","name":"WaveSpeed Image Edit","author":"WaveSpeed / 影策","documentation":"# WaveSpeed Image Edit",
+		"apiVersion":"open-ai-canvas.plugin/v2",
+		"id":"test-wavespeed-image-edit","version":"1.0.0","name":"WaveSpeed Image Edit","author":"WaveSpeed / AI 创作工作台","documentation":"# WaveSpeed Image Edit",
 		"permissions":["generation.run","media.read"],
 		"configuration":{"fields":[{"name":"apiKey","type":"secret","label":"WaveSpeed API Key","required":true}]},
 		"contributes":{"providers":[{
@@ -165,7 +165,7 @@ func TestWavespeedImageEditPollFailure(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := center.install(testPluginPackage(t, manifest), "wavespeed-image-edit.yingce-plugin"); err != nil {
+	if _, err := center.install(testPluginPackage(t, manifest), "wavespeed-image-edit.canvas-plugin"); err != nil {
 		t.Fatal(err)
 	}
 

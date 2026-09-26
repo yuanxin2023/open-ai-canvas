@@ -96,7 +96,7 @@ func TestBuiltInPaymentPackageUpgradeSelectsNewRuntimeDigest(t *testing.T) {
 	if err := os.MkdirAll(packageDir, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(packageDir, oldDigest+".yingce-plugin"), oldPackage, 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(packageDir, oldDigest+".canvas-plugin"), oldPackage, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := materializePaymentBackend(packageDir, oldDigest, oldPkg); err != nil {
@@ -104,14 +104,14 @@ func TestBuiltInPaymentPackageUpgradeSelectsNewRuntimeDigest(t *testing.T) {
 	}
 	registry := []pluginRegistryRecord{{
 		ID: "test-payment-runtime", Raw: oldPkg.ManifestRaw, Source: PluginOriginOfficial,
-		FileName: "test-payment-runtime.yingce-plugin", PackagePath: oldDigest + ".yingce-plugin", PackageSHA256: oldDigest,
+		FileName: "test-payment-runtime.canvas-plugin", PackagePath: oldDigest + ".canvas-plugin", PackageSHA256: oldDigest,
 	}}
 	if err := (&pluginRuntime{registryPath: filepath.Join(dataDir, "plugin_registry.json")}).writeRegistry(registry); err != nil {
 		t.Fatal(err)
 	}
 
 	officialDir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(officialDir, "test-payment-runtime.yingce-plugin"), newPackage, 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(officialDir, "test-payment-runtime.canvas-plugin"), newPackage, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("CANVAS_OFFICIAL_PLUGIN_DIR", officialDir)
@@ -172,7 +172,7 @@ func paymentRuntimePackage(t *testing.T, provider []byte) []byte {
 
 func paymentRuntimePackageFiles(t *testing.T, files map[string][]byte) []byte {
 	t.Helper()
-	manifest := []byte(`{"apiVersion":"yingce.plugin/v1","id":"test-payment-runtime","version":"1.0.0","name":"Test Payment Runtime","author":"Test","enabled":true,"runtime":{"backend":"rpc","backendEntry":"backend/provider"},"contributes":{"paymentProviders":[{"id":"test-payment","label":"Test Payment","icon":"brand:test","checkoutMode":"redirect","expiryPolicy":{"defaultMinutes":30,"minMinutes":5,"maxMinutes":1440}}]}}`)
+	manifest := []byte(`{"apiVersion":"open-ai-canvas.plugin/v1","id":"test-payment-runtime","version":"1.0.0","name":"Test Payment Runtime","author":"Test","enabled":true,"runtime":{"backend":"rpc","backendEntry":"backend/provider"},"contributes":{"paymentProviders":[{"id":"test-payment","label":"Test Payment","icon":"brand:test","checkoutMode":"redirect","expiryPolicy":{"defaultMinutes":30,"minMinutes":5,"maxMinutes":1440}}]}}`)
 	payload := map[string][]byte{"manifest.json": manifest}
 	for name, content := range files {
 		payload[name] = content

@@ -75,18 +75,18 @@
 
 该协议的模型级字段变化快或依赖云资源配置。插件固定线协议入口和统一字段，完整厂商对象通过 providerOptions.aws-bedrock-invoke-model 的 parameters/input/extra_body 传入；model-specific arbitrary body。云签名型入口在未配置对应鉴权驱动时会明确失败，不会伪装成 Bearer 成功。
 
-<!-- YINGCE_MANIFEST_CONTRACT_START -->
+<!-- OPEN_AI_CANVAS_MANIFEST_CONTRACT_START -->
 ## Manifest 完整接口定义
 
 以下 JSON 与插件包内实际 `manifest.json` 逐字段一致，覆盖插件身份、权限、配置、鉴权、参数、校验、创建、Agent、查询、取消、结果下载、响应和 Agent 响应映射。`documentation` 字段的值就是当前完整文档；为避免文档在自身内部无限递归，JSON 中仅用等义占位文本表示正文。
 
 ```json
 {
-  "apiVersion": "yingce.plugin/v2",
+  "apiVersion": "open-ai-canvas.plugin/v2",
   "id": "aws-bedrock-invoke-model",
   "name": "AWS Bedrock InvokeModel",
   "version": "2.0.0",
-  "author": "AWS / 影策",
+  "author": "AWS / AI 创作工作台",
   "description": "AWS Bedrock InvokeModel 独立请求协议插件。",
   "documentation": "<当前插件的完整 documentation，由 README.md 与 docs/interface.md 拼接而成；为避免 JSON 递归，此处不重复展开正文。>",
   "permissions": [
@@ -270,4 +270,4 @@
   }
 }
 ```
-<!-- YINGCE_MANIFEST_CONTRACT_END -->
+<!-- OPEN_AI_CANVAS_MANIFEST_CONTRACT_END -->

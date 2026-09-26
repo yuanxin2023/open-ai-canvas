@@ -77,18 +77,18 @@
 
 该包只代表上述线协议 profile；同一品牌的其他 endpoint、云区域或网关包装必须使用独立插件，不能根据模型名猜测。
 
-<!-- YINGCE_MANIFEST_CONTRACT_START -->
+<!-- OPEN_AI_CANVAS_MANIFEST_CONTRACT_START -->
 ## Manifest 完整接口定义
 
 以下 JSON 与插件包内实际 `manifest.json` 逐字段一致，覆盖插件身份、权限、配置、鉴权、参数、校验、创建、Agent、查询、取消、结果下载、响应和 Agent 响应映射。`documentation` 字段的值就是当前完整文档；为避免文档在自身内部无限递归，JSON 中仅用等义占位文本表示正文。
 
 ```json
 {
-  "apiVersion": "yingce.plugin/v2",
+  "apiVersion": "open-ai-canvas.plugin/v2",
   "id": "xai-video",
   "name": "xAI Video",
   "version": "2.0.0",
-  "author": "xAI / 影策",
+  "author": "xAI / AI 创作工作台",
   "description": "xAI Video 独立请求协议插件。",
   "documentation": "<当前插件的完整 documentation，由 README.md 与 docs/interface.md 拼接而成；为避免 JSON 递归，此处不重复展开正文。>",
   "permissions": [
@@ -524,4 +524,4 @@
   }
 }
 ```
-<!-- YINGCE_MANIFEST_CONTRACT_END -->
+<!-- OPEN_AI_CANVAS_MANIFEST_CONTRACT_END -->

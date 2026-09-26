@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-const rpcVersion = "yingce.payment/v1"
+const rpcVersion = "open-ai-canvas.payment/v1"
 
 type rpcRequest struct {
 	Version    string              `json:"version"`

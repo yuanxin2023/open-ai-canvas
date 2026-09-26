@@ -162,7 +162,7 @@ func RegisterPluginRoutes(r *gin.RouterGroup, svc *service.Service) {
 			return
 		}
 		if fileName == "" {
-			fileName = c.Param("id") + ".yingce-plugin"
+			fileName = c.Param("id") + ".canvas-plugin"
 		}
 		c.Header("Cache-Control", "private, no-store")
 		c.Header("Content-Disposition", "attachment; filename=\""+strings.ReplaceAll(fileName, "\"", "")+"\"")

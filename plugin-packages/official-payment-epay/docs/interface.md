@@ -1,4 +1,4 @@
-## yingce.payment/v1
+## open-ai-canvas.payment/v1
 
 支持 `validate_config`、`create_order`、`query_order`、`close_order`、`verify_notification` 和 `download_trade_bill`，统一返回 JSON 响应。
 
@@ -8,14 +8,14 @@
 
 V1 关单先查单：已支付订单返回付款凭据，未付款订单只关闭宿主本地记录，不能据此声称上游支付链接已失效。V2 当前仅实现下单和通知验签，未实现查单、刷新收银台和安全关单；`query_order` 返回 `epay_query_unsupported`，`close_order` 返回 `epay_close_unsupported`，不会把未知订单标成已关闭。启用 V2 前需接受这一限制并准备在网关人工核对订单；本次没有新增或猜测 V2 查单接口。交易账单下载返回 not found，不表示已完成对账。
 
-<!-- YINGCE_MANIFEST_CONTRACT_START -->
+<!-- OPEN_AI_CANVAS_MANIFEST_CONTRACT_START -->
 ## Manifest 完整接口定义
 
 以下 JSON 与插件包内实际 `manifest.json` 逐字段一致，覆盖插件身份、权限、配置、鉴权、参数、校验、创建、Agent、查询、取消、结果下载、响应和 Agent 响应映射。`documentation` 字段的值就是当前完整文档；为避免文档在自身内部无限递归，JSON 中仅用等义占位文本表示正文。
 
 ```json
 {
-  "apiVersion": "yingce.plugin/v1",
+  "apiVersion": "open-ai-canvas.plugin/v1",
   "id": "official-payment-epay",
   "name": "易支付",
   "version": "1.0.9",
@@ -152,4 +152,4 @@ V1 关单先查单：已支付订单返回付款凭据，未付款订单只关�
   "documentation": "<当前插件的完整 documentation，由 README.md 与 docs/interface.md 拼接而成；为避免 JSON 递归，此处不重复展开正文。>"
 }
 ```
-<!-- YINGCE_MANIFEST_CONTRACT_END -->
+<!-- OPEN_AI_CANVAS_MANIFEST_CONTRACT_END -->

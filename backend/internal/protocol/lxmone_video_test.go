@@ -14,7 +14,7 @@ func TestOfficialLxmoneVideoResultURLs(t *testing.T) {
 	const directURL = "https://cdn.example.com/generated.mp4?signature=test"
 	for _, provider := range providers {
 		t.Run(provider, func(t *testing.T) {
-			adapter := officialPackageAdapter(t, "lxmone-video-suite.yingce-plugin", provider)
+			adapter := officialPackageAdapter(t, "lxmone-video-suite.canvas-plugin", provider)
 			for _, tc := range []struct {
 				name    string
 				payload map[string]any

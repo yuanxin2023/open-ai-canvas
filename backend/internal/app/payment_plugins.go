@@ -50,7 +50,7 @@ func bundledPaymentPluginManifests() []protocol.Manifest {
 
 func zpayPaymentPluginManifest() protocol.Manifest {
 	return protocol.Manifest{
-		APIVersion: "yingce.plugin/v1",
+		APIVersion: "open-ai-canvas.plugin/v1",
 		Metadata: protocol.Metadata{
 			ID: PaymentPluginZPay, Version: "1.0.0", Name: "ZPAY 聚合支付", Vendor: "ZPAY",
 			Description: "通过 ZPAY/EasyPay API 提供支付宝和微信扫码充值。", Enabled: false, Installable: true,
@@ -94,7 +94,7 @@ func paymentManifestHasPermission(manifest protocol.Manifest, permission string)
 
 func paymentPluginManifest(pluginID, providerID, name, vendor, description, runtime, icon, checkoutMode string, configuration protocol.ManifestConfiguration) protocol.Manifest {
 	return protocol.Manifest{
-		APIVersion: "yingce.plugin/v1",
+		APIVersion: "open-ai-canvas.plugin/v1",
 		Metadata: protocol.Metadata{
 			ID: pluginID, Version: "1.0.0", Name: name, Vendor: vendor,
 			Description: description, Enabled: false, Installable: true,

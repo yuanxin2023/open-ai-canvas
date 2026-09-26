@@ -153,7 +153,7 @@ func LoadOfficialFallbackRegistry() *protocol.Registry {
 		}
 		adapters := make([]protocol.Adapter, 0, len(entries))
 		for _, entry := range entries {
-			if entry.IsDir() || !strings.HasSuffix(strings.ToLower(entry.Name()), ".yingce-plugin") {
+			if entry.IsDir() || !strings.HasSuffix(strings.ToLower(entry.Name()), ".canvas-plugin") {
 				continue
 			}
 			data, err := os.ReadFile(filepath.Join(directory, entry.Name()))

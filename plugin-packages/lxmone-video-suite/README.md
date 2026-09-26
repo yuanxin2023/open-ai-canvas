@@ -1,7 +1,7 @@
 # 万有引力视频套件（lxmone.xyz）
 
 该目录是万有引力中转站（`https://lxmone.xyz/v1`）视频协议的官方声明式插件源码。
-后端从生成的 `lxmone-video-suite.yingce-plugin` 包加载，不依赖系统内置 `host:` 适配器。
+后端从生成的 `lxmone-video-suite.canvas-plugin` 包加载，不依赖系统内置 `host:` 适配器。
 
 协议按中转站公开接口文档 `https://lxmone.xyz/docs/` 的 `/v1/videos` 与 `/v1/videos/generations`
 两套请求体形状编写，拆成 8 个 provider，覆盖该站点当前开放的全部视频模型：

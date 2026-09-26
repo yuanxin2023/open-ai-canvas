@@ -97,18 +97,18 @@ H3 工作流完成响应可能同时包含相对路径 `metadata.url` 和完整 
 错误信息取 `error.message`、`message`、`fail_reason`，错误码路径为 `error.message` 与 `error.code`。
 HTTP 失败、业务错误码或状态进入 `failed` 时，任务以失败结束并把上游原文回传给用户。
 
-<!-- YINGCE_MANIFEST_CONTRACT_START -->
+<!-- OPEN_AI_CANVAS_MANIFEST_CONTRACT_START -->
 ## Manifest 完整接口定义
 
 以下 JSON 与插件包内实际 `manifest.json` 逐字段一致，覆盖插件身份、权限、配置、鉴权、参数、校验、创建、Agent、查询、取消、结果下载、响应和 Agent 响应映射。`documentation` 字段的值就是当前完整文档；为避免文档在自身内部无限递归，JSON 中仅用等义占位文本表示正文。
 
 ```json
 {
-  "apiVersion": "yingce.plugin/v2",
+  "apiVersion": "open-ai-canvas.plugin/v2",
   "id": "lxmone-video-suite",
   "name": "万有引力视频套件",
   "version": "1.0.1",
-  "author": "Yingce / 万有引力",
+  "author": "Open AI Canvas / 万有引力",
   "description": "万有引力（lxmone.xyz）视频协议套件：Wan 3.0（现有渠道与 S 渠道）、Seedance 2 / 2.5、SD 2.0 / 2.5 / Mini、Grok Imagine、MiniMax H3（Max 与 A-E 独立工作流）。",
   "permissions": [
     "generation.run",
@@ -2441,4 +2441,4 @@ HTTP 失败、业务错误码或状态进入 `failed` 时，任务以失败结�
   "documentation": "<当前插件的完整 documentation，由 README.md 与 docs/interface.md 拼接而成；为避免 JSON 递归，此处不重复展开正文。>"
 }
 ```
-<!-- YINGCE_MANIFEST_CONTRACT_END -->
+<!-- OPEN_AI_CANVAS_MANIFEST_CONTRACT_END -->

@@ -6,7 +6,7 @@ import (
 )
 
 func TestMiniMaxVideoFailureMessages(t *testing.T) {
-	adapter := officialPackageAdapter(t, "minimax-hailuo-video-v2.yingce-plugin", "minimax-video")
+	adapter := officialPackageAdapter(t, "minimax-hailuo-video-v2.canvas-plugin", "minimax-video")
 	const dimensionError = "content[1].image_url: media dimensions must be between 256 and 5760 pixels"
 	for _, tc := range []struct {
 		name, payload, message string

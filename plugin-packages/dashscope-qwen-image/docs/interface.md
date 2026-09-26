@@ -82,18 +82,18 @@
 
 百炼多模态图像端点（image-generation 异步任务）。文生图与图生图共用同一入口：不传 image 为文生图，传 1-3 张 image 为图生图。参考图通过 input.messages[].content[].image 传输（优先 Base64 data URL），不使用 OpenAI 的 /v1/images/edits multipart。size 采用“宽*高”，未登记的档位省略并由模型自动推荐；enable_thinking 固定为 false，因为官方要求非流式调用关闭思考模式。
 
-<!-- YINGCE_MANIFEST_CONTRACT_START -->
+<!-- OPEN_AI_CANVAS_MANIFEST_CONTRACT_START -->
 ## Manifest 完整接口定义
 
 以下 JSON 与插件包内实际 `manifest.json` 逐字段一致，覆盖插件身份、权限、配置、鉴权、参数、校验、创建、Agent、查询、取消、结果下载、响应和 Agent 响应映射。`documentation` 字段的值就是当前完整文档；为避免文档在自身内部无限递归，JSON 中仅用等义占位文本表示正文。
 
 ```json
 {
-  "apiVersion": "yingce.plugin/v2",
+  "apiVersion": "open-ai-canvas.plugin/v2",
   "id": "dashscope-qwen-image",
   "name": "DashScope Qwen / Wan Image",
   "version": "2.0.0",
-  "author": "Alibaba Cloud / 影策",
+  "author": "Alibaba Cloud / AI 创作工作台",
   "description": "DashScope Qwen / Wan Image 独立请求协议插件。",
   "documentation": "<当前插件的完整 documentation，由 README.md 与 docs/interface.md 拼接而成；为避免 JSON 递归，此处不重复展开正文。>",
   "permissions": [
@@ -515,4 +515,4 @@
   }
 }
 ```
-<!-- YINGCE_MANIFEST_CONTRACT_END -->
+<!-- OPEN_AI_CANVAS_MANIFEST_CONTRACT_END -->

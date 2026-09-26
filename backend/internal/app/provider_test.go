@@ -628,7 +628,7 @@ func TestRunDeclarativeAgentTaskOmitsToolChoiceBeforeThinkingRequest(t *testing.
 	defer server.Close()
 
 	adapter, err := protocol.LoadManifest([]byte(`{
-		"apiVersion":"yingce.plugin/v1",
+		"apiVersion":"open-ai-canvas.plugin/v1",
 		"id":"chat-completion","version":"1.0.0","name":"Chat Completion Test","author":"Test","documentation":"# Test",
 		"contributes":{"providers":[{"id":"chat-completion","label":"Chat Completion Test","capabilities":["text"],"scopes":["agent"],
 		"create":{"method":"POST","path":"/create"},

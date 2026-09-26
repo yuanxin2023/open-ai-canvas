@@ -1152,13 +1152,13 @@ for (const [id, name, capability, createPath, pollPath, resultPath] of [
 
 function manifestFor(spec) {
   return {
-    apiVersion: "yingce.plugin/v2",
+    apiVersion: "open-ai-canvas.plugin/v2",
     id: spec.id,
     name: spec.name,
     version: "2.0.0",
-    author: `${spec.vendor} / 影策`,
+    author: `${spec.vendor} / AI 创作工作台`,
     description: `${spec.name} 独立请求协议插件。`,
-    documentation: `# ${spec.name}\n\n完整字段、映射、响应、鉴权和兼容边界见包内 README.md 与 docs/interface.md。\n\n## 影策运行时合同\n\n用户只操作统一的文本、图片或视频能力；插件负责把统一请求转换为 ${spec.name} 上游协议。`,
+    documentation: `# ${spec.name}\n\n完整字段、映射、响应、鉴权和兼容边界见包内 README.md 与 docs/interface.md。\n\n## 工作台运行时合同\n\n用户只操作统一的文本、图片或视频能力；插件负责把统一请求转换为 ${spec.name} 上游协议。`,
     permissions: ["generation.run", "media.read"],
     configuration: spec.configuration || config(),
     contributes: {
@@ -1250,7 +1250,7 @@ for (const spec of selectedSpecs) {
   const dir = join(root, spec.id);
   await mkdir(join(dir, "docs"), { recursive: true });
   await writeFile(join(dir, "manifest.json"), JSON.stringify(manifestFor(spec), null, 2) + "\n");
-  await writeFile(join(dir, "README.md"), `# ${spec.name}\n\n该目录是独立官方协议插件源码。后端从生成的 \`${spec.id}.yingce-plugin\` 包加载，不依赖系统内置 \`host:\` 适配器。\n\n完整接口见 [docs/interface.md](docs/interface.md)。\n`);
+  await writeFile(join(dir, "README.md"), `# ${spec.name}\n\n该目录是独立官方协议插件源码。后端从生成的 \`${spec.id}.canvas-plugin\` 包加载，不依赖系统内置 \`host:\` 适配器。\n\n完整接口见 [docs/interface.md](docs/interface.md)。\n`);
   await writeFile(join(dir, "docs", "interface.md"), docsFor(spec));
 }
 

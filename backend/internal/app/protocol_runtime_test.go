@@ -28,7 +28,7 @@ func TestPluginViewIncludesDocumentationForEveryOfficialProtocol(t *testing.T) {
 	for _, plugin := range plugins {
 		pluginsByID[plugin.Manifest.ID] = plugin
 	}
-	packages, err := filepath.Glob(filepath.Join("..", "..", "..", "plugin-packages", "*.yingce-plugin"))
+	packages, err := filepath.Glob(filepath.Join("..", "..", "..", "plugin-packages", "*.canvas-plugin"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,7 +85,7 @@ func TestPluginViewIncludesDocumentationForEveryOfficialProtocol(t *testing.T) {
 }
 
 func TestPluginRuntimeRefreshesExistingOfficialPackageDocumentation(t *testing.T) {
-	packagePath := filepath.Join("..", "..", "..", "plugin-packages", "openai-images.yingce-plugin")
+	packagePath := filepath.Join("..", "..", "..", "plugin-packages", "openai-images.canvas-plugin")
 	packageData, err := os.ReadFile(packagePath)
 	if err != nil {
 		t.Fatal(err)
@@ -134,6 +134,52 @@ func TestPluginRuntimeRefreshesExistingOfficialPackageDocumentation(t *testing.T
 		return
 	}
 	t.Fatal("refreshed OpenAI Images plugin is missing")
+}
+
+func TestPluginRegistryMigratesEarlierPackageMetadata(t *testing.T) {
+	dataDir := t.TempDir()
+	packageDir := filepath.Join(dataDir, "plugin-packages")
+	if err := os.MkdirAll(packageDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	earlierNamespace := string([]byte{121, 105, 110, 103, 99, 101})
+	earlierExtension := "." + earlierNamespace + "-plugin"
+	oldName := "compatible-extension" + earlierExtension
+	packageData := []byte("stored-package")
+	if err := os.WriteFile(filepath.Join(packageDir, oldName), packageData, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	manifest := json.RawMessage(`{"apiVersion":"` + earlierNamespace + `.plugin/v1","id":"compatible-extension","name":"Compatible Extension","version":"1.0.0","contributes":{}}`)
+	records := []pluginRegistryRecord{{ID: "compatible-extension", Raw: manifest, Source: "uploaded", FileName: oldName, PackagePath: oldName}}
+	registryData, err := json.Marshal(records)
+	if err != nil {
+		t.Fatal(err)
+	}
+	registryPath := filepath.Join(dataDir, "plugin_registry.json")
+	if err := os.WriteFile(registryPath, registryData, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	center := &pluginRuntime{registryPath: registryPath, packageDir: packageDir}
+	if err := center.migrateStoredPluginRegistry(); err != nil {
+		t.Fatal(err)
+	}
+	migrated, err := center.readRegistry()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(migrated) != 1 || migrated[0].PackagePath != "compatible-extension.canvas-plugin" || migrated[0].FileName != "compatible-extension.canvas-plugin" {
+		t.Fatalf("migrated registry = %#v", migrated)
+	}
+	var normalized protocol.Manifest
+	if err := json.Unmarshal(migrated[0].Raw, &normalized); err != nil || normalized.APIVersion != "open-ai-canvas.plugin/v1" {
+		t.Fatalf("normalized manifest = %#v, err = %v", normalized, err)
+	}
+	if _, err := os.Stat(filepath.Join(packageDir, oldName)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("earlier package was not removed: %v", err)
+	}
+	if migratedData, err := os.ReadFile(filepath.Join(packageDir, migrated[0].PackagePath)); err != nil || !bytes.Equal(migratedData, packageData) {
+		t.Fatalf("migrated package data = %q, err = %v", migratedData, err)
+	}
 }
 
 func TestBundledWorkflowPluginsControlAvailability(t *testing.T) {
@@ -189,19 +235,19 @@ func TestPluginRuntimeIsTheProtocolSourceOfTruth(t *testing.T) {
 	if got := center.registrySnapshot().List("", "", false); len(got) == 0 {
 		t.Fatal("bundled providers were not reconciled into the unified plugin registry")
 	}
-	if _, err := center.install([]byte(`{"apiVersion":"yingce.plugin/v1"}`), "legacy.json"); err == nil {
+	if _, err := center.install([]byte(`{"apiVersion":"open-ai-canvas.plugin/v1"}`), "legacy.json"); err == nil {
 		t.Fatal("bare JSON manifest was accepted by the upload runtime")
 	}
-	manifest := []byte(`{"apiVersion":"yingce.plugin/v1","id":"uploaded-runtime","version":"1.0.0","name":"Uploaded Runtime","author":"Test","documentation":"# Uploaded Runtime","contributes":{"providers":[{"id":"uploaded-runtime","label":"Uploaded Runtime","capabilities":["video"],"scopes":["canvas"],"create":{"method":"POST","path":"/tasks","fields":{"prompt":"request.prompt"}},"response":{"statusPaths":["status"]}}]}}`)
-	plugin, err := center.install(testPluginPackage(t, manifest), "uploaded-runtime.yingce-plugin")
+	manifest := []byte(`{"apiVersion":"open-ai-canvas.plugin/v1","id":"uploaded-runtime","version":"1.0.0","name":"Uploaded Runtime","author":"Test","documentation":"# Uploaded Runtime","contributes":{"providers":[{"id":"uploaded-runtime","label":"Uploaded Runtime","capabilities":["video"],"scopes":["canvas"],"create":{"method":"POST","path":"/tasks","fields":{"prompt":"request.prompt"}},"response":{"statusPaths":["status"]}}]}}`)
+	plugin, err := center.install(testPluginPackage(t, manifest), "uploaded-runtime.canvas-plugin")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if plugin.Status != "enabled" || !center.registrySnapshot().IsCapability("uploaded-runtime", protocol.CapabilityVideo) {
 		t.Fatalf("installed plugin was not activated: %#v", plugin)
 	}
-	updatedManifest := []byte(`{"apiVersion":"yingce.plugin/v1","id":"uploaded-runtime","version":"2.0.0","name":"Uploaded Runtime v2","author":"Test","documentation":"# Uploaded Runtime v2","contributes":{"providers":[{"id":"uploaded-runtime","label":"Uploaded Runtime v2","capabilities":["video"],"scopes":["canvas"],"create":{"method":"POST","path":"/tasks","fields":{"prompt":"request.prompt"}},"response":{"statusPaths":["status"]}}]}}`)
-	updated, err := center.install(testPluginPackage(t, updatedManifest), "uploaded-runtime-v2.yingce-plugin")
+	updatedManifest := []byte(`{"apiVersion":"open-ai-canvas.plugin/v1","id":"uploaded-runtime","version":"2.0.0","name":"Uploaded Runtime v2","author":"Test","documentation":"# Uploaded Runtime v2","contributes":{"providers":[{"id":"uploaded-runtime","label":"Uploaded Runtime v2","capabilities":["video"],"scopes":["canvas"],"create":{"method":"POST","path":"/tasks","fields":{"prompt":"request.prompt"}},"response":{"statusPaths":["status"]}}]}}`)
+	updated, err := center.install(testPluginPackage(t, updatedManifest), "uploaded-runtime-v2.canvas-plugin")
 	if err != nil || updated.Manifest.Version != "2.0.0" || updated.Manifest.Name != "Uploaded Runtime v2" {
 		t.Fatalf("plugin update = %#v, err = %v", updated, err)
 	}
@@ -223,7 +269,7 @@ func TestPluginRuntimeIsTheProtocolSourceOfTruth(t *testing.T) {
 }
 
 func TestPluginRuntimeDropsRemovedOfficialProtocol(t *testing.T) {
-	staleManifest := json.RawMessage(`{"apiVersion":"yingce.plugin/v2","id":"removed-official-protocol","version":"1.0.0","name":"Removed Official Protocol","author":"Test","documentation":"# Removed\n\n## 影策运行时合同","contributes":{"providers":[{"id":"removed-official-protocol","label":"Removed","capabilities":["video"],"scopes":["canvas"],"create":{"method":"POST","path":"/tasks","body":{"prompt":{"$ref":"request.prompt"}}},"response":{"status":"pending"}}]}}`)
+	staleManifest := json.RawMessage(`{"apiVersion":"open-ai-canvas.plugin/v2","id":"removed-official-protocol","version":"1.0.0","name":"Removed Official Protocol","author":"Test","documentation":"# Removed\n\n## 工作台运行时合同","contributes":{"providers":[{"id":"removed-official-protocol","label":"Removed","capabilities":["video"],"scopes":["canvas"],"create":{"method":"POST","path":"/tasks","body":{"prompt":{"$ref":"request.prompt"}}},"response":{"status":"pending"}}]}}`)
 	registryData, err := json.Marshal([]pluginRegistryRecord{{ID: "removed-official-protocol", Raw: staleManifest, Source: PluginOriginOfficial}})
 	if err != nil {
 		t.Fatal(err)
@@ -242,7 +288,7 @@ func TestPluginRuntimeDropsRemovedOfficialProtocol(t *testing.T) {
 }
 
 func TestPluginRuntimeRejectsPersistedUploadedPaymentProvider(t *testing.T) {
-	manifest := json.RawMessage(`{"apiVersion":"yingce.plugin/v1","id":"uploaded-payment-provider","version":"1.0.0","name":"Uploaded Payment Provider","author":"Test","enabled":true,"runtime":{"backend":"host:untrusted-payment"},"contributes":{"paymentProviders":[{"id":"untrusted-payment","label":"Untrusted Payment","icon":"brand:untrusted","checkoutMode":"redirect","expiryPolicy":{"defaultMinutes":30,"minMinutes":5,"maxMinutes":1440}}]}}`)
+	manifest := json.RawMessage(`{"apiVersion":"open-ai-canvas.plugin/v1","id":"uploaded-payment-provider","version":"1.0.0","name":"Uploaded Payment Provider","author":"Test","enabled":true,"runtime":{"backend":"host:untrusted-payment"},"contributes":{"paymentProviders":[{"id":"untrusted-payment","label":"Untrusted Payment","icon":"brand:untrusted","checkoutMode":"redirect","expiryPolicy":{"defaultMinutes":30,"minMinutes":5,"maxMinutes":1440}}]}}`)
 	registryData, err := json.Marshal([]pluginRegistryRecord{{ID: "uploaded-payment-provider", Raw: manifest, Source: "uploaded"}})
 	if err != nil {
 		t.Fatal(err)
@@ -304,7 +350,7 @@ func TestAutoDLPluginPackageLoadsAsOfficialRuntime(t *testing.T) {
 func TestDeclarativeProtocolRuntimeExecutesCreatePollAndDownload(t *testing.T) {
 	allowLoopbackProviderTest(t)
 	manifest := []byte(`{
-		"apiVersion":"yingce.plugin/v1",
+		"apiVersion":"open-ai-canvas.plugin/v1",
 			"id":"test-declarative-video-runtime","version":"1.0.0","name":"Test Declarative Video","author":"Test","documentation":"# Test Declarative Video",
 		"contributes":{"providers":[{"id":"test-declarative-video-runtime","label":"Test Declarative Video","capabilities":["video"],"scopes":["canvas"],"create":{"method":"POST","path":"/tasks","fields":{"model":"request.model","prompt":"request.prompt","seconds":"request.duration"}},"poll":{"method":"GET","path":"/tasks/{{taskId}}"},"response":{"taskIdPaths":["id"],"statusPaths":["status"],"resultPaths":["video_url"],"resultKind":"video"}}]}
 	}`)
@@ -312,7 +358,7 @@ func TestDeclarativeProtocolRuntimeExecutesCreatePollAndDownload(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := center.install(testPluginPackage(t, manifest), "test-declarative-video-runtime.yingce-plugin"); err != nil {
+	if _, err := center.install(testPluginPackage(t, manifest), "test-declarative-video-runtime.canvas-plugin"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -365,7 +411,7 @@ func TestDeclarativeProtocolPollingPolicyOnlyChangesVideoBehavior(t *testing.T) 
 func TestDeclarativeProtocolPollRecoversFromTransientGatewayFailure(t *testing.T) {
 	allowLoopbackProviderTest(t)
 	adapter, err := protocol.LoadManifest([]byte(`{
-		"apiVersion":"yingce.plugin/v1",
+		"apiVersion":"open-ai-canvas.plugin/v1",
 		"id":"test-declarative-video-retry","version":"1.0.0","name":"Test Declarative Video Retry","author":"Test","documentation":"# Test",
 		"contributes":{"providers":[{"id":"test-declarative-video-retry","label":"Test Declarative Video Retry","capabilities":["video"],"scopes":["canvas"],"create":{"method":"POST","path":"/tasks","fields":{"model":"request.model"}},"poll":{"method":"GET","path":"/tasks/{{taskId}}"},"response":{"taskIdPaths":["id"],"statusPaths":["status"],"resultPaths":["video_url"],"resultKind":"video"}}]}
 	}`))
@@ -413,7 +459,7 @@ func TestDeclarativeProtocolPollRecoversFromTransientGatewayFailure(t *testing.T
 func TestDeclarativeProtocolRetriesResultDownloadWithoutRepolling(t *testing.T) {
 	allowLoopbackProviderTest(t)
 	adapter, err := protocol.LoadManifest([]byte(`{
-		"apiVersion":"yingce.plugin/v1",
+		"apiVersion":"open-ai-canvas.plugin/v1",
 		"id":"test-declarative-download-retry","version":"1.0.0","name":"Test Declarative Download Retry","author":"Test","documentation":"# Test",
 		"contributes":{"providers":[{"id":"test-declarative-download-retry","label":"Test Declarative Download Retry","capabilities":["video"],"scopes":["canvas"],"create":{"method":"POST","path":"/tasks","fields":{"model":"request.model"}},"poll":{"method":"GET","path":"/tasks/{{taskId}}"},"response":{"taskIdPaths":["id"],"statusPaths":["status"],"resultPaths":["video_url"],"resultKind":"video"}}]}
 	}`))
@@ -460,7 +506,7 @@ func TestDeclarativeProtocolRetriesResultDownloadWithoutRepolling(t *testing.T) 
 func TestDeclarativeProtocolRuntimeGeneratesPerCreateIdempotencyKey(t *testing.T) {
 	allowLoopbackProviderTest(t)
 	manifest := []byte(`{
-		"apiVersion":"yingce.plugin/v1",
+		"apiVersion":"open-ai-canvas.plugin/v1",
 		"id":"test-idempotency-key-runtime","version":"1.0.0","name":"Test Idempotency Key","author":"Test","documentation":"# Test Idempotency Key",
 		"contributes":{"providers":[{"id":"test-idempotency-key-runtime","label":"Test Idempotency Key","capabilities":["video"],"scopes":["canvas"],"create":{"method":"POST","path":"/tasks","headers":{"Idempotency-Key":{"$ref":"request.extra.idempotencyKey"}},"body":{"model":{"$ref":"request.model"},"prompt":{"$ref":"request.prompt"}}},"poll":{"method":"GET","path":"/tasks/{{taskId}}"},"response":{"taskIdPaths":["id"],"statusPaths":["status"],"resultPaths":["video_url"],"resultKind":"video"}}]}
 	}`)
@@ -468,7 +514,7 @@ func TestDeclarativeProtocolRuntimeGeneratesPerCreateIdempotencyKey(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := center.install(testPluginPackage(t, manifest), "test-idempotency-key-runtime.yingce-plugin"); err != nil {
+	if _, err := center.install(testPluginPackage(t, manifest), "test-idempotency-key-runtime.canvas-plugin"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -601,7 +647,7 @@ func TestDeclarativeNewAPIChannel2TaskNotExistExhaustion(t *testing.T) {
 
 func TestDeclarativeMiniMaxFailureReachesTaskError(t *testing.T) {
 	allowLoopbackProviderTest(t)
-	data, err := os.ReadFile(filepath.Join("..", "..", "..", "plugin-packages", "minimax-hailuo-video-v2.yingce-plugin"))
+	data, err := os.ReadFile(filepath.Join("..", "..", "..", "plugin-packages", "minimax-hailuo-video-v2.canvas-plugin"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -679,7 +725,7 @@ func TestProviderTaskNotReadyStrictClassification(t *testing.T) {
 func newDeclarativeNewAPIChannel2TestAdapter(t *testing.T) protocol.Adapter {
 	t.Helper()
 	adapter, err := protocol.LoadManifest([]byte(`{
-		"apiVersion":"yingce.plugin/v1",
+		"apiVersion":"open-ai-canvas.plugin/v1",
 		"id":"newapi-channel-2","version":"1.0.0","name":"NewAPI Channel 2","author":"Test","documentation":"# Test",
 		"contributes":{"providers":[{"id":"newapi-channel-2","label":"NewAPI Channel 2","capabilities":["video"],"scopes":["canvas"],"create":{"method":"POST","path":"/video/generations","fields":{"model":"request.model"}},"poll":{"method":"GET","path":"/video/generations/{{taskId}}"},"response":{"taskIdPaths":["id"],"statusPaths":["status"],"resultPaths":["video_url"],"resultKind":"video"}}]}
 	}`))
@@ -692,7 +738,7 @@ func newDeclarativeNewAPIChannel2TestAdapter(t *testing.T) protocol.Adapter {
 func TestDeclarativeProtocolRecoveryQueriesExistingTaskWithoutCreating(t *testing.T) {
 	allowLoopbackProviderTest(t)
 	manifest := []byte(`{
-		"apiVersion":"yingce.plugin/v2",
+		"apiVersion":"open-ai-canvas.plugin/v2",
 		"id":"test-declarative-video-recovery","version":"1.0.0","name":"Test Declarative Video Recovery","author":"Test","documentation":"# Test Declarative Video Recovery",
 		"contributes":{"providers":[{"id":"test-declarative-video-recovery","label":"Test Declarative Video Recovery","capabilities":["video"],"scopes":["canvas"],"create":{"method":"POST","path":"/tasks","body":{"model":{"$ref":"request.model"}}},"poll":{"method":"GET","path":"/videos/{{taskId}}"},"result":{"method":"GET","path":"/videos/{{taskId}}/content"},"response":{"taskId":{"$coalesce":[{"$ref":"response.id"},{"$ref":"taskId"}]},"status":{"$coalesce":[{"$ref":"response.status"},"pending"]}}}]}
 	}`)
@@ -700,7 +746,7 @@ func TestDeclarativeProtocolRecoveryQueriesExistingTaskWithoutCreating(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := center.install(testPluginPackage(t, manifest), "test-declarative-video-recovery.yingce-plugin"); err != nil {
+	if _, err := center.install(testPluginPackage(t, manifest), "test-declarative-video-recovery.canvas-plugin"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -745,7 +791,7 @@ func TestDeclarativeProtocolRecoveryQueriesExistingTaskWithoutCreating(t *testin
 func TestDeclarativeProtocolRuntimeMapsReferenceImageURL(t *testing.T) {
 	allowLoopbackProviderTest(t)
 	manifest := []byte(`{
-		"apiVersion":"yingce.plugin/v1",
+		"apiVersion":"open-ai-canvas.plugin/v1",
 		"id":"test-declarative-reference-image-runtime","version":"1.0.0","name":"Test Declarative Reference Image","author":"Test","documentation":"# Test Declarative Reference Image",
 		"contributes":{"providers":[{"id":"test-declarative-reference-image-runtime","label":"Test Declarative Reference Image","capabilities":["video"],"scopes":["canvas"],"create":{"method":"POST","path":"/tasks","fields":{"prompt":"request.prompt","ref_image_0":"request.images.0.url"}},"response":{"statusPaths":["status"],"messagePaths":["msg"]}}]}
 	}`)
@@ -753,7 +799,7 @@ func TestDeclarativeProtocolRuntimeMapsReferenceImageURL(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := center.install(testPluginPackage(t, manifest), "test-declarative-reference-image-runtime.yingce-plugin"); err != nil {
+	if _, err := center.install(testPluginPackage(t, manifest), "test-declarative-reference-image-runtime.canvas-plugin"); err != nil {
 		t.Fatal(err)
 	}
 

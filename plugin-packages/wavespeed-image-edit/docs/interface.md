@@ -81,18 +81,18 @@ WaveSpeed 异步任务响应结构：
 
 模型字段由所选端点决定：编辑类端点接受 `prompt + images[]`；图层分解端点（`bytedance/seedream-v5.0-pro/layer-decomposition`）接受 `image + prompt`（用 `providerOptions` 传额外字段）；去背景端点（`bria/remove-background`）接受 `image`。宿主通过 `request.images` 统一提供源图，模型字段差异由调用方通过 providerOptions 补充。
 
-<!-- YINGCE_MANIFEST_CONTRACT_START -->
+<!-- OPEN_AI_CANVAS_MANIFEST_CONTRACT_START -->
 ## Manifest 完整接口定义
 
 以下 JSON 与插件包内实际 `manifest.json` 逐字段一致，覆盖插件身份、权限、配置、鉴权、参数、校验、创建、Agent、查询、取消、结果下载、响应和 Agent 响应映射。`documentation` 字段的值就是当前完整文档；为避免文档在自身内部无限递归，JSON 中仅用等义占位文本表示正文。
 
 ```json
 {
-  "apiVersion": "yingce.plugin/v2",
+  "apiVersion": "open-ai-canvas.plugin/v2",
   "id": "wavespeed-image-edit",
   "name": "WaveSpeed Image Edit",
   "version": "1.0.0",
-  "author": "WaveSpeed / 影策",
+  "author": "WaveSpeed / AI 创作工作台",
   "description": "WaveSpeed 图片编辑协议插件：GPT Image 2.5 / Seedream 5.0 Pro / Nano Banana 的 Image to Image 编辑与图层分解、去背景。",
   "permissions": [
     "generation.run",
@@ -294,4 +294,4 @@ WaveSpeed 异步任务响应结构：
   "documentation": "<当前插件的完整 documentation，由 README.md 与 docs/interface.md 拼接而成；为避免 JSON 递归，此处不重复展开正文。>"
 }
 ```
-<!-- YINGCE_MANIFEST_CONTRACT_END -->
+<!-- OPEN_AI_CANVAS_MANIFEST_CONTRACT_END -->
