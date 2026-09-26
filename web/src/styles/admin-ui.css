@@ -4643,8 +4643,6 @@
 .admin-runtime-policy-command-bar,
 .admin-runtime-policy-command-copy,
 .admin-runtime-policy-command-actions,
-.admin-runtime-policy-index,
-.admin-runtime-policy-index-label,
 .admin-runtime-policy-load-error,
 .admin-runtime-policy-inline-alert {
     display: flex;
@@ -4709,7 +4707,7 @@
 
 .admin-runtime-policy-command-actions {
     flex: 0 0 auto;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     justify-content: flex-end;
     gap: 8px;
 }
@@ -4725,9 +4723,7 @@
     line-height: 1.55;
 }
 
-.admin-runtime-policy-overview {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+.admin-runtime-policy-workspace-controls {
     overflow: hidden;
     border: 1px solid var(--admin-card-border);
     border-radius: var(--r-lg);
@@ -4735,106 +4731,137 @@
     box-shadow: var(--admin-card-shadow);
 }
 
-.admin-runtime-policy-overview .admin-stat-tile {
-    min-height: 106px;
-    background: var(--admin-layer-1);
-    box-shadow: none;
+.admin-runtime-policy-workspace-toolbar {
+    display: flex;
+    min-height: 58px;
+    align-items: center;
+    gap: 18px;
+    padding: 10px 14px;
 }
 
-.admin-runtime-policy-overview .admin-stat-tile-value {
-    overflow: hidden;
-    font-size: 20px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+.admin-runtime-policy-workspace-toolbar > .ant-input-affix-wrapper {
+    width: min(420px, 55vw);
+    min-height: 36px;
 }
 
-.admin-runtime-policy-overview .admin-stat-tile-detail {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+.admin-runtime-policy-workspace-toolbar .ant-input-prefix {
+    color: var(--admin-text-muted);
 }
 
-.admin-runtime-policy-index {
-    min-height: 62px;
-    overflow: hidden;
-    border: 1px solid var(--admin-card-border);
-    border-radius: var(--r-lg);
-    background: var(--admin-layer-1);
-    box-shadow: var(--admin-card-shadow);
-}
-
-.admin-runtime-policy-index-label {
-    min-height: 62px;
-    flex: 0 0 172px;
-    gap: 9px;
-    border-right: 1px solid var(--admin-divider);
-    background: var(--admin-layer-2);
-    padding: 12px 16px;
+.admin-runtime-policy-changed-filter {
+    display: inline-flex;
+    min-height: 32px;
+    align-items: center;
+    gap: 8px;
     color: var(--admin-text-secondary);
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.admin-runtime-policy-changed-filter:has(.ant-switch-disabled) {
+    cursor: default;
+    opacity: 0.56;
+}
+
+.admin-runtime-policy-tabs {
+    display: flex;
+    min-width: 0;
+    overflow-x: auto;
+    border-top: 1px solid var(--admin-divider);
+    scrollbar-width: none;
+}
+
+.admin-runtime-policy-tabs::-webkit-scrollbar {
+    display: none;
+}
+
+.admin-runtime-policy-tab {
+    position: relative;
+    display: inline-flex;
+    min-width: max-content;
+    min-height: 48px;
+    align-items: center;
+    gap: 7px;
+    border: 0;
+    background: transparent;
+    padding: 0 18px;
+    color: var(--admin-text-secondary);
+    cursor: pointer;
     font-size: 12px;
     font-weight: 650;
-}
-
-.admin-runtime-policy-index-links {
-    display: grid;
-    min-width: 0;
-    flex: 1;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-}
-
-.admin-runtime-policy-index-links button {
-    min-width: 0;
-    min-height: 62px;
-    border: 0;
-    border-left: 1px solid var(--admin-divider);
-    background: transparent;
-    padding: 10px 14px;
-    color: var(--admin-text-primary);
-    cursor: pointer;
-    text-align: left;
     transition:
         color 180ms ease,
         background-color 180ms ease;
 }
 
-.admin-runtime-policy-index-links button:first-child {
-    border-left: 0;
+.admin-runtime-policy-tab::after {
+    position: absolute;
+    right: 14px;
+    bottom: 0;
+    left: 14px;
+    height: 2px;
+    border-radius: 999px 999px 0 0;
+    background: transparent;
+    content: "";
 }
 
-.admin-runtime-policy-index-links button:hover {
+.admin-runtime-policy-tab:hover {
     background: var(--admin-layer-2);
+    color: var(--admin-text-primary);
 }
 
-.admin-runtime-policy-index-links button:focus-visible {
-    position: relative;
+.admin-runtime-policy-tab:focus-visible {
     z-index: 1;
     outline: 2px solid var(--control-focus-ring);
     outline-offset: -2px;
 }
 
-.admin-runtime-policy-index-links span,
-.admin-runtime-policy-index-links small {
-    display: block;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+.admin-runtime-policy-tab.is-active {
+    color: var(--admin-text-primary);
 }
 
-.admin-runtime-policy-index-links span {
-    font-size: 12px;
+.admin-runtime-policy-tab.is-active::after {
+    background: var(--admin-text-primary);
+}
+
+.admin-runtime-policy-tab small,
+.admin-runtime-policy-tab em {
+    display: inline-flex;
+    min-width: 20px;
+    min-height: 20px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    padding: 0 6px;
+    font-size: 10px;
+    font-style: normal;
+    line-height: 20px;
+}
+
+.admin-runtime-policy-tab small {
+    background: var(--admin-layer-2);
+    color: var(--admin-text-muted);
+    font-weight: 500;
+}
+
+.admin-runtime-policy-tab em {
+    background: color-mix(in srgb, var(--admin-status-warning) 14%, var(--admin-layer-1));
+    color: color-mix(in srgb, var(--admin-status-warning) 82%, var(--admin-text-primary));
     font-weight: 650;
 }
 
-.admin-runtime-policy-index-links small {
-    margin-top: 3px;
-    color: var(--admin-text-muted);
-    font-size: 10px;
-    font-weight: 500;
+.admin-runtime-policy-panels {
+    min-width: 0;
 }
 
 .admin-runtime-policy-anchor {
     width: 100%;
     scroll-margin-top: 78px;
+}
+
+.admin-runtime-policy-anchor[hidden] {
+    display: none !important;
 }
 
 .admin-runtime-policy-anchor .admin-settings-section {
@@ -4847,28 +4874,141 @@
     background: var(--admin-layer-1);
 }
 
-.admin-runtime-policy-field-grid {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 18px 20px;
-    padding: 20px;
+.admin-runtime-policy-section-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
-.admin-runtime-policy-field-grid .ant-form-item {
+.admin-runtime-policy-field-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 28px;
+    padding: 4px 20px 10px;
+}
+
+.admin-runtime-policy-field {
     min-width: 0;
-    margin-bottom: 0;
+    margin: 0 !important;
+    border-bottom: 1px solid var(--admin-divider);
+    padding: 13px 0;
+    transition:
+        border-color 180ms ease,
+        background-color 180ms ease,
+        box-shadow 180ms ease;
+}
+
+.admin-runtime-policy-field.is-dirty {
+    margin: 4px -10px !important;
+    border: 1px solid color-mix(in srgb, var(--admin-status-warning) 34%, var(--admin-card-border));
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--admin-status-warning) 7%, var(--admin-layer-1));
+    padding: 9px 10px;
+    box-shadow: inset 3px 0 0 color-mix(in srgb, var(--admin-status-warning) 72%, transparent);
+}
+
+.admin-runtime-policy-field > .ant-form-item-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(188px, 230px);
+    align-items: center;
+    gap: 16px;
+}
+
+.admin-runtime-policy-field .ant-form-item-label {
+    min-width: 0;
+    padding: 0;
+    text-align: left;
+    white-space: normal;
+}
+
+.admin-runtime-policy-field .ant-form-item-label > label {
+    display: block;
+    height: auto;
+    color: inherit;
+}
+
+.admin-runtime-policy-field .ant-form-item-label > label::after {
+    display: none;
+}
+
+.admin-runtime-policy-field-copy,
+.admin-runtime-policy-field-heading {
+    display: flex;
+    min-width: 0;
+}
+
+.admin-runtime-policy-field-copy {
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+.admin-runtime-policy-field-heading {
+    width: 100%;
+    align-items: center;
+    gap: 7px;
+}
+
+.admin-runtime-policy-field-heading strong {
+    overflow: hidden;
+    color: var(--admin-text-primary);
+    font-size: 12px;
+    font-weight: 650;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.admin-runtime-policy-field-heading em {
+    flex: 0 0 auto;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--admin-status-warning) 15%, var(--admin-layer-1));
+    padding: 1px 7px;
+    color: color-mix(in srgb, var(--admin-status-warning) 82%, var(--admin-text-primary));
+    font-size: 10px;
+    font-style: normal;
+    font-weight: 650;
+}
+
+.admin-runtime-policy-field-copy small {
+    display: block;
+    max-width: 100%;
+    margin-top: 3px;
+    overflow: hidden;
+    color: var(--admin-text-muted);
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 1.45;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.admin-runtime-policy-field-comparison {
+    margin-top: 4px;
+    color: color-mix(in srgb, var(--admin-status-warning) 78%, var(--admin-text-primary));
+    font-size: 10px;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+}
+
+.admin-runtime-policy-field .ant-form-item-control {
+    min-width: 0;
+}
+
+.admin-runtime-policy-field .ant-form-item-explain {
+    margin-top: 4px;
+    text-align: right;
 }
 
 .admin-runtime-policy-number-control {
-    display: flex;
+    display: grid;
     width: 100%;
     min-width: 0;
+    grid-template-columns: minmax(0, 1fr) minmax(52px, auto) 30px;
+    align-items: center;
 }
 
 .admin-runtime-policy-number-control .ant-input-number {
-    width: auto;
+    width: 100%;
     min-width: 0;
-    flex: 1 1 auto;
     border-radius: 7px 0 0 7px;
 }
 
@@ -4888,12 +5028,48 @@
     text-align: center;
 }
 
+.admin-runtime-policy-field-reset.ant-btn {
+    width: 28px;
+    min-width: 28px;
+    height: 28px;
+    margin-left: 2px;
+    padding: 0;
+}
+
+.admin-runtime-policy-field:not(.is-dirty) .admin-runtime-policy-field-reset {
+    visibility: hidden;
+}
+
 .admin-runtime-policy-number-control:focus-within .admin-runtime-policy-number-unit {
     border-color: var(--control-focus-ring);
 }
 
 .admin-runtime-policy-field-grid .ant-input-number-input {
     font-variant-numeric: tabular-nums;
+}
+
+.admin-runtime-policy-empty {
+    display: grid;
+    min-height: 260px;
+    place-items: center;
+    align-content: center;
+    gap: 6px;
+    border: 1px dashed var(--admin-card-border);
+    border-radius: var(--r-lg);
+    background: var(--admin-layer-1);
+    color: var(--admin-text-muted);
+    text-align: center;
+}
+
+.admin-runtime-policy-empty strong {
+    color: var(--admin-text-primary);
+    font-size: 13px;
+}
+
+.admin-runtime-policy-empty p {
+    max-width: 420px;
+    font-size: 11px;
+    line-height: 1.55;
 }
 
 .admin-runtime-policy-load-error,
@@ -4923,8 +5099,7 @@
 }
 
 .admin-runtime-policy-load-error p,
-.admin-runtime-policy-confirm-copy p,
-.admin-runtime-policy-review > p {
+.admin-runtime-policy-confirm-copy p {
     margin-top: 4px;
     color: var(--admin-text-muted);
     font-size: 12px;
@@ -4933,61 +5108,6 @@
 
 .admin-runtime-policy-confirm-copy p + p {
     margin-top: 8px;
-}
-
-.admin-runtime-policy-review > p {
-    margin: 0 0 12px;
-    color: var(--admin-text-secondary);
-}
-
-.admin-runtime-policy-review-groups {
-    display: grid;
-    max-height: min(520px, 58vh);
-    gap: 10px;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    padding-right: 4px;
-}
-
-.admin-runtime-policy-review-groups section {
-    overflow: hidden;
-    border: 1px solid var(--admin-card-border);
-    border-radius: 8px;
-    background: var(--admin-layer-1);
-}
-
-.admin-runtime-policy-review-groups h3 {
-    border-bottom: 1px solid var(--admin-divider);
-    background: var(--admin-layer-2);
-    padding: 8px 11px;
-    color: var(--admin-text-primary);
-    font-size: 12px;
-    font-weight: 650;
-}
-
-.admin-runtime-policy-review-item {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 12px;
-    padding: 9px 11px;
-}
-
-.admin-runtime-policy-review-item + .admin-runtime-policy-review-item {
-    border-top: 1px solid var(--admin-divider);
-}
-
-.admin-runtime-policy-review-item strong {
-    color: var(--admin-text-primary);
-    font-size: 12px;
-    font-weight: 600;
-}
-
-.admin-runtime-policy-review-item span {
-    color: var(--admin-text-secondary);
-    font-size: 11px;
-    font-variant-numeric: tabular-nums;
-    font-weight: 600;
-    text-align: right;
 }
 
 .admin-third-party-settings {
@@ -5958,31 +6078,6 @@
         justify-content: flex-start;
     }
 
-    .admin-runtime-policy-overview {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
-    .admin-runtime-policy-overview .admin-stat-tile:nth-child(3) {
-        border-left: 0;
-        border-top: 1px solid color-mix(in srgb, var(--foreground) 9%, transparent);
-    }
-
-    .admin-runtime-policy-overview .admin-stat-tile:nth-child(4) {
-        border-top: 1px solid color-mix(in srgb, var(--foreground) 9%, transparent);
-    }
-
-    .admin-runtime-policy-index {
-        align-items: stretch;
-        flex-direction: column;
-    }
-
-    .admin-runtime-policy-index-label {
-        min-height: 44px;
-        flex-basis: auto;
-        border-right: 0;
-        border-bottom: 1px solid var(--admin-divider);
-    }
-
     .admin-runtime-policy-field-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
@@ -6085,6 +6180,29 @@
         align-items: flex-start;
         flex-direction: column;
     }
+
+    .admin-runtime-policy-workspace-toolbar {
+        align-items: stretch;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .admin-runtime-policy-workspace-toolbar > .ant-input-affix-wrapper {
+        width: 100%;
+    }
+
+    .admin-runtime-policy-field-grid {
+        padding-inline: 14px;
+    }
+
+    .admin-runtime-policy-field > .ant-form-item-row {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 9px;
+    }
+
+    .admin-runtime-policy-field .ant-form-item-explain {
+        text-align: left;
+    }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -6103,7 +6221,8 @@
     .admin-drawing-command-bar,
     .admin-drawing-engine-choice,
     .admin-runtime-policy-command-bar,
-    .admin-runtime-policy-index-links button,
+    .admin-runtime-policy-tab,
+    .admin-runtime-policy-field,
     .admin-third-party-command-bar {
         transition: none !important;
     }
@@ -9462,9 +9581,6 @@
         grid-template-columns: repeat(3, minmax(0, 1fr));
     }
 
-    .admin-runtime-policy-field-grid {
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-    }
 }
 
 @media (max-width: 1599px) {
@@ -9478,6 +9594,10 @@
 }
 
 @media (max-width: 1099px) {
+    .admin-runtime-policy-field-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
     .admin-feature-board {
         grid-template-columns: 1fr;
     }

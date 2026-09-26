@@ -7,6 +7,7 @@ import { useSearchParams } from "react-router";
 
 import { PaginationBar } from "@/pages/admin/components/admin-ui";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
+import { listAdminUsers, type AdminUser } from "@/services/api/auth";
 import { adminResourceFileUrl, deleteAdminResources, downloadAdminResource, getAdminStorageStats, listAdminResources, type AdminStorageResource, type AdminStorageStats } from "@/services/api/admin-storage";
 import { AdminBatchBar, AdminDataTable, AdminFilterChip, AdminStatTile, AdminStatusBadge, AdminTableEmpty } from "./admin-ui";
 
@@ -24,6 +25,10 @@ export default function StorageResourcesPanel() {
     const pageSize = normalizePageSize(searchParams.get("pageSize"));
     const debouncedKeyword = useDebouncedValue(keyword);
     const debouncedUserId = useDebouncedValue(userId);
+    const [userSearch, setUserSearch] = useState("");
+    const debouncedUserSearch = useDebouncedValue(userSearch.trim(), 250);
+    const [userOptions, setUserOptions] = useState<AdminUser[]>([]);
+    const [searchingUsers, setSearchingUsers] = useState(false);
     const [resources, setResources] = useState<AdminStorageResource[]>([]);
     const [stats, setStats] = useState<AdminStorageStats | null>(null);
     const [total, setTotal] = useState(0);
@@ -34,7 +39,9 @@ export default function StorageResourcesPanel() {
     const [deleting, setDeleting] = useState(false);
     const [refreshKey, setRefreshKey] = useState(0);
     const requestSequence = useRef(0);
+    const userSearchSequence = useRef(0);
     const hasFilters = Boolean(keyword || userId || kind !== "all" || status !== "all" || provider !== "all");
+    const selectedUser = userOptions.find((user) => user.id === userId);
 
     const updateUrl = (patch: Record<string, string | number>, replace = false) => {
         const next = new URLSearchParams(searchParams);
@@ -56,6 +63,26 @@ export default function StorageResourcesPanel() {
             });
         return () => controller.abort();
     }, [refreshKey]);
+
+    useEffect(() => {
+        const sequence = ++userSearchSequence.current;
+        setSearchingUsers(true);
+        void listAdminUsers({ keyword: debouncedUserSearch || undefined, page: 1, pageSize: 50 })
+            .then((result) => {
+                if (sequence !== userSearchSequence.current) return;
+                setUserOptions((current) => {
+                    const selected = current.find((user) => user.id === userId);
+                    if (selected && !result.users.some((user) => user.id === selected.id)) return [selected, ...result.users];
+                    return result.users;
+                });
+            })
+            .catch((error) => {
+                if (sequence === userSearchSequence.current) message.error(error instanceof Error ? error.message : "搜索用户失败");
+            })
+            .finally(() => {
+                if (sequence === userSearchSequence.current) setSearchingUsers(false);
+            });
+    }, [debouncedUserSearch, message, userId]);
 
     useEffect(() => {
         const sequence = ++requestSequence.current;
@@ -209,7 +236,22 @@ export default function StorageResourcesPanel() {
                             placeholder="资源 ID 或对象路径"
                             onChange={(event) => updateUrl({ filter: event.target.value, page: 1 }, true)}
                         />
-                        <Input aria-label="按用户 ID 筛选" autoComplete="off" allowClear className="w-48" value={userId} placeholder="用户" onChange={(event) => updateUrl({ userId: event.target.value, page: 1 }, true)} />
+                        <Select
+                            aria-label="按用户筛选"
+                            allowClear
+                            showSearch
+                            filterOption={false}
+                            loading={searchingUsers}
+                            className="w-48"
+                            value={userId || undefined}
+                            placeholder="搜索用户"
+                            onSearch={setUserSearch}
+                            onChange={(value) => {
+                                setUserSearch("");
+                                updateUrl({ userId: value || "", page: 1 }, true);
+                            }}
+                            options={userOptions.map((user) => ({ value: user.id, label: adminUserLabel(user) }))}
+                        />
                         <Select aria-label="筛选资源类型" className="w-32" value={kind} onChange={(value) => updateUrl({ kind: value, page: 1 })} options={kindOptions} />
                         <Select aria-label="筛选资源状态" className="w-32" value={status} onChange={(value) => updateUrl({ status: value, page: 1 })} options={statusOptions} />
                         <Select aria-label="筛选存储类型" className="w-36" value={provider} onChange={(value) => updateUrl({ provider: value, page: 1 })} options={providerOptions} />
@@ -218,7 +260,7 @@ export default function StorageResourcesPanel() {
                 toolbarActiveFilters={
                     <>
                         {keyword ? <AdminFilterChip label={`搜索：${keyword}`} onRemove={() => updateUrl({ filter: "", page: 1 })} /> : null}
-                        {userId ? <AdminFilterChip label={`用户：${userId}`} onRemove={() => updateUrl({ userId: "", page: 1 })} /> : null}
+                        {userId ? <AdminFilterChip label={`用户：${selectedUser ? adminUserLabel(selectedUser) : userId}`} onRemove={() => updateUrl({ userId: "", page: 1 })} /> : null}
                         {kind !== "all" ? <AdminFilterChip label={`类型：${kindLabel(kind)}`} onRemove={() => updateUrl({ kind: "all", page: 1 })} /> : null}
                         {status !== "all" ? <AdminFilterChip label={`状态：${statusLabel(status)}`} onRemove={() => updateUrl({ status: "all", page: 1 })} /> : null}
                         {provider !== "all" ? <AdminFilterChip label={`存储：${providerLabel(provider)}`} onRemove={() => updateUrl({ provider: "all", page: 1 })} /> : null}
@@ -381,6 +423,10 @@ function resourceDimensions(resource: AdminStorageResource) {
         );
     if (resource.durationMs > 0) return <span className="tabular-nums">{formatDuration(resource.durationMs)}</span>;
     return <span className="text-foreground/30">--</span>;
+}
+function adminUserLabel(user: Pick<AdminUser, "username" | "displayName">) {
+    const displayName = user.displayName.trim();
+    return displayName && displayName !== user.username ? `${displayName} · @${user.username}` : `@${user.username}`;
 }
 function formatDuration(durationMs: number) {
     const seconds = Math.round(durationMs / 1000);

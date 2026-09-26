@@ -387,7 +387,11 @@ test("admin tables keep requested filters and actions in the intended positions"
     const storageToolbar = sourceSection(storageSource, "toolbar={", "toolbarActiveFilters=");
     expect(storageToolbar).toContain('className="admin-storage-resource-filters"');
     expect(storageToolbar).toContain('placeholder="资源 ID 或对象路径"');
-    expect(storageToolbar).toContain('placeholder="用户"');
+    expect(storageToolbar).toContain('placeholder="搜索用户"');
+    expect(storageToolbar).toContain("showSearch");
+    expect(storageToolbar).toContain("filterOption={false}");
+    expect(storageToolbar).toContain("onSearch={setUserSearch}");
+    expect(storageSource).toContain("listAdminUsers({ keyword: debouncedUserSearch || undefined, page: 1, pageSize: 50 })");
     expect(storageToolbar).toContain('aria-label="筛选资源类型"');
     expect(storageToolbar).toContain('aria-label="筛选资源状态"');
     expect(storageToolbar).toContain('aria-label="筛选存储类型"');
@@ -495,6 +499,29 @@ test("banner announcement editor keeps title styles through edit, save and statu
     expect(apiSource).toContain("noticeType?: BannerNoticeType");
     expect(apiSource).not.toContain("icon?:");
     expect(apiSource).toContain("export type { BannerTitleRun }");
+});
+
+test("runtime policy settings use a searchable category workspace with explicit draft controls", async () => {
+    const [pageSource, cssSource] = await Promise.all([
+        Bun.file(new URL("../src/pages/admin/settings/runtime-policy-settings-page.tsx", import.meta.url)).text(),
+        Bun.file(new URL("../src/styles/admin-ui.css", import.meta.url)).text(),
+    ]);
+
+    expect(pageSource).toContain("const totalPolicyFieldCount = allPolicyFields.length");
+    expect(pageSource).not.toContain("42 项");
+    expect(pageSource).toContain('placeholder="搜索参数名称、说明或单位"');
+    expect(pageSource).toContain("visibleFieldsBySection");
+    expect(pageSource).toContain("changedOnly");
+    expect(pageSource).toContain("<PolicyNumberControl");
+    expect(pageSource).toContain('aria-label="撤销此项改动"');
+    expect(pageSource).toContain("<Dropdown");
+    expect(pageSource).not.toContain("AdminStatTile");
+    expect(pageSource).not.toContain('className="admin-runtime-policy-overview"');
+
+    expect(cssSource).toContain(".admin-runtime-policy-workspace-controls");
+    expect(cssSource).toContain(".admin-runtime-policy-field.is-dirty");
+    expect(compactSource(cssSource)).toContain(".admin-runtime-policy-field-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));");
+    expect(compactSource(cssSource)).toContain("@media (max-width: 1099px) { .admin-runtime-policy-field-grid { grid-template-columns: minmax(0, 1fr);");
 });
 
 test("admin console tokens and shell stay isolated from the user workspace", async () => {
