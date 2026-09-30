@@ -1,7 +1,8 @@
-import { Alert, App, Button, Input, Modal, Segmented, Select } from "antd";
+import { Alert, App, Button, Dropdown, Input, Modal, Segmented, Select } from "antd";
 import { IconButton } from "@/pages/admin/ui/controls";
+import type { MenuProps } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { Download, Eye, Play, Search } from "lucide-react";
+import { ChevronDown, Download, Eye, Play, RefreshCw, Search } from "lucide-react";
 import { saveAs } from "file-saver";
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
@@ -11,14 +12,22 @@ import { MediaPreview } from "@/components/media-preview";
 import { formatCredits } from "@/constant/credits";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { exportAdminApiLogs, listAdminApiLogs, type ApiCallLog } from "@/services/api/auth";
+import { useUserStore } from "@/stores/use-user-store";
 import { ApiLogDetailModal } from "../components/api-log-detail-drawer";
 import { AdminPageFrame } from "../components/admin-shell";
 import { AdminBatchBar, AdminDataTable, AdminExportButton, AdminFilterChip, AdminStatusBadge, AdminTableEmpty } from "../components/admin-ui";
 import { logBillingLabel, logStatus, normalizeLogView } from "./log-view";
 import "./logs-page.css";
 
+const autoRefreshIntervals = [30, 60, 120] as const;
+type AutoRefreshInterval = (typeof autoRefreshIntervals)[number];
+type AutoRefreshPreference = { enabled: boolean; intervalSeconds: AutoRefreshInterval };
+
+const defaultAutoRefreshPreference: AutoRefreshPreference = { enabled: false, intervalSeconds: 60 };
+
 export default function LogsPage() {
     const { message } = App.useApp();
+    const userId = useUserStore((state) => state.user?.id);
     const [searchParams, setSearchParams] = useSearchParams();
     const keyword = searchParams.get("filter") || "";
     const view = normalizeLogView(searchParams.get("view"));
@@ -32,11 +41,19 @@ export default function LogsPage() {
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState("");
     const [retry, setRetry] = useState(0);
+    const [autoRefresh, setAutoRefresh] = useState<AutoRefreshPreference>(() => readAutoRefreshPreference(userId));
+    const [countdown, setCountdown] = useState<number>(autoRefresh.intervalSeconds);
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
     const [detailLogId, setDetailLogId] = useState<string | null>(null);
     const [mediaPreview, setMediaPreview] = useState<{ url: string; kind: "image" | "video"; title: string } | null>(null);
     const requestSequence = useRef(0);
     const hasFilters = Boolean(keyword || status !== "all" || recordType !== "request");
+
+    useEffect(() => {
+        const preference = readAutoRefreshPreference(userId);
+        setAutoRefresh(preference);
+        setCountdown(preference.intervalSeconds);
+    }, [userId]);
 
     const updateUrl = (patch: Record<string, string | number>, replace = false) => {
         const next = new URLSearchParams(searchParams);
@@ -72,6 +89,40 @@ export default function LogsPage() {
             .finally(() => sequence === requestSequence.current && setLoading(false));
         return () => { requestSequence.current += 1; };
     }, [debouncedKeyword, status, recordType, page, pageSize, retry]);
+
+    useEffect(() => {
+        setCountdown(autoRefresh.intervalSeconds);
+        if (!autoRefresh.enabled || loading) return;
+
+        const deadline = Date.now() + autoRefresh.intervalSeconds * 1_000;
+        const timer = window.setInterval(() => {
+            const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1_000));
+            setCountdown(remaining);
+            if (remaining > 0) return;
+            window.clearInterval(timer);
+            setRetry((value) => value + 1);
+        }, 1_000);
+
+        return () => window.clearInterval(timer);
+    }, [autoRefresh, loading, debouncedKeyword, status, recordType, page, pageSize, retry]);
+
+    const updateAutoRefresh = (preference: AutoRefreshPreference) => {
+        setAutoRefresh(preference);
+        setCountdown(preference.intervalSeconds);
+        writeAutoRefreshPreference(userId, preference);
+    };
+
+    const handleAutoRefreshMenu: MenuProps["onClick"] = ({ key }) => {
+        if (key === "enabled") {
+            updateAutoRefresh({ ...autoRefresh, enabled: !autoRefresh.enabled });
+            return;
+        }
+        const intervalSeconds = Number(key);
+        if (!isAutoRefreshInterval(intervalSeconds)) return;
+        updateAutoRefresh({ enabled: true, intervalSeconds });
+    };
+
+    const autoRefreshMenuItems: MenuProps["items"] = [{ key: "enabled", label: "启用自动刷新" }, { type: "divider" }, ...autoRefreshIntervals.map((seconds) => ({ key: String(seconds), label: `${seconds} 秒` }))];
 
     const fullColumns: ColumnsType<ApiCallLog> = [
         { title: "时间", width: 168, render: (_, log) => <button type="button" className="admin-log-detail-link" aria-label={`查看请求 ${log.id} 详情`} onClick={() => setDetailLogId(log.id)}>{formatTime(log.startedAt || log.createdAt)}</button> },
@@ -165,13 +216,32 @@ export default function LogsPage() {
             title="请求明细"
             description="模型生成与结果下载记录；仅计费调用扣除积分"
             actions={
-                <AdminExportButton
-                    exportFile={() => exportAdminApiLogs({ recordType, keyword: debouncedKeyword || undefined, status: status === "all" ? undefined : status })}
-                    fileName={() => `请求明细-${new Date().toISOString().slice(0, 10)}.csv`}
-                    label="导出当前筛选"
-                    successMessage="已按当前筛选导出请求明细"
-                    errorMessage="导出请求明细失败"
-                />
+                <>
+                    <Button aria-label="刷新" title="刷新" icon={<RefreshCw className="size-4" />} loading={loading} onClick={() => setRetry((value) => value + 1)} />
+                    <Dropdown
+                        trigger={["click"]}
+                        placement="bottomRight"
+                        menu={{
+                            items: autoRefreshMenuItems,
+                            selectable: true,
+                            multiple: true,
+                            selectedKeys: [String(autoRefresh.intervalSeconds), ...(autoRefresh.enabled ? ["enabled"] : [])],
+                            onClick: handleAutoRefreshMenu,
+                        }}
+                    >
+                        <Button icon={<RefreshCw className="size-4" />} aria-label={autoRefresh.enabled ? `自动刷新已开启，${countdown} 秒后刷新` : "设置自动刷新"}>
+                            {autoRefresh.enabled ? `自动刷新：${countdown} 秒` : "自动刷新"}
+                            <ChevronDown className="size-3.5" aria-hidden="true" />
+                        </Button>
+                    </Dropdown>
+                    <AdminExportButton
+                        exportFile={() => exportAdminApiLogs({ recordType, keyword: debouncedKeyword || undefined, status: status === "all" ? undefined : status })}
+                        fileName={() => `请求明细-${new Date().toISOString().slice(0, 10)}.csv`}
+                        label="导出当前筛选"
+                        successMessage="已按当前筛选导出请求明细"
+                        errorMessage="导出请求明细失败"
+                    />
+                </>
             }
         >
             {loadError ? <Alert type="error" showIcon title="请求明细读取失败" description={loadError} action={<Button size="small" onClick={() => setRetry((value) => value + 1)}>重试</Button>} /> : null}
@@ -288,6 +358,34 @@ function normalizePageSize(value: string | null) {
 }
 function normalizeStatus(value: string | null): "all" | "succeeded" | "failed" {
     return value === "succeeded" || value === "failed" ? value : "all";
+}
+function isAutoRefreshInterval(value: number): value is AutoRefreshInterval {
+    return autoRefreshIntervals.some((interval) => interval === value);
+}
+function autoRefreshStorageKey(userId: string) {
+    return `admin-console:${encodeURIComponent(userId)}:api-log-auto-refresh`;
+}
+function readAutoRefreshPreference(userId?: string): AutoRefreshPreference {
+    if (!userId || typeof window === "undefined") return { ...defaultAutoRefreshPreference };
+    try {
+        const saved = JSON.parse(window.localStorage.getItem(autoRefreshStorageKey(userId)) || "null") as Partial<AutoRefreshPreference> | null;
+        const intervalSeconds = Number(saved?.intervalSeconds);
+        return {
+            enabled: saved?.enabled === true,
+            intervalSeconds: isAutoRefreshInterval(intervalSeconds) ? intervalSeconds : defaultAutoRefreshPreference.intervalSeconds,
+        };
+    } catch (error) {
+        console.warn("无法读取请求明细自动刷新偏好，使用默认设置", error);
+        return { ...defaultAutoRefreshPreference };
+    }
+}
+function writeAutoRefreshPreference(userId: string | undefined, preference: AutoRefreshPreference) {
+    if (!userId) return;
+    try {
+        window.localStorage.setItem(autoRefreshStorageKey(userId), JSON.stringify(preference));
+    } catch (error) {
+        console.warn("自动刷新设置已更新，但无法保存偏好", error);
+    }
 }
 function formatTime(value?: string) {
     return value ? new Date(value).toLocaleString("zh-CN", { hour12: false }) : "--";
