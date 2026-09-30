@@ -1,7 +1,7 @@
 import { ImageSizePicker } from "@/components/image-size-picker";
 import { imageResolutionUsesQuality } from "@/lib/image-size-presets";
 import { createPortal } from "react-dom";
-import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode, type RefObject } from "react";
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type PointerEvent, type ReactNode, type RefObject } from "react";
 import { App, Button, Dropdown, Popover } from "antd";
 import { AppModal } from "@/components/ui/product/app-modal";
 import { useWorkspaceTopBarMount } from "@/components/layout/workspace-top-bar-extension";
@@ -342,6 +342,7 @@ type ComposerProps = {
     busy: boolean;
     generationActive: boolean;
     referenceReplacementBusy: boolean;
+    referenceUploadBusy: boolean;
     attachments: CreationAttachment[];
     referenceImageSize?: { width: number; height: number };
     maxReferences: number;
@@ -352,6 +353,7 @@ type ComposerProps = {
     onReorderAttachments: (attachments: CreationAttachment[]) => void;
     onReplaceAttachment: (targetAttachmentId: string, replacement: CreationAttachment) => void;
     onReplaceReferenceFiles: (targetAttachmentId: string, files: File[]) => void;
+    onAddReferenceFiles: (files: File[]) => void;
     onOpenLibrary: () => void;
     onModeChange: (mode: CreationMode) => void;
     model: string;
@@ -394,6 +396,7 @@ export function CreationComposer(props: ComposerProps) {
     const [promptOptimizerOpen, setPromptOptimizerOpen] = useState(false);
     const [referenceFilter, setReferenceFilter] = useState<CreationReferenceFilter>("all");
     const [canDragReferences, setCanDragReferences] = useState(false);
+    const [fileDropActive, setFileDropActive] = useState(false);
     const [dropTargetReferenceId, setDropTargetReferenceId] = useState<string | null>(null);
     const [promptLibrary, setPromptLibrary] = useState<{ personal: UserPrompt[]; public: Inspiration[]; loading: boolean; loaded: boolean; error: string }>({ personal: [], public: [], loading: false, loaded: false, error: "" });
     const promptLibraryRequestRef = useRef<AbortController | null>(null);
@@ -402,7 +405,7 @@ export function CreationComposer(props: ComposerProps) {
     const suppressAttachmentClickRef = useRef(false);
     const [trackState, setTrackState] = useState({ canScrollLeft: false, canScrollRight: false, isExpanded: true, isDragging: false });
     const previousAttachmentCountRef = useRef(0);
-    const interactionBusy = props.busy || props.referenceReplacementBusy;
+    const interactionBusy = props.busy || props.referenceReplacementBusy || props.referenceUploadBusy;
     const canSubmit = Boolean(props.prompt.trim()) && !interactionBusy;
     const creditsEnabled = useUserStore((state) => state.features.creditsEnabled);
     const priceChannel = resolveModelChannel(props.config, props.model);
@@ -478,7 +481,7 @@ export function CreationComposer(props: ComposerProps) {
     const generationCredits = routeQuote ? routeQuote.amountMicrocredits / 1_000_000 : credits;
     const showCost = creditsEnabled && generationCredits !== null && generationCredits !== undefined;
     const formattedCredits = generationCredits?.toLocaleString("zh-CN", { maximumFractionDigits: 2 });
-    const actionLabel = props.referenceReplacementBusy ? "正在替换参考图" : interactionBusy || (props.generationActive && !canSubmit) ? "生成中" : showCost ? `${routeQuote?.estimated ? "预估" : "消耗"} ${formattedCredits} 积分，发送` : "发送";
+    const actionLabel = props.referenceUploadBusy ? "正在上传参考图" : props.referenceReplacementBusy ? "正在替换参考图" : interactionBusy || (props.generationActive && !canSubmit) ? "生成中" : showCost ? `${routeQuote?.estimated ? "预估" : "消耗"} ${formattedCredits} 积分，发送` : "发送";
     // Send-button working state must span the WHOLE generation (not just the
     // submit-lock window): spinner + glow stay while a message is pending and
     // the composer is empty; typing a next prompt returns the arrow so the
@@ -490,11 +493,11 @@ export function CreationComposer(props: ComposerProps) {
         : props.mode === "image"
             ? "描述画面、人物、场景、构图与风格"
             : "描述镜头内容、运动、光线与节奏";
-    const emptyPlaceholder = "输入你的镜头、画面或故事。也可以添加参考图开始创作";
+    const emptyPlaceholder = "输入你的镜头、画面或故事。也可以添加或拖入参考图开始创作";
     const imageReferencesSupported = props.imageProfile.references.maxImages > 0;
     const referencesSupported = props.mode === "image" ? imageReferencesSupported : props.mode !== "video" || props.videoProfile.operations.includes("image_to_video");
     const canAddMoreReferences = referencesSupported && props.attachments.length < props.maxReferences;
-    const addReferenceLabel = interactionBusy ? (props.referenceReplacementBusy ? "正在替换参考图" : "生成中暂不能添加参考内容") : canAddMoreReferences ? "添加更多参考内容" : `已达到当前模型的参考内容上限（${props.maxReferences} 个）`;
+    const addReferenceLabel = interactionBusy ? (props.referenceUploadBusy ? "正在上传参考图" : props.referenceReplacementBusy ? "正在替换参考图" : "生成中暂不能添加参考内容") : canAddMoreReferences ? "添加更多参考内容" : `已达到当前模型的参考内容上限（${props.maxReferences} 个）`;
     const referenceCounts = useMemo(() => props.attachments.reduce((counts, attachment) => {
         const kind = creationAttachmentKind(attachment);
         counts[kind] += 1;
@@ -591,8 +594,42 @@ export function CreationComposer(props: ComposerProps) {
         }
         return undefined;
     };
+    const hasDraggedFiles = (event: DragEvent<HTMLElement>) => Array.from(event.dataTransfer.types).includes("Files");
+    const canAcceptDraggedImage = (event: DragEvent<HTMLElement>) => {
+        const items = Array.from(event.dataTransfer.items).filter((item) => item.kind === "file");
+        return !items.length || items.some((item) => !item.type || item.type.startsWith("image/"));
+    };
+    const handleComposerDragOver = (event: DragEvent<HTMLDivElement>) => {
+        if (props.variant !== "empty" || !hasDraggedFiles(event)) return;
+        event.preventDefault();
+        const acceptsImage = !interactionBusy && canAcceptDraggedImage(event);
+        event.dataTransfer.dropEffect = acceptsImage ? "copy" : "none";
+        setFileDropActive(acceptsImage);
+    };
+    const handleComposerDragLeave = (event: DragEvent<HTMLDivElement>) => {
+        if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return;
+        setFileDropActive(false);
+    };
+    const handleComposerDrop = (event: DragEvent<HTMLDivElement>) => {
+        if (props.variant !== "empty" || !hasDraggedFiles(event)) return;
+        setFileDropActive(false);
+        if (event.defaultPrevented) return;
+        event.preventDefault();
+        if (interactionBusy) return;
+        props.onAddReferenceFiles(Array.from(event.dataTransfer.files));
+    };
     const composer = <HoverBorderGradient as="div" duration={2.2} containerClassName="creation-composer-shell" className="creation-composer-shell-inner">
-        <div className={`creation-chat-composer is-${props.variant}`}>
+        <div
+            className={`creation-chat-composer is-${props.variant}${fileDropActive ? " is-file-drop-active" : ""}${props.referenceUploadBusy ? " is-reference-uploading" : ""}`}
+            onDragOver={handleComposerDragOver}
+            onDragLeave={handleComposerDragLeave}
+            onDrop={handleComposerDrop}
+        >
+        {props.variant === "empty" && (fileDropActive || props.referenceUploadBusy) ? <div className="creation-reference-drop-overlay" role="status" aria-live="polite">
+            {props.referenceUploadBusy ? <LoaderCircle className="animate-spin" aria-hidden="true" /> : <ImageIcon aria-hidden="true" />}
+            <strong>{props.referenceUploadBusy ? "正在上传图片" : "松开即可添加为参考图"}</strong>
+            <span>{props.referenceUploadBusy ? "上传完成后会同步保存到素材库" : "图片会同时保存到素材库"}</span>
+        </div> : null}
         <div className="creation-chat-writing-surface">
             <div className="creation-chat-editor">
                 <CanvasResourceMentionTextarea ref={props.composerFocusRef} value={props.prompt} references={props.references} mentionMenuWidth={400} slashCommandMenuWidth={420} slashCommandGroups={creationPromptSlashGroups} slashCommandItems={slashCommandItems} slashCommandLoading={promptLibrary.loading} slashCommandError={promptLibrary.error} onSlashCommandOpen={loadPromptLibrary} sendOnEnter onFocus={props.onPromptFocus} onChange={props.setPrompt} onSubmit={props.onSubmit} containerClassName="creation-chat-mention-container" className="creation-chat-mention-editor creation-scrollbar" style={{ color: "var(--creation-text)" }} placeholder={props.placeholderOverride || (props.variant === "empty" ? emptyPlaceholder : placeholder)} aria-label="创作提示词，可使用 / 调用提示词、@ 引用当前参考内容或技能；回车发送，Shift+回车换行" spellCheck disabled={interactionBusy} activeDropReferenceId={dropTargetReferenceId} onReferenceFilesDrop={(reference, files) => { const target = props.references.find((item) => item.id === reference.id); if (target?.attachmentId) props.onReplaceReferenceFiles(target.attachmentId, files); }} />

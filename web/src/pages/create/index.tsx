@@ -106,6 +106,8 @@ export default function CreatePage() {
     const [conversationSidebarOpen, setConversationSidebarOpen] = useState(() => readComposerPref(CONVERSATION_SIDEBAR_OPEN_PREF_KEY, true));
     const [busy, setBusy] = useState(false);
     const [referenceReplacementBusy, setReferenceReplacementBusy] = useState(false);
+    const [referenceUploadBusy, setReferenceUploadBusy] = useState(false);
+    const referenceUploadBusyRef = useRef(false);
     const [inspirationHomeOpen, setInspirationHomeOpen] = useState(false);
     const [libraryOpen, setLibraryOpen] = useState(false);
     const externalAssetSources = useExternalAssetSources(libraryOpen);
@@ -534,6 +536,54 @@ export default function CreatePage() {
             setReferenceReplacementBusy(false);
         }
     }, [addAsset, busy, referenceReplacementBusy, replaceAttachmentReference, toast]);
+
+    const addReferenceImagesFromFiles = useCallback(async (files: File[]) => {
+        if (busy || referenceReplacementBusy || referenceUploadBusyRef.current) return;
+        const imageFiles = files.filter((file) => file.type.startsWith("image/"));
+        if (!imageFiles.length) {
+            toast.warning("请拖入图片文件");
+            return;
+        }
+
+        const availableSlots = Math.max(0, maxReferences - attachmentsRef.current.length);
+        if (!availableSlots) {
+            toast.warning(maxReferences > 0 ? `已达到当前模型的参考内容上限（${maxReferences} 个）` : "当前模型不支持参考图");
+            return;
+        }
+
+        const acceptedFiles = imageFiles.slice(0, availableSlots);
+        if (acceptedFiles.length < imageFiles.length) toast.info(`当前还可添加 ${availableSlots} 张参考图，超出部分未上传`);
+
+        referenceUploadBusyRef.current = true;
+        setReferenceUploadBusy(true);
+        try {
+            const settled = await Promise.allSettled(acceptedFiles.map(async (file) => {
+                const { asset, attachment } = await uploadCreationAsset(file);
+                if (!asset || creationAttachmentKind(attachment) !== "image") throw new Error("上传结果不是可用图片");
+                const assetId = addAsset(asset);
+                return { ...attachment, id: `asset:${assetId}` };
+            }));
+            const uploaded = settled.flatMap((entry) => entry.status === "fulfilled" ? [entry.value] : []);
+            const failed = settled.filter((entry) => entry.status === "rejected");
+
+            if (uploaded.length) {
+                setAttachments((current) => {
+                    const remainingSlots = Math.max(0, maxReferences - current.length);
+                    const next = [...current, ...uploaded.slice(0, remainingSlots)];
+                    attachmentsRef.current = next;
+                    return next;
+                });
+                toast.success(`${uploaded.length} 张图片已添加为参考图，并同步到素材库`);
+            }
+            if (failed.length) {
+                const firstError = failed[0].status === "rejected" ? failed[0].reason : undefined;
+                toast.error(failed.length === 1 && firstError instanceof Error ? firstError.message : `${failed.length} 张图片上传失败，请重试`);
+            }
+        } finally {
+            referenceUploadBusyRef.current = false;
+            setReferenceUploadBusy(false);
+        }
+    }, [addAsset, busy, maxReferences, referenceReplacementBusy, toast]);
 
     const submit = async (retryContext?: CreationRetryContext, retryLockKey?: string) => {
         const enteringThreadFromHome = !showThreadWorkspace;
@@ -980,6 +1030,7 @@ export default function CreatePage() {
         busy,
         generationActive,
         referenceReplacementBusy,
+        referenceUploadBusy,
         attachments,
         referenceImageSize,
         maxReferences,
@@ -990,6 +1041,7 @@ export default function CreatePage() {
         onReorderAttachments: reorderAttachments,
         onReplaceAttachment: replaceReferenceFromTrack,
         onReplaceReferenceFiles: replaceReferenceFromFiles,
+        onAddReferenceFiles: addReferenceImagesFromFiles,
         onOpenLibrary: () => setLibraryOpen(true),
         onModeChange: selectMode,
         model: selectedModel,

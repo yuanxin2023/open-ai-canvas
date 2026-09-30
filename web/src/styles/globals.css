@@ -18697,6 +18697,28 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap { box-shadow: 0 
     box-shadow: none !important;
     transition: box-shadow var(--user-motion), transform var(--user-motion) !important;
 }
+.app-user-workspace .creation-chat-composer.is-file-drop-active {
+    box-shadow: inset 0 0 0 2px var(--user-accent) !important;
+}
+.app-user-workspace .creation-reference-drop-overlay {
+    position: absolute;
+    z-index: 4;
+    inset: 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border: 1px dashed var(--user-accent);
+    border-radius: 15px;
+    background: color-mix(in srgb, var(--user-surface) 92%, var(--user-accent));
+    color: var(--user-ink);
+    pointer-events: none;
+    backdrop-filter: blur(8px);
+}
+.app-user-workspace .creation-reference-drop-overlay svg { width: 28px; height: 28px; color: var(--user-accent); }
+.app-user-workspace .creation-reference-drop-overlay strong { font-size: 15px; line-height: 1.4; }
+.app-user-workspace .creation-reference-drop-overlay span { color: var(--user-ink-muted); font-size: 12px; line-height: 1.4; }
 .app-user-workspace .creation-chat-composer .creation-chat-writing-surface,
 .app-user-workspace .creation-chat-composer .creation-chat-dock {
     position: relative;
