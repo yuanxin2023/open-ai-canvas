@@ -8,6 +8,7 @@ import (
 	"infinite-canvas/backend/internal/kernel"
 	"log"
 	"net/mail"
+	"net/url"
 	"regexp"
 	"strings"
 	"time"
@@ -28,11 +29,9 @@ var usernamePattern = regexp.MustCompile(`^[a-zA-Z0-9_-]{3,32}$`)
 type AuthError = kernel.AppError
 
 type RegisterRequest struct {
-	Username    string `json:"username"`
-	Email       string `json:"email"`
-	EmailCode   string `json:"emailCode"`
-	DisplayName string `json:"displayName"`
-	Password    string `json:"password"`
+	Email     string `json:"email"`
+	EmailCode string `json:"emailCode"`
+	Password  string `json:"password"`
 }
 
 type LoginRequest struct {
@@ -40,12 +39,23 @@ type LoginRequest struct {
 	Password string `json:"password"`
 }
 
+type UpdateProfileRequest struct {
+	Username         string  `json:"username"`
+	AvatarResourceID *string `json:"avatarResourceId"`
+}
+
+type ChangePasswordRequest struct {
+	CurrentPassword string `json:"currentPassword"`
+	NewPassword     string `json:"newPassword"`
+}
+
 type PublicAuthSettings struct {
-	FirstUser           bool `json:"firstUser"`
-	RegistrationEnabled bool `json:"registrationEnabled"`
-	LinuxDOEnabled      bool `json:"linuxdoEnabled"`
-	EmailEnabled        bool `json:"emailEnabled"`
-	EmailCodeRequired   bool `json:"emailCodeRequired"`
+	FirstUser              bool `json:"firstUser"`
+	RegistrationEnabled    bool `json:"registrationEnabled"`
+	LinuxDOEnabled         bool `json:"linuxdoEnabled"`
+	EmailEnabled           bool `json:"emailEnabled"`
+	EmailCodeRequired      bool `json:"emailCodeRequired"`
+	EmailFirstRegistration bool `json:"emailFirstRegistration"`
 }
 
 type AuthSessionResult struct {
@@ -56,6 +66,7 @@ type AuthSessionResult struct {
 
 type AuthUser struct {
 	model.User
+	AvatarResourceID string `json:"avatarResourceId,omitempty"`
 	AvatarURL        string `json:"avatarUrl,omitempty"`
 	IdentityProvider string `json:"identityProvider,omitempty"`
 	IdentityID       string `json:"identityId,omitempty"`
@@ -68,7 +79,7 @@ func (s *Service) PublicAuthSettings() (*PublicAuthSettings, error) {
 		return nil, err
 	}
 	if count == 0 {
-		return &PublicAuthSettings{FirstUser: true, RegistrationEnabled: true, LinuxDOEnabled: false}, nil
+		return &PublicAuthSettings{FirstUser: true, RegistrationEnabled: true, LinuxDOEnabled: false, EmailFirstRegistration: true}, nil
 	}
 	registrationEnabled, err := s.RegistrationEnabled()
 	if err != nil {
@@ -78,23 +89,19 @@ func (s *Service) PublicAuthSettings() (*PublicAuthSettings, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &PublicAuthSettings{FirstUser: false, RegistrationEnabled: registrationEnabled, LinuxDOEnabled: s.LinuxDOEnabled(), EmailEnabled: emailEnabled, EmailCodeRequired: true}, nil
+	return &PublicAuthSettings{FirstUser: false, RegistrationEnabled: registrationEnabled, LinuxDOEnabled: s.LinuxDOEnabled(), EmailEnabled: emailEnabled, EmailCodeRequired: true, EmailFirstRegistration: true}, nil
 }
 
 func (s *Service) Register(req RegisterRequest) (*AuthSessionResult, error) {
-	username := NormalizeUsername(req.Username)
 	email := NormalizeEmail(req.Email)
-	displayName := NormalizeDisplayName(req.DisplayName, username)
-	if err := ValidateUsername(username); err != nil {
+	if email == "" {
+		return nil, kernel.BadAuthRequest("请输入邮箱")
+	}
+	if err := ValidateEmail(email); err != nil {
 		return nil, err
 	}
 	if err := ValidatePassword(req.Password); err != nil {
 		return nil, err
-	}
-	if email != "" {
-		if err := ValidateEmail(email); err != nil {
-			return nil, err
-		}
 	}
 	s.registrationMu.Lock()
 	defer s.registrationMu.Unlock()
@@ -111,9 +118,6 @@ func (s *Service) Register(req RegisterRequest) (*AuthSessionResult, error) {
 		if !registrationEnabled {
 			return nil, kernel.Forbidden("管理员未开放新用户注册")
 		}
-		if email == "" {
-			return nil, kernel.BadAuthRequest("请输入邮箱")
-		}
 		if err := s.validateRegistrationEmailDomain(email); err != nil {
 			return nil, err
 		}
@@ -122,28 +126,22 @@ func (s *Service) Register(req RegisterRequest) (*AuthSessionResult, error) {
 			return nil, err
 		}
 	}
-	if _, err := s.repo.UserByUsername(username); err == nil {
-		return nil, kernel.BadAuthRequest("用户名已存在")
+	if _, err := s.repo.UserByEmail(email); err == nil {
+		return nil, kernel.BadAuthRequest("邮箱已被注册")
 	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, err
-	}
-	if email != "" {
-		if _, err := s.repo.UserByEmail(email); err == nil {
-			return nil, kernel.BadAuthRequest("邮箱已被注册")
-		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, err
-		}
 	}
 	passwordHash, err := HashPassword(req.Password)
 	if err != nil {
 		return nil, err
 	}
 	now := time.Now()
+	userID := kernel.NewID()
 	user := model.User{
-		ID:           kernel.NewID(),
-		Username:     username,
+		ID:           userID,
+		Username:     userID,
 		Email:        email,
-		DisplayName:  displayName,
+		DisplayName:  registrationDisplayName(email, userID),
 		Role:         model.UserRoleUser,
 		Status:       model.UserStatusActive,
 		PasswordHash: passwordHash,
@@ -164,6 +162,14 @@ func (s *Service) Register(req RegisterRequest) (*AuthSessionResult, error) {
 		return nil, err
 	}
 	return s.createAuthSession(&user)
+}
+
+func registrationDisplayName(email string, fallback string) string {
+	local, _, found := strings.Cut(NormalizeEmail(email), "@")
+	if !found {
+		local = ""
+	}
+	return NormalizeDisplayName(local, fallback)
 }
 
 func (s *Service) Login(req LoginRequest) (*AuthSessionResult, error) {
@@ -232,7 +238,18 @@ func (s *Service) CurrentUser(cookieValue string) (*model.User, error) {
 
 // 认证响应只补充当前用户自己的第三方公开身份，不把身份表或密钥字段暴露给其他列表接口。
 func (s *Service) PublicAuthUser(user *model.User) (AuthUser, error) {
-	result := AuthUser{User: *user}
+	result := AuthUser{User: *user, AvatarResourceID: user.AvatarResourceID}
+	if result.ProfileName == "" && result.Username != result.ID {
+		result.ProfileName = result.Username
+	}
+	if user.AvatarResourceID != "" {
+		resource, err := s.repo.ResourceForUser(user.ID, user.AvatarResourceID)
+		if err == nil && resource.Status == model.ResourceStatusReady {
+			result.AvatarURL = "/api/resources/" + url.PathEscape(resource.ID) + "/file?direct=1"
+		} else if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			return AuthUser{}, err
+		}
+	}
 	identity, err := s.repo.UserIdentityForUser(user.ID, "linuxdo")
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return result, nil
@@ -240,11 +257,118 @@ func (s *Service) PublicAuthUser(user *model.User) (AuthUser, error) {
 	if err != nil {
 		return AuthUser{}, err
 	}
-	result.AvatarURL = identity.AvatarURL
 	result.IdentityProvider = identity.Provider
 	result.IdentityID = identity.Subject
 	result.IdentityUsername = identity.ProviderUsername
 	return result, nil
+}
+
+func (s *Service) UpdateProfile(user *model.User, req UpdateProfileRequest) (AuthUser, error) {
+	if user == nil || strings.TrimSpace(user.ID) == "" {
+		return AuthUser{}, kernel.Unauthorized("请先登录")
+	}
+	username := NormalizeUsername(req.Username)
+	if err := ValidateUsername(username); err != nil {
+		return AuthUser{}, err
+	}
+	stored, err := s.repo.User(user.ID)
+	if err != nil {
+		return AuthUser{}, err
+	}
+	if stored.Status != model.UserStatusActive {
+		return AuthUser{}, kernel.Forbidden("该账号已被禁用")
+	}
+	if existing, lookupErr := s.repo.UserByUsername(username); lookupErr == nil {
+		if existing.ID != stored.ID {
+			return AuthUser{}, kernel.BadAuthRequest("用户名已存在")
+		}
+	} else if !errors.Is(lookupErr, gorm.ErrRecordNotFound) {
+		return AuthUser{}, lookupErr
+	}
+	if req.AvatarResourceID != nil {
+		avatarResourceID := strings.TrimSpace(*req.AvatarResourceID)
+		if avatarResourceID != "" {
+			resource, err := s.repo.ResourceForUser(stored.ID, avatarResourceID)
+			if err != nil {
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					return AuthUser{}, kernel.BadAuthRequest("头像资源不存在或不属于当前用户")
+				}
+				return AuthUser{}, err
+			}
+			if resource.Status != model.ResourceStatusReady || resource.Kind != "image" || !allowedProfileAvatarMIME(resource.MimeType) {
+				return AuthUser{}, kernel.BadAuthRequest("头像必须是已上传的 JPG、PNG 或 WebP 图片")
+			}
+			if resource.Size <= 0 || resource.Size > 2<<20 {
+				return AuthUser{}, kernel.BadAuthRequest("头像大小不能超过 2 MB")
+			}
+		}
+		stored.AvatarResourceID = avatarResourceID
+	}
+	stored.Username = username
+	stored.ProfileName = username
+	stored.DisplayName = username
+	stored.UpdatedAt = time.Now()
+	if err := s.repo.Save(stored); err != nil {
+		if isUsernameUniqueViolation(err) {
+			return AuthUser{}, kernel.BadAuthRequest("用户名已存在")
+		}
+		return AuthUser{}, err
+	}
+	return s.PublicAuthUser(stored)
+}
+
+func isUsernameUniqueViolation(err error) bool {
+	if err == nil {
+		return false
+	}
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "idx_users_username") ||
+		(strings.Contains(message, "users.username") && strings.Contains(message, "unique")) ||
+		(strings.Contains(message, "username") && strings.Contains(message, "duplicate key"))
+}
+
+func (s *Service) ChangePassword(user *model.User, cookieValue string, req ChangePasswordRequest) error {
+	if user == nil || strings.TrimSpace(user.ID) == "" {
+		return kernel.Unauthorized("请先登录")
+	}
+	sessionID, token := parseSessionCookie(cookieValue)
+	if sessionID == "" || token == "" {
+		return kernel.Unauthorized("登录状态已失效")
+	}
+	session, err := s.repo.AuthSession(sessionID)
+	if err != nil || session.UserID != user.ID || time.Now().After(session.ExpiresAt) || session.TokenHash != HashToken(token) {
+		return kernel.Unauthorized("登录状态已失效")
+	}
+	stored, err := s.repo.User(user.ID)
+	if err != nil {
+		return err
+	}
+	if stored.Status != model.UserStatusActive {
+		return kernel.Forbidden("该账号已被禁用")
+	}
+	if strings.TrimSpace(stored.PasswordHash) == "" || !verifyPassword(req.CurrentPassword, stored.PasswordHash) {
+		return kernel.BadAuthRequest("当前密码不正确")
+	}
+	if err := ValidatePassword(req.NewPassword); err != nil {
+		return err
+	}
+	if verifyPassword(req.NewPassword, stored.PasswordHash) {
+		return kernel.BadAuthRequest("新密码不能与当前密码相同")
+	}
+	passwordHash, err := HashPassword(req.NewPassword)
+	if err != nil {
+		return err
+	}
+	return s.repo.ChangeUserPassword(stored.ID, sessionID, passwordHash, time.Now())
+}
+
+func allowedProfileAvatarMIME(value string) bool {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "image/jpeg", "image/png", "image/webp":
+		return true
+	default:
+		return false
+	}
 }
 
 func (s *Service) createAuthSession(user *model.User) (*AuthSessionResult, error) {

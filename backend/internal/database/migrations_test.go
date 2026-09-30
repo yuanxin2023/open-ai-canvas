@@ -12,12 +12,19 @@ import (
 )
 
 func TestCurrentSchemaVersionMatchesMigrationPlan(t *testing.T) {
-	if len(schemaMigrations) == 0 {
-		t.Fatal("migration plan is empty")
-	}
-	latest := schemaMigrations[len(schemaMigrations)-1].version
-	if CurrentSchemaVersion != latest {
-		t.Fatalf("supported schema version %d does not match latest migration %d", CurrentSchemaVersion, latest)
+	for name, plan := range map[string][]migration{"local": schemaMigrations, "upstream": upstreamFirstMigrationPlan()} {
+		if len(plan) == 0 {
+			t.Fatalf("%s migration plan is empty", name)
+		}
+		for index, item := range plan {
+			if item.version != int64(index+1) {
+				t.Fatalf("%s migration %q has version %d at position %d", name, item.name, item.version, index+1)
+			}
+		}
+		latest := plan[len(plan)-1]
+		if CurrentSchemaVersion != latest.version || latest.name != "user_login_names" {
+			t.Fatalf("%s latest migration = %d/%q, want %d/user_login_names", name, latest.version, latest.name, CurrentSchemaVersion)
+		}
 	}
 }
 
@@ -29,8 +36,8 @@ func TestMigrateSchemaSupportsLocalAndUpstreamPost23Lineages(t *testing.T) {
 		expectedV24Name  string
 		expectedTailName string
 	}{
-		{name: "local", plan: schemaMigrations, appliedThrough: 27, expectedV24Name: "topup_product_benefits", expectedTailName: "channel_model_tags"},
-		{name: "upstream", plan: upstreamFirstMigrationPlan(), appliedThrough: 32, expectedV24Name: "channel_model_label", expectedTailName: "inspiration_cover_dimensions"},
+		{name: "local", plan: schemaMigrations, appliedThrough: 27, expectedV24Name: "topup_product_benefits", expectedTailName: "user_login_names"},
+		{name: "upstream", plan: upstreamFirstMigrationPlan(), appliedThrough: 32, expectedV24Name: "channel_model_label", expectedTailName: "user_login_names"},
 	} {
 		t.Run(scenario.name, func(t *testing.T) {
 			db, err := Open(Config{Driver: "sqlite", DSN: "file:" + t.Name() + "?mode=memory&cache=shared"})
@@ -759,6 +766,79 @@ func TestMigrateSchemaV31AddsToolUserActions(t *testing.T) {
 	}
 	if !db.Migrator().HasTable(&model.ToolFavorite{}) {
 		t.Fatal("migration v31 did not create tool_favorites table")
+	}
+}
+
+func TestMigrateUserProfilesBackfillsOnlyLegacyUsernames(t *testing.T) {
+	db, err := Open(Config{Driver: "sqlite", DSN: "file:migration-user-profiles-v37?mode=memory&cache=shared"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AutoMigrate(&model.User{}); err != nil {
+		t.Fatal(err)
+	}
+	users := []model.User{
+		{ID: "legacy-id", Username: "legacy_name", DisplayName: "已有显示名称", Role: model.UserRoleUser, Status: model.UserStatusActive},
+		{ID: "generated-id", Username: "generated-id", DisplayName: "mail-prefix", Role: model.UserRoleUser, Status: model.UserStatusActive},
+	}
+	if err := db.Create(&users).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := migrateUserProfiles(db); err != nil {
+		t.Fatal(err)
+	}
+	var migrated []model.User
+	if err := db.Order("id").Find(&migrated).Error; err != nil {
+		t.Fatal(err)
+	}
+	byID := map[string]model.User{}
+	for _, user := range migrated {
+		byID[user.ID] = user
+	}
+	if byID["legacy-id"].ProfileName != "legacy_name" {
+		t.Fatalf("legacy profile name = %q", byID["legacy-id"].ProfileName)
+	}
+	if byID["generated-id"].ProfileName != "" {
+		t.Fatalf("generated username leaked into profile name = %q", byID["generated-id"].ProfileName)
+	}
+}
+
+func TestMigrateUserLoginNamesAddsCaseInsensitiveUniqueness(t *testing.T) {
+	db, err := Open(Config{Driver: "sqlite", DSN: "file:migration-user-login-names-v38?mode=memory&cache=shared"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AutoMigrate(&model.User{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&model.User{ID: "first-user", Username: "Creator", Role: model.UserRoleUser, Status: model.UserStatusActive}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := migrateUserLoginNames(db); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&model.User{ID: "second-user", Username: "creator", Role: model.UserRoleUser, Status: model.UserStatusActive}).Error; err == nil {
+		t.Fatal("case-insensitive duplicate username was accepted")
+	}
+}
+
+func TestMigrateUserLoginNamesRejectsExistingCaseConflict(t *testing.T) {
+	db, err := Open(Config{Driver: "sqlite", DSN: "file:migration-user-login-conflict-v38?mode=memory&cache=shared"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AutoMigrate(&model.User{}); err != nil {
+		t.Fatal(err)
+	}
+	users := []model.User{
+		{ID: "first-user", Username: "Creator", Role: model.UserRoleUser, Status: model.UserStatusActive},
+		{ID: "second-user", Username: "creator", Role: model.UserRoleUser, Status: model.UserStatusActive},
+	}
+	if err := db.Create(&users).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := migrateUserLoginNames(db); err == nil {
+		t.Fatal("migration accepted existing case-insensitive username conflict")
 	}
 }
 

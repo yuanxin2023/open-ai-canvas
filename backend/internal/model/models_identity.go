@@ -3,16 +3,18 @@ package model
 import "time"
 
 type User struct {
-	ID           string     `json:"id" gorm:"primaryKey;size:36"`
-	Username     string     `json:"username" gorm:"uniqueIndex;size:80"`
-	Email        string     `json:"email,omitempty" gorm:"size:160"`
-	DisplayName  string     `json:"displayName" gorm:"size:80"`
-	Role         UserRole   `json:"role" gorm:"index;size:24"`
-	Status       UserStatus `json:"status" gorm:"index;size:24"`
-	PasswordHash string     `json:"-"`
-	LastLoginAt  *time.Time `json:"lastLoginAt"`
-	CreatedAt    time.Time  `json:"createdAt"`
-	UpdatedAt    time.Time  `json:"updatedAt"`
+	ID               string     `json:"id" gorm:"primaryKey;size:36"`
+	Username         string     `json:"username" gorm:"uniqueIndex;size:80"`
+	Email            string     `json:"email,omitempty" gorm:"size:160"`
+	DisplayName      string     `json:"displayName" gorm:"size:80"`
+	ProfileName      string     `json:"profileName" gorm:"size:80"`
+	AvatarResourceID string     `json:"-" gorm:"index;size:36"`
+	Role             UserRole   `json:"role" gorm:"index;size:24"`
+	Status           UserStatus `json:"status" gorm:"index;size:24"`
+	PasswordHash     string     `json:"-"`
+	LastLoginAt      *time.Time `json:"lastLoginAt"`
+	CreatedAt        time.Time  `json:"createdAt"`
+	UpdatedAt        time.Time  `json:"updatedAt"`
 }
 
 type AuthSession struct {

@@ -119,7 +119,7 @@ export function AuthScene() {
                         >
                             <ConfigProvider theme={getAntThemeConfig(true)}>
                                 <div className="auth-card-dark auth-scene-card h-auto overflow-hidden rounded-lg backdrop-blur-2xl">
-                                    <section aria-label={copy.title} className={`flex flex-col ${recovery ? "min-h-[600px]" : activeTab === "login" ? "min-h-[500px]" : "min-h-[620px] sm:min-h-[640px]"}`}>
+                                    <section aria-label={copy.title} className={`flex flex-col ${recovery ? "min-h-[600px]" : "min-h-[500px]"}`}>
                                         <header className="px-6 pb-5 pt-6 sm:px-8 sm:pt-7">
                                             <p className="auth-scene-eyebrow text-xs font-semibold tracking-[0.18em]">{copy.eyebrow}</p>
                                             <h2 className="mt-2 text-3xl font-semibold">{copy.title}</h2>

@@ -248,6 +248,8 @@ type (
 	PublicRuntimePolicySetting             = app.PublicRuntimePolicySetting
 	RedeemBatchPage                        = app.RedeemBatchPage
 	RegisterRequest                        = app.RegisterRequest
+	UpdateProfileRequest                   = app.UpdateProfileRequest
+	ChangePasswordRequest                  = app.ChangePasswordRequest
 	RegisterTaskOutputRequest              = app.RegisterTaskOutputRequest
 	RegistrationSettingRequest             = app.RegistrationSettingRequest
 	ReorderProjectUnitsRequest             = app.ReorderProjectUnitsRequest

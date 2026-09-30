@@ -14,6 +14,8 @@ type (
 	EmailCodeCooldownError     = auth.EmailCodeCooldownError
 	RegisterRequest            = auth.RegisterRequest
 	LoginRequest               = auth.LoginRequest
+	UpdateProfileRequest       = auth.UpdateProfileRequest
+	ChangePasswordRequest      = auth.ChangePasswordRequest
 	PublicAuthSettings         = auth.PublicAuthSettings
 	AuthSessionResult          = auth.AuthSessionResult
 	AuthUser                   = auth.AuthUser
@@ -142,6 +144,14 @@ func (s *Service) CurrentUser(cookieValue string) (*model.User, error) {
 
 func (s *Service) PublicAuthUser(user *model.User) (AuthUser, error) {
 	return s.authDomain().PublicAuthUser(user)
+}
+
+func (s *Service) UpdateProfile(user *model.User, req UpdateProfileRequest) (AuthUser, error) {
+	return s.authDomain().UpdateProfile(user, req)
+}
+
+func (s *Service) ChangePassword(user *model.User, cookieValue string, req ChangePasswordRequest) error {
+	return s.authDomain().ChangePassword(user, cookieValue, req)
 }
 
 func (s *Service) AdminRegistrationSetting(actor *model.User) (*PublicRegistrationSetting, error) {

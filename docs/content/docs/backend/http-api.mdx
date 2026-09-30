@@ -9,6 +9,18 @@ description: 信封、错误码与 OpenAPI
 
 机器可读规范：运行中的 `GET /api/openapi.yaml`，源文件 `backend/internal/handler/openapi.yaml`。前端 TypeScript 仍走 `web/src/services/api` 的 `http`，不从 OpenAPI 生成客户端。
 
+## 邮箱优先注册
+
+本地注册使用同一路由内的两步流程。前端先向 `POST /auth/email-code` 提交 `{ "email": "user@example.com" }`，再向 `POST /auth/register` 提交 `{ "email": "user@example.com", "password": "...", "emailCode": "123456" }`。确认密码只在前端校验，不属于后端合同；邀请码和优惠码目前只是界面预留，不校验、不持久化，也绝不发送到服务端。`GET /auth/settings` 返回 `emailFirstRegistration: true` 作为能力标记；新前端连接到尚未支持该合同的旧后端时会停止注册并提示先升级或重启后端，避免再次显示误导性的用户名校验错误。
+
+空数据库中的首个用户是初始化例外：仍必须提交合法邮箱和至少 8 位密码，但不要求 `emailCode`，创建后自动成为管理员，便于未配置 SMTP 的新部署完成初始化。后续用户必须同时满足普通注册已开启、邮箱域名白名单和一次性验证码要求。
+
+服务端先生成不可变的 32 位用户 ID，并在用户尚未设置登录用户名时将同一个值临时写入 `username`；`displayName` 默认取规范化邮箱的 `@` 前部分。`POST /auth/login` 的请求字段仍为 `{ "username", "password" }`，其中 `username` 可填写邮箱或已经设置的用户名。服务端 JSON 解码会忽略旧前端附带的多余注册字段，发布时应先升级后端、再升级前端。
+
+登录用户可通过 `PATCH /auth/profile` 提交 `{ "username": "登录用户名", "avatarResourceId": "资源 ID" }` 更新个人资料；用户名去除首尾空白后必须为 3–32 位字母、数字、下划线或连字符，并在所有账号间大小写无关唯一。保存后同步到 `profileName` 和 `displayName`，用户可使用“邮箱 + 密码”或“用户名 + 密码”登录；再次修改会立即使用新用户名，旧用户名不再登录。`avatarResourceId` 省略表示不修改、空字符串表示移除，非空时必须是当前用户拥有的就绪 JPG、PNG 或 WebP 图片资源且不超过 2 MB。邮箱、角色、状态和用户 ID 不允许由该入口修改。成功响应返回更新后的公开用户对象。
+
+登录用户可通过 `PATCH /auth/password` 提交 `{ "currentPassword": "当前密码", "newPassword": "至少 8 位的新密码" }` 修改本地密码；确认密码只在前端校验，不进入接口。服务端会重新验证当前会话和当前密码，在同一事务中更新 bcrypt 哈希，并撤销该账号除当前会话外的其他登录会话。当前页面保持登录，其他设备需使用新密码重新登录。
+
 ## 管理员兑换码查询
 
 `POST /admin/redeem-codes/lookup` 接收 `{ "code": "32 位完整兑换码" }`，仅允许管理员调用。查询与用户兑换入口使用相同的格式规则，不额外限定字符集；兑换码在 JSON 请求体中提交，不放入 URL 或查询参数。服务端统一转为小写并按 SHA-256 哈希精确查询，兼容只有哈希、无法恢复明文的旧批次。成功返回 `data.batch` 批次摘要和 `data.code` 单码详情；单码详情包含当前状态、面值、有效期，以及已核销时的用户 ID、用户名、显示名、核销时间和 IP。响应设置 `Cache-Control: no-store`。

@@ -185,6 +185,50 @@ func RegisterAuthRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		ok(c, gin.H{"user": publicUser, "logicalModels": logicalModels, "runtimeLimits": limits, "drawingEngine": drawingEngine, "features": features})
 	})
+	r.PATCH("/auth/profile", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 16<<10)
+		var req service.UpdateProfileRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		updated, err := svc.UpdateProfile(user, req)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"user": updated})
+	})
+	r.PATCH("/auth/password", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 16<<10)
+		var req service.ChangePasswordRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		policy, available := loadRuntimePolicy(c, svc)
+		if !available || !enforceRateLimit(c, "change-password-ip:"+c.ClientIP(), policy.Request.LoginIPPerTenMinutes, 10*time.Minute) {
+			return
+		}
+		if !enforceRateLimit(c, "change-password-user:"+user.ID, policy.Request.LoginAccountPerTenMinutes, 10*time.Minute) {
+			return
+		}
+		if err := svc.ChangePassword(user, sessionCookie(c), req); err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"changed": true})
+	})
 	r.GET("/channels/system", func(c *gin.Context) {
 		actor, err := currentUser(c, svc)
 		if err != nil {

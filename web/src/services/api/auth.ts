@@ -6,6 +6,7 @@ import type { FeatureAvailability } from "@/stores/use-user-store";
 import { http, apiBaseURL } from "@/services/api/request";
 import type { PublicLogicalModel } from "@/services/api/logical-models";
 import type { OSSConnectionTestInput, OSSConnectionTestResult, OSSProvider, S3Preset } from "@/lib/oss-settings";
+import { resourceFileUrl } from "@/services/api/resources";
 
 
 let authSessionRequest: Promise<AuthSessionPayload> | null = null;
@@ -20,6 +21,8 @@ export type LocalUser = {
     username: string;
     email?: string;
     displayName: string;
+    profileName?: string;
+    avatarResourceId?: string;
     avatarUrl?: string;
     identityProvider?: string;
     identityId?: string;
@@ -368,7 +371,7 @@ export type RuntimePolicySetting = {
 };
 
 export function getAuthSettings() {
-    return http.get<{ firstUser: boolean; registrationEnabled: boolean; linuxdoEnabled: boolean; emailEnabled: boolean; emailCodeRequired: boolean }>("/auth/settings");
+    return http.get<{ firstUser: boolean; registrationEnabled: boolean; linuxdoEnabled: boolean; emailEnabled: boolean; emailCodeRequired: boolean; emailFirstRegistration?: boolean }>("/auth/settings");
 }
 
 export function linuxDOLoginURL(next: string) {
@@ -382,6 +385,7 @@ export function getAuthSession() {
     if (authSessionRequest) return authSessionRequest;
     authSessionRequest = http.get<AuthSessionPayload>("/auth/session")
         .then((payload) => {
+            payload = { ...payload, user: normalizeUserAvatar(payload.user) };
             authSessionCache = { payload, expiresAt: Date.now() + 5_000 };
             return payload;
         })
@@ -411,7 +415,7 @@ export async function login(input: { username: string; password: string }) {
     const result = await http.post<{ user: LocalUser }>("/auth/login", input);
     // 登录会改变服务端会话身份，不能让登录前缓存的游客 session 污染后续恢复。
     invalidateAuthSessionCache();
-    return result;
+    return { ...result, user: normalizeUserAvatar(result.user)! };
 }
 
 export function sendRegistrationEmailCode(email: string) {
@@ -426,14 +430,31 @@ export function resetPassword(input: { email: string; emailCode: string; passwor
     return http.post<{ reset: boolean }>("/auth/password-reset", input);
 }
 
-export function register(input: { username: string; email?: string; emailCode?: string; displayName?: string; password: string }) {
-    return http.post<{ user: LocalUser }>("/auth/register", input);
+export async function register(input: { email: string; emailCode?: string; password: string }) {
+    const result = await http.post<{ user: LocalUser }>("/auth/register", input);
+    invalidateAuthSessionCache();
+    return { ...result, user: normalizeUserAvatar(result.user)! };
 }
 
 export async function logout() {
     const result = await http.post<{ ok: boolean }>("/auth/logout");
     invalidateAuthSessionCache();
     return result;
+}
+
+export async function updateProfile(input: { username: string; avatarResourceId?: string }) {
+    const result = await http.patch<{ user: LocalUser }>("/auth/profile", input);
+    invalidateAuthSessionCache();
+    return { ...result, user: normalizeUserAvatar(result.user)! };
+}
+
+export function changePassword(input: { currentPassword: string; newPassword: string }) {
+    return http.patch<{ changed: boolean }>("/auth/password", input);
+}
+
+function normalizeUserAvatar(user: LocalUser | null) {
+    if (!user?.avatarResourceId) return user;
+    return { ...user, avatarUrl: resourceFileUrl(user.avatarResourceId) };
 }
 
 export type AdminListParams = { keyword?: string; status?: string; role?: string; page?: number; pageSize?: number };

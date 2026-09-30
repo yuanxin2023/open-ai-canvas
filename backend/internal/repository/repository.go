@@ -283,6 +283,19 @@ func (r *Repository) DeleteUserAuthSessions(userID string) error {
 	return r.db.Delete(&model.AuthSession{}, "user_id = ?", userID).Error
 }
 
+func (r *Repository) ChangeUserPassword(userID string, currentSessionID string, passwordHash string, updatedAt time.Time) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		result := tx.Model(&model.User{}).Where("id = ?", userID).Updates(map[string]any{"password_hash": passwordHash, "updated_at": updatedAt})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return gorm.ErrRecordNotFound
+		}
+		return tx.Delete(&model.AuthSession{}, "user_id = ? AND id <> ?", userID, currentSessionID).Error
+	})
+}
+
 func (r *Repository) LatestEmailVerificationCode(email string, purpose string) (*model.EmailVerificationCode, error) {
 	var code model.EmailVerificationCode
 	if err := r.db.Where("email = ? AND purpose = ? AND used_at IS NULL", email, purpose).Order("created_at desc").First(&code).Error; err != nil {

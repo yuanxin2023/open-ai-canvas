@@ -7,6 +7,8 @@ export type LocalUser = {
     username: string;
     email?: string;
     displayName: string;
+    profileName?: string;
+    avatarResourceId?: string;
     avatarUrl?: string;
     identityProvider?: string;
     identityId?: string;

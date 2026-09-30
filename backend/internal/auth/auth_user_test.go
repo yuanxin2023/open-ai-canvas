@@ -10,7 +10,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func TestPublicAuthUserIncludesLinuxDOIdentity(t *testing.T) {
+func TestPublicAuthUserKeepsIdentityMetadataWithoutUsingThirdPartyAvatar(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	if err != nil {
 		t.Fatal(err)
@@ -31,7 +31,7 @@ func TestPublicAuthUserIncludesLinuxDOIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.AvatarURL != identity.AvatarURL || result.IdentityProvider != "linuxdo" || result.IdentityID != identity.Subject || result.IdentityUsername != identity.ProviderUsername {
+	if result.AvatarURL != "" || result.IdentityProvider != "linuxdo" || result.IdentityID != identity.Subject || result.IdentityUsername != identity.ProviderUsername {
 		t.Fatalf("PublicAuthUser() = %#v", result)
 	}
 }

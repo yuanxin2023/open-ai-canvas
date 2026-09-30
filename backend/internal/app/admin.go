@@ -259,6 +259,7 @@ func (s *Service) CreateAdminUser(actor *model.User, req CreateAdminUserRequest)
 		Username:     username,
 		Email:        email,
 		DisplayName:  displayName,
+		ProfileName:  displayName,
 		Role:         req.Role,
 		Status:       req.Status,
 		PasswordHash: passwordHash,
@@ -324,6 +325,7 @@ func (s *Service) UpdateUser(actor *model.User, userID string, req UpdateUserReq
 	}
 	if strings.TrimSpace(req.DisplayName) != "" {
 		user.DisplayName = normalizeDisplayName(req.DisplayName, user.Username)
+		user.ProfileName = user.DisplayName
 	}
 	if req.Email != "" {
 		email := normalizeEmail(req.Email)

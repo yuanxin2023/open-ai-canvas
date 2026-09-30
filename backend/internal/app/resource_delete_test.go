@@ -450,6 +450,30 @@ func TestDetachedResourceCleanupRemovesOrphanAndKeepsAssetBackedResource(t *test
 	}
 }
 
+func TestDetachedResourceCleanupKeepsProfileAvatar(t *testing.T) {
+	svc, db, _ := newResourceDeletionTestService(t)
+	old := time.Now().Add(-48 * time.Hour)
+	avatar := model.Resource{ID: "profile-avatar", UserID: "user-1", Kind: "image", Status: model.ResourceStatusReady, Provider: "local", ObjectKey: "users/user-1/image/avatar.png", MimeType: "image/png", Size: 1024, CreatedAt: old, UpdatedAt: old}
+	user := model.User{ID: "user-1", Username: "user-1", DisplayName: "Creator", AvatarResourceID: avatar.ID, Role: model.UserRoleUser, Status: model.UserStatusActive, CreatedAt: old, UpdatedAt: old}
+	if err := db.Create(&user).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&avatar).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	if err := svc.cleanupDetachedUserResources(user.ID, []model.Resource{avatar}); err != nil {
+		t.Fatal(err)
+	}
+	var count int64
+	if err := db.Model(&model.Resource{}).Where("id = ?", avatar.ID).Count(&count).Error; err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Fatalf("profile avatar was removed: count=%d", count)
+	}
+}
+
 func TestDetachedResourceCleanupKeepsAppearanceAssets(t *testing.T) {
 	for _, setting := range []string{
 		`{"logoResourceId":"logo","darkLogoResourceId":"dark","authVideoResourceId":"video","authVideoPosterResourceId":"poster"}`,

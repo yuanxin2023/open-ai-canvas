@@ -57,8 +57,8 @@ export default function LoginPage() {
 
     return (
         <form onSubmit={submit} className="space-y-5">
-            <AuthField label="用户名 / 邮箱" htmlFor="login-account">
-                <Input id="login-account" size="large" prefix={<UserRound className="size-4 text-white/35" />} value={username} onChange={(event) => setUsername(event.target.value)} placeholder="用户名或邮箱" autoComplete="username" required />
+            <AuthField label="邮箱 / 用户名" htmlFor="login-account">
+                <Input id="login-account" size="large" prefix={<UserRound className="size-4 text-white/35" />} value={username} onChange={(event) => setUsername(event.target.value)} placeholder="邮箱或用户名" autoComplete="username" required />
             </AuthField>
             <AuthField
                 label="密码"

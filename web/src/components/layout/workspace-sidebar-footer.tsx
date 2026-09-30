@@ -114,7 +114,7 @@ function MenuLink({ to, icon, label, onNavigate }: { to: string; icon: ReactNode
 
 function UserAvatar({ user, className }: { user: LocalUser; className: string }) {
     const [failed, setFailed] = useState(false);
-    const avatarUrl = /^https?:\/\//i.test(user.avatarUrl || "") ? user.avatarUrl : "";
+    const avatarUrl = /^(?:https?:\/\/|\/(?!\/))/i.test(user.avatarUrl || "") ? user.avatarUrl : "";
 
     useEffect(() => setFailed(false), [avatarUrl]);
 

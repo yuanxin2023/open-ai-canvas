@@ -2,6 +2,7 @@ package repository
 
 import (
 	"encoding/json"
+	"errors"
 	"slices"
 	"strconv"
 	"strings"
@@ -122,6 +123,13 @@ func (r *Repository) ResourceReferenceSnapshot(userID string, excludingAssetID s
 	snapshot := ResourceReferenceSnapshot{Documents: []ResourceReferenceDocument{}, Direct: []ResourceDirectReference{}}
 	if len(resourceIDs) == 0 {
 		return snapshot, nil
+	}
+	var profile model.User
+	if err := r.db.Select("id", "display_name", "avatar_resource_id").First(&profile, "id = ?", userID).Error; err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return snapshot, err
+	}
+	if profile.AvatarResourceID != "" && slices.Contains(resourceIDs, profile.AvatarResourceID) {
+		snapshot.Direct = append(snapshot.Direct, ResourceDirectReference{Kind: "个人头像", ID: profile.ID, Title: profile.DisplayName, ResourceID: profile.AvatarResourceID})
 	}
 	history, err := r.CanvasHistoryResourceReferences(resourceIDs)
 	if err != nil {

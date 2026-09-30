@@ -12,7 +12,7 @@ import (
 	"gorm.io/gorm"
 )
 
-const CurrentSchemaVersion int64 = 36
+const CurrentSchemaVersion int64 = 38
 
 //go:embed seed/inspirations.json
 var inspirationSeedJSON []byte
@@ -124,6 +124,30 @@ var schemaMigrations = []migration{
 		return tx.AutoMigrate(&model.ToolFavorite{})
 	}},
 	{version: 36, name: "channel_model_tags", checksum: "sha256:channel-model-tags-v32", apply: migrateChannelModelTags},
+	{version: 37, name: "user_profiles", checksum: "sha256:user-profiles-v37-20260927", apply: migrateUserProfiles},
+	{version: 38, name: "user_login_names", checksum: "sha256:user-login-names-v38-20260927", apply: migrateUserLoginNames},
+}
+
+func migrateUserProfiles(tx *gorm.DB) error {
+	if err := tx.AutoMigrate(&model.User{}); err != nil {
+		return err
+	}
+	// 旧账号首次打开个人资料时沿用原用户名；邮箱优先注册生成的内部用户名等于用户 ID，保持待填写状态。
+	return tx.Exec("UPDATE users SET profile_name = username WHERE COALESCE(profile_name, '') = '' AND username <> id").Error
+}
+
+func migrateUserLoginNames(tx *gorm.DB) error {
+	var duplicate struct {
+		NormalizedUsername string
+		Count              int64
+	}
+	if err := tx.Raw(`SELECT lower(username) AS normalized_username, COUNT(*) AS count FROM users GROUP BY lower(username) HAVING COUNT(*) > 1 LIMIT 1`).Scan(&duplicate).Error; err != nil {
+		return fmt.Errorf("检查重复登录用户名：%w", err)
+	}
+	if duplicate.Count > 1 {
+		return fmt.Errorf("存在大小写重复的登录用户名 %q，请先处理后再升级", duplicate.NormalizedUsername)
+	}
+	return tx.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username_ci ON users(lower(username))").Error
 }
 
 func migrateSchemaV25(tx *gorm.DB) error {
@@ -319,13 +343,20 @@ func migrationsForDatabase(db *gorm.DB) ([]migration, error) {
 func upstreamFirstMigrationPlan() []migration {
 	const sharedCount = 23
 	const localCount = 4
+	const commonTailCount = 2
 	plan := append([]migration(nil), schemaMigrations[:sharedCount]...)
-	for index, item := range schemaMigrations[sharedCount+localCount:] {
+	middleEnd := len(schemaMigrations) - commonTailCount
+	for index, item := range schemaMigrations[sharedCount+localCount : middleEnd] {
 		item.version = int64(24 + index)
 		plan = append(plan, item)
 	}
+	nextVersion := int64(24 + middleEnd - sharedCount - localCount)
 	for index, item := range schemaMigrations[sharedCount : sharedCount+localCount] {
-		item.version = int64(33 + index)
+		item.version = nextVersion + int64(index)
+		plan = append(plan, item)
+	}
+	for _, item := range schemaMigrations[middleEnd:] {
+		item.version = int64(len(plan) + 1)
 		plan = append(plan, item)
 	}
 	return plan

@@ -31,7 +31,7 @@ func TestCreateAdminUserCreatesActiveUserWithPasswordAndAudit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if created.Username != "new-user" || created.DisplayName != "New User" || created.Email != "new-user@example.com" {
+	if created.Username != "new-user" || created.DisplayName != "New User" || created.ProfileName != "New User" || created.Email != "new-user@example.com" {
 		t.Fatalf("created user = %+v", created)
 	}
 	if created.Role != model.UserRoleUser || created.Status != model.UserStatusActive {
@@ -87,7 +87,7 @@ func TestUpdateUserAllowsAdminToResetPasswordAndRevokesTargetSessions(t *testing
 		t.Fatal(err)
 	}
 
-	updated, err := (&Service{repo: repository.New(db)}).UpdateUser(&actor, target.ID, UpdateUserRequest{Password: "new-password"})
+	updated, err := (&Service{repo: repository.New(db)}).UpdateUser(&actor, target.ID, UpdateUserRequest{DisplayName: "Renamed User", Password: "new-password"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,6 +96,9 @@ func TestUpdateUserAllowsAdminToResetPasswordAndRevokesTargetSessions(t *testing
 	}
 	if bcrypt.CompareHashAndPassword([]byte(updated.PasswordHash), []byte("old-password")) == nil {
 		t.Fatal("updated password still matches the old password")
+	}
+	if updated.DisplayName != "Renamed User" || updated.ProfileName != "Renamed User" {
+		t.Fatalf("updated public name = %q/%q", updated.DisplayName, updated.ProfileName)
 	}
 	var targetSessions int64
 	if err := db.Model(&model.AuthSession{}).Where("user_id = ?", target.ID).Count(&targetSessions).Error; err != nil {
