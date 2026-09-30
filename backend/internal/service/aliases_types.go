@@ -32,6 +32,8 @@ type (
 	AdminChannelModelImportRequest         = app.AdminChannelModelImportRequest
 	AdminChannelModelTestResult            = app.AdminChannelModelTestResult
 	AdminChannelPage                       = app.AdminChannelPage
+	AdminSkillCatalog                      = app.AdminSkillCatalog
+	AdminSkillAvailabilityRequest          = app.AdminSkillAvailabilityRequest
 	AdminChannelReference                  = app.AdminChannelReference
 	AdminCreditAdjustmentRequest           = app.AdminCreditAdjustmentRequest
 	AdminListQuery                         = app.AdminListQuery

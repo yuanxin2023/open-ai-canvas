@@ -410,6 +410,11 @@ func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, pare
 	if err != nil {
 		return nil, err
 	}
+	if len(req.SkillIDs) > 0 {
+		if err := s.RequireFeature(FeatureSkillLibrary); err != nil {
+			return nil, err
+		}
+	}
 	skillSnapshots, err := s.cloudAgentSkills(userID, req.SkillIDs)
 	if err != nil {
 		return nil, err

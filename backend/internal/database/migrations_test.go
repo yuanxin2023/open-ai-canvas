@@ -22,8 +22,8 @@ func TestCurrentSchemaVersionMatchesMigrationPlan(t *testing.T) {
 			}
 		}
 		latest := plan[len(plan)-1]
-		if CurrentSchemaVersion != latest.version || latest.name != "user_login_environment" {
-			t.Fatalf("%s latest migration = %d/%q, want %d/user_login_environment", name, latest.version, latest.name, CurrentSchemaVersion)
+		if CurrentSchemaVersion != latest.version || latest.name != "platform_skill_availability" {
+			t.Fatalf("%s latest migration = %d/%q, want %d/platform_skill_availability", name, latest.version, latest.name, CurrentSchemaVersion)
 		}
 	}
 }
@@ -36,8 +36,8 @@ func TestMigrateSchemaSupportsLocalAndUpstreamPost23Lineages(t *testing.T) {
 		expectedV24Name  string
 		expectedTailName string
 	}{
-		{name: "local", plan: schemaMigrations, appliedThrough: 27, expectedV24Name: "topup_product_benefits", expectedTailName: "user_login_environment"},
-		{name: "upstream", plan: upstreamFirstMigrationPlan(), appliedThrough: 32, expectedV24Name: "channel_model_label", expectedTailName: "user_login_environment"},
+		{name: "local", plan: schemaMigrations, appliedThrough: 27, expectedV24Name: "topup_product_benefits", expectedTailName: "platform_skill_availability"},
+		{name: "upstream", plan: upstreamFirstMigrationPlan(), appliedThrough: 32, expectedV24Name: "channel_model_label", expectedTailName: "platform_skill_availability"},
 	} {
 		t.Run(scenario.name, func(t *testing.T) {
 			db, err := Open(Config{Driver: "sqlite", DSN: "file:" + t.Name() + "?mode=memory&cache=shared"})
@@ -113,6 +113,9 @@ func TestMigrateSchemaRecordsAndValidatesVersion(t *testing.T) {
 	}
 	if !db.Migrator().HasColumn(&model.PaymentProviderConfig{}, "plugin_version") || !db.Migrator().HasColumn(&model.PaymentOrder{}, "plugin_version") {
 		t.Fatal("schema migration v19 did not add payment plugin version columns")
+	}
+	if !db.Migrator().HasTable(&model.SkillPlatformState{}) || !db.Migrator().HasTable(&model.SkillCategoryPlatformState{}) {
+		t.Fatal("schema migration v40 did not create platform skill availability tables")
 	}
 	if !db.Migrator().HasTable(&model.BannerAnnouncement{}) {
 		t.Fatal("schema migration v20 did not create banner announcements")

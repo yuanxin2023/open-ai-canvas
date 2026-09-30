@@ -61,6 +61,8 @@ func Models() []any {
 		&model.StorageLocation{},
 		&model.UserDailyUploadUsage{},
 		&model.Skill{},
+		&model.SkillPlatformState{},
+		&model.SkillCategoryPlatformState{},
 		&model.SkillVersion{},
 		&model.SkillFile{},
 		&model.UserSkillState{},

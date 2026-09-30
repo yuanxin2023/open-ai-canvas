@@ -2,17 +2,17 @@ import { CollectionToolbar } from "@/components/layout/collection-toolbar";
 import { App, Button, Dropdown, Input, Select } from "antd";
 import { Tooltip } from "@/components/ui/base/tooltip";
 
-import { Boxes, Check, Clapperboard, Heart, Library, LoaderCircle, Megaphone, MoreHorizontal, Palette, Plus, Puzzle, Search, ShoppingBag, Sparkles, UserRound } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+import { Check, Heart, Library, LoaderCircle, MoreHorizontal, Plus, Search, Sparkles, UserRound } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 
 import { PageHeader, PaginationBar, WorkspacePage } from "@/components/layout/workspace-page";
+import { skillCategoryIconOf } from "@/components/skills/skill-category-icons";
 import { WorkspaceErrorState, WorkspaceState } from "@/components/layout/workspace-state";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { fallbackSkillCategories, formatSkillCount, groupSkills, skillCategoryLabel } from "@/pages/skills/skill-catalog";
 import { SkillDetailModal } from "@/pages/skills/skill-detail-drawer";
 import { SkillEditorDrawer } from "@/pages/skills/skill-editor-drawer";
-import { SkillInstallModal } from "@/pages/skills/skill-install-modal";
+import { SkillInstallModal } from "@/components/skills/skill-install-modal";
 import { addSkill, deleteSkill, getSkill, likeSkill, listSkills, removeSkill, syncSkill, unlikeSkill, type Skill, type SkillCategory, type SkillScope, type SkillSort } from "@/services/api/skills";
 
 const scopeOptions = [
@@ -21,16 +21,6 @@ const scopeOptions = [
     { label: "我创建的", value: "created", icon: UserRound },
     { label: "我的收藏", value: "favorites", icon: Heart },
 ];
-
-/* 分类图标映射：画廊卡片顶部的图标块，未知分类回退 Boxes。 */
-const categoryIcons: Record<string, LucideIcon> = {
-    drama: Clapperboard,
-    ecommerce: ShoppingBag,
-    creative: Palette,
-    social: Megaphone,
-    others: Puzzle,
-};
-const categoryIconOf = (value: string) => categoryIcons[value] ?? Boxes;
 
 const sortOptions: { label: string; value: SkillSort }[] = [
     { label: "最多加入", value: "popular" },
@@ -252,7 +242,7 @@ export default function SkillsPage() {
                 {loading && !skills.length ? <SkillSkeleton /> : loadError ? <WorkspaceErrorState compact description={loadError} onRetry={reload} /> : groupedSkills.length ? (
                     <div key={`${scope}-${page}`} className="skills-scope-panel">
                         {groupedSkills.map((group) => {
-                            const GroupIcon = categoryIconOf(group.value);
+                            const GroupIcon = skillCategoryIconOf(group.value);
                             return (
                                 <section key={group.value} data-category={group.value} aria-labelledby={`skill-category-${group.value}`}>
                                     <div className="skill-section-heading">
@@ -295,7 +285,7 @@ export default function SkillsPage() {
 }
 
 function SkillCard({ skill, categories, loading, style, onOpen, onAdd, onLike, onEdit, onDelete }: { skill: Skill; categories: SkillCategory[]; loading: boolean; style?: CSSProperties; onOpen: () => void; onAdd: () => void; onLike: () => void; onEdit: () => void; onDelete: () => void }) {
-    const CategoryIcon = categoryIconOf(skill.tag);
+    const CategoryIcon = skillCategoryIconOf(skill.tag);
     return (
         <article style={style} className={`product-collection-card library-card library-card-surface skill-library-card group${skill.isAdded ? " is-added" : ""}`}>
             <div className="skill-card-top">

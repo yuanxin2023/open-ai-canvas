@@ -27,6 +27,110 @@ tags:
   - name: admin
   - name: inspirations
 paths:
+  /admin/skills:
+    get:
+      tags: [admin]
+      summary: 读取平台公共技能与固定分类的可用状态
+      description: 仅管理员可调用；只返回 source != 1 的公开技能。缺少技能或分类状态记录时按开启处理，同时返回用户技能库总闸与综合有效状态。
+      responses:
+        "200": {description: 标准信封 data 包含 globalAvailable、categories 和 skills}
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+  /admin/skills/install:
+    post:
+      tags: [admin]
+      summary: 上传并安装平台公共技能
+      description: 仅管理员可调用。支持 Markdown 或 ZIP，安装结果固定为公开平台技能并进入技能广场。
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, sourceType, tag]
+              properties:
+                file: {type: string, format: binary}
+                sourceType: {type: string, enum: [markdown, zip]}
+                name: {type: string, maxLength: 80}
+                description: {type: string, maxLength: 500}
+                tag: {type: string, enum: [drama, ecommerce, creative, social, others]}
+      responses:
+        "200": {description: 标准信封 data 返回安装后的完整管理目录}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+  /admin/skills/install/github:
+    post:
+      tags: [admin]
+      summary: 从公开 GitHub 仓库安装平台公共技能
+      description: 仅管理员可调用。安装结果固定为公开平台技能，可选择后台自动同步。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url, tag, autoUpdate]
+              properties:
+                url: {type: string, format: uri}
+                ref: {type: string}
+                subdir: {type: string}
+                tag: {type: string, enum: [drama, ecommerce, creative, social, others]}
+                autoUpdate: {type: boolean}
+      responses:
+        "200": {description: 标准信封 data 返回安装后的完整管理目录}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+  /admin/skills/availability:
+    put:
+      tags: [admin]
+      summary: 批量更新平台公共技能可用状态
+      description: 先验证所有 ID 都是平台公共技能，再在事务内整体更新，不允许部分成功。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [skillIds, available]
+              properties:
+                skillIds:
+                  type: array
+                  minItems: 1
+                  maxItems: 200
+                  uniqueItems: true
+                  items: {type: string, minLength: 1}
+                available: {type: boolean}
+      responses:
+        "200": {description: 标准信封 data 返回更新后的完整管理目录}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+  /admin/skills/categories/{tag}/availability:
+    put:
+      tags: [admin]
+      summary: 更新固定技能分类总开关
+      description: 分类开关仅作为总闸，不修改子项原始状态。
+      parameters:
+        - in: path
+          name: tag
+          required: true
+          schema: {type: string, enum: [drama, ecommerce, creative, social, others]}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [available]
+              properties:
+                available: {type: boolean}
+      responses:
+        "200": {description: 标准信封 data 返回更新后的完整管理目录}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
   /admin/redeem-batches/search:
     post:
       tags: [admin]

@@ -112,7 +112,7 @@ type githubSkillSpec struct {
 }
 
 func (s *Service) EnsureSkillPackages() error {
-	skills, err := s.repo.SkillsForPackageEnsure(skillSourceUser)
+	skills, err := s.repo.SkillsForPackageEnsure()
 	if err != nil {
 		return err
 	}
@@ -137,6 +137,19 @@ func (s *Service) EnsureSkillPackages() error {
 }
 
 func (s *Service) InstallSkillUpload(userID string, sourceType string, header *multipart.FileHeader, req SkillInstallRequest) (*SkillItem, error) {
+	return s.installSkillUpload(userID, sourceType, header, req, skillSourceUser)
+}
+
+func (s *Service) InstallPlatformSkillUpload(adminID string, sourceType string, header *multipart.FileHeader, req SkillInstallRequest) (*SkillItem, error) {
+	req.Tag = strings.TrimSpace(req.Tag)
+	if _, ok := skillCategoryLabels[req.Tag]; !ok {
+		return nil, kernel.BadAuthRequest("请选择有效的技能分类")
+	}
+	req.IsPrivate = false
+	return s.installSkillUpload(adminID, sourceType, header, req, model.SkillSourcePlatform)
+}
+
+func (s *Service) installSkillUpload(ownerID string, sourceType string, header *multipart.FileHeader, req SkillInstallRequest, source int) (*SkillItem, error) {
 	sourceType = strings.ToLower(strings.TrimSpace(sourceType))
 	if sourceType == "" && header != nil {
 		switch strings.ToLower(path.Ext(header.Filename)) {
@@ -173,10 +186,23 @@ func (s *Service) InstallSkillUpload(userID string, sourceType string, header *m
 	if err != nil {
 		return nil, err
 	}
-	return s.createSkillFromArchive(userID, archive, req, sourceType, "", "", "", "", false)
+	return s.createSkillFromArchive(ownerID, archive, req, sourceType, "", "", "", "", false, source)
 }
 
 func (s *Service) InstallGitHubSkill(userID string, req SkillGitHubInstallRequest) (*SkillItem, error) {
+	return s.installGitHubSkill(userID, req, skillSourceUser)
+}
+
+func (s *Service) InstallPlatformGitHubSkill(adminID string, req SkillGitHubInstallRequest) (*SkillItem, error) {
+	req.Tag = strings.TrimSpace(req.Tag)
+	if _, ok := skillCategoryLabels[req.Tag]; !ok {
+		return nil, kernel.BadAuthRequest("请选择有效的技能分类")
+	}
+	req.IsPrivate = false
+	return s.installGitHubSkill(adminID, req, model.SkillSourcePlatform)
+}
+
+func (s *Service) installGitHubSkill(ownerID string, req SkillGitHubInstallRequest, source int) (*SkillItem, error) {
 	spec, err := parseGitHubSkillURL(req.URL, req.Ref, req.Subdir)
 	if err != nil {
 		return nil, err
@@ -189,7 +215,7 @@ func (s *Service) InstallGitHubSkill(userID string, req SkillGitHubInstallReques
 		}
 		return nil, kernel.WrapAppError(http.StatusBadGateway, "GitHub 技能读取失败，请检查仓库地址和网络", err)
 	}
-	return s.createSkillFromArchive(userID, archive, SkillInstallRequest{Tag: req.Tag, IsPrivate: req.IsPrivate}, "github", canonicalURL, resolvedRef, spec.Subdir, commit, req.AutoUpdate)
+	return s.createSkillFromArchive(ownerID, archive, SkillInstallRequest{Tag: req.Tag, IsPrivate: req.IsPrivate}, "github", canonicalURL, resolvedRef, spec.Subdir, commit, req.AutoUpdate, source)
 }
 
 func (s *Service) SyncGitHubSkill(userID string, skillID string) (*SkillItem, error) {
@@ -275,7 +301,7 @@ func (s *Service) createSingleMarkdownSkill(userID string, req SkillMutationRequ
 	if err != nil {
 		return nil, err
 	}
-	return s.createSkillFromArchive(userID, archive, SkillInstallRequest{Name: req.SkillName, Description: req.Description, Tag: req.Tag, IsPrivate: req.IsPrivate}, "markdown", req.MarkdownURL, "", "", "", false)
+	return s.createSkillFromArchive(userID, archive, SkillInstallRequest{Name: req.SkillName, Description: req.Description, Tag: req.Tag, IsPrivate: req.IsPrivate}, "markdown", req.MarkdownURL, "", "", "", false, skillSourceUser)
 }
 
 func (s *Service) updateSingleMarkdownSkill(skill *model.Skill, req SkillMutationRequest) error {
@@ -290,7 +316,7 @@ func (s *Service) updateSingleMarkdownSkill(skill *model.Skill, req SkillMutatio
 	return s.addSkillArchiveVersion(skill, archive, "markdown", req.MarkdownURL, "", "", "", false)
 }
 
-func (s *Service) createSkillFromArchive(userID string, archive skillPackageArchive, req SkillInstallRequest, sourceType string, sourceURL string, sourceRef string, sourceSubdir string, sourceCommit string, autoUpdate bool) (*SkillItem, error) {
+func (s *Service) createSkillFromArchive(ownerID string, archive skillPackageArchive, req SkillInstallRequest, sourceType string, sourceURL string, sourceRef string, sourceSubdir string, sourceCommit string, autoUpdate bool, source int) (*SkillItem, error) {
 	name := strings.TrimSpace(req.Name)
 	if name == "" {
 		name = archive.Metadata.Name
@@ -325,18 +351,28 @@ func (s *Service) createSkillFromArchive(userID string, archive skillPackageArch
 	}
 	version.VersionLabel = versionLabel
 	skill := &model.Skill{
-		ID: skillID, OwnerID: userID, Name: name, Description: description, Instruction: string(archive.Files["SKILL.md"]),
+		ID: skillID, OwnerID: ownerID, Name: name, Description: description, Instruction: string(archive.Files["SKILL.md"]),
 		CurrentVersionID: versionID, VersionLabel: versionLabel, ContentHash: archive.ContentHash, FileCount: len(archive.Files), TotalBytes: archive.TotalBytes,
 		SourceType: sourceType, SourceURL: sourceURL, SourceRef: sourceRef, SourceSubdir: sourceSubdir, SourceCommit: sourceCommit,
 		SyncStatus: "synced", AutoUpdate: autoUpdate, LastCheckedAt: &now, LastSyncedAt: &now,
-		Status: skillStatusEnabled, Source: skillSourceUser, Tag: tag, IsPrivate: req.IsPrivate, MarkdownURL: sourceURL, ShowcaseMediaJSON: "[]",
+		Status: skillStatusEnabled, Source: source, Tag: tag, IsPrivate: source == skillSourceUser && req.IsPrivate, MarkdownURL: sourceURL, ShowcaseMediaJSON: "[]",
 	}
-	state := &model.UserSkillState{ID: kernel.NewID(), UserID: userID, SkillID: skillID, Added: true, InstalledVersionID: versionID, AutoUpdate: autoUpdate}
+	var state *model.UserSkillState
+	if source == skillSourceUser {
+		state = &model.UserSkillState{ID: kernel.NewID(), UserID: ownerID, SkillID: skillID, Added: true, InstalledVersionID: versionID, AutoUpdate: autoUpdate}
+	}
 	if err := s.repo.CreateSkillWithPackage(skill, version, files, state); err != nil {
 		_ = os.Remove(filepath.Join(s.dataDir, "skill-packages", filepath.FromSlash(packageKey)))
 		return nil, err
 	}
-	return s.SkillDetail(userID, skillID)
+	if source != skillSourceUser {
+		items, err := s.skillItems(ownerID, []model.Skill{*skill}, true)
+		if err != nil {
+			return nil, err
+		}
+		return &items[0], nil
+	}
+	return s.SkillDetail(ownerID, skillID)
 }
 
 func (s *Service) addSkillArchiveVersion(skill *model.Skill, archive skillPackageArchive, sourceType string, sourceURL string, sourceRef string, sourceSubdir string, sourceCommit string, autoUpdate bool) error {

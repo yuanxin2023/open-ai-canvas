@@ -20,6 +20,7 @@ const (
 	FeatureCredits               = "credits"
 	FeatureCustomChannels        = "customChannels"
 	FeatureFrontendModels        = "frontendModels"
+	FeatureSkillLibrary          = "skillLibrary"
 	FeaturePluginCenter          = "pluginCenter"
 	FeatureSystemPlugins         = "systemPluginsVisibleToUsers"
 	FeatureTimelineTranscription = "timelineTranscription"
@@ -32,6 +33,7 @@ type FeatureAvailability struct {
 	CreditsEnabled               bool `json:"creditsEnabled"`
 	CustomChannelsEnabled        bool `json:"customChannelsEnabled"`
 	FrontendModelsEnabled        bool `json:"frontendModelsEnabled"`
+	SkillLibraryEnabled          bool `json:"skillLibraryEnabled"`
 	PluginCenterEnabled          bool `json:"pluginCenterEnabled"`
 	SystemPluginsVisibleToUsers  bool `json:"systemPluginsVisibleToUsers"`
 	TimelineTranscriptionEnabled bool `json:"timelineTranscriptionEnabled"`
@@ -53,6 +55,7 @@ func DefaultFeatureAvailability() FeatureAvailability {
 		CreditsEnabled:               true,
 		CustomChannelsEnabled:        true,
 		FrontendModelsEnabled:        false,
+		SkillLibraryEnabled:          true,
 		PluginCenterEnabled:          true,
 		SystemPluginsVisibleToUsers:  true,
 		TimelineTranscriptionEnabled: true,
@@ -115,6 +118,8 @@ func (s *Service) FeatureEnabled(feature string) (bool, error) {
 		return value.CustomChannelsEnabled, nil
 	case FeatureFrontendModels:
 		return value.FrontendModelsEnabled, nil
+	case FeatureSkillLibrary:
+		return value.SkillLibraryEnabled, nil
 	case FeaturePluginCenter:
 		return value.PluginCenterEnabled, nil
 	case FeatureSystemPlugins:
@@ -145,6 +150,8 @@ func (s *Service) RequireFeature(feature string) error {
 		return kernel.Forbidden("自定义渠道暂未开放")
 	case FeatureFrontendModels:
 		return kernel.Forbidden("前台模型目录暂未开放")
+	case FeatureSkillLibrary:
+		return kernel.Forbidden("技能库暂未开放")
 	case FeaturePluginCenter:
 		return kernel.Forbidden("插件中心暂未开放")
 	case FeatureSystemPlugins:

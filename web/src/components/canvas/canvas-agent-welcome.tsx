@@ -4,7 +4,7 @@ import { agentCopy, type CanvasAppearance } from "@/lib/canvas/agent-appearance"
 type AgentWelcomeProps = {
     appearance: CanvasAppearance;
     nodeCount: number;
-    onChooseSkill: () => void;
+    onChooseSkill?: () => void;
     onDraftPrompt: (prompt: string) => void;
 };
 
@@ -17,14 +17,14 @@ export function AgentWelcome({ appearance, nodeCount, onChooseSkill, onDraftProm
                 <p>{agentCopy(appearance.welcomeDescription, appearance.agentName)}</p>
             </div>
             <div className="agent-welcome-actions">
-                <button type="button" onClick={onChooseSkill}>
+                {onChooseSkill ? <button type="button" onClick={onChooseSkill}>
                     <Sparkles aria-hidden="true" />
                     <span>
                         <strong>选择技能，开始创作</strong>
                         <small>为这次创作找到合适的帮手</small>
                     </span>
                     <ArrowUpRight className="agent-welcome-arrow" aria-hidden="true" />
-                </button>
+                </button> : null}
                 <button type="button" onClick={() => onDraftPrompt("我想创作一段短片，请先和我一起梳理故事方向。先询问我的想法，不要直接生成。")}>
                     <Clapperboard aria-hidden="true" />
                     <span>

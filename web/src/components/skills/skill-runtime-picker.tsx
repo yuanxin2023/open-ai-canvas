@@ -3,13 +3,21 @@ import { Select } from "antd";
 
 import { listAddedSkills, type Skill } from "@/services/api/skills";
 import { SKILL_RUNTIME_PROFILES, type SkillRuntimeProfile } from "@/services/skill-runtime";
+import { useUserStore } from "@/stores/use-user-store";
 
 export function useSkillRuntimeCatalog() {
+    const enabled = useUserStore((state) => state.features.skillLibraryEnabled);
     const [skills, setSkills] = useState<Skill[]>([]);
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(enabled);
 
     useEffect(() => {
+        if (!enabled) {
+            setSkills([]);
+            setLoading(false);
+            return;
+        }
         let cancelled = false;
+        setLoading(true);
         listAddedSkills()
             .then((result) => {
                 if (!cancelled) setSkills(result.skills.filter((skill) => skill.isAdded));
@@ -23,9 +31,9 @@ export function useSkillRuntimeCatalog() {
         return () => {
             cancelled = true;
         };
-    }, []);
+    }, [enabled]);
 
-    return { skills, loading };
+    return { skills, loading, enabled };
 }
 
 export function SkillRuntimePicker({ skills, loading, value, onChange, placeholder = "选择本次生成使用的技能", profile = "canvas" }: { skills: Skill[]; loading?: boolean; value: string[]; onChange: (skillIds: string[]) => void; placeholder?: string; profile?: SkillRuntimeProfile }) {

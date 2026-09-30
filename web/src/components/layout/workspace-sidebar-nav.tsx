@@ -47,7 +47,7 @@ function buildNav(features: FeatureAvailability): { groups: WorkspaceNavGroup[];
         },
         {
             heading: "资源与工具",
-            items: [{ ...toolItem("assets", "/assets"), title: "资产" }, { ...toolItem("prompts", "/prompts"), title: "提示词" }, { ...toolItem("skills", "/skills"), title: "技能" }, ...(features.pluginCenterEnabled ? [{ ...toolItem("plugins", "/plugins"), title: "插件" }] : [])],
+            items: [{ ...toolItem("assets", "/assets"), title: "资产" }, { ...toolItem("prompts", "/prompts"), title: "提示词" }, ...(features.skillLibraryEnabled ? [{ ...toolItem("skills", "/skills"), title: "技能" }] : []), ...(features.pluginCenterEnabled ? [{ ...toolItem("plugins", "/plugins"), title: "插件" }] : [])],
         },
         ...(features.taskCenterEnabled ? [{ items: [{ ...toolItem("tasks", "/tasks"), title: "创作历史", icon: HistoryIcon }] }] : []),
     ];

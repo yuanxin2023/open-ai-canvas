@@ -109,7 +109,10 @@ export default function ProjectChaptersView({ detail, refreshProject }: ProjectD
     const [operationNow, setOperationNow] = useState(() => Date.now());
     const [selectedTextModel, setSelectedTextModel] = useState("");
     const [selectedSkillIds, setSelectedSkillIds] = useState<string[]>([]);
-    const { skills: availableSkills, loading: skillsLoading } = useSkillRuntimeCatalog();
+    const { skills: availableSkills, loading: skillsLoading, enabled: skillsEnabled } = useSkillRuntimeCatalog();
+    useEffect(() => {
+        if (!skillsEnabled) setSelectedSkillIds([]);
+    }, [skillsEnabled]);
     const effectiveConfig = useEffectiveConfig();
     const isAiConfigReady = useConfigStore((state) => state.isAiConfigReady);
     const listRef = useRef<HTMLDivElement>(null);
@@ -639,13 +642,13 @@ export default function ProjectChaptersView({ detail, refreshProject }: ProjectD
                         <span className="mb-1.5 block text-xs font-medium text-foreground/68">文本模型</span>
                         <ModelPicker config={effectiveConfig} capability="text" value={selectedTextModel} onChange={setSelectedTextModel} variant="creation" fullWidth placeholder="选择用于生成分镜的文本模型" showSelectedPrice={false} onMissingConfig={() => navigateToSettings({ continueCreation: true })} />
                     </label>
-                    <div>
+                    {skillsEnabled ? <div>
                         <label className="block">
                             <span className="mb-1.5 block text-xs font-medium text-foreground/68">分镜技能</span>
                             <SkillRuntimePicker profile="shortDrama" skills={availableSkills} loading={skillsLoading} value={selectedSkillIds} onChange={setSelectedSkillIds} placeholder="选择本次章节分镜使用的技能" />
                         </label>
                         <p className="mt-2 text-[var(--fs-tiny)] leading-5 text-foreground/42">可不选，最多 4 个。所选技能会在本次生成时由统一 Skill Runtime 按需读取，并记录实际使用的版本和文件。</p>
-                    </div>
+                    </div> : null}
                 </div>
             </Modal>
             <Modal className="library-modal" title="移动章节" open={Boolean(moveTargetId)} width={400} okText="移动" cancelText="取消" okButtonProps={{ disabled: !movePosition || movePosition < 1 || movePosition > orderedUnits.length, loading: reorderMutation.isPending }} onCancel={() => { setMoveTargetId(""); setMovePosition(null); }} onOk={moveChapterToPosition} styles={{ body: { paddingTop: 12 } }}>

@@ -29,7 +29,7 @@ description: 从产品功能快速定位主要代码入口
 | 产品模型与渠道选择 | `web/src/components/model-picker.tsx`、`pages/admin/components/channel-model-editor.tsx` | `lib/model-picker-groups.ts` 只构建跨渠道展示分组；`lib/user-session.ts` 透传渠道展示名；`components/model-logo.tsx` 按需加载原色图标；后端 `app/channel_models.go` 校验写入，`app/model_catalog.go` 发布目录，schema v24 增加 `channel_label` |
 | 系统渠道规格利润率与批量调价 | `web/src/pages/admin/components/channel-model-manager.tsx`、`channel-model-reprice-dialog.tsx` | 弹窗按模型分组展示多规格、重新计算与逐项编辑；`channel-model-cost-summary.tsx` 展示价格，`channel-model-pricing.ts` 精确四舍五入并组装最终售价；后端 `handler/finance.go` 接收批量请求，`app/channel_model_pricing.go` 校验权限、最终价格及快照版本，`repository/channel_model_pricing.go` 事务保存及版本冲突检测 |
 | 我的素材 | `web/src/pages/assets/` | `stores/use-asset-store.ts`、`services/image-storage.ts` |
-| 技能库 | `web/src/pages/skills/` | `services/api/skills.ts`、`services/skill-runtime.ts`、`components/skills/skill-runtime-picker.tsx` |
+| 技能库 | `web/src/pages/skills/`、`web/src/pages/admin/skills/` | `components/skills/skill-install-modal.tsx` 共用用户/管理员安装表单；`services/api/skills.ts`、`services/api/admin-skills.ts` 分离用户技能与平台公共技能写入语义；运行时见 `services/skill-runtime.ts`、`components/skills/skill-runtime-picker.tsx` |
 | 画布列表 | `web/src/pages/canvas/index.tsx` | `stores/canvas/use-canvas-store.ts` |
 | 画布编辑器 | `web/src/pages/canvas/project.tsx` | `pages/canvas/canvas-project-*`、`pages/canvas/use-canvas-*`、`components/canvas/`、`lib/canvas/`、`stores/canvas/` |
 | 公开分享 | `web/src/pages/canvas/shared.tsx` | `components/canvas/infinite-canvas.tsx`、`services/api/canvas-share.ts` |
@@ -124,6 +124,7 @@ HTTP 请求 -> handler -> service（稳定导入面 / 别名）-> app（组合�
 | 文件和 OSS | `handler/routes.go` | `internal/app/resource.go`、`settings.go` |
 | 画布分享 | `handler/canvas_share.go` | `internal/canvas` |
 | 技能库 | `handler/skills.go` | `internal/skills`、`repository/skills.go` |
+| 平台公共技能管理 | `handler/admin_skills.go` | `internal/skills`、`repository/skills.go`、`skill_platform_states`、`skill_category_platform_states` |
 | 提示词模板 | `handler/auth.go`、`handler/user_data.go` | `internal/prompts` |
 | 用户风格库 | `handler/style_profile.go` | `internal/prompts`、`repository/style_profile.go` |
 | 用量分析 | `handler/admin_analytics.go` | `internal/app/analytics.go`、`repository/analytics.go` |

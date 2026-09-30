@@ -120,6 +120,66 @@ func TestParseGitHubSkillURL(t *testing.T) {
 	}
 }
 
+func TestCreatePlatformSkillFromArchivePublishesToAllUsers(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open("file:"+kernel.NewID()+"?mode=memory&cache=shared"), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AutoMigrate(
+		&model.User{}, &model.UserIdentity{}, &model.Skill{}, &model.SkillVersion{}, &model.SkillFile{},
+		&model.UserSkillState{}, &model.SkillPlatformState{}, &model.SkillCategoryPlatformState{},
+	); err != nil {
+		t.Fatal(err)
+	}
+	admin := model.User{ID: kernel.NewID(), Username: "platform-admin", DisplayName: "平台运营", Role: model.UserRoleAdmin, Status: model.UserStatusActive}
+	if err := db.Create(&admin).Error; err != nil {
+		t.Fatal(err)
+	}
+	svc := New(repository.New(db), t.TempDir(), nil)
+	archive, err := finalizeSkillArchive(map[string][]byte{
+		"SKILL.md":            []byte("# 公共导演\n\n面向全部用户的导演技能。\n"),
+		"references/guide.md": []byte("# 导演参考\n"),
+	}, skillPackageMetadata{Name: "公共导演", Description: "面向全部用户的导演技能。"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	created, err := svc.createSkillFromArchive(admin.ID, archive, SkillInstallRequest{Tag: "drama", IsPrivate: true}, "zip", "", "", "", "", false, model.SkillSourcePlatform)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var stored model.Skill
+	if err := db.First(&stored, "id = ?", created.SkillID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if stored.Source != model.SkillSourcePlatform || stored.IsPrivate || stored.OwnerID != admin.ID {
+		t.Fatalf("platform skill = %#v", stored)
+	}
+	var ownerStateCount int64
+	if err := db.Model(&model.UserSkillState{}).Where("skill_id = ?", stored.ID).Count(&ownerStateCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if ownerStateCount != 0 {
+		t.Fatalf("platform install created %d owner states", ownerStateCount)
+	}
+	public, err := svc.Skills("ordinary-user", SkillListRequest{Scope: "public", Page: 1, PageSize: 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(public.Skills) != 1 || public.Skills[0].SkillID != stored.ID {
+		t.Fatalf("public skills = %#v", public.Skills)
+	}
+	if err := svc.EnsureSkillPackages(); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.First(&stored, "id = ?", created.SkillID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if stored.SourceType != "zip" || stored.FileCount != 2 {
+		t.Fatalf("package ensure rewrote admin-installed skill: %#v", stored)
+	}
+	assertSkillVersionCount(t, db, stored.ID, 1)
+}
+
 func TestEnsureSkillPackagesMigratesAndRefreshesBuiltinSkills(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open("file:"+kernel.NewID()+"?mode=memory&cache=shared"), &gorm.Config{})
 	if err != nil {

@@ -12,7 +12,7 @@ import (
 	"gorm.io/gorm"
 )
 
-const CurrentSchemaVersion int64 = 39
+const CurrentSchemaVersion int64 = 40
 
 //go:embed seed/inspirations.json
 var inspirationSeedJSON []byte
@@ -127,6 +127,9 @@ var schemaMigrations = []migration{
 	{version: 37, name: "user_profiles", checksum: "sha256:user-profiles-v37-20260927", apply: migrateUserProfiles},
 	{version: 38, name: "user_login_names", checksum: "sha256:user-login-names-v38-20260927", apply: migrateUserLoginNames},
 	{version: 39, name: "user_login_environment", checksum: "sha256:user-login-environment-v39-20260930", apply: migrateUserLoginEnvironment},
+	{version: 40, name: "platform_skill_availability", checksum: "sha256:platform-skill-availability-v40-20260930", apply: func(tx *gorm.DB) error {
+		return tx.AutoMigrate(&model.SkillPlatformState{}, &model.SkillCategoryPlatformState{})
+	}},
 }
 
 func migrateUserLoginEnvironment(tx *gorm.DB) error {

@@ -167,9 +167,23 @@ Token 报价的 `estimated` 为 `true`，`quantity` 是预留 Token 数。参考
 
 管理员通过 `GET/PATCH /admin/settings/features` 读取和保存 `welcomeEnabled`，默认 `true`，与其他功能开关一起存入 `system_settings` 的 `feature_availability` JSON，并记录管理员审计。关闭后新访问 `/welcome` 的浏览器跳转到 `/`。
 
+`skillLibraryEnabled` 控制用户前端技能库，默认 `true`。关闭后工作台隐藏技能入口，`/skills` 业务接口统一返回 403，Agent 能力响应将 `skills` 设为 `false` 且不再声明 `skill_read_file`；新建 Agent 运行携带 `skillIds` 时同样拒绝。已有技能、安装状态和历史运行数据保留，重新开启后继续可用。
+
+## 平台公共技能管理
+
+以下接口均要求管理员登录，只管理 `source != 1` 的平台内置或社区公共技能。用户自行创建的公开、私有技能不在返回范围内，也不接受这些接口修改。
+
+- `GET /admin/skills`：返回固定五分类、分类原始开关、平台公共技能原始开关与综合有效状态、作者、版本、加入/收藏量。缺少状态记录按开启返回；`globalAvailable` 表示用户技能库总闸。
+- `POST /admin/skills/install`：使用 `multipart/form-data` 上传 Markdown 或 ZIP 技能包，字段为 `file`、`sourceType`、`tag`，可选 `name`、`description`。安装结果固定为公开平台技能，不接受私有状态。
+- `POST /admin/skills/install/github`：请求 `{ url, ref?, subdir?, tag, autoUpdate }`，从公开 GitHub 仓库安装平台技能；开启自动同步后由后台周期检查新提交。
+- `PUT /admin/skills/availability`：请求 `{ skillIds: string[], available: boolean }`；ID 必须非空、不重复且最多 200 个。服务端先确认全部目标都是仍有效的平台公共技能，再在事务内整体写入；包含用户技能、未知或非公开技能时整批失败。
+- `PUT /admin/skills/categories/:tag/availability`：请求 `{ available: boolean }`；`tag` 只接受 `drama`、`ecommerce`、`creative`、`social`、`others`。
+
+管理员安装成功的技能直接进入技能广场并可由所有用户查看、加入和使用，同时立即纳入三级可用状态控制。分类关闭只充当总闸，子项原始开关仍可修改且不会被重置。关闭的平台技能从公共、我的、收藏和已加入列表中过滤，详情、文件、加入、收藏、同步以及 Skill Runtime/Agent 后续读取统一返回 403；原有关系与历史运行数据保留。已开始运行的 Agent 不主动取消，但下一次读取该技能时会收到明确的“该平台技能已停用”。安装、批量技能与分类写操作均记录管理员审计。
+
 ## 云端 Agent
 
-所有 `/agent` 路径都需要登录 Cookie。`GET /agent/capabilities` 返回当前版本（2）、权限模式、上下文范围、技能和工具清单；跨轮历史仍按可恢复事实和发送预算整理，不把某个固定字节数当作模型窗口。Agent 运行由服务端任务 Worker 驱动，浏览器断开不会停止运行。
+所有 `/agent` 路径都需要登录 Cookie。`GET /agent/capabilities` 返回当前版本（2）、权限模式、上下文范围、当前技能开放状态和工具清单；跨轮历史仍按可恢复事实和发送预算整理，不把某个固定字节数当作模型窗口。Agent 运行由服务端任务 Worker 驱动，浏览器断开不会停止运行。
 
 文本模型能力合同包含 `contextWindowTokens`（输入加输出的总上下文窗口）和 `maxOutputTokens`（输出/推理上限）。Agent 每轮根据实际执行的渠道模型计算输入预算，并预留工具 schema、协议包装和恢复空间；逻辑模型按候选文本线路取安全交集，旧配置或能力解析失败回退 128K / 16K。1M 模型可通过后台能力配置使用更大输入预算。前后端的 Token 估算用于提前压缩和拒绝病态请求，最终仍以上游 tokenizer 和响应为准。运行 checkpoint 的 512KB 持久化上限只约束恢复状态，不限制模型上下文窗口。
 

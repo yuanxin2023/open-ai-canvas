@@ -29,6 +29,7 @@ type AgentSettingsProps = {
     onSaveProfile: (input: { scope: AgentProfileScope; projectId?: string; canvasId?: string; content: string; revision: number }) => Promise<AgentProfileView>;
     contextScope: AgentContextKey[];
     nodeCount: number;
+    skillsEnabled: boolean;
     installedSkills: Skill[];
     marketSkills: Skill[];
     selectedSkillIds: string[];
@@ -74,6 +75,10 @@ export function CanvasCloudAgentSettings(props: AgentSettingsProps) {
     const title = section === "home" ? "Agent 设置" : sectionTitle(section);
     const goHome = () => setSection("home");
 
+    useEffect(() => {
+        if (!props.skillsEnabled && section === "skills") setSection("home");
+    }, [props.skillsEnabled, section]);
+
     return (
         <div className="canvas-agent-settings flex min-h-0 min-w-0 flex-1 flex-col" style={{ background: theme.node.panel }}>
             <header data-agent-drag-handle className="agent-panel-header flex shrink-0 items-center gap-2">
@@ -85,7 +90,7 @@ export function CanvasCloudAgentSettings(props: AgentSettingsProps) {
             {section === "home" ? <SettingsHome props={props} theme={theme} onOpen={setSection} /> : null}
             {section === "profile" ? <ProfileWorkspace props={props} theme={theme} /> : null}
             {section === "memories" ? <MemoriesWorkspace /> : null}
-            {section === "skills" ? <SkillsWorkspace props={props} theme={theme} tab={skillTab} onTabChange={setSkillTab} /> : null}
+            {section === "skills" && props.skillsEnabled ? <SkillsWorkspace props={props} theme={theme} tab={skillTab} onTabChange={setSkillTab} /> : null}
             {section === "mcp" ? <McpWorkspace theme={theme} /> : null}
             {section === "context" ? <ContextWorkspace props={props} theme={theme} /> : null}
             {section === "budget" ? <BudgetWorkspace props={props} theme={theme} /> : null}
@@ -129,8 +134,8 @@ function SettingsHome({ props, theme, onOpen }: { props: AgentSettingsProps; the
                     <SettingRow theme={theme} icon={<Cpu className="size-4" />} title="上下文" summary={`${props.nodeCount} 个节点 · ${props.contextScope.length} 个范围`} onClick={() => onOpen("context")} />
                     <SettingRow theme={theme} icon={<Sparkles className="size-4" />} title="长期偏好" summary={profileSummary(props.profileView)} onClick={() => onOpen("profile")} />
                     <SettingRow theme={theme} icon={<BookMarked className="size-4" />} title="个人记忆" summary="批准、添加、导出导入；只影响你的会话" onClick={() => onOpen("memories")} />
-                    <SettingRow theme={theme} icon={<Sparkles className="size-4" />} title="Skills · 用户技能库" summary={`${props.installedSkills.length} 个已安装 · 本轮启用 ${props.selectedSkillIds.length} 个`} onClick={() => onOpen("skills")} />
-                    <SettingRow theme={theme} icon={<Wrench className="size-4" />} title="工具与连接" summary="画布、技能参考文件、生成任务" onClick={() => onOpen("mcp")} />
+                    {props.skillsEnabled ? <SettingRow theme={theme} icon={<Sparkles className="size-4" />} title="Skills · 用户技能库" summary={`${props.installedSkills.length} 个已安装 · 本轮启用 ${props.selectedSkillIds.length} 个`} onClick={() => onOpen("skills")} /> : null}
+                    <SettingRow theme={theme} icon={<Wrench className="size-4" />} title="工具与连接" summary={props.skillsEnabled ? "画布、技能参考文件、生成任务" : "画布与生成任务"} onClick={() => onOpen("mcp")} />
                     <SettingRow theme={theme} icon={<Gauge className="size-4" />} title="预算" summary={`每轮最多 ${props.maxCredits || "未设置"} 积分 · 固定计价模型`} onClick={() => onOpen("budget")} />
                 </div>
             </section>

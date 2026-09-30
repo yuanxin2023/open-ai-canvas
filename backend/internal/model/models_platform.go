@@ -2,6 +2,12 @@ package model
 
 import "time"
 
+const (
+	SkillStatusEnabled  = 1
+	SkillSourceUser     = 1
+	SkillSourcePlatform = 3
+)
+
 type UserDailyActivity struct {
 	ID                string     `json:"id" gorm:"primaryKey;size:64"`
 	Day               time.Time  `json:"day" gorm:"type:date;uniqueIndex:idx_user_daily_activity_day_user,priority:1;index"`
@@ -110,6 +116,26 @@ type Skill struct {
 	InitialAddedCount int64      `json:"initialAddedCount"`
 	CreatedAt         time.Time  `json:"createdAt" gorm:"index"`
 	UpdatedAt         time.Time  `json:"updatedAt" gorm:"index"`
+}
+
+// SkillPlatformState stores administrator availability separately from the
+// skill catalog so builtin synchronization cannot overwrite the decision.
+type SkillPlatformState struct {
+	SkillID   string    `json:"skillId" gorm:"primaryKey;size:36"`
+	Available bool      `json:"available" gorm:"index"`
+	UpdatedBy string    `json:"updatedBy" gorm:"size:36;index"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+// SkillCategoryPlatformState is a category-level gate. Child skill states are
+// intentionally retained while a category is unavailable.
+type SkillCategoryPlatformState struct {
+	Tag       string    `json:"tag" gorm:"primaryKey;size:32"`
+	Available bool      `json:"available" gorm:"index"`
+	UpdatedBy string    `json:"updatedBy" gorm:"size:36;index"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
 }
 
 type SkillVersion struct {

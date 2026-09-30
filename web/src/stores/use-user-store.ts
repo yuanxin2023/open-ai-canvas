@@ -33,6 +33,7 @@ export type FeatureAvailability = {
     creditsEnabled: boolean;
     customChannelsEnabled: boolean;
     frontendModelsEnabled: boolean;
+    skillLibraryEnabled: boolean;
     pluginCenterEnabled: boolean;
     systemPluginsVisibleToUsers: boolean;
     configured?: boolean;
@@ -47,6 +48,7 @@ export const defaultFeatureAvailability: FeatureAvailability = {
     creditsEnabled: true,
     customChannelsEnabled: true,
     frontendModelsEnabled: false,
+    skillLibraryEnabled: true,
     pluginCenterEnabled: true,
     systemPluginsVisibleToUsers: true,
 };

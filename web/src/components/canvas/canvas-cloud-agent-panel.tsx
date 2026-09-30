@@ -26,6 +26,7 @@ import { clearCloudAgentPendingSubmission, cloudAgentConversationTitle, loadClou
 import { logicalModelIDForConfig, modelOptionName, resolveModelRequestConfig, selectableModelsByCapability, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
+import { useUserStore } from "@/stores/use-user-store";
 import { applyAgentCanvasPatches, refreshCanvasAfterAgent, saveRemoteUserDataNow } from "@/services/user-data-sync";
 import { createAgentCanvasSync } from "@/services/agent-canvas-sync";
 import { buildSkillMentionReferences, resolveSkillMentions } from "@/services/skill-runtime";
@@ -49,6 +50,7 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, re
     const theme = canvasThemes[useActiveTheme()];
     const config = useEffectiveConfig();
     const updateConfig = useConfigStore((state) => state.updateConfig);
+    const skillsEnabled = useUserStore((state) => state.features.skillLibraryEnabled);
     const reducedMotion = useReducedMotion();
     const [view, setView] = useState<AgentPanelView>("chat");
     const [run, setRun] = useState<AgentRun | null>(null);
@@ -175,6 +177,13 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, re
     }, [skillSearch]);
 
     useEffect(() => {
+        if (!skillsEnabled) {
+            setSkills([]);
+            setMarketSkills([]);
+            setSelectedSkillIds([]);
+            setSkillsOpen(false);
+            return;
+        }
         let active = true;
         const refresh = () => { void listAddedSkills()
             .then((result) => {
@@ -191,9 +200,10 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, re
             window.removeEventListener("canvas-skills-changed", refresh);
             window.removeEventListener("focus", refresh);
         };
-    }, [open]);
+    }, [open, skillsEnabled]);
 
     useEffect(() => {
+        if (!skillsEnabled) return;
         if (view !== "settings" && !skillsOpen) return;
         let active = true;
         setSkillsLoading(true);
@@ -221,7 +231,7 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, re
         return () => {
             active = false;
         };
-    }, [view, skillsOpen, debouncedSkillSearch, skillTag]);
+    }, [view, skillsOpen, debouncedSkillSearch, skillTag, skillsEnabled]);
 
     const loadMoreSkills = async () => {
         if (skillsLoading || skillPageRequestRef.current || !skillHasMore || skillSearch.trim() !== debouncedSkillSearch) return;
@@ -268,7 +278,7 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, re
                     setMessages(current.messages);
                     setRun(current.run);
                     setPermissionMode(current.permissionMode);
-                    setSelectedSkillIds(current.skillIds || []);
+                    setSelectedSkillIds(skillsEnabled ? current.skillIds || [] : []);
                     if (current.model) setModel(current.model);
                     const pending = await loadCloudAgentPendingSubmission(canvasId, current.id);
                     if (!active) return;
@@ -290,7 +300,7 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, re
         return () => {
             active = false;
         };
-    }, [canvasId]);
+    }, [canvasId, skillsEnabled]);
 
     useEffect(() => {
         if (!historyHydrated || (!messages.length && !run)) return;
@@ -411,7 +421,7 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, re
                     canvasId, prompt: value, reasoningMode: reasoningSupported ? reasoningMode : "off", profileRevision: profileView.revision,
                     model: modelOptionName(selectedModel) || undefined,
                     ...(logicalModelId ? { logicalModelId } : requestConfig.channelId ? { channelId: requestConfig.channelId, channelModelKey: modelOptionName(selectedModel) || undefined } : {}),
-                    skillIds: [...new Set([...selectedSkillIds, ...resolveSkillMentions(value, installedSkills).map((skill) => skill.skillId)])],
+                    skillIds: skillsEnabled ? [...new Set([...selectedSkillIds, ...resolveSkillMentions(value, installedSkills).map((skill) => skill.skillId)])] : [],
                     permissionMode, contextScope,
                     budget: { maxCredits: positiveNumber(maxCredits), maxGenerationTasks: permissionMode === "read_only" ? 0 : Number(maxGenerationTasks), maxVideoSeconds: permissionMode === "read_only" ? 0 : Number(maxVideoSeconds) },
                 };
@@ -574,7 +584,7 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, re
         setRun(conversation.run);
         setMessages(conversation.messages);
         setPermissionMode(conversation.permissionMode);
-        setSelectedSkillIds(conversation.skillIds || []);
+        setSelectedSkillIds(skillsEnabled ? conversation.skillIds || [] : []);
         setApproval(null);
         setPrompt("");
         if (conversation.model) setModel(conversation.model);
@@ -637,6 +647,7 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, re
                                         permissionMode={permissionMode}
                                         contextScope={contextScope}
                                         nodeCount={nodeCount}
+                                        skillsEnabled={skillsEnabled}
                                         installedSkills={installedSkills}
                                         marketSkills={marketSkills}
                                         selectedSkillIds={selectedSkillIds}
@@ -720,12 +731,12 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, re
                                         theme={theme}
                                         messages={messages}
                                         onFocusNode={onFocusNode}
-                                        references={[...references, ...buildSkillMentionReferences(installedSkills)]}
+                                        references={skillsEnabled ? [...references, ...buildSkillMentionReferences(installedSkills)] : references}
                                         busy={busy || running}
                                         approval={approval}
                                         nodeCount={nodeCount}
                                         approvalSubmitting={approvalSubmitting || connectionStatus !== "connected"}
-                                        onChooseSkill={() => setSkillsOpen(true)}
+                                        onChooseSkill={skillsEnabled ? () => setSkillsOpen(true) : undefined}
                                         onDraftPrompt={(draft) => setPrompt((current) => current.trim() ? `${current}\n\n${draft}` : draft)}
                                         onApprovalReasonChange={(reason) => setApproval((current) => (current ? { ...current, reason } : current))}
                                         onApprove={(settings) => void submitApproval("approve", settings)}
@@ -745,14 +756,14 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, re
                                         disabled={Boolean(run && connectionStatus !== "connected") || !historyHydrated || !pendingHydrated}
                                         sending={busy}
                                         running={running}
-                                        placeholder={running ? "运行中可直接插话，会在它下一步生效" : "输入操作指导；用 @ 引用画布节点，用 / 或 、 引用 Skills"}
+                                        placeholder={running ? "运行中可直接插话，会在它下一步生效" : skillsEnabled ? "输入操作指导；用 @ 引用画布节点，用 / 或 、 引用 Skills" : "输入操作指导；用 @ 引用画布节点"}
                                         theme={theme}
                                         onPromptChange={setPrompt}
                                         onSubmit={() => void submit()}
                                         onStop={run?.id && running ? stop : undefined}
                                         stopping={stopping}
-                                        references={[...references, ...buildSkillMentionReferences(installedSkills)]}
-                                        slashSkills={installedSkills}
+                                        references={skillsEnabled ? [...references, ...buildSkillMentionReferences(installedSkills)] : references}
+                                        slashSkills={skillsEnabled ? installedSkills : []}
                                         includeAssetLibrary={false}
                                         left={
                                             <ComposerControls
@@ -762,6 +773,7 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, re
                                                 config={config}
                                                 selectedModel={selectedModel}
                                                 permissionMode={permissionMode}
+                                                skillsEnabled={skillsEnabled}
                                                 theme={theme}
                                                 onModelChange={setModel}
                                                 onPermissionChange={setPermissionMode}
@@ -777,7 +789,7 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, re
                     </motion.aside>
                 ) : null}
             </AnimatePresence>
-            <CanvasAgentSkillLibraryModal
+            {skillsEnabled ? <CanvasAgentSkillLibraryModal
                 open={skillsOpen}
                 theme={theme}
                 installedSkills={installedSkills}
@@ -797,7 +809,7 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, re
                 })}
                 onInstall={installSkill}
                 onLoadMore={loadMoreSkills}
-            />
+            /> : null}
         </>
     );
 }
@@ -926,7 +938,7 @@ function AgentConversation({
     approval: ApprovalState | null;
     approvalSubmitting: boolean;
     nodeCount: number;
-    onChooseSkill: () => void;
+    onChooseSkill?: () => void;
     onDraftPrompt: (prompt: string) => void;
     onFocusNode?: (nodeId: string) => void;
     onApprovalReasonChange: (reason: string) => void;
@@ -985,6 +997,7 @@ function ComposerControls({
     config,
     selectedModel,
     permissionMode,
+    skillsEnabled,
     theme,
     onModelChange,
     onPermissionChange,
@@ -998,6 +1011,7 @@ function ComposerControls({
     config: ReturnType<typeof useEffectiveConfig>;
     selectedModel: string;
     permissionMode: AgentPermissionMode;
+    skillsEnabled: boolean;
     theme: CanvasTheme;
     onModelChange: (model: string) => void;
     onPermissionChange: (mode: AgentPermissionMode) => void;
@@ -1037,7 +1051,7 @@ function ComposerControls({
                     <PermissionIcon className="size-3.5" style={{ color: permissionVisual.color }} aria-hidden="true" />
                 </button>
             </Dropdown>
-            <button
+            {skillsEnabled ? <button
                 type="button"
                 className="flex h-8 shrink-0 items-center gap-1 rounded-md px-2 text-[11px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current/25"
                 style={{ color: selectedSkillCount ? theme.accent.primary : theme.node.muted, background: skillsOpen ? theme.node.fill : "transparent" }}
@@ -1049,7 +1063,7 @@ function ComposerControls({
             >
                 <Sparkles className="size-3.5" />
                 <span className="max-w-28 truncate">Skills({selectedSkillCount})</span>
-            </button>
+            </button> : null}
         </div>
     );
 }

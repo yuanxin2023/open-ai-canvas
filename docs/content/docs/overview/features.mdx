@@ -223,6 +223,31 @@ SEO 标题、描述、可选关键词会投影到浏览器 metadata、Open Graph
 - `backend/internal/service/password_reset.go`：发送策略、验证码校验和密码重置业务边界。
 - `backend/internal/repository/repository.go`：密码更新、验证码消费和登录会话撤销事务。
 
+## 用户技能库开放控制
+
+管理员可在“系统配置 → 功能开放”统一开启或关闭用户技能库。关闭后用户工作台不展示技能入口，技能列表与管理接口不可调用，短剧工作流和画布 Agent 不再提供技能选择；已有技能包、安装状态和历史运行数据不会删除。旧部署未保存该字段时默认保持开启。
+
+### 相关实现
+
+- `backend/internal/platform/feature_availability.go`：`skillLibraryEnabled` 持久化、默认值与服务端功能守卫。
+- `backend/internal/handler/skills.go`、`backend/internal/app/cloud_agent.go`：技能 API 与 Agent 新运行的强制校验。
+- `web/src/pages/admin/components/feature-availability-panel.tsx`：管理员功能开关。
+- `web/src/router.tsx`、`web/src/components/layout/workspace-sidebar-nav.tsx`：用户路由和导航入口控制。
+
+## 平台公共技能分级管理
+
+管理后台“平台资源 → 技能管理”按短剧影视、电商营销、创意设计、社媒内容、其他五个固定分类管理平台内置和社区公共技能。管理员可关闭整个分类、单独调整技能，或跨分类选择最多 200 项批量开启/关闭；分类关闭时保留子项值，重新开启后恢复原状态。用户自行创建的技能不受分类和子项开关影响。
+
+管理员也可从 Markdown、ZIP 技能包或公开 GitHub 仓库安装新的平台公共技能。安装结果固定公开并立即进入技能广场，所有用户均可查看、加入和使用；GitHub 来源可开启周期自动同步，新技能仍遵守技能库总开关、分类开关和单项开关。
+
+平台技能只有在用户技能库总开关、分类开关和技能开关全部开启时才有效。停用后用户列表、详情、文件读取、加入、收藏与新运行均由后端统一过滤或拒绝，已有关系和历史数据不删除。
+
+### 相关实现
+
+- `backend/internal/skills/skills.go`、`backend/internal/skills/skill_packages.go`、`backend/internal/repository/skills.go`：管理目录、公共技能安装、事务更新和统一有效性边界。
+- `backend/internal/handler/admin_skills.go`：管理员接口与严格请求合同。
+- `web/src/components/skills/skill-install-modal.tsx`、`web/src/pages/admin/skills/skills-page.tsx`：用户端与管理员端共用安装表单和文件校验；管理员页负责公共发布、分类总闸、筛选、选择和批量操作。
+
 ## 官方提示词模板
 
 平台级 LLM 任务只走后端提示词目录，不在页面里手写整段系统指令。运营可在管理后台维护版本，用户可在设置里跟随、追加或改写创作层；动态上下文和 JSON 输出契约由服务端编译时注入，不能被模板或个人偏好覆盖。

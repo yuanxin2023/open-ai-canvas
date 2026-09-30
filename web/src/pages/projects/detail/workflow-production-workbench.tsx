@@ -125,7 +125,10 @@ export default function WorkflowProductionWorkbench(props: Props) {
     const [resolution, setResolution] = useState(effectiveConfig.vquality || "720");
     const [imageQuality, setImageQuality] = useState(effectiveConfig.quality || "auto");
     const [selectedSkillIds, setSelectedSkillIds] = useState<string[]>([]);
-    const { skills: availableSkills, loading: skillsLoading } = useSkillRuntimeCatalog();
+    const { skills: availableSkills, loading: skillsLoading, enabled: skillsEnabled } = useSkillRuntimeCatalog();
+    useEffect(() => {
+        if (!skillsEnabled) setSelectedSkillIds([]);
+    }, [skillsEnabled]);
     const shotAssetReferenceContext = useMemo(() => buildShotAssetReferenceContext(detail, selectedShot?.id || ""), [detail, selectedShot?.id]);
     const referenceByVersionId = useMemo(() => {
         const references = (detail.shotReferences || []).filter((reference) => reference.shotId === selectedShot?.id && reference.role === "reference" && reference.status === "linked");
@@ -503,7 +506,7 @@ export default function WorkflowProductionWorkbench(props: Props) {
                                             showSelectedPrice
                                         />
                                     </Form.Item>
-                                    <Form.Item label="技能库"><SkillRuntimePicker profile="shortDrama" skills={availableSkills} loading={skillsLoading} value={selectedSkillIds} onChange={setSelectedSkillIds} /></Form.Item>
+                                    {skillsEnabled ? <Form.Item label="技能库"><SkillRuntimePicker profile="shortDrama" skills={availableSkills} loading={skillsLoading} value={selectedSkillIds} onChange={setSelectedSkillIds} /></Form.Item> : null}
                                     <div className="workflow-form-grid is-three">
                                         <Form.Item name="durationSeconds" label="镜头时长（秒）">
                                             {generationCapability === "video" && videoProfile?.duration.selection === "enum"

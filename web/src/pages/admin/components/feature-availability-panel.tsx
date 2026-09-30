@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { App, Button, Skeleton } from "antd";
 import { Switch } from "@/pages/admin/ui/controls";
-import { AlertTriangle, Clapperboard, Coins, ListChecks, MonitorCog, PlugZap, RadioTower, RefreshCw, ShieldCheck, Sparkles } from "lucide-react";
+import { AlertTriangle, BookOpenCheck, Clapperboard, Coins, ListChecks, MonitorCog, PlugZap, RadioTower, RefreshCw, ShieldCheck, Sparkles } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { getAdminFeatureAvailability, updateAdminFeatureAvailability } from "@/services/api/auth";
 import { useUserStore, type FeatureAvailability } from "@/stores/use-user-store";
 import { AdminStatusBadge } from "./admin-ui";
 
-type FeatureKey = "shortDramaEnabled" | "taskCenterEnabled" | "creditsEnabled" | "customChannelsEnabled" | "frontendModelsEnabled" | "pluginCenterEnabled" | "systemPluginsVisibleToUsers";
+type FeatureKey = "shortDramaEnabled" | "taskCenterEnabled" | "creditsEnabled" | "customChannelsEnabled" | "frontendModelsEnabled" | "skillLibraryEnabled" | "pluginCenterEnabled" | "systemPluginsVisibleToUsers";
 type FeatureChangeCopy = {
     title: string;
     operation: string;
@@ -27,7 +27,7 @@ type FeatureRow = {
     };
 };
 
-const editableFeatureKeys: FeatureKey[] = ["shortDramaEnabled", "taskCenterEnabled", "creditsEnabled", "customChannelsEnabled", "frontendModelsEnabled", "pluginCenterEnabled", "systemPluginsVisibleToUsers"];
+const editableFeatureKeys: FeatureKey[] = ["shortDramaEnabled", "taskCenterEnabled", "creditsEnabled", "customChannelsEnabled", "frontendModelsEnabled", "skillLibraryEnabled", "pluginCenterEnabled", "systemPluginsVisibleToUsers"];
 
 const workspaceFeatureRows: FeatureRow[] = [
     {
@@ -106,6 +106,26 @@ const workspaceFeatureRows: FeatureRow[] = [
                 title: "确认关闭自定义渠道？",
                 operation: "停止向普通用户开放自定义渠道配置和调用能力。",
                 userImpact: "用户将无法选择或调用自己的模型渠道，相关生成请求需要改用系统提供的模型。",
+                okText: "确认关闭",
+            },
+        },
+    },
+    {
+        key: "skillLibraryEnabled",
+        title: "用户技能库",
+        description: "开放技能库入口、技能管理及创作中的技能调用能力。关闭不删除已有技能。",
+        icon: <BookOpenCheck className="size-4" aria-hidden="true" />,
+        changeCopy: {
+            enabled: {
+                title: "确认开启用户技能库？",
+                operation: "开放用户技能库入口、技能管理接口和创作中的技能调用能力。",
+                userImpact: "普通用户将可以浏览、安装、管理并在创作与 Agent 中使用技能。",
+                okText: "确认开启",
+            },
+            disabled: {
+                title: "确认关闭用户技能库？",
+                operation: "关闭技能库入口、技能管理接口和新运行中的技能调用，但保留已有技能与历史记录。",
+                userImpact: "普通用户将无法进入或调用技能库；重新开启后可继续使用原有技能。",
                 okText: "确认关闭",
             },
         },
@@ -343,7 +363,7 @@ export default function FeatureAvailabilityPanel() {
                     title="1. 用户工作台入口"
                     description="先决定普通用户能进入哪些核心工作区"
                     icon={<MonitorCog className="size-4" aria-hidden="true" />}
-                    status={<AdminStatusBadge label={`${enabledWorkspaceFeatures}/4 开放`} tone={enabledWorkspaceFeatures === 4 ? "success" : "neutral"} />}
+                    status={<AdminStatusBadge label={`${enabledWorkspaceFeatures}/${workspaceFeatureRows.length} 开放`} tone={enabledWorkspaceFeatures === workspaceFeatureRows.length ? "success" : "neutral"} />}
                 >
                     {workspaceFeatureRows.map((row) => (
                         <FeatureSettingRow key={row.key} row={row} saved={savedFeatures} draft={draftFeatures} saving={saving} onChange={requestFeatureChange} />
@@ -450,6 +470,7 @@ function toEditablePayload(features: FeatureAvailability) {
         creditsEnabled: features.creditsEnabled,
         customChannelsEnabled: features.customChannelsEnabled,
         frontendModelsEnabled: features.frontendModelsEnabled,
+        skillLibraryEnabled: features.skillLibraryEnabled,
         pluginCenterEnabled: features.pluginCenterEnabled,
         systemPluginsVisibleToUsers: features.systemPluginsVisibleToUsers,
     };
@@ -472,6 +493,7 @@ function parseFeatureAvailability(value: unknown): FeatureAvailability {
         creditsEnabled: record.creditsEnabled as boolean,
         customChannelsEnabled: record.customChannelsEnabled as boolean,
         frontendModelsEnabled: record.frontendModelsEnabled as boolean,
+        skillLibraryEnabled: record.skillLibraryEnabled as boolean,
         pluginCenterEnabled: record.pluginCenterEnabled as boolean,
         systemPluginsVisibleToUsers: record.systemPluginsVisibleToUsers as boolean,
         configured: typeof record.configured === "boolean" ? record.configured : undefined,

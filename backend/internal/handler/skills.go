@@ -13,6 +13,9 @@ import (
 )
 
 func RegisterSkillRoutes(r *gin.RouterGroup, svc *service.Service) {
+	r = r.Group("")
+	r.Use(RequireFeature(svc, service.FeatureSkillLibrary))
+
 	r.POST("/skills/install", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {

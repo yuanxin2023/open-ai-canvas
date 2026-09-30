@@ -18,8 +18,9 @@ import (
 )
 
 const (
-	skillStatusEnabled = 1
-	skillSourceUser    = 1
+	skillStatusEnabled = model.SkillStatusEnabled
+	skillSourceUser    = model.SkillSourceUser
+	maxAdminSkillBatch = 200
 )
 
 var skillCategoryLabels = map[string]string{
@@ -107,6 +108,41 @@ type SkillList struct {
 	Categories []SkillCategory `json:"categories"`
 }
 
+type AdminSkillCategory struct {
+	Value          string `json:"value"`
+	Label          string `json:"label"`
+	Available      bool   `json:"available"`
+	TotalCount     int    `json:"totalCount"`
+	AvailableCount int    `json:"availableCount"`
+}
+
+type AdminSkillItem struct {
+	SkillID            string    `json:"skillId"`
+	SkillName          string    `json:"skillName"`
+	Description        string    `json:"description"`
+	Tag                string    `json:"tag"`
+	AuthorName         string    `json:"authorName"`
+	Version            string    `json:"version"`
+	SourceType         string    `json:"sourceType"`
+	Available          bool      `json:"available"`
+	CategoryAvailable  bool      `json:"categoryAvailable"`
+	EffectiveAvailable bool      `json:"effectiveAvailable"`
+	AddedCount         int64     `json:"addedCount"`
+	LikeCount          int64     `json:"likeCount"`
+	UpdatedAt          time.Time `json:"updatedAt"`
+}
+
+type AdminSkillCatalog struct {
+	GlobalAvailable bool                 `json:"globalAvailable"`
+	Categories      []AdminSkillCategory `json:"categories"`
+	Skills          []AdminSkillItem     `json:"skills"`
+}
+
+type AdminSkillAvailabilityRequest struct {
+	SkillIDs  []string `json:"skillIds"`
+	Available bool     `json:"available"`
+}
+
 type SkillMutationRequest struct {
 	SkillName     string               `json:"skillName"`
 	Description   string               `json:"description"`
@@ -169,6 +205,101 @@ func (s *Service) SkillDetail(userID string, id string) (*SkillItem, error) {
 		return nil, err
 	}
 	return &items[0], nil
+}
+
+func (s *Service) AdminSkills(globalAvailable bool) (*AdminSkillCatalog, error) {
+	rows, err := s.repo.PlatformSkills()
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]string, 0, len(rows))
+	for _, row := range rows {
+		ids = append(ids, row.ID)
+	}
+	skillStates, err := s.repo.SkillPlatformStates(ids)
+	if err != nil {
+		return nil, err
+	}
+	categoryStates, err := s.repo.SkillCategoryPlatformStates()
+	if err != nil {
+		return nil, err
+	}
+	items, err := s.skillItems("", rows, false)
+	if err != nil {
+		return nil, err
+	}
+	categoryIndexByTag := make(map[string]int, len(skillCategoryLabels))
+	categories := make([]AdminSkillCategory, 0, len(skillCategoryLabels))
+	for _, category := range skillCategories() {
+		available := true
+		if state, ok := categoryStates[category.Value]; ok {
+			available = state.Available
+		}
+		categories = append(categories, AdminSkillCategory{Value: category.Value, Label: category.Label, Available: available})
+		categoryIndexByTag[category.Value] = len(categories) - 1
+	}
+	result := make([]AdminSkillItem, 0, len(items))
+	for _, item := range items {
+		available := true
+		if state, ok := skillStates[item.SkillID]; ok {
+			available = state.Available
+		}
+		categoryAvailable := true
+		if state, ok := categoryStates[item.Tag]; ok {
+			categoryAvailable = state.Available
+		}
+		result = append(result, AdminSkillItem{
+			SkillID: item.SkillID, SkillName: item.SkillName, Description: item.Description, Tag: item.Tag,
+			AuthorName: item.EffectiveUser.Name, Version: item.Version, SourceType: item.SourceType,
+			Available: available, CategoryAvailable: categoryAvailable,
+			EffectiveAvailable: globalAvailable && categoryAvailable && available,
+			AddedCount:         item.AddedCount, LikeCount: item.LikeCount, UpdatedAt: item.UpdatedAt,
+		})
+		if categoryIndex, ok := categoryIndexByTag[item.Tag]; ok {
+			categories[categoryIndex].TotalCount++
+			if globalAvailable && categoryAvailable && available {
+				categories[categoryIndex].AvailableCount++
+			}
+		}
+	}
+	return &AdminSkillCatalog{GlobalAvailable: globalAvailable, Categories: categories, Skills: result}, nil
+}
+
+func (s *Service) SetPlatformSkillAvailability(req AdminSkillAvailabilityRequest, actorID string, audit *model.AdminAuditEvent) error {
+	if len(req.SkillIDs) == 0 {
+		return kernel.BadAuthRequest("请选择至少一个平台公共技能")
+	}
+	if len(req.SkillIDs) > maxAdminSkillBatch {
+		return kernel.BadAuthRequest("单次最多操作 200 个技能")
+	}
+	ids := make([]string, 0, len(req.SkillIDs))
+	seen := make(map[string]struct{}, len(req.SkillIDs))
+	for _, value := range req.SkillIDs {
+		id := strings.TrimSpace(value)
+		if id == "" {
+			return kernel.BadAuthRequest("技能 ID 不能为空")
+		}
+		if _, exists := seen[id]; exists {
+			return kernel.BadAuthRequest("技能 ID 不能重复")
+		}
+		seen[id] = struct{}{}
+		ids = append(ids, id)
+	}
+	if err := s.repo.SetPlatformSkillAvailability(ids, req.Available, strings.TrimSpace(actorID), audit); err != nil {
+		if errors.Is(err, repository.ErrInvalidPlatformSkillBatch) {
+			return kernel.BadAuthRequest("批次包含不存在、用户创建或非公开的技能")
+		}
+		return err
+	}
+	return nil
+}
+
+func (s *Service) SetPlatformSkillCategoryAvailability(tag string, available bool, actorID string, audit *model.AdminAuditEvent) error {
+	tag = strings.TrimSpace(tag)
+	if _, ok := skillCategoryLabels[tag]; !ok {
+		return kernel.BadAuthRequest("未知的技能分类")
+	}
+	return s.repo.SetSkillCategoryPlatformAvailability(tag, available, strings.TrimSpace(actorID), audit)
 }
 
 func (s *Service) CreateSkill(userID string, req SkillMutationRequest) (*SkillItem, error) {
@@ -351,6 +482,13 @@ func (s *Service) visibleSkill(userID string, id string) (*model.Skill, error) {
 	}
 	if skill.IsPrivate && skill.OwnerID != userID {
 		return nil, kernel.Forbidden("该技能未公开")
+	}
+	available, err := s.repo.PlatformSkillAvailable(*skill)
+	if err != nil {
+		return nil, err
+	}
+	if !available {
+		return nil, kernel.Forbidden("该平台技能已停用")
 	}
 	return skill, nil
 }

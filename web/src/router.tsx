@@ -23,6 +23,7 @@ const InspirationsPage = lazy(() => import("@/pages/admin/admin-route-pages").th
 const ChannelsPage = lazy(() => import("@/pages/admin/channels/channels-page"));
 const LogicalModelsPage = lazy(() => import("@/pages/admin/logical-models/logical-models-page"));
 const AdminPluginsPage = lazy(() => import("@/pages/admin/plugins/plugins-page"));
+const AdminSkillsPage = lazy(() => import("@/pages/admin/skills/skills-page"));
 const AdminPaymentsPage = lazy(() => import("@/pages/admin/payments/payments-page"));
 const ProductOperationsPage = lazy(() => import("@/pages/admin/product-operations/product-operations-page"));
 const CustomerServicePage = lazy(() => import("@/pages/admin/customer-service/customer-service-page"));
@@ -122,7 +123,14 @@ export const router = createBrowserRouter([
             },
             { path: "/assets", element: <RequireAuth>{deferred(<AssetsPage />)}</RequireAuth> },
             { path: "/prompts", element: <RequireAuth>{deferred(<PromptsPage />)}</RequireAuth> },
-            { path: "/skills", element: <RequireAuth>{deferred(<SkillsPage />)}</RequireAuth> },
+            {
+                path: "/skills",
+                element: (
+                    <RequireAuth>
+                        <RequireFeature feature="skillLibraryEnabled">{deferred(<SkillsPage />)}</RequireFeature>
+                    </RequireAuth>
+                ),
+            },
             {
                 path: "/plugins",
                 element: (
@@ -197,6 +205,7 @@ export const router = createBrowserRouter([
                     { path: "channels", element: <ChannelsPage /> },
                     { path: "models", element: <RequireFeature feature="frontendModelsEnabled"><LogicalModelsPage /></RequireFeature> },
                     { path: "plugins", element: <AdminPluginsPage /> },
+                    { path: "skills", element: <AdminSkillsPage /> },
                     { path: "payments", element: <AdminPaymentsPage view="providers" /> },
                     { path: "payment-orders", element: <AdminPaymentsPage view="orders" /> },
                     { path: "payment-reconciliation", element: <AdminPaymentsPage view="reconciliation" /> },

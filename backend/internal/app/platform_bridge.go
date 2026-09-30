@@ -27,6 +27,7 @@ const (
 	FeatureCredits               = platform.FeatureCredits
 	FeatureCustomChannels        = platform.FeatureCustomChannels
 	FeatureFrontendModels        = platform.FeatureFrontendModels
+	FeatureSkillLibrary          = platform.FeatureSkillLibrary
 	FeaturePluginCenter          = platform.FeaturePluginCenter
 	FeatureSystemPlugins         = platform.FeatureSystemPlugins
 	FeatureTimelineTranscription = platform.FeatureTimelineTranscription
