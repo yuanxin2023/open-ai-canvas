@@ -2171,6 +2171,7 @@
     }
 
     .workspace-credit-panel-heading,
+    .workspace-credit-daily-bonus,
     .workspace-credit-redeem-heading,
     .workspace-credit-redeem-heading > span,
     .workspace-credit-balance-chip,
@@ -2182,8 +2183,7 @@
     .workspace-credit-panel-heading {
     justify-content: space-between;
     gap: 16px;
-    padding-bottom: 16px;
-    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 12px;
     }
 
     .workspace-credit-panel-title {
@@ -2224,6 +2224,45 @@
     font-size: var(--fs-body);
     font-variant-numeric: tabular-nums;
     text-overflow: ellipsis;
+    }
+
+    .workspace-credit-daily-bonus {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 10px;
+    padding: 12px 0 16px;
+    border-bottom: 1px solid var(--border-color);
+    }
+
+    .workspace-credit-daily-bonus > svg {
+    width: 18px;
+    height: 18px;
+    margin-top: 2px;
+    color: var(--workspace-accent);
+    }
+
+    .workspace-credit-daily-bonus-copy {
+    display: grid;
+    min-width: 0;
+    gap: 2px;
+    }
+
+    .workspace-credit-daily-bonus-copy strong {
+    color: var(--foreground);
+    font-size: var(--fs-body-sm);
+    font-weight: 600;
+    }
+
+    .workspace-credit-daily-bonus-copy span {
+    color: color-mix(in srgb, var(--foreground) 42%, transparent);
+    font-size: var(--fs-label);
+    }
+
+    .workspace-credit-daily-bonus-amount {
+    color: var(--foreground);
+    font-size: var(--fs-body);
+    font-variant-numeric: tabular-nums;
+    font-weight: 650;
     }
 
     .workspace-credit-redeem-heading {

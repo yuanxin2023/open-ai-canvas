@@ -18,7 +18,7 @@ const workspaceCreditTheme = getWorkspaceAntThemeConfig();
 
 export function WorkspaceCreditPopover({ userId }: { userId: string }) {
     const { message } = App.useApp();
-    const { availableMicrocredits } = useWalletBalance(userId);
+    const { availableMicrocredits, policy } = useWalletBalance(userId);
     const [open, setOpen] = useState(false);
     const [productsOpen, setProductsOpen] = useState(false);
     const [selectedProduct, setSelectedProduct] = useState<TopupProduct | null>(null);
@@ -32,6 +32,7 @@ export function WorkspaceCreditPopover({ userId }: { userId: string }) {
     const paymentIdempotencyKey = useRef("");
     const completedPaymentOrderId = useRef("");
     const balance = availableMicrocredits === null ? "--" : formatCredits(availableMicrocredits);
+    const dailyBonus = policy === null ? "--" : formatCredits(policy.checkinBonusMicrocredits, 2);
     const normalizedCode = code.trim().toLowerCase();
     const paymentCatalogQuery = useQuery({
         queryKey: ["payment-catalog", userId],
@@ -200,7 +201,7 @@ export function WorkspaceCreditPopover({ userId }: { userId: string }) {
     return (
         <ConfigProvider theme={workspaceCreditTheme}>
             <Popover
-            trigger="click"
+            trigger="hover"
             placement="bottomRight"
             rootClassName="workspace-credit-popover"
             open={open}
@@ -217,6 +218,15 @@ export function WorkspaceCreditPopover({ userId }: { userId: string }) {
                             <span>余额</span>
                             <strong>{balance}</strong>
                         </div>
+                    </div>
+
+                    <div className="workspace-credit-daily-bonus" aria-label={`每日签到赠送 ${dailyBonus} 免费积分`}>
+                        <Gift aria-hidden />
+                        <div className="workspace-credit-daily-bonus-copy">
+                            <strong>每日免费积分</strong>
+                            <span>{policy === null ? "正在读取每日签到赠送额度" : `每天签到赠送 ${dailyBonus} 免费积分`}</span>
+                        </div>
+                        <strong className="workspace-credit-daily-bonus-amount">{dailyBonus}</strong>
                     </div>
 
                     <div className="workspace-credit-redeem-heading">
@@ -258,7 +268,10 @@ export function WorkspaceCreditPopover({ userId }: { userId: string }) {
                 type="button"
                 className="app-workspace-credit-button"
                 aria-label={availableMicrocredits === null ? "查看积分余额" : `积分余额 ${balance}`}
-                title="查看积分余额"
+                onClick={() => {
+                    setOpen(false);
+                    setProductsOpen(true);
+                }}
             >
                 <Sparkles aria-hidden />
                 <span>{balance}</span>
