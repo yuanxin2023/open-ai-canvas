@@ -137,6 +137,18 @@ func (r *Repository) ExportAPICallLogs(filter APICallLogFilter, limit int) ([]mo
 	return logs, err
 }
 
+// APICallLogByBillingOrder returns the billable request that created the
+// billing decision. Polling and download records are operational details and
+// must not be presented as the request an administrator is reconciling.
+func (r *Repository) APICallLogByBillingOrder(orderID string, userID string) (*model.ApiCallLog, error) {
+	var log model.ApiCallLog
+	query := r.db.Where("billing_order_id = ? AND user_id = ? AND billable = ?", orderID, userID, true)
+	if err := visibleAPICallLogQuery(query).Where("COALESCE(request_kind, '') <> ?", "download").Order("created_at asc").First(&log).Error; err != nil {
+		return nil, err
+	}
+	return &log, nil
+}
+
 func (r *Repository) filteredAPICallLogQuery(filter APICallLogFilter) *gorm.DB {
 	query := r.apiCallLogQuery(filter.AnalyticsFilter)
 	switch filter.RecordType {

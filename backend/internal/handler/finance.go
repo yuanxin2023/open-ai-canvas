@@ -536,6 +536,19 @@ func RegisterFinanceRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		ok(c, items)
 	})
+	r.GET("/admin/billing-orders/:id/api-log", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		log, err := svc.AdminAPICallLogByBillingOrder(user, c.Param("id"))
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"log": log})
+	})
 	r.POST("/admin/billing-orders/batch-resolve", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {

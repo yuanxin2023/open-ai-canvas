@@ -11,6 +11,7 @@ import { listAdminUsers, type AdminReferenceData, type AdminUser } from "@/servi
 import { adjustAdminUserCredits, getAdminCreditPolicy, listAdminBillingOrders, resolveAdminBillingOrder, resolveAdminBillingOrders, updateAdminCreditPolicy, type BillingOrder } from "@/services/api/wallet";
 
 import { AdminBatchBar, AdminDataTable, AdminRowActions, AdminStatusBadge, AdminTableEmpty } from "./admin-ui";
+import { ApiLogDetailModal } from "./api-log-detail-drawer";
 
 export type CreditOperation = "policy" | "adjustment" | null;
 
@@ -50,6 +51,7 @@ export default function CreditOperationsPanel({ users, activeOperation, onOperat
     const [searchingUsers, setSearchingUsers] = useState(false);
     const [pendingAdjustment, setPendingAdjustment] = useState<AdjustmentFormValues | null>(null);
     const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
+    const [detailBillingOrderId, setDetailBillingOrderId] = useState<string | null>(null);
     const [resolutionTarget, setResolutionTarget] = useState<BillingResolutionTarget | null>(null);
     const [adjustmentForm] = Form.useForm<AdjustmentFormValues>();
     const [resolutionForm] = Form.useForm<ResolutionFormValues>();
@@ -290,7 +292,17 @@ export default function CreditOperationsPanel({ users, activeOperation, onOperat
     };
 
     const columns: ColumnsType<BillingOrder> = [
-        { title: "创建时间", dataIndex: "createdAt", width: 170, align: "center", render: formatTime },
+        {
+            title: "创建时间 / 详情",
+            dataIndex: "createdAt",
+            width: 170,
+            align: "center",
+            render: (value: string, order) => (
+                <Button type="link" size="small" className="h-auto p-0 tabular-nums" aria-label={`查看计费订单 ${order.id} 的请求详情`} onClick={() => setDetailBillingOrderId(order.id)}>
+                    {formatTime(value)}
+                </Button>
+            ),
+        },
         {
             title: "用户",
             dataIndex: "userId",
@@ -440,6 +452,13 @@ export default function CreditOperationsPanel({ users, activeOperation, onOperat
                         pagination: false,
                         columns,
                         dataSource: orders,
+                        onRow: (order) => ({
+                            onClick: (event) => {
+                                if ((event.target as HTMLElement).closest("button,a,input,.ant-checkbox-wrapper")) return;
+                                setDetailBillingOrderId(order.id);
+                            },
+                            className: "admin-table-clickable-row",
+                        }),
                         rowSelection: {
                             selectedRowKeys: selectedOrderIds,
                             preserveSelectedRowKeys: false,
@@ -466,6 +485,8 @@ export default function CreditOperationsPanel({ users, activeOperation, onOperat
                     }
                 />
             </section>
+
+            <ApiLogDetailModal billingOrderId={detailBillingOrderId} onClose={() => setDetailBillingOrderId(null)} onLogUpdated={() => void reload(page, pageSize)} />
 
             <AdminModal
                 centered

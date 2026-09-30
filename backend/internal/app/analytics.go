@@ -387,6 +387,31 @@ func (s *Service) AdminAPICallLog(actor *model.User, id string) (*model.ApiCallL
 	return &logs[0], nil
 }
 
+func (s *Service) AdminAPICallLogByBillingOrder(actor *model.User, billingOrderID string) (*model.ApiCallLog, error) {
+	if err := s.RequireAdmin(actor); err != nil {
+		return nil, err
+	}
+	order, err := s.repo.BillingOrder(strings.TrimSpace(billingOrderID))
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, NotFound("计费订单不存在")
+	}
+	if err != nil {
+		return nil, err
+	}
+	log, err := s.repo.APICallLogByBillingOrder(order.ID, order.UserID)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, NotFound("该计费订单没有可查看的请求详情")
+	}
+	if err != nil {
+		return nil, err
+	}
+	logs := []model.ApiCallLog{*log}
+	if err := s.decorateAPICallLogs(logs); err != nil {
+		return nil, err
+	}
+	return &logs[0], nil
+}
+
 func (s *Service) AdminAPICallLogsCSV(actor *model.User, query APICallLogQuery) ([]byte, error) {
 	if err := s.RequireAdmin(actor); err != nil {
 		return nil, err

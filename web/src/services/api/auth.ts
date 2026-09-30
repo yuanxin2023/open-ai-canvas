@@ -605,6 +605,10 @@ export function getAdminApiLog(id: string) {
     return http.get<{ log: ApiCallLog }>(`/admin/api-logs/${encodeURIComponent(id)}`);
 }
 
+export function getAdminApiLogByBillingOrder(billingOrderId: string) {
+    return http.get<{ log: ApiCallLog }>(`/admin/billing-orders/${encodeURIComponent(billingOrderId)}/api-log`);
+}
+
 export function queryAdminApiLogTask(id: string) {
     return http.post<AdminProviderTaskQueryResult>(`/admin/api-logs/${encodeURIComponent(id)}/query-task`);
 }

@@ -5,27 +5,31 @@ import { AdminModal } from "@/pages/admin/ui/overlays";
 import { RefreshCw } from "lucide-react";
 
 import { formatCredits } from "@/constant/credits";
-import { getAdminApiLog, queryAdminApiLogTask, type ApiCallLog } from "@/services/api/auth";
+import { getAdminApiLog, getAdminApiLogByBillingOrder, queryAdminApiLogTask, type ApiCallLog } from "@/services/api/auth";
 import { AdminStatusBadge } from "./admin-ui";
 
-export function ApiLogDetailModal({ logId, onClose, onLogUpdated }: { logId: string | null; onClose: () => void; onLogUpdated?: (log: ApiCallLog) => void }) {
+export function ApiLogDetailModal({ logId = null, billingOrderId = null, onClose, onLogUpdated }: { logId?: string | null; billingOrderId?: string | null; onClose: () => void; onLogUpdated?: (log: ApiCallLog) => void }) {
     const { message } = App.useApp();
     const [log, setLog] = useState<ApiCallLog | null>(null);
     const [loading, setLoading] = useState(false);
     const [querying, setQuerying] = useState(false);
     useEffect(() => {
-        if (!logId) return;
+        if (!logId && !billingOrderId) {
+            setLog(null);
+            return;
+        }
         let active = true;
         setLoading(true);
         setLog(null);
-        void getAdminApiLog(logId)
+        const request = logId ? getAdminApiLog(logId) : getAdminApiLogByBillingOrder(billingOrderId!);
+        void request
             .then((result) => active && setLog(result.log))
             .catch((error) => active && message.error(error instanceof Error ? error.message : "读取请求详情失败"))
             .finally(() => active && setLoading(false));
         return () => {
             active = false;
         };
-    }, [logId, message]);
+    }, [billingOrderId, logId, message]);
 
     const queryProviderTask = async () => {
         if (!log) return;
@@ -52,7 +56,7 @@ export function ApiLogDetailModal({ logId, onClose, onLogUpdated }: { logId: str
     return (
         <AdminModal
             title="请求详情"
-            open={Boolean(logId)}
+            open={Boolean(logId || billingOrderId)}
             centered
             width="min(1200px, calc(100vw - 32px))"
             onCancel={onClose}
