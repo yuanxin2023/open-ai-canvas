@@ -17,9 +17,13 @@ const (
 )
 
 func TestOfficialProtocolPackagesAreSelfContainedDeclarativePlugins(t *testing.T) {
-	paths, err := filepath.Glob(filepath.Join("..", "..", "..", "plugin-packages", "*.canvas-plugin"))
-	if err != nil {
-		t.Fatal(err)
+	paths := make([]string, 0, 80)
+	for _, extension := range PluginPackageExtensions() {
+		matched, err := filepath.Glob(filepath.Join("..", "..", "..", "plugin-packages", "*"+extension))
+		if err != nil {
+			t.Fatal(err)
+		}
+		paths = append(paths, matched...)
 	}
 	if len(paths) < 70 {
 		t.Fatalf("official protocol packages = %d, want at least 70", len(paths))
@@ -39,7 +43,11 @@ func TestOfficialProtocolPackagesAreSelfContainedDeclarativePlugins(t *testing.T
 			// the declarative AI provider contract covered by this catalog test.
 			continue
 		}
-		if pkg.Manifest.APIVersion != "open-ai-canvas.plugin/v2" {
+		expectedAPIVersion := "open-ai-canvas.plugin/v2"
+		if strings.HasSuffix(strings.ToLower(path), LovwowPackageExtension) {
+			expectedAPIVersion = "lovwow.plugin/v2"
+		}
+		if pkg.Manifest.APIVersion != expectedAPIVersion {
 			t.Fatalf("%s apiVersion = %q", filepath.Base(path), pkg.Manifest.APIVersion)
 		}
 		if strings.HasPrefix(strings.TrimSpace(pkg.Manifest.Runtime.Backend), "host:") {
@@ -709,6 +717,76 @@ func TestOfficialGeminiImagePrefersQualityOverVideoResolution(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestSubRouterGeminiImageParsesMarkdownSignedURL(t *testing.T) {
+	adapter := officialPackageAdapter(t, "subrouter-gemini-image.canvas-plugin", "subrouter-gemini-image")
+	create, err := adapter.BuildCreate(context.Background(), RequestContext{Request: GenerationRequest{
+		Model: "gemini-compatible-image", Prompt: "edit the references", AspectRatio: "1:1", Quality: "1k",
+		Images: []MediaReference{
+			{DataURL: "data:image/png;base64,aGVsbG8=", MIMEType: "image/png"},
+			{URL: "https://cdn.example/reference.jpg", MIMEType: "image/jpeg"},
+		},
+		Output: OutputOptions{AspectRatio: "16:9", Quality: "4k"},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if create.Path != "/v1beta/models/gemini-compatible-image:generateContent" {
+		t.Fatalf("create path = %q", create.Path)
+	}
+	if create.Method != "POST" || create.ContentType != "application/json" || create.Auth.Type != "google-api-key" || create.Auth.Field != "apiKey" {
+		t.Fatalf("create contract = %#v", create)
+	}
+	if len(create.Headers) != 0 || len(create.Query) != 0 || len(create.Files) != 0 {
+		t.Fatalf("unexpected request extras = %#v", create)
+	}
+	body := manifestTestBody(t, create)
+	contents, _ := body["contents"].([]any)
+	content, _ := contents[0].(map[string]any)
+	parts, _ := content["parts"].([]any)
+	if len(parts) != 3 {
+		t.Fatalf("SubRouter image request parts = %#v", contents)
+	}
+	inline, _ := parts[1].(map[string]any)
+	inlineData, _ := inline["inlineData"].(map[string]any)
+	if inlineData["mimeType"] != "image/png" || inlineData["data"] != "aGVsbG8=" {
+		t.Fatalf("SubRouter inline reference = %#v", parts[1])
+	}
+	remote, _ := parts[2].(map[string]any)
+	fileData, _ := remote["fileData"].(map[string]any)
+	if fileData["mimeType"] != "image/jpeg" || fileData["fileUri"] != "https://cdn.example/reference.jpg" {
+		t.Fatalf("SubRouter remote reference = %#v", parts[2])
+	}
+	generationConfig, _ := body["generationConfig"].(map[string]any)
+	imageConfig, _ := generationConfig["imageConfig"].(map[string]any)
+	if imageConfig["aspectRatio"] != "16:9" || imageConfig["imageSize"] != "4K" {
+		t.Fatalf("imageConfig = %#v", imageConfig)
+	}
+
+	response := []byte(`{"candidates":[{"content":{"parts":[{"text":"![原图链接5小时有效](https://cdn.example/image.jpg?X-Amz-Expires=18000&X-Amz-Signature=test)"}],"role":"model"},"finishReason":"STOP"}],"usageMetadata":{"totalTokenCount":2189}}`)
+	result, err := adapter.ParseCreate(context.Background(), response)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Status != StatusSucceeded || result.Result == nil || len(result.Result.Images) != 1 {
+		t.Fatalf("result = %#v", result)
+	}
+	image := result.Result.Images[0]
+	if image.URL != "https://cdn.example/image.jpg?X-Amz-Expires=18000&X-Amz-Signature=test" || !image.Ephemeral {
+		t.Fatalf("image = %#v", image)
+	}
+
+	inlineResult, err := adapter.ParseCreate(context.Background(), []byte(`{"candidates":[{"content":{"parts":[{"inlineData":{"mimeType":"image/png","data":"aGVsbG8="}}]}}]}`))
+	if err != nil || inlineResult.Result == nil || len(inlineResult.Result.Images) != 1 || inlineResult.Result.Images[0].DataURL != "data:image/png;base64,aGVsbG8=" || !inlineResult.Result.Images[0].Ephemeral {
+		t.Fatalf("inline result = %#v, err = %v", inlineResult, err)
+	}
+
+	failed, err := adapter.ParseCreate(context.Background(), []byte(`{"error":{"code":400,"message":"invalid request"}}`))
+	if err != nil || failed.Status != StatusFailed || failed.Message != "invalid request" {
+		t.Fatalf("failed result = %#v, err = %v", failed, err)
+	}
+
 }
 
 func TestOfficialGrokImageMapsAspectAndResolution(t *testing.T) {

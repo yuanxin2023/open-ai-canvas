@@ -12,12 +12,34 @@ import (
 )
 
 const (
-	PluginPackageFormat    = "open-ai-canvas.plugin/package-v1"
-	PluginPackageMaxBytes  = 48 << 20
-	PluginManifestMaxBytes = 512 << 10
-	pluginPackageMaxFiles  = 256
-	pluginPackageMaxEntry  = 16 << 20
+	PluginPackageFormat        = "open-ai-canvas.plugin/package-v1"
+	PluginPackageExtension     = ".canvas-plugin"
+	CompatiblePackageExtension = ".yingce-plugin"
+	LovwowPackageExtension     = ".lovwow-plugin"
+	PluginPackageMaxBytes      = 48 << 20
+	PluginManifestMaxBytes     = 512 << 10
+	pluginPackageMaxFiles      = 256
+	pluginPackageMaxEntry      = 16 << 20
 )
+
+func IsPluginPackageFileName(name string) bool {
+	lower := strings.ToLower(strings.TrimSpace(name))
+	return strings.HasSuffix(lower, PluginPackageExtension) || strings.HasSuffix(lower, CompatiblePackageExtension) || strings.HasSuffix(lower, LovwowPackageExtension)
+}
+
+func PluginPackageExtensions() []string {
+	return []string{PluginPackageExtension, CompatiblePackageExtension, LovwowPackageExtension}
+}
+
+func PluginPackageExtensionForAPIVersion(apiVersion string) string {
+	if strings.HasPrefix(strings.TrimSpace(apiVersion), "yingce.plugin/") {
+		return CompatiblePackageExtension
+	}
+	if strings.HasPrefix(strings.TrimSpace(apiVersion), "lovwow.plugin/") {
+		return LovwowPackageExtension
+	}
+	return PluginPackageExtension
+}
 
 // PluginPackage is the transport envelope for every uploaded plugin. The
 // manifest remains the single capability contract; files are optional runtime

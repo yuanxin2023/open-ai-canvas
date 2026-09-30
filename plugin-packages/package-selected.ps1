@@ -11,11 +11,18 @@ foreach ($id in $ids) {
     throw "Source mirror directories cannot be packaged directly: $id"
   }
   $source = Join-Path $root $id
-  $output = Join-Path $root ($id + '.canvas-plugin')
-  $temporary = Join-Path $root ('.' + $id + '.canvas-plugin.tmp')
-  if (-not (Test-Path -LiteralPath (Join-Path $source 'manifest.json'))) {
+  $manifestPath = Join-Path $source 'manifest.json'
+  if (-not (Test-Path -LiteralPath $manifestPath)) {
     throw "Missing manifest.json for $id"
   }
+  $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+  $extension = switch -Wildcard ([string]$manifest.apiVersion) {
+    'yingce.plugin/*' { '.yingce-plugin'; break }
+    'lovwow.plugin/*' { '.lovwow-plugin'; break }
+    default { '.canvas-plugin' }
+  }
+  $output = Join-Path $root ($id + $extension)
+  $temporary = Join-Path $root ('.' + $id + $extension + '.tmp')
   if (Test-Path -LiteralPath $temporary) { Remove-Item -LiteralPath $temporary -Force }
 
   $archive = [System.IO.Compression.ZipFile]::Open($temporary, [System.IO.Compression.ZipArchiveMode]::Create)
@@ -33,5 +40,9 @@ foreach ($id in $ids) {
     $archive.Dispose()
   }
   Move-Item -LiteralPath $temporary -Destination $output -Force
+  @('.yingce-plugin', '.lovwow-plugin', '.canvas-plugin') | Where-Object { $_ -ne $extension } | ForEach-Object {
+    $staleOutput = Join-Path $root ($id + $_)
+    if (Test-Path -LiteralPath $staleOutput) { Remove-Item -LiteralPath $staleOutput -Force }
+  }
   Write-Output "$id -> $output"
 }

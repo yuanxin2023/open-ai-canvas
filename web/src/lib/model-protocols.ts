@@ -13,6 +13,10 @@ export function isVolcengineArkImageProtocol(protocol?: string) {
     return protocol === "volcengine-ark-image" || protocol === "volcengine-ark-agent-plan-image";
 }
 
+export function isGeminiImageProtocol(protocol?: string) {
+    return protocol === "gemini-image" || protocol === "subrouter-gemini-image";
+}
+
 export function isVolcengineArkVideoProtocol(protocol?: string) {
     return protocol === "volcengine-ark-video" || protocol === "volcengine-ark-agent-plan-video";
 }

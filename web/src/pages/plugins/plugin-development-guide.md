@@ -4,7 +4,7 @@
 
 ## 1. 包格式
 
-上传文件必须是 `.canvas-plugin` ZIP 包，大小不超过 48 MiB。包内必须有根目录 `manifest.json`；不能上传裸 JSON。清单和可选的 Web 运行时代码、静态资源属于同一个版本、权限和生命周期：
+新插件上传文件使用 `.canvas-plugin` ZIP 包，大小不超过 48 MiB；宿主继续兼容已有 `.lovwow-plugin` 和 `.yingce-plugin`。包内必须有根目录 `manifest.json`，不能上传裸 JSON。清单和可选的 Web 运行时代码、静态资源属于同一个版本、权限和生命周期：
 
 ```text
 my-plugin.canvas-plugin

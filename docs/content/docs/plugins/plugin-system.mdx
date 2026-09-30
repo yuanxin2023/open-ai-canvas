@@ -7,7 +7,7 @@ description: AI 创作工作台统一插件系统的扩展边界、Manifest 合�
 
 > 状态：已实现首版（Eagle 外部素材来源 + AI 提示词优化器）
 >
-> 当前版本已经包含 Eagle 专属素材管理页面、后端本地桥接、原始文件树浏览、文件读取和写入，以及内置 `prompt-optimizer` AI 能力插件。第三方包统一使用 `.canvas-plugin`；远程 Web 入口仍必须经过沙箱运行时和宿主 RPC。
+> 当前版本已经包含 Eagle 专属素材管理页面、后端本地桥接、原始文件树浏览、文件读取和写入，以及内置 `prompt-optimizer` AI 能力插件。新插件统一使用 `.canvas-plugin`，宿主继续兼容已有 `.lovwow-plugin` 和 `.yingce-plugin`；远程 Web 入口仍必须经过沙箱运行时和宿主 RPC。
 
 ## 1. 背景与范围
 
@@ -49,7 +49,7 @@ description: AI 创作工作台统一插件系统的扩展边界、Manifest 合�
 | --- | --- | --- | --- | --- |
 | 系统插件 | OpenAI、Gemini、即梦等协议 Provider | 管理员 | 不适用 | 管理员 |
 | 官方插件 | RunningHub、ComfyUI Bridge、Eagle、提示词优化器、肖像排查 | 管理员作为硬上限 | 每个用户独立 | 按插件为用户级或无配置 |
-| 自定义插件 | 管理员上传的 `.canvas-plugin` | 管理员 | 不适用 | 管理员 |
+| 自定义插件 | 管理员上传的 `.canvas-plugin`（兼容 `.lovwow-plugin`、`.yingce-plugin`） | 管理员 | 不适用 | 管理员 |
 
 `/plugins` 是用户发现、个人启用和个人配置入口；`/admin/plugins` 是平台可用性、上传、卸载和启用人数入口。普通用户是否能看到只读的系统/自定义插件由“向普通用户显示系统插件”功能开关控制，但官方应用插件始终保留个人开关。
 
@@ -87,7 +87,7 @@ Eagle 插件属于此类，具体方案见第 8 节。
 
 ## 5. 插件包与清单
 
-插件以一个统一的 `.canvas-plugin` 包作为入口。包内固定包含 `manifest.json`，也可以包含受沙箱约束的 Web 入口和静态资源。Manifest 负责描述插件能力、权限和运行时；包文件负责承载对应版本的实现，不能再把“协议 JSON”和“UI 插件源码”拆成两套安装系统。
+插件以一个统一的 `.canvas-plugin` 包作为入口；历史 `.lovwow-plugin` 和 `.yingce-plugin` 仍可加载。包内固定包含 `manifest.json`，也可以包含受沙箱约束的 Web 入口和静态资源。Manifest 负责描述插件能力、权限和运行时；包文件负责承载对应版本的实现，不能再把“协议 JSON”和“UI 插件源码”拆成两套安装系统。
 
 建议的最小包结构：
 
@@ -102,7 +102,7 @@ eagle-asset-connector.canvas-plugin
 
 ```json
 {
-  "apiVersion": "open-ai-canvas.plugin/v1",
+  "apiVersion": "open-ai-canvas.plugin/v2",
   "id": "eagle-asset-connector",
   "name": "Eagle 素材库",
   "version": "0.3.0",
@@ -113,13 +113,13 @@ eagle-asset-connector.canvas-plugin
 }
 ```
 
-带 Web 功能的包增加 `entry: "web/entry.js"`、`runtime.web: "sandbox"` 或 `"worker"`。上传入口只接受 `.canvas-plugin`，服务端会校验 ZIP 路径、大小、重复文件、Manifest 和入口文件，不执行包内 JavaScript；当前版本先完成包校验、存储和入口合同，未授权的 Web 代码不会自动进入主页面。Provider 仍由后端声明式运行时执行；UI/功能代码通过隔离运行时和权限化宿主 API 接入。
+带 Web 功能的包增加 `entry: "web/entry.js"`、`runtime.web: "sandbox"` 或 `"worker"`。上传入口接受 `.canvas-plugin` 并兼容 `.lovwow-plugin` 和 `.yingce-plugin`，服务端会校验 ZIP 路径、大小、重复文件、Manifest 和入口文件，不执行包内 JavaScript；当前版本先完成包校验、存储和入口合同，未授权的 Web 代码不会自动进入主页面。Provider 仍由后端声明式运行时执行；UI/功能代码通过隔离运行时和权限化宿主 API 接入。
 
 字段约束：
 
 - `id`：全局唯一，使用小写 kebab-case；安装后不能随意变更。
 - `version`：遵循 SemVer，用于更新和回滚判断。
-- `apiVersion`：新包固定使用 `open-ai-canvas.plugin/v1`；运行时只为上一代官方命名空间提供自动迁移，不接受其他平行 Manifest。
+- `apiVersion`：新包固定使用 `open-ai-canvas.plugin/v2`；运行时继续接受既有 `lovwow.plugin/v1|v2` 和 `yingce.plugin/v1|v2` 包。
 - `contributes`：声明 provider、workflow、canvasNodes、transforms、assetSources、agents 等能力。
 - `permissions`：最小权限集合，宿主在安装和首次使用时展示。
 - `dependencies`：插件依赖的其他插件或宿主能力。
@@ -133,7 +133,7 @@ eagle-asset-connector.canvas-plugin
 
 ```ts
 export interface CanvasPluginManifest {
-  apiVersion: "open-ai-canvas.plugin/v1";
+  apiVersion: "open-ai-canvas.plugin/v2";
   id: string;
   name: string;
   version: string;

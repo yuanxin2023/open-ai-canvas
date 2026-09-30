@@ -118,6 +118,7 @@ HTTP 请求 -> handler -> service（稳定导入面 / 别名）-> app（组合�
 | 管理后台存储资源 | `handler/admin_storage.go` | `internal/app/admin_storage.go`、`repository/admin_storage.go` |
 | 资源与请求策略 | `handler/auth.go`、`handler/security.go` | `internal/platform`、`internal/app/upload_quota.go`、`storage_quota.go`、`coordination.go` |
 | 模型响应拦截 | `handler/response_interception.go`、`handler/custom_proxy.go` | `internal/app/response_interception.go`、`repository/repository.go` |
+| 模型协议插件 | `handler/plugin.go`、`handler/auth.go` | `internal/protocol`、`internal/generation`、根目录 `plugin-packages/`；SubRouter Gemini 图片兼容包为 `plugin-packages/subrouter-gemini-image/` |
 | 异步任务、文本 SSE 与 Agent | `handler/routes.go` | `internal/app` 组合根（`provider_*` 仍在此）+ `internal/generation` + `internal/outbound` + `task_text_stream.go`、`text_replay.go` |
 | 用户画布与素材 | `handler/user_data.go` | `internal/canvas` |
 | 文件和 OSS | `handler/routes.go` | `internal/app/resource.go`、`settings.go` |

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { consumeChatCompletionStreamText, consumeGeminiStreamText, consumeResponseStreamText, parseChatCompletionPayload, parseGeminiToolResponse, parseImagePayload, parseToolResponse } from "../src/services/api/image-response";
+import { consumeChatCompletionStreamText, consumeGeminiStreamText, consumeResponseStreamText, parseChatCompletionPayload, parseGeminiImagePayload, parseGeminiToolResponse, parseImagePayload, parseToolResponse } from "../src/services/api/image-response";
 import { normalizeQuality, resolveRequestSize, validateImageSize } from "../src/services/api/image-validation";
 
 describe("image api contracts", () => {
@@ -22,6 +22,15 @@ describe("image api contracts", () => {
         ]);
         expect(() => parseImagePayload({ data: [] })).toThrow("接口没有返回图片");
         expect(() => parseImagePayload({ code: 1001, msg: "额度不足" })).toThrow("额度不足");
+    });
+
+    test("解包 SubRouter Gemini Markdown 临时图片链接", () => {
+        const signedUrl = "https://cdn.example/image.jpg?X-Amz-Expires=18000&X-Amz-Signature=test";
+        expect(
+            parseGeminiImagePayload({
+                candidates: [{ content: { parts: [{ text: `![原图链接5小时有效](${signedUrl})` }] }, finishReason: "STOP" }],
+            }),
+        ).toEqual([{ id: expect.any(String), dataUrl: signedUrl }]);
     });
 
     test("统一解析 Responses、Chat Completions 和 Gemini 工具调用", () => {

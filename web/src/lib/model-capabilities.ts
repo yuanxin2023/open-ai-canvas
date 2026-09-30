@@ -1,4 +1,4 @@
-import type { ModelProtocol, ModelProtocolWorkflow } from "@/lib/model-protocols";
+import { isGeminiImageProtocol, type ModelProtocol, type ModelProtocolWorkflow } from "@/lib/model-protocols";
 import type { ImageResolutionOption, ImageResolutionTier } from "@/lib/image-resolution-tiers";
 
 export type ModelCapabilityConfig = {
@@ -242,7 +242,7 @@ export function defaultImageCapabilityConfig(protocol?: ModelProtocol, model = "
         image.responseFormat.supported = false;
         image.outputFormat.supported = false;
     }
-    if (protocol === "gemini-image") {
+    if (isGeminiImageProtocol(protocol)) {
         image.references.maskSupported = false;
         // Gemini Images uses imageConfig.aspectRatio, not the OpenAI-style pixel size field.
         image.size = {

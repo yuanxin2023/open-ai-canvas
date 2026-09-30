@@ -85,6 +85,8 @@ func OfficialDeclarativeImageInterface(interfaceType string) (string, bool) {
 	switch strings.TrimSpace(interfaceType) {
 	case string(model.ChannelInterfaceGeminiImage):
 		return "Gemini Images", true
+	case string(model.ChannelInterfaceSubRouterGeminiImage):
+		return "SubRouter Gemini Images", true
 	case string(model.ChannelInterfaceOpenAIImage):
 		return "OpenAI Images", true
 	case string(model.ChannelInterfaceGrokImage):
@@ -153,7 +155,7 @@ func LoadOfficialFallbackRegistry() *protocol.Registry {
 		}
 		adapters := make([]protocol.Adapter, 0, len(entries))
 		for _, entry := range entries {
-			if entry.IsDir() || !strings.HasSuffix(strings.ToLower(entry.Name()), ".canvas-plugin") {
+			if entry.IsDir() || !protocol.IsPluginPackageFileName(entry.Name()) {
 				continue
 			}
 			data, err := os.ReadFile(filepath.Join(directory, entry.Name()))

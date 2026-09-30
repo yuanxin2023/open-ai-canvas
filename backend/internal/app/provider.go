@@ -924,7 +924,7 @@ func (s *Service) resolveProviderConfig(config providerConfig) (providerConfig, 
 // 同一系统渠道可以挂载不同协议的模型，因此渠道级 APIFormat 只能作为协议缺失时的兼容值。
 func channelAPIFormatForProtocol(channelDefault string, protocol model.ChannelInterfaceType) string {
 	switch protocol {
-	case model.ChannelInterfaceGeminiVeo, model.ChannelInterfaceGeminiImage:
+	case model.ChannelInterfaceGeminiVeo, model.ChannelInterfaceGeminiImage, model.ChannelInterfaceSubRouterGeminiImage:
 		return "gemini"
 	case model.ChannelInterfaceClaudeAPI:
 		return "claude"

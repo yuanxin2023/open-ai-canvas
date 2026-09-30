@@ -267,7 +267,10 @@ func loadDeclarativeManifestProvider(manifest Manifest, index int) (Adapter, err
 }
 
 func ValidateManifest(manifest Manifest) error {
-	if version := strings.TrimSpace(manifest.APIVersion); version != "open-ai-canvas.plugin/v1" && version != "open-ai-canvas.plugin/v2" {
+	version := strings.TrimSpace(manifest.APIVersion)
+	compatibleV1 := earlierPluginProtocolNamespace + ".plugin/v1"
+	compatibleV2 := earlierPluginProtocolNamespace + ".plugin/v2"
+	if version != "open-ai-canvas.plugin/v1" && version != "open-ai-canvas.plugin/v2" && version != "lovwow.plugin/v1" && version != "lovwow.plugin/v2" && version != compatibleV1 && version != compatibleV2 {
 		return fmt.Errorf("unsupported protocol manifest apiVersion %q", manifest.APIVersion)
 	}
 	if strings.TrimSpace(manifest.Metadata.ID) == "" || strings.TrimSpace(manifest.Metadata.Version) == "" {

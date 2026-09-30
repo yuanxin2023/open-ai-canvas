@@ -9,6 +9,15 @@ $violations = [System.Collections.Generic.List[string]]::new()
 
 function Test-ForbiddenContent([byte[]]$Bytes) {
     $text = [System.Text.Encoding]::UTF8.GetString($Bytes)
+    @(
+        ($latinMarker + ".plugin/v1"),
+        ($latinMarker + ".plugin/v2"),
+        ($latinMarker + ".plugin/"),
+        ($latinMarker + "\.plugin/"),
+        ("." + $latinMarker + "-plugin")
+    ) | ForEach-Object {
+        $text = $text.Replace($_, "", [System.StringComparison]::OrdinalIgnoreCase)
+    }
     return $text.IndexOf($latinMarker, [System.StringComparison]::OrdinalIgnoreCase) -ge 0 -or $text.Contains($hanMarker)
 }
 
@@ -56,16 +65,17 @@ try {
     )
     $expectedArtifactIds = @($sourcePluginIds + $artifactOnlyPluginIds | Sort-Object -Unique)
     $actualArtifactIds = @(
-        Get-ChildItem -LiteralPath $pluginRoot -File -Filter "*.canvas-plugin" |
+        Get-ChildItem -LiteralPath $pluginRoot -File |
+            Where-Object { $_.Name -like "*.canvas-plugin" -or $_.Name -like "*.lovwow-plugin" -or $_.Name -like "*.yingce-plugin" } |
             ForEach-Object { $_.BaseName } |
             Sort-Object -Unique
     )
     $artifactComparison = @(Compare-Object -ReferenceObject $expectedArtifactIds -DifferenceObject $actualArtifactIds)
     foreach ($difference in $artifactComparison) {
         if ($difference.SideIndicator -eq "<=") {
-            $violations.Add("缺少插件包: plugin-packages/$($difference.InputObject).canvas-plugin")
+            $violations.Add("缺少插件包: plugin-packages/$($difference.InputObject).canvas-plugin 或兼容格式")
         } elseif ($difference.SideIndicator -eq ">=") {
-            $violations.Add("多余插件包: plugin-packages/$($difference.InputObject).canvas-plugin")
+            $violations.Add("多余插件包: plugin-packages/$($difference.InputObject)")
         }
     }
 
@@ -81,7 +91,7 @@ try {
         if (Test-ForbiddenContent $bytes) {
             $violations.Add("文件内容: $relativePath")
         }
-        if ([System.IO.Path]::GetExtension($relativePath).Equals(".canvas-plugin", [System.StringComparison]::OrdinalIgnoreCase)) {
+        if ($relativePath.EndsWith(".canvas-plugin", [System.StringComparison]::OrdinalIgnoreCase) -or $relativePath.EndsWith(".lovwow-plugin", [System.StringComparison]::OrdinalIgnoreCase) -or $relativePath.EndsWith(".yingce-plugin", [System.StringComparison]::OrdinalIgnoreCase)) {
             Test-PackageEntries $fullPath $relativePath
         }
     }

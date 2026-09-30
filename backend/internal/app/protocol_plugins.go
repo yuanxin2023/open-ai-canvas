@@ -149,7 +149,7 @@ func (c *pluginRuntime) migrateStoredPluginRegistry() error {
 			continue
 		}
 		oldName := filepath.Base(record.PackagePath)
-		if strings.EqualFold(filepath.Ext(oldName), ".canvas-plugin") {
+		if protocol.IsPluginPackageFileName(oldName) {
 			continue
 		}
 		oldPath := filepath.Join(c.packageDir, oldName)
@@ -160,7 +160,8 @@ func (c *pluginRuntime) migrateStoredPluginRegistry() error {
 		if readErr != nil {
 			return fmt.Errorf("读取待迁移插件包 %s：%w", record.ID, readErr)
 		}
-		newName := strings.TrimSuffix(oldName, filepath.Ext(oldName)) + ".canvas-plugin"
+		extension := protocol.PluginPackageExtensionForAPIVersion(manifest.APIVersion)
+		newName := strings.TrimSuffix(oldName, filepath.Ext(oldName)) + extension
 		newPath := filepath.Join(c.packageDir, newName)
 		created := false
 		if existing, readTargetErr := os.ReadFile(newPath); errors.Is(readTargetErr, os.ErrNotExist) {
@@ -175,7 +176,7 @@ func (c *pluginRuntime) migrateStoredPluginRegistry() error {
 		}
 		record.PackagePath = newName
 		if strings.TrimSpace(record.FileName) != "" {
-			record.FileName = strings.TrimSuffix(record.FileName, filepath.Ext(record.FileName)) + ".canvas-plugin"
+			record.FileName = strings.TrimSuffix(record.FileName, filepath.Ext(record.FileName)) + extension
 		}
 		staged = append(staged, stagedPackage{oldPath: oldPath, newPath: newPath, created: created})
 		changed = true
@@ -216,7 +217,7 @@ func (c *pluginRuntime) bootstrapBuiltInPlugins() error {
 	}
 	builtInIDs := make(map[string]struct{}, len(entries)+2)
 	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(strings.ToLower(entry.Name()), ".canvas-plugin") {
+		if entry.IsDir() || !protocol.IsPluginPackageFileName(entry.Name()) {
 			continue
 		}
 		packageData, err := os.ReadFile(filepath.Join(officialDir, entry.Name()))
@@ -253,7 +254,7 @@ func (c *pluginRuntime) bootstrapBuiltInPlugins() error {
 			return fmt.Errorf("编码官方插件 %q：%w", id, err)
 		}
 		hash := pluginHash(packageData)
-		packageName := hash + ".canvas-plugin"
+		packageName := hash + protocol.PluginPackageExtensionForAPIVersion(manifest.APIVersion)
 		if err := writePluginFile(filepath.Join(c.packageDir, packageName), packageData); err != nil {
 			return fmt.Errorf("缓存官方插件 %q：%w", id, err)
 		}
@@ -370,7 +371,7 @@ func containsOfficialPluginPackage(dir string) bool {
 		return false
 	}
 	for _, entry := range entries {
-		if !entry.IsDir() && strings.HasSuffix(strings.ToLower(entry.Name()), ".canvas-plugin") {
+		if !entry.IsDir() && protocol.IsPluginPackageFileName(entry.Name()) {
 			return true
 		}
 	}
@@ -696,10 +697,11 @@ func (c *pluginRuntime) install(data []byte, fileName string) (PluginView, error
 	}
 	hash := pluginHash(data)
 	packageName := filepath.Base(strings.TrimSpace(fileName))
+	packageExtension := protocol.PluginPackageExtensionForAPIVersion(manifest.APIVersion)
 	if packageName == "." || packageName == "" || packageName == string(filepath.Separator) {
-		packageName = manifest.Metadata.ID + ".canvas-plugin"
+		packageName = manifest.Metadata.ID + packageExtension
 	}
-	packagePath := filepath.Join(c.packageDir, hash+".canvas-plugin")
+	packagePath := filepath.Join(c.packageDir, hash+packageExtension)
 	if err := writePluginFile(packagePath, data); err != nil {
 		return PluginView{}, fmt.Errorf("保存插件包失败：%w", err)
 	}

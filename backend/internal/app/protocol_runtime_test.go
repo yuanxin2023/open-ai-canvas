@@ -28,9 +28,13 @@ func TestPluginViewIncludesDocumentationForEveryOfficialProtocol(t *testing.T) {
 	for _, plugin := range plugins {
 		pluginsByID[plugin.Manifest.ID] = plugin
 	}
-	packages, err := filepath.Glob(filepath.Join("..", "..", "..", "plugin-packages", "*.canvas-plugin"))
-	if err != nil {
-		t.Fatal(err)
+	packages := make([]string, 0, 80)
+	for _, extension := range protocol.PluginPackageExtensions() {
+		matched, err := filepath.Glob(filepath.Join("..", "..", "..", "plugin-packages", "*"+extension))
+		if err != nil {
+			t.Fatal(err)
+		}
+		packages = append(packages, matched...)
 	}
 	bundledCount := len(bundledWorkflowPluginManifests())
 	packageIDs := make(map[string]bool, len(packages))

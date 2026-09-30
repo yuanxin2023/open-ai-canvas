@@ -126,14 +126,26 @@ done
 package_plugin() {
   package_id=$1
   package_dir="$root_dir/$package_id"
-  output_file="$root_dir/$package_id.canvas-plugin"
-  temporary_file="$root_dir/.$package_id.canvas-plugin.tmp"
+  if grep -q '"apiVersion"[[:space:]]*:[[:space:]]*"yingce\.plugin/' "$package_dir/manifest.json"; then
+    package_extension=.yingce-plugin
+  elif grep -q '"apiVersion"[[:space:]]*:[[:space:]]*"lovwow\.plugin/' "$package_dir/manifest.json"; then
+    package_extension=.lovwow-plugin
+  else
+    package_extension=.canvas-plugin
+  fi
+  output_file="$root_dir/$package_id$package_extension"
+  temporary_file="$root_dir/.$package_id$package_extension.tmp"
   rm -f "$temporary_file"
   (
     cd "$package_dir"
     find manifest.json README.md docs assets web backend LICENSE -type f 2>/dev/null | LC_ALL=C sort | zip -X -q "$temporary_file" -@
   )
   mv "$temporary_file" "$output_file"
+  for stale_extension in .yingce-plugin .lovwow-plugin .canvas-plugin; do
+    if [ "$stale_extension" != "$package_extension" ]; then
+      rm -f "$root_dir/$package_id$stale_extension"
+    fi
+  done
 }
 
 if [ "$payments_only" = true ]; then
