@@ -59,6 +59,19 @@ description: 信封、错误码与 OpenAPI
 - 物理空间由后台删除队列异步释放，失败保留任务重试；接口成功不代表对象存储已经清理完成。未选中素材使用的资源，以及其他 Resource 行（包括其他用户）复用的物理对象继续保留。
 - 旧画布 / 任务 / 历史快照记录本身保留，但被删媒体链接将失效。此操作不可恢复；没有数据库结构迁移。
 
+## 管理员强制删除存储资源
+
+`POST /api/admin/resources/delete-preview` 仅允许管理员调用，请求为 `{ "resourceIds": ["resource-1", "resource-2"] }`。响应中的 `inspirationCovers` 列出所选资源里正在作为首页灵感提示词展示图的资源及灵感标题，供界面在实际删除前显示专属确认弹窗；预检不修改任何数据。
+
+`POST /api/admin/resources/delete` 仅允许管理员调用，请求为 `{ "resourceIds": ["resource-1", "resource-2"], "confirmInspirationCovers": false }`，单次最多 100 项。该接口默认执行不可恢复的强制删除，不接受通用 `force` 开关。若包含首页灵感提示词展示图，必须在完成预检和用户确认后传入 `confirmInspirationCovers: true`；否则整批返回 HTTP 409，`reason` 为 `inspiration_cover_confirmation_required`，且不删除任何记录。
+
+- 用户头像、平台外观 / Logo / 登录页媒体 / Canvas Agent Live2D、客服按钮图片，以及排队中、运行中、文本回放中的任务或活动 Agent / 创作执行引用属于保护引用，资源保留并在 `blocked[].references` 返回具体来源。
+- 其他创作引用不阻止删除。事务内删除素材表示、镜头产物、画布历史资源索引和临时绑定，清空项目封面、声音样本、公告 / 灵感 / 个人提示词封面及工具的结构化媒体字段；画布、项目、素材、任务和历史快照主体保留，其 JSON 内的旧链接回看时显示资源已删除。
+- 首页灵感提示词展示图属于可删除资源，但必须经过上述专属确认；确认删除后保留灵感卡片主体并清空封面字段。批量选择中只要包含此类展示图，专属确认覆盖整批操作，取消时整批不写入。
+- 支持的存储对象通过 `resource_deletion_jobs` 异步清理；其他资源记录仍复用的同一物理对象不删除。未知存储类型仍删除数据库记录，但不创建无法执行的物理删除任务，并在 `warnings` 提示需人工清理。
+
+成功信封的 `data` 为 `{ deleted: string[], blocked: Array<{ id, reason, references }>, warnings: Array<{ id, reason }> }`。批量请求允许部分成功；审计事件使用 `resource.delete`，并记录强制删除模式、结构化依赖清理和物理文件处理状态。
+
 ## 画布配置与 Live2D（外观合同版本 10）
 
 `GET /public/appearance` 和管理员 `GET /admin/settings/appearance` 返回 `canvas`；管理员通过 `PATCH /admin/settings/appearance` 随外观配置统一保存。字段为 `agentName`（1–24 字）、`launcherLabel`（0–24 字）、`panelTitle`（1–40 字）、`welcomeTitle`（1–100 字）、`welcomeDescription`（0–200 字）、`inputPlaceholder`（1–160 字）、`avatarType`（`orb|live2d`）、`avatarHeight`（120–360 整数）、`live2dResourceId`、`live2dEntry`。入口由服务端核验覆盖；Live2D 无有效资源时拒绝启用。配置不修改 Agent 系统提示词。

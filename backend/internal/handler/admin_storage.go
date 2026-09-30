@@ -9,6 +9,25 @@ import (
 )
 
 func RegisterAdminStorageRoutes(r *gin.RouterGroup, svc *service.Service) {
+	r.POST("/admin/resources/delete-preview", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		var req service.AdminResourceDeleteRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			failService(c, service.BadAuthRequest("删除资源预检请求无效"))
+			return
+		}
+		result, err := svc.PreviewAdminResourceDelete(user, req)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, result)
+	})
+
 	r.POST("/admin/resources/delete", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {

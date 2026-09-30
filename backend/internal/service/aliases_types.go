@@ -52,8 +52,11 @@ type (
 	AdminRedeemCodeSearchResult            = app.AdminRedeemCodeSearchResult
 	AdminReferenceData                     = app.AdminReferenceData
 	AdminResourceDeleteBlocked             = app.AdminResourceDeleteBlocked
+	AdminResourceDeleteConfirmation        = app.AdminResourceDeleteConfirmation
+	AdminResourceDeletePreview             = app.AdminResourceDeletePreview
 	AdminResourceDeleteRequest             = app.AdminResourceDeleteRequest
 	AdminResourceDeleteResult              = app.AdminResourceDeleteResult
+	AdminResourceDeleteWarning             = app.AdminResourceDeleteWarning
 	AdminResourcePage                      = app.AdminResourcePage
 	AdminResourceQuery                     = app.AdminResourceQuery
 	AdminResourceReferenceView             = app.AdminResourceReferenceView

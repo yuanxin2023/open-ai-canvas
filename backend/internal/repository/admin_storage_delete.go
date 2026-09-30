@@ -2,6 +2,7 @@ package repository
 
 import (
 	"errors"
+	"time"
 
 	"infinite-canvas/backend/internal/model"
 
@@ -10,8 +11,18 @@ import (
 )
 
 var ErrAdminResourceDeleteChanged = errors.New("admin resource delete set changed")
-var ErrAdminResourceStillReferenced = errors.New("admin resource is still directly referenced")
+var ErrAdminResourceProtected = errors.New("admin resource became protected")
 var ErrAdminResourceAuditMismatch = errors.New("admin resource delete audit mismatch")
+
+type AdminToolResourceCleanup struct {
+	ID                    int64
+	ExpectedCover         string
+	ExpectedMediaURL      string
+	ExpectedExtraInfoJSON string
+	Cover                 string
+	MediaURL              string
+	ExtraInfoJSON         string
+}
 
 func (r *Repository) AdminResourcesByIDs(ids []string) ([]model.Resource, error) {
 	if len(ids) == 0 {
@@ -22,22 +33,46 @@ func (r *Repository) AdminResourcesByIDs(ids []string) ([]model.Resource, error)
 	return resources, err
 }
 
-func (r *Repository) AnnouncementResourceReferences(resourceIDs []string) ([]ResourceDirectReference, error) {
+func (r *Repository) AdminToolsByOwners(ownerIDs []string) ([]model.Tool, error) {
+	if len(ownerIDs) == 0 {
+		return []model.Tool{}, nil
+	}
+	var tools []model.Tool
+	err := r.db.Where("owner_id IN ?", ownerIDs).Find(&tools).Error
+	return tools, err
+}
+
+func (r *Repository) UserAvatarResourceReferences(resourceIDs []string) ([]ResourceDirectReference, error) {
 	if len(resourceIDs) == 0 {
 		return []ResourceDirectReference{}, nil
 	}
-	var announcements []model.Announcement
-	if err := r.db.Where("image_resource_id IN ?", resourceIDs).Find(&announcements).Error; err != nil {
+	var users []model.User
+	if err := r.db.Select("id", "display_name", "avatar_resource_id").Where("avatar_resource_id IN ?", resourceIDs).Find(&users).Error; err != nil {
 		return nil, err
 	}
-	result := make([]ResourceDirectReference, 0, len(announcements))
-	for _, announcement := range announcements {
-		result = append(result, ResourceDirectReference{Kind: "公告", ID: announcement.ID, Title: announcement.Title, ResourceID: announcement.ImageResourceID})
+	result := make([]ResourceDirectReference, 0, len(users))
+	for _, user := range users {
+		result = append(result, ResourceDirectReference{Kind: "个人头像", ID: user.ID, Title: user.DisplayName, ResourceID: user.AvatarResourceID})
 	}
 	return result, nil
 }
 
-func (r *Repository) DeleteAdminResources(resources []model.Resource, deletionJobs []model.ResourceDeletionJob, audits []model.AdminAuditEvent) error {
+func (r *Repository) InspirationResourceReferences(resourceIDs []string) ([]ResourceDirectReference, error) {
+	if len(resourceIDs) == 0 {
+		return []ResourceDirectReference{}, nil
+	}
+	var inspirations []model.Inspiration
+	if err := r.db.Select("id", "title", "cover_resource_id").Where("cover_resource_id IN ?", resourceIDs).Find(&inspirations).Error; err != nil {
+		return nil, err
+	}
+	result := make([]ResourceDirectReference, 0, len(inspirations))
+	for _, inspiration := range inspirations {
+		result = append(result, ResourceDirectReference{Kind: "首页灵感提示词", ID: inspiration.ID, Title: inspiration.Title, ResourceID: inspiration.CoverResourceID})
+	}
+	return result, nil
+}
+
+func (r *Repository) DeleteAdminResources(resources []model.Resource, toolCleanups []AdminToolResourceCleanup, deletionJobs []model.ResourceDeletionJob, audits []model.AdminAuditEvent, confirmInspirationCovers bool) error {
 	if len(resources) == 0 {
 		return nil
 	}
@@ -49,9 +84,6 @@ func (r *Repository) DeleteAdminResources(resources []model.Resource, deletionJo
 		resourceIDs = append(resourceIDs, resource.ID)
 	}
 	return r.db.Transaction(func(tx *gorm.DB) error {
-		if err := New(tx).RequireNoCanvasHistoryReferences(resourceIDs); err != nil {
-			return err
-		}
 		var current []model.Resource
 		query := tx.Where("id IN ?", resourceIDs)
 		if r.Dialect() == "postgres" {
@@ -66,29 +98,58 @@ func (r *Repository) DeleteAdminResources(resources []model.Resource, deletionJo
 		for _, check := range []struct {
 			model any
 			query string
+			args  []any
 		}{
-			{&model.Announcement{}, "image_resource_id IN ?"},
-			{&model.Inspiration{}, "cover_resource_id IN ?"},
-			{&model.AssetRepresentation{}, "resource_id IN ?"},
-			{&model.VoiceProfile{}, "sample_resource_id IN ?"},
-			{&model.ShotArtifact{}, "resource_id IN ?"},
+			{model: &model.User{}, query: "avatar_resource_id IN ?", args: []any{resourceIDs}},
+			{model: &model.CloudAgentResourceLease{}, query: "resource_id IN ? AND expires_at > ?", args: []any{resourceIDs, time.Now()}},
 		} {
 			var count int64
-			if err := tx.Model(check.model).Where(check.query, resourceIDs).Count(&count).Error; err != nil {
+			if err := tx.Model(check.model).Where(check.query, check.args...).Count(&count).Error; err != nil {
 				return err
 			}
 			if count > 0 {
-				return ErrAdminResourceStillReferenced
+				return ErrAdminResourceProtected
 			}
 		}
-		if err := tx.Where("resource_id IN ?", resourceIDs).Delete(&model.ArkPrivateAssetBinding{}).Error; err != nil {
-			return err
+		if !confirmInspirationCovers {
+			var count int64
+			if err := tx.Model(&model.Inspiration{}).Where("cover_resource_id IN ?", resourceIDs).Count(&count).Error; err != nil {
+				return err
+			}
+			if count > 0 {
+				return ErrAdminResourceProtected
+			}
 		}
-		if err := tx.Where("resource_id IN ?", resourceIDs).Delete(&model.AnnouncementImageDraft{}).Error; err != nil {
-			return err
+		for _, cleanup := range toolCleanups {
+			updated := tx.Model(&model.Tool{}).
+				Where("id = ? AND cover = ? AND media_url = ? AND extra_info_json = ?", cleanup.ID, cleanup.ExpectedCover, cleanup.ExpectedMediaURL, cleanup.ExpectedExtraInfoJSON).
+				Updates(map[string]any{"cover": cleanup.Cover, "media_url": cleanup.MediaURL, "extra_info_json": cleanup.ExtraInfoJSON})
+			if updated.Error != nil {
+				return updated.Error
+			}
+			if updated.RowsAffected != 1 {
+				return ErrAdminResourceDeleteChanged
+			}
 		}
-		if err := tx.Where("resource_id IN ?", resourceIDs).Delete(&model.InspirationCoverDraft{}).Error; err != nil {
-			return err
+		for _, value := range []any{&model.CanvasSnapshotResource{}, &model.ArkPrivateAssetBinding{}, &model.AnnouncementImageDraft{}, &model.InspirationCoverDraft{}, &model.AssetRepresentation{}, &model.ShotArtifact{}, &model.CloudAgentResourceLease{}} {
+			if err := tx.Where("resource_id IN ?", resourceIDs).Delete(value).Error; err != nil {
+				return err
+			}
+		}
+		for _, cleanup := range []struct {
+			model   any
+			query   string
+			updates map[string]any
+		}{
+			{model: &model.VoiceProfile{}, query: "sample_resource_id IN ?", updates: map[string]any{"sample_resource_id": ""}},
+			{model: &model.Project{}, query: "cover_resource_id IN ?", updates: map[string]any{"cover_resource_id": ""}},
+			{model: &model.Announcement{}, query: "image_resource_id IN ?", updates: map[string]any{"image_resource_id": ""}},
+			{model: &model.Inspiration{}, query: "cover_resource_id IN ?", updates: map[string]any{"cover_resource_id": "", "cover_url": "", "cover_width": 0, "cover_height": 0}},
+			{model: &model.UserPrompt{}, query: "cover_resource_id IN ?", updates: map[string]any{"cover_resource_id": "", "cover_url": ""}},
+		} {
+			if err := tx.Model(cleanup.model).Where(cleanup.query, resourceIDs).Updates(cleanup.updates).Error; err != nil {
+				return err
+			}
 		}
 		if len(deletionJobs) > 0 {
 			if err := tx.Create(&deletionJobs).Error; err != nil {

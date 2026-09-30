@@ -17,12 +17,13 @@ import (
 // ResourceReferenceDocument 是资源删除校验使用的只读业务文档快照。
 // repository 只按用户范围读取记录；JSON 中的资源引用合同由 service 统一解释。
 type ResourceReferenceDocument struct {
-	Kind          string
-	ID            string
-	Title         string
-	PrimaryJSON   string
-	SecondaryJSON string
-	TaskStatus    model.TaskStatus
+	Kind            string
+	ID              string
+	Title           string
+	PrimaryJSON     string
+	SecondaryJSON   string
+	TaskStatus      model.TaskStatus
+	ExecutionStatus string
 }
 
 type ResourceDirectReference struct {
@@ -192,15 +193,17 @@ func (r *Repository) ResourceReferenceSnapshot(userID string, excludingAssetID s
 	if err := r.db.Where("user_id = ?", userID).Find(&runs).Error; err != nil {
 		return snapshot, err
 	}
+	runStatuses := make(map[string]string, len(runs))
 	for _, run := range runs {
-		snapshot.Documents = append(snapshot.Documents, ResourceReferenceDocument{Kind: "创作会话", ID: run.ID, Title: "智能创作", PrimaryJSON: run.StateJSON, SecondaryJSON: run.ApprovedOperationsJSON})
+		runStatuses[run.ID] = run.Status
+		snapshot.Documents = append(snapshot.Documents, ResourceReferenceDocument{Kind: "创作会话", ID: run.ID, Title: "智能创作", PrimaryJSON: run.StateJSON, SecondaryJSON: run.ApprovedOperationsJSON, ExecutionStatus: run.Status})
 	}
 	var submissions []model.CreationSubmission
 	if err := r.db.Where("user_id = ? AND revoked_at IS NULL", userID).Find(&submissions).Error; err != nil {
 		return snapshot, err
 	}
 	for _, submission := range submissions {
-		snapshot.Documents = append(snapshot.Documents, ResourceReferenceDocument{Kind: "创作执行项", ID: submission.ID, Title: submission.ItemKey, PrimaryJSON: submission.RequestJSON})
+		snapshot.Documents = append(snapshot.Documents, ResourceReferenceDocument{Kind: "创作执行项", ID: submission.ID, Title: submission.ItemKey, PrimaryJSON: submission.RequestJSON, ExecutionStatus: runStatuses[submission.RunID]})
 	}
 
 	var taskLogs []model.TaskLog

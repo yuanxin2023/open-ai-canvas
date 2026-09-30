@@ -395,6 +395,14 @@ test("admin tables keep requested filters and actions in the intended positions"
     expect(storageToolbar).toContain('aria-label="筛选资源类型"');
     expect(storageToolbar).toContain('aria-label="筛选资源状态"');
     expect(storageToolbar).toContain('aria-label="筛选存储类型"');
+    expect(storageSource).toContain("确认永久删除");
+    expect(storageSource).toContain("用户头像、平台外观、客服资源及活动任务引用仍会受保护");
+    expect(storageSource).toContain("previewAdminResourceDelete(uniqueIds)");
+    expect(storageSource).toContain("删除首页灵感提示词展示图？");
+    expect(storageSource).toContain("这是上传的提示词图展示图，确认要删除么？");
+    expect(storageSource).toContain("deleteAdminResources(uniqueIds, hasInspirationCovers)");
+    expect(storageSource).toContain("result.blocked.length > 0 || result.warnings.length > 0");
+    expect(storageSource).toContain("<DeleteResultSummary blocked={result.blocked} warnings={result.warnings} />");
 
     const operationColumn = sourceSection(creditSource, 'title: "操作"', "const hasFilters");
     expect(operationColumn).toContain('fixed: "right"');

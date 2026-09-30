@@ -8,7 +8,7 @@ import { useSearchParams } from "react-router";
 import { PaginationBar } from "@/pages/admin/components/admin-ui";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { listAdminUsers, type AdminUser } from "@/services/api/auth";
-import { adminResourceFileUrl, deleteAdminResources, downloadAdminResource, getAdminStorageStats, listAdminResources, type AdminStorageResource, type AdminStorageStats } from "@/services/api/admin-storage";
+import { adminResourceFileUrl, deleteAdminResources, downloadAdminResource, getAdminStorageStats, listAdminResources, previewAdminResourceDelete, type AdminStorageResource, type AdminStorageStats } from "@/services/api/admin-storage";
 import { AdminBatchBar, AdminDataTable, AdminFilterChip, AdminStatTile, AdminStatusBadge, AdminTableEmpty } from "./admin-ui";
 
 const pageSizes = [20, 50, 100];
@@ -161,7 +161,7 @@ export default function StorageResourcesPanel() {
                         <Button type="text" size="small" icon={<Download className="size-3.5" />} loading={downloadingId === resource.id} disabled={resource.status !== "ready"} onClick={() => void download(resource)}>
                             下载
                         </Button>
-                        <Button type="text" danger size="small" icon={<Trash2 className="size-3.5" />} disabled={deleting} onClick={() => confirmDelete([resource.id])}>
+                        <Button type="text" danger size="small" icon={<Trash2 className="size-3.5" />} disabled={deleting} onClick={() => void confirmDelete([resource.id])}>
                             删除
                         </Button>
                     </div>
@@ -183,25 +183,46 @@ export default function StorageResourcesPanel() {
         }
     };
 
-    const confirmDelete = (resourceIds: string[]) => {
+    const confirmDelete = async (resourceIds: string[]) => {
         const uniqueIds = Array.from(new Set(resourceIds));
+        setDeleting(true);
+        let inspirationCovers;
+        try {
+            const preview = await previewAdminResourceDelete(uniqueIds);
+            inspirationCovers = preview.inspirationCovers;
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "读取资源引用失败");
+            return;
+        } finally {
+            setDeleting(false);
+        }
+        const hasInspirationCovers = inspirationCovers.length > 0;
+        const inspirationTitles = Array.from(new Set(inspirationCovers.flatMap((item) => item.references.map((reference) => reference.title).filter(Boolean))));
         modal.confirm({
-            title: uniqueIds.length > 1 ? `删除选中的 ${uniqueIds.length} 个资源？` : "删除这个资源？",
-            content: "系统会先批量检查公告、素材、画布、项目、工作流和镜头产物引用。仍被引用的资源会保留；无引用资源的记录、清理任务和审计事件会在同一事务提交。",
-            okText: uniqueIds.length > 1 ? "检查并删除" : "确认删除",
+            title: hasInspirationCovers ? "删除首页灵感提示词展示图？" : uniqueIds.length > 1 ? `删除选中的 ${uniqueIds.length} 个资源？` : "删除这个资源？",
+            content: hasInspirationCovers ? (
+                <div className="space-y-2">
+                    <p>这是上传的提示词图展示图，确认要删除么？删除后对应首页灵感卡片将不再显示封面，此操作不可恢复。</p>
+                    {inspirationTitles.length > 0 ? <p className="text-foreground/60">涉及：{inspirationTitles.join("、")}</p> : null}
+                    {uniqueIds.length > inspirationCovers.length ? <p className="text-foreground/60">确认后，本次选中的其他资源也会一并按原规则删除。</p> : null}
+                </div>
+            ) : (
+                "此操作不可恢复。系统会强制删除普通创作资源并清理结构化依赖，画布、项目和历史记录中的对应媒体将显示为已删除。用户头像、平台外观、客服资源及活动任务引用仍会受保护。"
+            ),
+            okText: hasInspirationCovers ? "确认删除" : "确认永久删除",
             cancelText: "取消",
             okButtonProps: { danger: true },
             onOk: async () => {
                 setDeleting(true);
                 try {
-                    const result = await deleteAdminResources(uniqueIds);
+                    const result = await deleteAdminResources(uniqueIds, hasInspirationCovers);
                     setSelectedIds([]);
                     setRefreshKey((value) => value + 1);
                     if (result.deleted.length > 0) message.success(`已删除 ${result.deleted.length} 个资源`);
-                    if (result.blocked.length > 0) {
+                    if (result.blocked.length > 0 || result.warnings.length > 0) {
                         modal.warning({
-                            title: result.deleted.length > 0 ? "部分资源未删除" : "资源未删除",
-                            content: <DeleteBlockedSummary blocked={result.blocked} />,
+                            title: result.blocked.length > 0 ? (result.deleted.length > 0 ? "部分资源未删除" : "资源未删除") : "资源记录已删除，但文件需手动清理",
+                            content: <DeleteResultSummary blocked={result.blocked} warnings={result.warnings} />,
                             okText: "知道了",
                         });
                     }
@@ -270,7 +291,7 @@ export default function StorageResourcesPanel() {
                 onReset={() => updateUrl({ filter: "", userId: "", kind: "all", status: "all", provider: "all", page: 1 })}
                 batchActions={
                     <AdminBatchBar count={selectedIds.length} onClear={() => setSelectedIds([])}>
-                        <Button danger size="small" icon={<Trash2 className="size-3.5" />} loading={deleting} onClick={() => confirmDelete(selectedIds)}>
+                        <Button danger size="small" icon={<Trash2 className="size-3.5" />} loading={deleting} onClick={() => void confirmDelete(selectedIds)}>
                             批量删除
                         </Button>
                     </AdminBatchBar>
@@ -318,7 +339,7 @@ export default function StorageResourcesPanel() {
     );
 }
 
-function DeleteBlockedSummary({ blocked }: { blocked: Array<{ id: string; reason: string; references: Array<{ kind: string; id: string; title: string }> }> }) {
+function DeleteResultSummary({ blocked, warnings }: { blocked: Array<{ id: string; reason: string; references: Array<{ kind: string; id: string; title: string }> }>; warnings: Array<{ id: string; reason: string }> }) {
     return (
         <div className="max-h-72 space-y-3 overflow-y-auto pr-1 text-sm">
             {blocked.map((item) => (
@@ -334,6 +355,12 @@ function DeleteBlockedSummary({ blocked }: { blocked: Array<{ id: string; reason
                             {item.references.length > 4 ? ` 等 ${item.references.length} 处` : ""}
                         </div>
                     ) : null}
+                </div>
+            ))}
+            {warnings.map((item) => (
+                <div key={`warning-${item.id}`} className="rounded-md border border-status-warning/35 bg-status-warning/5 px-3 py-2">
+                    <div className="admin-monospace break-all text-foreground/75">{item.id}</div>
+                    <div className="mt-1 text-foreground/55">{item.reason}</div>
                 </div>
             ))}
         </div>

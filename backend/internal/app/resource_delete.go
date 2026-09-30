@@ -127,19 +127,9 @@ func (s *Service) deleteUserAssetsWithResources(userID string, ids []string, pur
 			}
 		}
 		for _, document := range snapshot.Documents {
-			// 已结束任务的输出和日志仅记录生成历史，不构成素材占用。
-			// 仅在素材删除时放行；孤儿清理仍保留尚未入库的任务产物。
-			switch document.TaskStatus {
-			case model.TaskStatusSucceeded, model.TaskStatusFailed, model.TaskStatusCancelled:
-				if document.Kind == "任务日志" || document.Kind == "任务结果" {
-					continue
-				}
-				if document.Kind == "任务" {
-					document.SecondaryJSON = ""
-				}
-			}
-			referencedIDs := documentReferencedResourceIDs(document.PrimaryJSON, ownedIDSet)
-			for resourceID := range documentReferencedResourceIDs(document.SecondaryJSON, ownedIDSet) {
+			primaryJSON, secondaryJSON := deletionBlockingDocumentPayloads(document)
+			referencedIDs := documentReferencedResourceIDs(primaryJSON, ownedIDSet)
+			for resourceID := range documentReferencedResourceIDs(secondaryJSON, ownedIDSet) {
 				referencedIDs[resourceID] = struct{}{}
 			}
 			if len(referencedIDs) > 0 {
@@ -263,6 +253,23 @@ func documentReferencesResources(raw string, resourceIDs map[string]struct{}) bo
 
 func documentReferencedResourceIDs(raw string, resourceIDs map[string]struct{}) map[string]struct{} {
 	return assets.DocumentReferencedIDs(raw, resourceIDs)
+}
+
+// deletionBlockingDocumentPayloads excludes terminal task output history while
+// retaining task inputs, which can still be needed for retries or provenance.
+// Automatic orphan cleanup does not use this helper and remains conservative.
+func deletionBlockingDocumentPayloads(document repository.ResourceReferenceDocument) (string, string) {
+	primaryJSON, secondaryJSON := document.PrimaryJSON, document.SecondaryJSON
+	switch document.TaskStatus {
+	case model.TaskStatusSucceeded, model.TaskStatusFailed, model.TaskStatusCancelled:
+		switch document.Kind {
+		case "任务日志", "任务结果":
+			return "", ""
+		case "任务":
+			secondaryJSON = ""
+		}
+	}
+	return primaryJSON, secondaryJSON
 }
 
 func sortedReferenceIDs(values map[string]struct{}) []string {

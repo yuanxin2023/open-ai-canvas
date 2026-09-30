@@ -69,6 +69,14 @@ export type AdminResourceDeleteBlocked = {
 export type AdminResourceDeleteResult = {
     deleted: string[];
     blocked: AdminResourceDeleteBlocked[];
+    warnings: Array<{ id: string; reason: string }>;
+};
+
+export type AdminResourceDeletePreview = {
+    inspirationCovers: Array<{
+        id: string;
+        references: AdminResourceReference[];
+    }>;
 };
 
 export async function listAdminResources(query: AdminResourceQuery, signal?: AbortSignal) {
@@ -80,8 +88,12 @@ export async function getAdminStorageStats(signal?: AbortSignal) {
     return result.stats;
 }
 
-export function deleteAdminResources(resourceIds: string[]) {
-    return http.post<AdminResourceDeleteResult>("/admin/resources/delete", { resourceIds });
+export function previewAdminResourceDelete(resourceIds: string[]) {
+    return http.post<AdminResourceDeletePreview>("/admin/resources/delete-preview", { resourceIds });
+}
+
+export function deleteAdminResources(resourceIds: string[], confirmInspirationCovers = false) {
+    return http.post<AdminResourceDeleteResult>("/admin/resources/delete", { resourceIds, confirmInspirationCovers });
 }
 
 export function adminResourceFileUrl(id: string, download = false) {
