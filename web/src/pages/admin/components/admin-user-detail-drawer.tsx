@@ -6,7 +6,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { formatCredits } from "@/constant/credits";
 import { IconButton } from "@/pages/admin/ui/controls";
 import { AdminDataTable, AdminEmpty, AdminStatusBadge, AdminTableEmpty, PaginationBar, type AdminStatusTone } from "./admin-ui";
-import { getAdminUserDetail, listAdminUserAuditEvents, listAdminUserLedger, listAdminUserTasks, type AdminAuditEvent, type AdminUserDetail, type AdminUserTask } from "@/services/api/auth";
+import { getAdminUserDetail, listAdminUserAuditEvents, listAdminUserLedger, listAdminUserLoginEvents, listAdminUserTasks, type AdminAuditEvent, type AdminUserDetail, type AdminUserLoginEvent, type AdminUserTask } from "@/services/api/auth";
 import type { CreditLedgerEntry } from "@/services/api/wallet";
 
 export function AdminUserDetailModal({ userId, onClose, previousUserId, nextUserId, onNavigate }: { userId: string | null; onClose: () => void; previousUserId?: string; nextUserId?: string; onNavigate?: (userId: string) => void }) {
@@ -15,6 +15,7 @@ export function AdminUserDetailModal({ userId, onClose, previousUserId, nextUser
     const [ledger, setLedger] = useState<CreditLedgerEntry[]>([]);
     const [tasks, setTasks] = useState<AdminUserTask[]>([]);
     const [events, setEvents] = useState<AdminAuditEvent[]>([]);
+    const [loginEvents, setLoginEvents] = useState<AdminUserLoginEvent[]>([]);
     const [loading, setLoading] = useState(false);
     const [ledgerPage, setLedgerPage] = useState(1);
     const [ledgerTotal, setLedgerTotal] = useState(0);
@@ -22,6 +23,8 @@ export function AdminUserDetailModal({ userId, onClose, previousUserId, nextUser
     const [taskTotal, setTaskTotal] = useState(0);
     const [auditPage, setAuditPage] = useState(1);
     const [auditTotal, setAuditTotal] = useState(0);
+    const [loginPage, setLoginPage] = useState(1);
+    const [loginTotal, setLoginTotal] = useState(0);
 
     useEffect(() => {
         if (!userId) return;
@@ -31,6 +34,7 @@ export function AdminUserDetailModal({ userId, onClose, previousUserId, nextUser
         setLedgerPage(1);
         setTaskPage(1);
         setAuditPage(1);
+        setLoginPage(1);
         void getAdminUserDetail(userId)
             .then((nextDetail) => {
                 if (active) setDetail(nextDetail);
@@ -72,6 +76,21 @@ export function AdminUserDetailModal({ userId, onClose, previousUserId, nextUser
             active = false;
         };
     }, [message, taskPage, userId]);
+    useEffect(() => {
+        if (!userId) return;
+        let active = true;
+        void listAdminUserLoginEvents(userId, { page: loginPage, pageSize: 20 })
+            .then((result) => {
+                if (active) {
+                    setLoginEvents(result.events);
+                    setLoginTotal(result.total);
+                }
+            })
+            .catch((error) => active && message.error(error instanceof Error ? error.message : "读取登录环境失败"));
+        return () => {
+            active = false;
+        };
+    }, [loginPage, message, userId]);
     useEffect(() => {
         if (!userId) return;
         let active = true;
@@ -123,6 +142,8 @@ export function AdminUserDetailModal({ userId, onClose, previousUserId, nextUser
                                         size="small"
                                         column={{ xs: 1, sm: 2 }}
                                         items={[
+                                            { key: "id", label: "用户 ID", children: <span className="break-all font-mono text-xs">{detail.user.id}</span> },
+                                            { key: "registrationIp", label: "注册 IP", children: <span className="font-mono text-xs">{detail.registrationIp || "未记录"}</span> },
                                             { key: "username", label: "用户名", children: `@${detail.user.username}` },
                                             { key: "email", label: "邮箱", children: detail.user.email || "未填写" },
                                             { key: "role", label: "角色", children: detail.user.role === "admin" ? "管理员" : "普通用户" },
@@ -134,7 +155,7 @@ export function AdminUserDetailModal({ userId, onClose, previousUserId, nextUser
                                         ]}
                                     />
                                     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                                        {Object.entries({ 积分流水: detail.counts.ledgerEntries, 生成任务: detail.counts.tasks, 上游请求: detail.counts.apiCalls, 管理操作: detail.counts.auditEvents }).map(([label, value]) => (
+                                        {Object.entries({ 积分流水: detail.counts.ledgerEntries, 生成任务: detail.counts.tasks, 上游请求: detail.counts.apiCalls, 登录记录: detail.counts.loginEvents, 管理操作: detail.counts.auditEvents }).map(([label, value]) => (
                                             <div key={label} className="rounded-md border border-border p-3">
                                                 <div className="text-xs text-foreground/50">{label}</div>
                                                 <div className="mt-1 text-xl font-semibold tabular-nums">{value}</div>
@@ -206,6 +227,32 @@ export function AdminUserDetailModal({ userId, onClose, previousUserId, nextUser
                             ),
                         },
                         {
+                            key: "login-environment",
+                            label: `登录环境 ${detail.counts.loginEvents}`,
+                            children: (
+                                <div className="space-y-3">
+                                    {loginEvents.length > 0 ? loginEvents.map((event) => (
+                                        <Descriptions
+                                            key={event.id}
+                                            bordered
+                                            size="small"
+                                            column={{ xs: 1, sm: 2 }}
+                                            items={[
+                                                { key: "createdAt", label: "登录时间", children: formatTime(event.createdAt) },
+                                                { key: "loginMethod", label: "登录方式", children: loginMethodLabel(event.loginMethod) },
+                                                { key: "ipAddress", label: "IP 地址", children: <span className="font-mono text-xs">{fallbackText(event.ipAddress)}</span> },
+                                                { key: "deviceType", label: "设备", children: fallbackText(event.deviceType) },
+                                                { key: "os", label: "操作系统", children: environmentName(event.os, event.osVersion) },
+                                                { key: "browser", label: "浏览器", children: environmentName(event.browser, event.browserVersion) },
+                                                { key: "userAgent", label: "User-Agent", span: 2, children: <span className="break-all font-mono text-xs">{fallbackText(event.userAgent)}</span> },
+                                            ]}
+                                        />
+                                    )) : <AdminEmpty size="compact" title="暂无登录环境记录" />}
+                                    <PaginationBar alwaysShow current={loginPage} pageSize={20} total={loginTotal} onChange={(page) => setLoginPage(page)} pageSizeOptions={[20]} />
+                                </div>
+                            ),
+                        },
+                        {
                             key: "audit",
                             label: `管理操作 ${detail.counts.auditEvents}`,
                             children: (
@@ -239,6 +286,18 @@ export function AdminUserDetailModal({ userId, onClose, previousUserId, nextUser
 
 function formatTime(value?: string) {
     return value ? new Date(value).toLocaleString("zh-CN", { hour12: false }) : "--";
+}
+
+function fallbackText(value?: string) {
+    return value || "--";
+}
+
+function environmentName(name?: string, version?: string) {
+    return [name, version].filter(Boolean).join(" ") || "--";
+}
+
+function loginMethodLabel(value?: string) {
+    return ({ email_register: "邮箱注册", password: "密码登录", linuxdo: "Linux.do" } as Record<string, string>)[value || ""] || value || "--";
 }
 
 function taskStatusTone(value?: string): AdminStatusTone {

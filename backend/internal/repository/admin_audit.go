@@ -21,6 +21,7 @@ type AdminUserCounts struct {
 	Tasks         int64 `json:"tasks"`
 	APICalls      int64 `json:"apiCalls"`
 	AuditEvents   int64 `json:"auditEvents"`
+	LoginEvents   int64 `json:"loginEvents"`
 }
 
 func (r *Repository) AppendAdminAudit(event *model.AdminAuditEvent) error {
@@ -106,6 +107,7 @@ func (r *Repository) AdminUserCounts(userID string) (AdminUserCounts, error) {
 		{&model.Task{}, "user_id = ?", &counts.Tasks},
 		{&model.ApiCallLog{}, "user_id = ?", &counts.APICalls},
 		{&model.AdminAuditEvent{}, "target_type = 'user' AND target_id = ?", &counts.AuditEvents},
+		{&model.UserLoginEvent{}, "user_id = ?", &counts.LoginEvents},
 	}
 	for _, query := range queries {
 		if err := r.db.Model(query.model).Where(query.where, userID).Count(query.value).Error; err != nil {
@@ -113,6 +115,17 @@ func (r *Repository) AdminUserCounts(userID string) (AdminUserCounts, error) {
 		}
 	}
 	return counts, nil
+}
+
+func (r *Repository) AdminUserLoginEvents(userID string, limit int, offset int) ([]model.UserLoginEvent, int64, error) {
+	query := r.db.Model(&model.UserLoginEvent{}).Where("user_id = ?", userID)
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	var events []model.UserLoginEvent
+	err := query.Order("created_at desc").Limit(limit).Offset(offset).Find(&events).Error
+	return events, total, err
 }
 
 func (r *Repository) AdminUserTasks(userID string, limit int, offset int) ([]model.Task, int64, error) {

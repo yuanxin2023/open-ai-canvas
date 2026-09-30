@@ -14,6 +14,7 @@ type (
 	EmailCodeCooldownError     = auth.EmailCodeCooldownError
 	RegisterRequest            = auth.RegisterRequest
 	LoginRequest               = auth.LoginRequest
+	LoginEnvironment           = auth.LoginEnvironment
 	UpdateProfileRequest       = auth.UpdateProfileRequest
 	ChangePasswordRequest      = auth.ChangePasswordRequest
 	PublicAuthSettings         = auth.PublicAuthSettings
@@ -130,8 +131,16 @@ func (s *Service) Register(req RegisterRequest) (*AuthSessionResult, error) {
 	return s.authDomain().Register(req)
 }
 
+func (s *Service) RegisterWithEnvironment(req RegisterRequest, environment LoginEnvironment) (*AuthSessionResult, error) {
+	return s.authDomain().RegisterWithEnvironment(req, environment)
+}
+
 func (s *Service) Login(req LoginRequest) (*AuthSessionResult, error) {
 	return s.authDomain().Login(req)
+}
+
+func (s *Service) LoginWithEnvironment(req LoginRequest, environment LoginEnvironment) (*AuthSessionResult, error) {
+	return s.authDomain().LoginWithEnvironment(req, environment)
 }
 
 func (s *Service) Logout(cookieValue string) error {
@@ -212,6 +221,10 @@ func (s *Service) BeginLinuxDOLogin(nextPath string) (string, error) {
 
 func (s *Service) CompleteLinuxDOLogin(stateValue string, code string) (*LinuxDOCallbackResult, error) {
 	return s.authDomain().CompleteLinuxDOLogin(stateValue, code)
+}
+
+func (s *Service) CompleteLinuxDOLoginWithEnvironment(stateValue string, code string, environment LoginEnvironment) (*LinuxDOCallbackResult, error) {
+	return s.authDomain().CompleteLinuxDOLoginWithEnvironment(stateValue, code, environment)
 }
 
 func (s *Service) AdminLibTVSetting(actor *model.User) (*PublicLibTVSetting, error) {

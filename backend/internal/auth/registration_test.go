@@ -27,7 +27,9 @@ func TestRegisterFirstUserUsesEmailIdentityWithoutVerification(t *testing.T) {
 		t.Fatalf("public auth settings = %#v, err = %v", settings, err)
 	}
 
-	result, err := svc.Register(RegisterRequest{Email: " Creator.Name@Example.com ", Password: "strong-password"})
+	result, err := svc.RegisterWithEnvironment(RegisterRequest{Email: " Creator.Name@Example.com ", Password: "strong-password"}, LoginEnvironment{
+		IPAddress: "203.0.113.9", UserAgent: "test-agent", DeviceType: "电脑", Browser: "Chrome", BrowserVersion: "140", OS: "Windows", OSVersion: "11",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,6 +52,16 @@ func TestRegisterFirstUserUsesEmailIdentityWithoutVerification(t *testing.T) {
 	}
 	if stored.Username != user.ID || stored.Email != user.Email || stored.DisplayName != user.DisplayName {
 		t.Fatalf("stored user = %#v", stored)
+	}
+	if stored.RegistrationIP != "203.0.113.9" {
+		t.Fatalf("registration IP = %q", stored.RegistrationIP)
+	}
+	var loginEvent model.UserLoginEvent
+	if err := db.First(&loginEvent, "user_id = ?", user.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if loginEvent.LoginMethod != "email_register" || loginEvent.IPAddress != stored.RegistrationIP || loginEvent.Browser != "Chrome" || loginEvent.OS != "Windows" {
+		t.Fatalf("registration login event = %#v", loginEvent)
 	}
 }
 
@@ -150,5 +162,15 @@ func TestLoginKeepsUsernameAndEmailCompatibility(t *testing.T) {
 		if _, err := svc.Login(LoginRequest{Username: account, Password: "strong-password"}); err != nil {
 			t.Fatalf("login with %q failed: %v", account, err)
 		}
+	}
+	if _, err := svc.LoginWithEnvironment(LoginRequest{Username: user.Email, Password: "strong-password"}, LoginEnvironment{IPAddress: "2001:db8::8", DeviceType: "手机", Browser: "Safari", OS: "iOS"}); err != nil {
+		t.Fatal(err)
+	}
+	var event model.UserLoginEvent
+	if err := db.Where("user_id = ?", user.ID).Order("created_at desc").First(&event).Error; err != nil {
+		t.Fatal(err)
+	}
+	if event.LoginMethod != "password" || event.IPAddress != "2001:db8::8" || event.DeviceType != "手机" {
+		t.Fatalf("login event = %#v", event)
 	}
 }

@@ -51,6 +51,7 @@ func TestPurgeUserDeletesAccountAndUserScopedData(t *testing.T) {
 	}
 	rows := []any{
 		&model.AuthSession{ID: "session-1", UserID: target.ID},
+		&model.UserLoginEvent{ID: "login-event-1", UserID: target.ID, SessionID: "session-1", LoginMethod: "password"},
 		&model.CreditAccount{UserID: target.ID, AvailableMicrocredits: 100},
 		&model.Project{ID: "project-1", UserID: target.ID, Name: "Project"},
 		&model.CanvasProject{ID: "canvas-1", UserID: target.ID, Title: "Canvas"},
@@ -74,7 +75,7 @@ func TestPurgeUserDeletesAccountAndUserScopedData(t *testing.T) {
 		model any
 		query string
 	}{
-		{&model.User{}, "id = ?"}, {&model.AuthSession{}, "user_id = ?"},
+		{&model.User{}, "id = ?"}, {&model.AuthSession{}, "user_id = ?"}, {&model.UserLoginEvent{}, "user_id = ?"},
 		{&model.CreditAccount{}, "user_id = ?"}, {&model.Project{}, "user_id = ?"},
 		{&model.CanvasProject{}, "user_id = ?"}, {&model.Task{}, "user_id = ?"},
 		{&model.TaskLog{}, "user_id = ?"}, {&model.Resource{}, "user_id = ?"},

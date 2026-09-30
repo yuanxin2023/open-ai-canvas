@@ -41,7 +41,7 @@ func RegisterAuthRoutes(r *gin.RouterGroup, svc *service.Service) {
 		if !available || !enforceRateLimit(c, "register:"+c.ClientIP(), policy.Request.RegisterPerHour, time.Hour) {
 			return
 		}
-		result, err := svc.Register(req)
+		result, err := svc.RegisterWithEnvironment(req, loginEnvironment(c))
 		if err != nil {
 			failService(c, err)
 			return
@@ -127,7 +127,7 @@ func RegisterAuthRoutes(r *gin.RouterGroup, svc *service.Service) {
 		if !enforceRateLimit(c, "login:"+c.ClientIP()+":"+strings.ToLower(strings.TrimSpace(req.Username)), policy.Request.LoginAccountPerTenMinutes, 10*time.Minute) {
 			return
 		}
-		result, err := svc.Login(req)
+		result, err := svc.LoginWithEnvironment(req, loginEnvironment(c))
 		if err != nil {
 			failService(c, err)
 			return
@@ -258,7 +258,7 @@ func linuxDOCallbackHandler(svc *service.Service) gin.HandlerFunc {
 		if !enforceRateLimit(c, "linuxdo-callback:"+c.ClientIP(), 30, 10*time.Minute) {
 			return
 		}
-		result, err := svc.CompleteLinuxDOLogin(c.Query("state"), c.Query("code"))
+		result, err := svc.CompleteLinuxDOLoginWithEnvironment(c.Query("state"), c.Query("code"), loginEnvironment(c))
 		if err != nil {
 			c.Redirect(http.StatusFound, "/login?oauth_error="+url.QueryEscape(err.Error()))
 			return
@@ -345,6 +345,24 @@ func RegisterAdminRoutes(r *gin.RouterGroup, svc *service.Service) {
 			return
 		}
 		result, err := svc.AdminUserDetail(user, c.Param("id"))
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, result)
+	})
+	r.GET("/admin/users/:id/login-events", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		page, limit, err := parsePaginationQuery(c, 20)
+		if err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		result, err := svc.AdminUserLoginEvents(user, c.Param("id"), page, limit)
 		if err != nil {
 			failService(c, err)
 			return

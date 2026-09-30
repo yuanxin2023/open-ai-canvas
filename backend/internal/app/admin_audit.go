@@ -11,12 +11,20 @@ import (
 
 type AdminUserDetail struct {
 	User             model.User                  `json:"user"`
+	RegistrationIP   string                      `json:"registrationIp"`
 	Account          model.CreditAccount         `json:"account"`
 	Counts           repository.AdminUserCounts  `json:"counts"`
 	StorageUsage     repository.UserStorageUsage `json:"storageUsage"`
 	StoredFileBytes  int64                       `json:"storedFileBytes"`
 	DailyUploadBytes int64                       `json:"dailyUploadBytes"`
 	Quota            RuntimeResourcePolicy       `json:"quota"`
+}
+
+type AdminLoginEventPage struct {
+	Events []model.UserLoginEvent `json:"events"`
+	Total  int64                  `json:"total"`
+	Page   int                    `json:"page"`
+	Limit  int                    `json:"pageSize"`
 }
 
 type AdminTaskPage struct {
@@ -92,9 +100,22 @@ func (s *Service) AdminUserDetail(actor *model.User, userID string) (*AdminUserD
 		return nil, err
 	}
 	return &AdminUserDetail{
-		User: *user, Account: *account, Counts: counts, StorageUsage: usage,
+		User: *user, RegistrationIP: user.RegistrationIP, Account: *account, Counts: counts, StorageUsage: usage,
 		StoredFileBytes: storedFileBytes, DailyUploadBytes: dailyUploadBytes, Quota: policy.Resource,
 	}, nil
+}
+
+func (s *Service) AdminUserLoginEvents(actor *model.User, userID string, page int, limit int) (*AdminLoginEventPage, error) {
+	if err := s.RequireAdmin(actor); err != nil {
+		return nil, err
+	}
+	userID = strings.TrimSpace(userID)
+	if _, err := s.repo.User(userID); err != nil {
+		return nil, err
+	}
+	page, limit = normalizeAdminPage(page, limit)
+	events, total, err := s.repo.AdminUserLoginEvents(userID, limit, (page-1)*limit)
+	return &AdminLoginEventPage{Events: events, Total: total, Page: page, Limit: limit}, err
 }
 
 func (s *Service) AdminUserLedger(actor *model.User, userID string, entryType string, page int, limit int) (*WalletSummary, error) {

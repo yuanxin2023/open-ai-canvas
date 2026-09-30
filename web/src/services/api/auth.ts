@@ -125,8 +125,9 @@ export type AdminAuditEvent = {
 
 export type AdminUserDetail = {
     user: LocalUser;
+    registrationIp?: string;
     account: { userId: string; availableMicrocredits: number; reservedMicrocredits: number; version: number };
-    counts: { ledgerEntries: number; tasks: number; apiCalls: number; auditEvents: number };
+    counts: { ledgerEntries: number; tasks: number; apiCalls: number; auditEvents: number; loginEvents: number };
     storageUsage: {
         assetCount: number;
         assetBytes: number;
@@ -139,6 +140,19 @@ export type AdminUserDetail = {
     storedFileBytes: number;
     dailyUploadBytes: number;
     quota: RuntimeResourcePolicy;
+};
+
+export type AdminUserLoginEvent = {
+    id: string;
+    loginMethod: "email_register" | "password" | "linuxdo" | string;
+    ipAddress?: string;
+    userAgent?: string;
+    deviceType?: string;
+    browser?: string;
+    browserVersion?: string;
+    os?: string;
+    osVersion?: string;
+    createdAt: string;
 };
 
 export type AdminUserTask = {
@@ -481,6 +495,10 @@ export function listAdminUserLedger(id: string, params: { page?: number; pageSiz
 
 export function listAdminUserTasks(id: string, params: { page?: number; pageSize?: number } = {}) {
     return http.get<{ tasks: AdminUserTask[]; total: number; page: number; pageSize: number }>(`/admin/users/${encodeURIComponent(id)}/tasks`, { params });
+}
+
+export function listAdminUserLoginEvents(id: string, params: { page?: number; pageSize?: number } = {}) {
+    return http.get<{ events: AdminUserLoginEvent[]; total: number; page: number; pageSize: number }>(`/admin/users/${encodeURIComponent(id)}/login-events`, { params });
 }
 
 export function listAdminUserAuditEvents(id: string, params: { page?: number; pageSize?: number } = {}) {

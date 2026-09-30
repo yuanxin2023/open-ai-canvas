@@ -22,8 +22,8 @@ func TestCurrentSchemaVersionMatchesMigrationPlan(t *testing.T) {
 			}
 		}
 		latest := plan[len(plan)-1]
-		if CurrentSchemaVersion != latest.version || latest.name != "user_login_names" {
-			t.Fatalf("%s latest migration = %d/%q, want %d/user_login_names", name, latest.version, latest.name, CurrentSchemaVersion)
+		if CurrentSchemaVersion != latest.version || latest.name != "user_login_environment" {
+			t.Fatalf("%s latest migration = %d/%q, want %d/user_login_environment", name, latest.version, latest.name, CurrentSchemaVersion)
 		}
 	}
 }
@@ -36,8 +36,8 @@ func TestMigrateSchemaSupportsLocalAndUpstreamPost23Lineages(t *testing.T) {
 		expectedV24Name  string
 		expectedTailName string
 	}{
-		{name: "local", plan: schemaMigrations, appliedThrough: 27, expectedV24Name: "topup_product_benefits", expectedTailName: "user_login_names"},
-		{name: "upstream", plan: upstreamFirstMigrationPlan(), appliedThrough: 32, expectedV24Name: "channel_model_label", expectedTailName: "user_login_names"},
+		{name: "local", plan: schemaMigrations, appliedThrough: 27, expectedV24Name: "topup_product_benefits", expectedTailName: "user_login_environment"},
+		{name: "upstream", plan: upstreamFirstMigrationPlan(), appliedThrough: 32, expectedV24Name: "channel_model_label", expectedTailName: "user_login_environment"},
 	} {
 		t.Run(scenario.name, func(t *testing.T) {
 			db, err := Open(Config{Driver: "sqlite", DSN: "file:" + t.Name() + "?mode=memory&cache=shared"})
@@ -839,6 +839,25 @@ func TestMigrateUserLoginNamesRejectsExistingCaseConflict(t *testing.T) {
 	}
 	if err := migrateUserLoginNames(db); err == nil {
 		t.Fatal("migration accepted existing case-insensitive username conflict")
+	}
+}
+
+func TestMigrateUserLoginEnvironmentAddsRegistrationIPAndEventTable(t *testing.T) {
+	db, err := Open(Config{Driver: "sqlite", DSN: "file:migration-user-login-environment-v39?mode=memory&cache=shared"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec("CREATE TABLE users (id text PRIMARY KEY, username text)").Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := migrateUserLoginEnvironment(db); err != nil {
+		t.Fatal(err)
+	}
+	if !db.Migrator().HasColumn(&model.User{}, "RegistrationIP") {
+		t.Fatal("users.registration_ip was not added")
+	}
+	if !db.Migrator().HasTable(&model.UserLoginEvent{}) {
+		t.Fatal("user_login_events table was not created")
 	}
 }
 

@@ -52,6 +52,9 @@ type UserStorageUsage struct {
 	APICallCount int64 `json:"apiCallCount"`
 }
 
+const userLoginEventRetention = 90 * 24 * time.Hour
+const userLoginEventLimit = 200
+
 func New(db *gorm.DB) *Repository {
 	return &Repository{db: db}
 }
@@ -271,12 +274,39 @@ func (r *Repository) AuthSession(id string) (*model.AuthSession, error) {
 	return &session, nil
 }
 
+func (r *Repository) CreateAuthSessionWithLoginEvent(session *model.AuthSession, event *model.UserLoginEvent) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(session).Error; err != nil {
+			return err
+		}
+		if err := tx.Create(event).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("user_id = ? AND created_at < ?", event.UserID, event.CreatedAt.Add(-userLoginEventRetention)).Delete(&model.UserLoginEvent{}).Error; err != nil {
+			return err
+		}
+		var excessIDs []string
+		if err := tx.Model(&model.UserLoginEvent{}).Where("user_id = ?", event.UserID).
+			Order("created_at desc").Offset(userLoginEventLimit).Limit(10000).Pluck("id", &excessIDs).Error; err != nil {
+			return err
+		}
+		if len(excessIDs) > 0 {
+			return tx.Delete(&model.UserLoginEvent{}, "id IN ?", excessIDs).Error
+		}
+		return nil
+	})
+}
+
 func (r *Repository) DeleteAuthSession(id string) error {
 	return r.db.Delete(&model.AuthSession{}, "id = ?", id).Error
 }
 
 func (r *Repository) DeleteExpiredAuthSessions() error {
 	return r.db.Delete(&model.AuthSession{}, "expires_at <= ?", time.Now()).Error
+}
+
+func (r *Repository) DeleteExpiredUserLoginEvents(cutoff time.Time) error {
+	return r.db.Delete(&model.UserLoginEvent{}, "created_at < ?", cutoff).Error
 }
 
 func (r *Repository) DeleteUserAuthSessions(userID string) error {

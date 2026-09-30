@@ -12,9 +12,26 @@ type User struct {
 	Role             UserRole   `json:"role" gorm:"index;size:24"`
 	Status           UserStatus `json:"status" gorm:"index;size:24"`
 	PasswordHash     string     `json:"-"`
+	RegistrationIP   string     `json:"-" gorm:"size:64"`
 	LastLoginAt      *time.Time `json:"lastLoginAt"`
 	CreatedAt        time.Time  `json:"createdAt"`
 	UpdatedAt        time.Time  `json:"updatedAt"`
+}
+
+// UserLoginEvent 保留成功登录时的排障环境；它独立于可撤销的 AuthSession，退出后仍可审计。
+type UserLoginEvent struct {
+	ID             string    `json:"id" gorm:"primaryKey;size:36"`
+	UserID         string    `json:"-" gorm:"index:idx_user_login_events_user_created,priority:1;index;size:36"`
+	SessionID      string    `json:"-" gorm:"index;size:36"`
+	LoginMethod    string    `json:"loginMethod" gorm:"index;size:32"`
+	IPAddress      string    `json:"ipAddress" gorm:"index;size:64"`
+	UserAgent      string    `json:"userAgent" gorm:"size:1024"`
+	DeviceType     string    `json:"deviceType" gorm:"size:32"`
+	Browser        string    `json:"browser" gorm:"size:80"`
+	BrowserVersion string    `json:"browserVersion" gorm:"size:40"`
+	OS             string    `json:"os" gorm:"size:80"`
+	OSVersion      string    `json:"osVersion" gorm:"size:40"`
+	CreatedAt      time.Time `json:"createdAt" gorm:"index:idx_user_login_events_user_created,priority:2,sort:desc"`
 }
 
 type AuthSession struct {

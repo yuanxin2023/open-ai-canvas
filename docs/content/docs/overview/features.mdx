@@ -5,6 +5,17 @@ description: 当前项目已实现的核心工作台能力与使用入口
 
 # 功能清单
 
+## 管理员登录环境排查
+
+后台用户详情展示永久用户 ID、首次注册 IP，并提供“登录环境”页签分页查看成功注册/登录的时间、方式、IP、设备类型、操作系统、浏览器和 User-Agent。信息由后端在邮箱注册、密码登录与 Linux.do 登录成功时静默采集，不触发浏览器权限弹窗；历史账号不会用后续登录 IP 冒充注册 IP。记录每个用户最多保留 90 天和 200 条，注销账号时一并删除。环境摘要可被客户端隐藏或伪造，只作为排障线索，不作为可信设备或鉴权依据。
+
+### 相关实现
+
+- `backend/internal/handler/login_environment.go`：从可信代理后的请求信息与 Client Hints 提取环境摘要。
+- `backend/internal/model/models_identity.go`：注册 IP 和独立登录历史模型。
+- `web/src/pages/admin/components/admin-user-detail-drawer.tsx`：管理员用户详情与登录环境页签。
+- `GET /api/admin/users/:id/login-events`：管理员专用分页查询接口。
+
 ## 画布 Agent 名称、文案与形象
 
 「站点及外观 → 画布配置」提供独立助手名称、入口文字、面板标题和欢迎/输入文案。支持导入授权的 Live2D Cubism 3/4 运行时 ZIP，预览后保存启用、调整高度、切回默认动态球。加载失败保留可点击的默认入口，上传和资源访问具有管理员校验和引用保护。Cubism Core 由部署者提供，真实播放待验收；不含图片自动建模或 AI 自我介绍同步。详见 [画布 Agent 外观与 Live2D](/docs/backend/canvas-agent-appearance)。

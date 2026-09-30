@@ -179,6 +179,7 @@ type (
 	LogicalModelRequest                    = app.LogicalModelRequest
 	LogicalRouteRequest                    = app.LogicalRouteRequest
 	LoginRequest                           = app.LoginRequest
+	LoginEnvironment                       = app.LoginEnvironment
 	ModelCapabilityConfig                  = app.ModelCapabilityConfig
 	ModelCatalogResponse                   = app.ModelCatalogResponse
 	ModelCatalogSource                     = app.ModelCatalogSource

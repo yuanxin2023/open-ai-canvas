@@ -7,6 +7,7 @@ import (
 	"errors"
 	"infinite-canvas/backend/internal/kernel"
 	"log"
+	"net"
 	"net/mail"
 	"net/url"
 	"regexp"
@@ -37,6 +38,16 @@ type RegisterRequest struct {
 type LoginRequest struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
+}
+
+type LoginEnvironment struct {
+	IPAddress      string
+	UserAgent      string
+	DeviceType     string
+	Browser        string
+	BrowserVersion string
+	OS             string
+	OSVersion      string
 }
 
 type UpdateProfileRequest struct {
@@ -93,6 +104,11 @@ func (s *Service) PublicAuthSettings() (*PublicAuthSettings, error) {
 }
 
 func (s *Service) Register(req RegisterRequest) (*AuthSessionResult, error) {
+	return s.RegisterWithEnvironment(req, LoginEnvironment{})
+}
+
+func (s *Service) RegisterWithEnvironment(req RegisterRequest, environment LoginEnvironment) (*AuthSessionResult, error) {
+	environment = normalizeLoginEnvironment(environment)
 	email := NormalizeEmail(req.Email)
 	if email == "" {
 		return nil, kernel.BadAuthRequest("请输入邮箱")
@@ -138,15 +154,16 @@ func (s *Service) Register(req RegisterRequest) (*AuthSessionResult, error) {
 	now := time.Now()
 	userID := kernel.NewID()
 	user := model.User{
-		ID:           userID,
-		Username:     userID,
-		Email:        email,
-		DisplayName:  registrationDisplayName(email, userID),
-		Role:         model.UserRoleUser,
-		Status:       model.UserStatusActive,
-		PasswordHash: passwordHash,
-		CreatedAt:    now,
-		UpdatedAt:    now,
+		ID:             userID,
+		Username:       userID,
+		Email:          email,
+		DisplayName:    registrationDisplayName(email, userID),
+		Role:           model.UserRoleUser,
+		Status:         model.UserStatusActive,
+		PasswordHash:   passwordHash,
+		RegistrationIP: environment.IPAddress,
+		CreatedAt:      now,
+		UpdatedAt:      now,
 	}
 	if count == 0 {
 		user.Role = model.UserRoleAdmin
@@ -161,7 +178,7 @@ func (s *Service) Register(req RegisterRequest) (*AuthSessionResult, error) {
 	if err := s.host.EnsureSignupBonus(user.ID); err != nil {
 		return nil, err
 	}
-	return s.createAuthSession(&user)
+	return s.createAuthSession(&user, "email_register", environment)
 }
 
 func registrationDisplayName(email string, fallback string) string {
@@ -173,6 +190,11 @@ func registrationDisplayName(email string, fallback string) string {
 }
 
 func (s *Service) Login(req LoginRequest) (*AuthSessionResult, error) {
+	return s.LoginWithEnvironment(req, LoginEnvironment{})
+}
+
+func (s *Service) LoginWithEnvironment(req LoginRequest, environment LoginEnvironment) (*AuthSessionResult, error) {
+	environment = normalizeLoginEnvironment(environment)
 	account := strings.TrimSpace(req.Username)
 	user, err := s.repo.UserByAccount(account)
 	if err != nil {
@@ -197,7 +219,7 @@ func (s *Service) Login(req LoginRequest) (*AuthSessionResult, error) {
 		return nil, err
 	}
 	s.host.RecordActivity(user.ID, "login", 1)
-	return s.createAuthSession(user)
+	return s.createAuthSession(user, "password", environment)
 }
 
 func (s *Service) Logout(cookieValue string) error {
@@ -371,7 +393,7 @@ func allowedProfileAvatarMIME(value string) bool {
 	}
 }
 
-func (s *Service) createAuthSession(user *model.User) (*AuthSessionResult, error) {
+func (s *Service) createAuthSession(user *model.User, loginMethod string, environment LoginEnvironment) (*AuthSessionResult, error) {
 	publicUser, err := s.PublicAuthUser(user)
 	if err != nil {
 		return nil, err
@@ -386,10 +408,48 @@ func (s *Service) createAuthSession(user *model.User) (*AuthSessionResult, error
 		CreatedAt: now,
 		UpdatedAt: now,
 	}
-	if err := s.repo.Create(&session); err != nil {
+	event := model.UserLoginEvent{
+		ID:             kernel.NewID(),
+		UserID:         user.ID,
+		SessionID:      session.ID,
+		LoginMethod:    truncateLoginEnvironment(loginMethod, 32),
+		IPAddress:      environment.IPAddress,
+		UserAgent:      environment.UserAgent,
+		DeviceType:     environment.DeviceType,
+		Browser:        environment.Browser,
+		BrowserVersion: environment.BrowserVersion,
+		OS:             environment.OS,
+		OSVersion:      environment.OSVersion,
+		CreatedAt:      now,
+	}
+	if err := s.repo.CreateAuthSessionWithLoginEvent(&session, &event); err != nil {
 		return nil, err
 	}
 	return &AuthSessionResult{User: publicUser, Session: session.ID + "." + token, MaxAgeSecs: int(sessionMaxAge.Seconds())}, nil
+}
+
+func normalizeLoginEnvironment(value LoginEnvironment) LoginEnvironment {
+	if parsed := net.ParseIP(strings.TrimSpace(value.IPAddress)); parsed != nil {
+		value.IPAddress = parsed.String()
+	} else {
+		value.IPAddress = ""
+	}
+	value.UserAgent = truncateLoginEnvironment(value.UserAgent, 1024)
+	value.DeviceType = truncateLoginEnvironment(value.DeviceType, 32)
+	value.Browser = truncateLoginEnvironment(value.Browser, 80)
+	value.BrowserVersion = truncateLoginEnvironment(value.BrowserVersion, 40)
+	value.OS = truncateLoginEnvironment(value.OS, 80)
+	value.OSVersion = truncateLoginEnvironment(value.OSVersion, 40)
+	return value
+}
+
+func truncateLoginEnvironment(value string, limit int) string {
+	value = strings.TrimSpace(value)
+	runes := []rune(value)
+	if len(runes) > limit {
+		return string(runes[:limit])
+	}
+	return value
 }
 
 func HashPassword(password string) (string, error) {

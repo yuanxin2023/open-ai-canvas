@@ -12,7 +12,7 @@ import (
 	"gorm.io/gorm"
 )
 
-const CurrentSchemaVersion int64 = 38
+const CurrentSchemaVersion int64 = 39
 
 //go:embed seed/inspirations.json
 var inspirationSeedJSON []byte
@@ -126,6 +126,11 @@ var schemaMigrations = []migration{
 	{version: 36, name: "channel_model_tags", checksum: "sha256:channel-model-tags-v32", apply: migrateChannelModelTags},
 	{version: 37, name: "user_profiles", checksum: "sha256:user-profiles-v37-20260927", apply: migrateUserProfiles},
 	{version: 38, name: "user_login_names", checksum: "sha256:user-login-names-v38-20260927", apply: migrateUserLoginNames},
+	{version: 39, name: "user_login_environment", checksum: "sha256:user-login-environment-v39-20260930", apply: migrateUserLoginEnvironment},
+}
+
+func migrateUserLoginEnvironment(tx *gorm.DB) error {
+	return tx.AutoMigrate(&model.User{}, &model.UserLoginEvent{})
 }
 
 func migrateUserProfiles(tx *gorm.DB) error {
@@ -343,7 +348,7 @@ func migrationsForDatabase(db *gorm.DB) ([]migration, error) {
 func upstreamFirstMigrationPlan() []migration {
 	const sharedCount = 23
 	const localCount = 4
-	const commonTailCount = 2
+	const commonTailCount = 3
 	plan := append([]migration(nil), schemaMigrations[:sharedCount]...)
 	middleEnd := len(schemaMigrations) - commonTailCount
 	for index, item := range schemaMigrations[sharedCount+localCount : middleEnd] {
