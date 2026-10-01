@@ -5,12 +5,13 @@ import { AdminModal } from "@/pages/admin/ui/overlays";
 import { useEffect, useState, type ChangeEvent } from "react";
 
 import { useCopyText } from "@/hooks/use-copy-text";
+import { normalizeUsername, usernameValidationMessage } from "@/lib/username";
 import { formatCredits } from "@/constant/credits";
 import { createAdminUser, updateAdminUser, type AdminUser, type LocalUser } from "@/services/api/auth";
 import { adjustAdminUserCredits, type CreditAccount } from "@/services/api/wallet";
 import { generateAdminPassword } from "./admin-password";
 
-type UserFormValues = Pick<LocalUser, "displayName" | "email" | "role" | "status"> & { password?: string };
+type UserFormValues = Pick<LocalUser, "email" | "role" | "status"> & { password?: string };
 type CreditAdjustmentFormValues = { amount: number; note: string };
 
 export function AdminUserEditModal({
@@ -45,7 +46,6 @@ export function AdminUserEditModal({
         setAvailableMicrocredits(user.availableMicrocredits);
         setReservedMicrocredits(user.reservedMicrocredits);
         form.setFieldsValue({
-            displayName: user.displayName,
             email: user.email || "",
             password: "",
             role: user.role,
@@ -81,7 +81,6 @@ export function AdminUserEditModal({
         setSaving(true);
         try {
             const result = await updateAdminUser(user.id, {
-                displayName: values.displayName.trim(),
                 email: values.email?.trim() || "",
                 role: values.role,
                 status: values.status,
@@ -143,7 +142,7 @@ export function AdminUserEditModal({
     return (
         <>
         <AdminModal
-            title={user ? `编辑用户 · ${user.displayName || user.username}` : "编辑用户"}
+            title={user ? `编辑用户 · ${user.username}` : "编辑用户"}
             open={Boolean(user)}
             centered
             width="min(620px, calc(100vw - 32px))"
@@ -162,9 +161,6 @@ export function AdminUserEditModal({
             <Form form={form} layout="vertical" requiredMark={false}>
                 <Form.Item label="用户名">
                     <Input value={user ? `@${user.username}` : ""} disabled />
-                </Form.Item>
-                <Form.Item name="displayName" label="显示名称" rules={[{ required: true, whitespace: true, message: "请填写显示名称" }]}>
-                    <Input placeholder="用户在产品内显示的名称" />
                 </Form.Item>
                 <Form.Item name="email" label="邮箱" rules={[{ type: "email", message: "请输入有效邮箱" }]}>
                     <Input placeholder="name@example.com" />
@@ -260,7 +256,7 @@ export function AdminUserEditModal({
                     <dl className="admin-operation-confirmation-grid">
                         <div>
                             <dt>目标用户</dt>
-                            <dd>{user.displayName || user.username} · @{user.username}</dd>
+                            <dd>@{user.username}</dd>
                         </div>
                         <div>
                             <dt>积分变化</dt>
@@ -329,7 +325,6 @@ function AdminPasswordField({
 
 type CreateUserFormValues = {
     username: string;
-    displayName: string;
     email?: string;
     password: string;
     role: LocalUser["role"];
@@ -376,8 +371,7 @@ export function AdminUserCreateDrawer({
         setSaving(true);
         try {
             const result = await createAdminUser({
-                username: values.username.trim(),
-                displayName: values.displayName.trim(),
+                username: normalizeUsername(values.username),
                 email: values.email?.trim() || "",
                 password: values.password,
                 role: values.role,
@@ -405,11 +399,8 @@ export function AdminUserCreateDrawer({
             extra={<Button type="primary" loading={saving} onClick={() => void save()}>{"\u4fdd\u5b58"}</Button>}
         >
             <Form form={form} layout="vertical" requiredMark={false}>
-                <Form.Item name="username" label={"\u7528\u6237\u540d"} rules={[{ required: true, whitespace: true, message: "\u8bf7\u8f93\u5165\u7528\u6237\u540d" }]}>
-                    <Input placeholder={"3-32 \u4f4d\u5b57\u6bcd\u3001\u6570\u5b57\u3001\u4e0b\u5212\u7ebf\u6216\u8fde\u5b57\u7b26"} />
-                </Form.Item>
-                <Form.Item name="displayName" label={"\u663e\u793a\u540d\u79f0"} rules={[{ required: true, whitespace: true, message: "\u8bf7\u586b\u5199\u663e\u793a\u540d\u79f0" }]}>
-                    <Input placeholder={"\u7528\u6237\u5728\u4ea7\u54c1\u5185\u663e\u793a\u7684\u540d\u79f0"} />
+                <Form.Item name="username" label={"\u7528\u6237\u540d"} rules={[{ validator: (_, value?: string) => { const error = usernameValidationMessage(value || ""); return error ? Promise.reject(new Error(error)) : Promise.resolve(); } }]}>
+                    <Input placeholder={"\u542b\u4e2d\u6587 2-6 \u4f4d\uff0c\u5176\u4ed6 3-6 \u4f4d"} />
                 </Form.Item>
                 <Form.Item name="email" label={"\u90ae\u7bb1"} rules={[{ type: "email", message: "\u8bf7\u8f93\u5165\u6709\u6548\u90ae\u7bb1" }]}>
                     <Input placeholder="name@example.com" />

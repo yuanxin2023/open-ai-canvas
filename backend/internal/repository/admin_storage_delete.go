@@ -47,12 +47,12 @@ func (r *Repository) UserAvatarResourceReferences(resourceIDs []string) ([]Resou
 		return []ResourceDirectReference{}, nil
 	}
 	var users []model.User
-	if err := r.db.Select("id", "display_name", "avatar_resource_id").Where("avatar_resource_id IN ?", resourceIDs).Find(&users).Error; err != nil {
+	if err := r.db.Select("id", "username", "avatar_resource_id").Where("avatar_resource_id IN ?", resourceIDs).Find(&users).Error; err != nil {
 		return nil, err
 	}
 	result := make([]ResourceDirectReference, 0, len(users))
 	for _, user := range users {
-		result = append(result, ResourceDirectReference{Kind: "个人头像", ID: user.ID, Title: user.DisplayName, ResourceID: user.AvatarResourceID})
+		result = append(result, ResourceDirectReference{Kind: "个人头像", ID: user.ID, Title: user.Username, ResourceID: user.AvatarResourceID})
 	}
 	return result, nil
 }

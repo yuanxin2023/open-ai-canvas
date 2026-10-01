@@ -279,7 +279,7 @@ func (s *Service) decorateAPICallLogs(logs []model.ApiCallLog) error {
 			logs[index].ChannelName = "已删除渠道"
 		}
 		if user, exists := userByID[logs[index].UserID]; exists {
-			logs[index].UserDisplayName = user.DisplayName
+			logs[index].UserDisplayName = user.Username
 			logs[index].UserAccount = user.Username
 		}
 		if logs[index].Billable {
@@ -773,7 +773,7 @@ func buildAnalyticsModels(tasks []model.Task, logs []model.ApiCallLog) []Analyti
 func buildAnalyticsUsers(filter repository.AnalyticsFilter, tasks []model.Task, logs []model.ApiCallLog, activities []model.UserDailyActivity, users []model.User) []AnalyticsUserRow {
 	names := map[string]string{}
 	for _, user := range users {
-		names[user.ID] = firstNonEmpty(user.DisplayName, user.Username)
+		names[user.ID] = user.Username
 	}
 	rows := map[string]*AnalyticsUserRow{}
 	models := map[string]map[string]int{}

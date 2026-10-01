@@ -451,9 +451,8 @@ function resourceDimensions(resource: AdminStorageResource) {
     if (resource.durationMs > 0) return <span className="tabular-nums">{formatDuration(resource.durationMs)}</span>;
     return <span className="text-foreground/30">--</span>;
 }
-function adminUserLabel(user: Pick<AdminUser, "username" | "displayName">) {
-    const displayName = user.displayName.trim();
-    return displayName && displayName !== user.username ? `${displayName} · @${user.username}` : `@${user.username}`;
+function adminUserLabel(user: Pick<AdminUser, "username">) {
+    return `@${user.username}`;
 }
 function formatDuration(durationMs: number) {
     const seconds = Math.round(durationMs / 1000);

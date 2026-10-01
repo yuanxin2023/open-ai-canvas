@@ -388,6 +388,7 @@ func (r *Repository) PurgeUserData(userID string, expectedResourceIDs []string, 
 			{&model.AnnouncementImageDraft{}, "user_id = ?"},
 			{&model.InspirationCoverDraft{}, "user_id = ?"}, {&model.UserIdentity{}, "user_id = ?"},
 			{&model.UserLoginEvent{}, "user_id = ?"},
+			{&model.UserUsernameChange{}, "user_id = ?"},
 			{&model.AuthSession{}, "user_id = ?"},
 		} {
 			if err := tx.Where(owned.query, userID).Delete(owned.model).Error; err != nil {

@@ -55,7 +55,7 @@ func (r *Repository) Skills(filter SkillListFilter) ([]model.Skill, int64, error
 	if filter.Search != "" {
 		pattern := "%" + strings.ToLower(filter.Search) + "%"
 		query = query.Joins("LEFT JOIN users skill_owners ON skill_owners.id = skills.owner_id").
-			Where("lower(skills.name) LIKE ? OR lower(skills.description) LIKE ? OR lower(skills.author_name) LIKE ? OR lower(skill_owners.display_name) LIKE ? OR lower(skill_owners.username) LIKE ?", pattern, pattern, pattern, pattern, pattern)
+			Where("lower(skills.name) LIKE ? OR lower(skills.description) LIKE ? OR lower(skills.author_name) LIKE ? OR lower(skill_owners.username) LIKE ?", pattern, pattern, pattern, pattern)
 	}
 	if filter.Tag != "" {
 		query = query.Where("skills.tag = ?", filter.Tag)

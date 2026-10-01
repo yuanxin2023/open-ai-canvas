@@ -38,7 +38,7 @@ export function createUserColumns({
             dataIndex: "username",
             render: (_, user) => (
                 <div>
-                    <div className="flex items-center gap-1.5"><button type="button" className="admin-table-primary-link font-medium" onClick={() => onView(user)}>{user.displayName || user.username}</button><IdentityProviderBadge user={user} /></div>
+                    <div className="flex items-center gap-1.5"><button type="button" className="admin-table-primary-link font-medium" onClick={() => onView(user)}>{user.username}</button><IdentityProviderBadge user={user} /></div>
                     <div className="text-xs text-foreground/45">@{user.username}</div>
                 </div>
             ),
@@ -73,7 +73,7 @@ export function createUserColumns({
                             danger: true,
                             disabled: user.id === actorId,
                             confirm: {
-                                title: `确认注销“${user.displayName || user.username}”？`,
+                                title: `确认注销“${user.username}”？`,
                                 description: "注销后将永久删除该用户账号，以及该用户产生的画布、项目、素材、任务、积分、支付记录和其他全部资料。此操作不可恢复。",
                                 okText: "确认注销并删除",
                             },

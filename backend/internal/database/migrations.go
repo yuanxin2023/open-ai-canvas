@@ -5,14 +5,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
+	"infinite-canvas/backend/internal/kernel"
 	"infinite-canvas/backend/internal/model"
 
 	"gorm.io/gorm"
 )
 
-const CurrentSchemaVersion int64 = 40
+const CurrentSchemaVersion int64 = 41
 
 //go:embed seed/inspirations.json
 var inspirationSeedJSON []byte
@@ -130,6 +132,60 @@ var schemaMigrations = []migration{
 	{version: 40, name: "platform_skill_availability", checksum: "sha256:platform-skill-availability-v40-20260930", apply: func(tx *gorm.DB) error {
 		return tx.AutoMigrate(&model.SkillPlatformState{}, &model.SkillCategoryPlatformState{})
 	}},
+	{version: 41, name: "short_login_usernames", checksum: "sha256:short-login-usernames-v41-20261001", apply: migrateShortLoginUsernames},
+}
+
+func migrateShortLoginUsernames(tx *gorm.DB) error {
+	if err := tx.AutoMigrate(&model.User{}, &model.UserUsernameChange{}); err != nil {
+		return err
+	}
+	var users []model.User
+	if err := tx.Order("created_at asc").Find(&users).Error; err != nil {
+		return err
+	}
+	used := make(map[string]struct{}, len(users))
+	for _, user := range users {
+		if user.Username != user.ID || strings.TrimSpace(user.Email) == "" {
+			used[strings.ToLower(user.Username)] = struct{}{}
+		}
+	}
+	for _, user := range users {
+		if user.Username == user.ID && strings.TrimSpace(user.Email) != "" {
+			candidate := ""
+			for attempt := 0; attempt < 1024; attempt++ {
+				value := kernel.DefaultLoginUsernameCandidate(user.Email, user.ID, attempt)
+				if _, exists := used[strings.ToLower(value)]; !exists {
+					candidate = value
+					break
+				}
+			}
+			if candidate == "" {
+				return fmt.Errorf("为用户 %s 生成唯一短用户名失败", user.ID)
+			}
+			if err := tx.Model(&model.User{}).Where("id = ?", user.ID).Updates(map[string]any{
+				"username": candidate, "display_name": candidate, "profile_name": candidate,
+				"username_customized_at": nil,
+			}).Error; err != nil {
+				return err
+			}
+			used[strings.ToLower(candidate)] = struct{}{}
+			continue
+		}
+		if user.UsernameCustomizedAt == nil {
+			customizedAt := user.CreatedAt
+			if customizedAt.IsZero() {
+				customizedAt = time.Now()
+			}
+			if err := tx.Model(&model.User{}).Where("id = ?", user.ID).Updates(map[string]any{
+				"username_customized_at": customizedAt, "display_name": user.Username, "profile_name": user.Username,
+			}).Error; err != nil {
+				return err
+			}
+		} else if err := tx.Model(&model.User{}).Where("id = ?", user.ID).Updates(map[string]any{"display_name": user.Username, "profile_name": user.Username}).Error; err != nil {
+			return err
+		}
+	}
+	return migrateUserLoginNames(tx)
 }
 
 func migrateUserLoginEnvironment(tx *gorm.DB) error {
@@ -351,7 +407,7 @@ func migrationsForDatabase(db *gorm.DB) ([]migration, error) {
 func upstreamFirstMigrationPlan() []migration {
 	const sharedCount = 23
 	const localCount = 4
-	const commonTailCount = 3
+	const commonTailCount = 4
 	plan := append([]migration(nil), schemaMigrations[:sharedCount]...)
 	middleEnd := len(schemaMigrations) - commonTailCount
 	for index, item := range schemaMigrations[sharedCount+localCount : middleEnd] {

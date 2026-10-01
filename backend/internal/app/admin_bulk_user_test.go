@@ -21,7 +21,7 @@ func TestCreateAdminUserCreatesActiveUserWithPasswordAndAudit(t *testing.T) {
 	}
 
 	created, err := (&Service{repo: repository.New(db)}).CreateAdminUser(&actor, CreateAdminUserRequest{
-		Username:    "new-user",
+		Username:    "newusr",
 		DisplayName: "New User",
 		Email:       "new-user@example.com",
 		Password:    "strong-password",
@@ -31,7 +31,7 @@ func TestCreateAdminUserCreatesActiveUserWithPasswordAndAudit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if created.Username != "new-user" || created.DisplayName != "New User" || created.ProfileName != "New User" || created.Email != "new-user@example.com" {
+	if created.Username != "newusr" || created.DisplayName != "newusr" || created.ProfileName != "newusr" || created.Email != "new-user@example.com" {
 		t.Fatalf("created user = %+v", created)
 	}
 	if created.Role != model.UserRoleUser || created.Status != model.UserStatusActive {
@@ -63,7 +63,7 @@ func TestCreateAdminUserRejectsDuplicateUsername(t *testing.T) {
 		t.Fatal(err)
 	}
 	svc := &Service{repo: repository.New(db)}
-	input := CreateAdminUserRequest{Username: "duplicate", DisplayName: "Duplicate", Password: "strong-password", Role: model.UserRoleUser, Status: model.UserStatusActive}
+	input := CreateAdminUserRequest{Username: "dupone", DisplayName: "Duplicate", Password: "strong-password", Role: model.UserRoleUser, Status: model.UserStatusActive}
 	if _, err := svc.CreateAdminUser(&actor, input); err != nil {
 		t.Fatal(err)
 	}
@@ -97,7 +97,7 @@ func TestUpdateUserAllowsAdminToResetPasswordAndRevokesTargetSessions(t *testing
 	if bcrypt.CompareHashAndPassword([]byte(updated.PasswordHash), []byte("old-password")) == nil {
 		t.Fatal("updated password still matches the old password")
 	}
-	if updated.DisplayName != "Renamed User" || updated.ProfileName != "Renamed User" {
+	if updated.DisplayName != target.Username || updated.ProfileName != target.Username {
 		t.Fatalf("updated public name = %q/%q", updated.DisplayName, updated.ProfileName)
 	}
 	var targetSessions int64

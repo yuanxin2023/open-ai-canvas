@@ -126,11 +126,11 @@ func (r *Repository) ResourceReferenceSnapshot(userID string, excludingAssetID s
 		return snapshot, nil
 	}
 	var profile model.User
-	if err := r.db.Select("id", "display_name", "avatar_resource_id").First(&profile, "id = ?", userID).Error; err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+	if err := r.db.Select("id", "username", "avatar_resource_id").First(&profile, "id = ?", userID).Error; err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return snapshot, err
 	}
 	if profile.AvatarResourceID != "" && slices.Contains(resourceIDs, profile.AvatarResourceID) {
-		snapshot.Direct = append(snapshot.Direct, ResourceDirectReference{Kind: "个人头像", ID: profile.ID, Title: profile.DisplayName, ResourceID: profile.AvatarResourceID})
+		snapshot.Direct = append(snapshot.Direct, ResourceDirectReference{Kind: "个人头像", ID: profile.ID, Title: profile.Username, ResourceID: profile.AvatarResourceID})
 	}
 	history, err := r.CanvasHistoryResourceReferences(resourceIDs)
 	if err != nil {

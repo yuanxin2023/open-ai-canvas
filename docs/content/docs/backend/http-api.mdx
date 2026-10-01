@@ -15,15 +15,17 @@ description: 信封、错误码与 OpenAPI
 
 空数据库中的首个用户是初始化例外：仍必须提交合法邮箱和至少 8 位密码，但不要求 `emailCode`，创建后自动成为管理员，便于未配置 SMTP 的新部署完成初始化。后续用户必须同时满足普通注册已开启、邮箱域名白名单和一次性验证码要求。
 
-服务端先生成不可变的 32 位用户 ID，并在用户尚未设置登录用户名时将同一个值临时写入 `username`；`displayName` 默认取规范化邮箱的 `@` 前部分。`POST /auth/login` 的请求字段仍为 `{ "username", "password" }`，其中 `username` 可填写邮箱或已经设置的用户名。服务端 JSON 解码会忽略旧前端附带的多余注册字段，发布时应先升级后端、再升级前端。
+服务端先生成不可变的 32 位用户 ID，再从邮箱 `@` 前部分提取字母和数字、转小写并生成最多 6 位的可登录用户名。候选不合法、属于系统保留名或已占用时，服务端使用最多 3 位可识别前缀和由用户 ID 派生的 3 位后缀；没有有效前缀时使用 `usr` 加后缀，并在唯一索引冲突时继续确定性重试。`displayName`、`profileName` 是本版本保留的废弃兼容别名，始终镜像 `username`。`POST /auth/login` 的请求字段仍为 `{ "username", "password" }`，其中 `username` 可填写邮箱或用户名。服务端 JSON 解码会忽略旧前端附带的多余注册字段，发布时应先升级后端、再升级前端。
 
-登录用户可通过 `PATCH /auth/profile` 提交 `{ "username": "登录用户名", "avatarResourceId": "资源 ID" }` 更新个人资料；用户名去除首尾空白后必须为 3–32 位字母、数字、下划线或连字符，并在所有账号间大小写无关唯一。保存后同步到 `profileName` 和 `displayName`，用户可使用“邮箱 + 密码”或“用户名 + 密码”登录；再次修改会立即使用新用户名，旧用户名不再登录。`avatarResourceId` 省略表示不修改、空字符串表示移除，非空时必须是当前用户拥有的就绪 JPG、PNG 或 WebP 图片资源且不超过 2 MB。邮箱、角色、状态和用户 ID 不允许由该入口修改。成功响应返回更新后的公开用户对象。
+登录用户可通过 `PATCH /auth/profile` 提交 `{ "username": "登录用户名", "avatarResourceId": "资源 ID" }` 更新个人资料。新用户名依次执行 NFKC 规范化、去除首尾空白和小写转换；只允许汉字、英文字母和数字，且至少包含一个汉字或英文字母。含中文时总长度为 2–6 个 Unicode 字符，否则为 3–6 个字符；纯数字、空格、Emoji、下划线、连字符和标点均拒绝，并在所有账号间大小写无关唯一。精确保留名为 `admin`、`root`、`system`、`openai`、`官方`、`官方账号`、`系统`、`管理员`、`客服`、`平台`。现有不符合新规则的用户名仍可登录和展示，仅主动改名时校验；因此仅修改头像不会被旧用户名阻止。保存后同步废弃别名 `profileName`、`displayName`，用户可使用邮箱或新用户名登录，旧用户名立即失效并可被其他账号使用。`avatarResourceId` 省略表示不修改、空字符串表示移除，非空时必须是当前用户拥有的就绪 JPG、PNG 或 WebP 图片资源且不超过 2 MB。邮箱、角色、状态和用户 ID 不允许由该入口修改。
+
+认证用户对象包含 `usernameChangePolicy: { customized, limit, used, remaining, windowDays, nextAvailableAt? }`。普通用户 `limit=3`、`windowDays=30`，按滚动 30×24 小时统计成功且计费的修改；系统默认名首次改为自选名免费，管理员的 `limit` 和 `remaining` 为 `null` 且不限次数。达到上限时 `nextAvailableAt` 给出最早恢复时间，改名接口返回 HTTP 429、`code=42902`、`reason=username_change_limit` 和对应秒数的 `Retry-After`。非法、重名、保存失败、仅大小写/NFKC 等价或仅改头像均不写入计费次数。
 
 登录用户可通过 `PATCH /auth/password` 提交 `{ "currentPassword": "当前密码", "newPassword": "至少 8 位的新密码" }` 修改本地密码；确认密码只在前端校验，不进入接口。服务端会重新验证当前会话和当前密码，在同一事务中更新 bcrypt 哈希，并撤销该账号除当前会话外的其他登录会话。当前页面保持登录，其他设备需使用新密码重新登录。
 
 ## 管理员兑换码查询
 
-`POST /admin/redeem-codes/lookup` 接收 `{ "code": "32 位完整兑换码" }`，仅允许管理员调用。查询与用户兑换入口使用相同的格式规则，不额外限定字符集；兑换码在 JSON 请求体中提交，不放入 URL 或查询参数。服务端统一转为小写并按 SHA-256 哈希精确查询，兼容只有哈希、无法恢复明文的旧批次。成功返回 `data.batch` 批次摘要和 `data.code` 单码详情；单码详情包含当前状态、面值、有效期，以及已核销时的用户 ID、用户名、显示名、核销时间和 IP。响应设置 `Cache-Control: no-store`。
+`POST /admin/redeem-codes/lookup` 接收 `{ "code": "32 位完整兑换码" }`，仅允许管理员调用。查询与用户兑换入口使用相同的格式规则，不额外限定字符集；兑换码在 JSON 请求体中提交，不放入 URL 或查询参数。服务端统一转为小写并按 SHA-256 哈希精确查询，兼容只有哈希、无法恢复明文的旧批次。成功返回 `data.batch` 批次摘要和 `data.code` 单码详情；单码详情包含当前状态、面值、有效期，以及已核销时的用户 ID、用户名、废弃兼容显示名、核销时间和 IP，其中显示名镜像用户名。响应设置 `Cache-Control: no-store`。
 
 未使用且未过期的查询结果可继续调用 `POST /admin/redeem-batches/:id/codes/:codeId/disable` 禁用。服务端以批次 ID、单码 ID、`unused` 状态及有效期做原子条件更新；已核销、已禁用、已过期或不存在的记录一律拒绝，不依赖前端按钮状态。
 
@@ -259,9 +261,9 @@ Skills 的 `tool_completed` / `tool_failed` 事件附带 `skillId`、`skillName`
 
 ## 管理员支付订单
 
-`GET /api/admin/payments/orders` 需要管理员权限，支持 `status`、`keyword`、`providerId`、`timeField`、`from`、`to`、`page`、`pageSize`。关键词匹配订单号、渠道交易号、用户名称、用户名或邮箱，也支持完整用户 ID 精确匹配。用户名和邮箱搜索忽略大小写；所有筛选同时生效，返回匹配总数和当前页订单。`timeField` 为 `created`（默认创建时间）、`paid`（渠道支付时间）、`credited`（入账时间）。`from`、`to` 为 `YYYY-MM-DD`，包含起止日期，按北京时间转换为左闭右开的时间区间；未填写的边界不限制，倒置日期或无效状态/时间口径返回 400。
+`GET /api/admin/payments/orders` 需要管理员权限，支持 `status`、`keyword`、`providerId`、`timeField`、`from`、`to`、`page`、`pageSize`。关键词匹配订单号、渠道交易号、用户名或邮箱，也支持完整用户 ID 精确匹配。用户名和邮箱搜索忽略大小写；所有筛选同时生效，返回匹配总数和当前页订单。`timeField` 为 `created`（默认创建时间）、`paid`（渠道支付时间）、`credited`（入账时间）。`from`、`to` 为 `YYYY-MM-DD`，包含起止日期，按北京时间转换为左闭右开的时间区间；未填写的边界不限制，倒置日期或无效状态/时间口径返回 400。
 
-每条管理员列表订单在原有字段之外包含 `user: { id, username, displayName, email }`，由当前页用户 ID 批量读取；用户不存在时返回 `user: null`，保留原 `userId` 与历史订单。此身份摘要仅用于管理员订单列表，不添加到普通用户支付接口或支付状态同步响应。
+每条管理员列表订单在原有字段之外包含 `user: { id, username, displayName, email }`，由当前页用户 ID 批量读取；废弃兼容字段 `displayName` 镜像 `username`。用户不存在时返回 `user: null`，保留原 `userId` 与历史订单。此身份摘要仅用于管理员订单列表，不添加到普通用户支付接口或支付状态同步响应。
 
 后台支付订单列表展示用户身份，点击名称打开用户详情；订单详情提供完整订单号、渠道交易号、用户 ID 和各阶段时间。同步支付状态与关闭订单位于更多菜单，关闭订单仍需确认。关闭操作会先尽力向渠道查单：已支付订单立即入账；未支付且渠道支持关单时尝试远程关单；查单或远程关单失败时仍关闭本地订单，并继续通过晚到账通知和补查保障入账。
 
@@ -351,6 +353,7 @@ CSV 使用中文表头、UTF-8 BOM、CRLF；金额按整数分精确转换为两
 | 40301 | 403 | `quota_exceeded` | 账号配额用尽（不自动重试） |
 | 40901 | 409 | `conflict` | 幂等冲突 |
 | 42901 | 429 | `rate_limited` | 请求限流（可带 Retry-After） |
+| 42902 | 429 | `username_change_limit` | 30 天用户名修改次数已达上限（带 Retry-After） |
 
 模型错误把已有字符串码放进 `reason`（如 `model_capability_not_supported`），`code` 仍为 400。
 

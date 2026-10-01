@@ -27,6 +27,7 @@ func Models() []any {
 		&model.User{},
 		&model.AuthSession{},
 		&model.UserLoginEvent{},
+		&model.UserUsernameChange{},
 		&model.UserIdentity{},
 		&model.OAuthState{},
 		&model.EmailVerificationCode{},

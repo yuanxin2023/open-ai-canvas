@@ -59,7 +59,7 @@ func TestAdminStorageListStatsAndPreview(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if page.Total != 3 || len(page.Items) != 3 || page.Items[0].UserName != "创作者" {
+	if page.Total != 3 || len(page.Items) != 3 || page.Items[0].UserName != "creator" {
 		t.Fatalf("page = %+v", page)
 	}
 	if page.Items[0].PhysicalBytes != 128 || page.Items[1].PhysicalBytes != 0 {

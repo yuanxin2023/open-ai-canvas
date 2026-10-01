@@ -18,24 +18,26 @@ const (
 	CodeQuotaExceeded       = kernel.CodeQuotaExceeded
 	CodeIdempotencyConflict = kernel.CodeIdempotencyConflict
 	CodeRateLimited         = kernel.CodeRateLimited
+	CodeUsernameChangeLimit = kernel.CodeUsernameChangeLimit
 )
 
 type ErrorReason = kernel.ErrorReason
 
 const (
-	ReasonInvalidArgument    = kernel.ReasonInvalidArgument
-	ReasonUnauthorized       = kernel.ReasonUnauthorized
-	ReasonForbidden          = kernel.ReasonForbidden
-	ReasonNotFound           = kernel.ReasonNotFound
-	ReasonConflict           = kernel.ReasonConflict
-	ReasonFailedPrecondition = kernel.ReasonFailedPrecondition
-	ReasonQuotaExceeded      = kernel.ReasonQuotaExceeded
-	ReasonRateLimited        = kernel.ReasonRateLimited
-	ReasonUnavailable        = kernel.ReasonUnavailable
-	ReasonTimeout            = kernel.ReasonTimeout
-	ReasonInternal           = kernel.ReasonInternal
-	ReasonBadGateway         = kernel.ReasonBadGateway
-	ReasonUpstreamDNSFailed  = kernel.ReasonUpstreamDNSFailed
+	ReasonInvalidArgument     = kernel.ReasonInvalidArgument
+	ReasonUnauthorized        = kernel.ReasonUnauthorized
+	ReasonForbidden           = kernel.ReasonForbidden
+	ReasonNotFound            = kernel.ReasonNotFound
+	ReasonConflict            = kernel.ReasonConflict
+	ReasonFailedPrecondition  = kernel.ReasonFailedPrecondition
+	ReasonQuotaExceeded       = kernel.ReasonQuotaExceeded
+	ReasonRateLimited         = kernel.ReasonRateLimited
+	ReasonUsernameChangeLimit = kernel.ReasonUsernameChangeLimit
+	ReasonUnavailable         = kernel.ReasonUnavailable
+	ReasonTimeout             = kernel.ReasonTimeout
+	ReasonInternal            = kernel.ReasonInternal
+	ReasonBadGateway          = kernel.ReasonBadGateway
+	ReasonUpstreamDNSFailed   = kernel.ReasonUpstreamDNSFailed
 )
 
 func ReasonForStatus(status int) ErrorReason {

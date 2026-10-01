@@ -19,25 +19,27 @@ const (
 	CodeQuotaExceeded       = 40301
 	CodeIdempotencyConflict = 40901
 	CodeRateLimited         = 42901
+	CodeUsernameChangeLimit = 42902
 )
 
 // ErrorReason 是稳定机器可读原因，前端应判断 reason 而不是解析 msg。
 type ErrorReason string
 
 const (
-	ReasonInvalidArgument    ErrorReason = "invalid_argument"
-	ReasonUnauthorized       ErrorReason = "unauthorized"
-	ReasonForbidden          ErrorReason = "forbidden"
-	ReasonNotFound           ErrorReason = "not_found"
-	ReasonConflict           ErrorReason = "conflict"
-	ReasonFailedPrecondition ErrorReason = "failed_precondition"
-	ReasonQuotaExceeded      ErrorReason = "quota_exceeded"
-	ReasonRateLimited        ErrorReason = "rate_limited"
-	ReasonUnavailable        ErrorReason = "unavailable"
-	ReasonTimeout            ErrorReason = "timeout"
-	ReasonInternal           ErrorReason = "internal"
-	ReasonBadGateway         ErrorReason = "bad_gateway"
-	ReasonUpstreamDNSFailed  ErrorReason = "upstream_dns_failed"
+	ReasonInvalidArgument     ErrorReason = "invalid_argument"
+	ReasonUnauthorized        ErrorReason = "unauthorized"
+	ReasonForbidden           ErrorReason = "forbidden"
+	ReasonNotFound            ErrorReason = "not_found"
+	ReasonConflict            ErrorReason = "conflict"
+	ReasonFailedPrecondition  ErrorReason = "failed_precondition"
+	ReasonQuotaExceeded       ErrorReason = "quota_exceeded"
+	ReasonRateLimited         ErrorReason = "rate_limited"
+	ReasonUsernameChangeLimit ErrorReason = "username_change_limit"
+	ReasonUnavailable         ErrorReason = "unavailable"
+	ReasonTimeout             ErrorReason = "timeout"
+	ReasonInternal            ErrorReason = "internal"
+	ReasonBadGateway          ErrorReason = "bad_gateway"
+	ReasonUpstreamDNSFailed   ErrorReason = "upstream_dns_failed"
 )
 
 func ReasonForStatus(status int) ErrorReason {

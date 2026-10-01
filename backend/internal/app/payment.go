@@ -1039,7 +1039,7 @@ func (s *Service) AdminPaymentOrderPage(actor *model.User, query PaymentOrderQue
 	for _, order := range orders {
 		view := AdminPaymentOrderView{PaymentOrderView: paymentOrderView(order)}
 		if user, ok := users[order.UserID]; ok {
-			view.User = &AdminPaymentOrderUser{ID: user.ID, Username: user.Username, DisplayName: user.DisplayName, Email: user.Email}
+			view.User = &AdminPaymentOrderUser{ID: user.ID, Username: user.Username, DisplayName: user.Username, Email: user.Email}
 		}
 		views = append(views, view)
 	}

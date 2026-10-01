@@ -106,7 +106,7 @@ func (s *Service) AdminPaymentOrdersCSV(ctx context.Context, actor *model.User, 
 		if order.ProviderTradeNo != nil {
 			trade = *order.ProviderTradeNo
 		}
-		rows = append(rows, []string{paymentCSVIdentifier(order.ID), paymentCSVIdentifier(order.MerchantOrderNo), paymentCSVIdentifier(trade), paymentCSVIdentifier(order.UserID), user.Username, user.DisplayName, user.Email, order.ProductName, s.paymentExportProviderName(order.ProviderID), paymentDecimal(order.AmountFen, 2, false), order.Currency, paymentDecimal(order.CreditsMicrocredits, 6, true), paymentExportLabel(string(order.Status)), order.ProviderStatus, paymentCSVTime(&order.CreatedAt), paymentCSVTime(order.ProviderPaidAt), paymentCSVTime(order.CreditedAt), paymentCSVTime(order.ClosedAt)})
+		rows = append(rows, []string{paymentCSVIdentifier(order.ID), paymentCSVIdentifier(order.MerchantOrderNo), paymentCSVIdentifier(trade), paymentCSVIdentifier(order.UserID), user.Username, user.Username, user.Email, order.ProductName, s.paymentExportProviderName(order.ProviderID), paymentDecimal(order.AmountFen, 2, false), order.Currency, paymentDecimal(order.CreditsMicrocredits, 6, true), paymentExportLabel(string(order.Status)), order.ProviderStatus, paymentCSVTime(&order.CreatedAt), paymentCSVTime(order.ProviderPaidAt), paymentCSVTime(order.CreditedAt), paymentCSVTime(order.ClosedAt)})
 	}
 	return paymentCSV(rows)
 }

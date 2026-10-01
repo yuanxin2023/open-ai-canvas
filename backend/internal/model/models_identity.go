@@ -3,19 +3,30 @@ package model
 import "time"
 
 type User struct {
-	ID               string     `json:"id" gorm:"primaryKey;size:36"`
-	Username         string     `json:"username" gorm:"uniqueIndex;size:80"`
-	Email            string     `json:"email,omitempty" gorm:"size:160"`
-	DisplayName      string     `json:"displayName" gorm:"size:80"`
-	ProfileName      string     `json:"profileName" gorm:"size:80"`
-	AvatarResourceID string     `json:"-" gorm:"index;size:36"`
-	Role             UserRole   `json:"role" gorm:"index;size:24"`
-	Status           UserStatus `json:"status" gorm:"index;size:24"`
-	PasswordHash     string     `json:"-"`
-	RegistrationIP   string     `json:"-" gorm:"size:64"`
-	LastLoginAt      *time.Time `json:"lastLoginAt"`
-	CreatedAt        time.Time  `json:"createdAt"`
-	UpdatedAt        time.Time  `json:"updatedAt"`
+	ID                   string     `json:"id" gorm:"primaryKey;size:36"`
+	Username             string     `json:"username" gorm:"uniqueIndex;size:80"`
+	Email                string     `json:"email,omitempty" gorm:"size:160"`
+	DisplayName          string     `json:"displayName" gorm:"size:80"`
+	ProfileName          string     `json:"profileName" gorm:"size:80"`
+	UsernameCustomizedAt *time.Time `json:"-" gorm:"index"`
+	AvatarResourceID     string     `json:"-" gorm:"index;size:36"`
+	Role                 UserRole   `json:"role" gorm:"index;size:24"`
+	Status               UserStatus `json:"status" gorm:"index;size:24"`
+	PasswordHash         string     `json:"-"`
+	RegistrationIP       string     `json:"-" gorm:"size:64"`
+	LastLoginAt          *time.Time `json:"lastLoginAt"`
+	CreatedAt            time.Time  `json:"createdAt"`
+	UpdatedAt            time.Time  `json:"updatedAt"`
+}
+
+// UserUsernameChange 记录每次成功的语义改名；旧用户名不会被保留占用。
+type UserUsernameChange struct {
+	ID                string    `json:"id" gorm:"primaryKey;size:36"`
+	UserID            string    `json:"-" gorm:"index:idx_user_username_changes_user_created,priority:1;index;size:36"`
+	OldUsername       string    `json:"oldUsername" gorm:"size:80"`
+	NewUsername       string    `json:"newUsername" gorm:"size:80"`
+	CountsTowardLimit bool      `json:"countsTowardLimit" gorm:"index"`
+	CreatedAt         time.Time `json:"createdAt" gorm:"index:idx_user_username_changes_user_created,priority:2,sort:desc"`
 }
 
 // UserLoginEvent 保留成功登录时的排障环境；它独立于可撤销的 AuthSession，退出后仍可审计。

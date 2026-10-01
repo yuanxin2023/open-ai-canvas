@@ -15,7 +15,7 @@ func TestPublicAuthUserKeepsIdentityMetadataWithoutUsingThirdPartyAvatar(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&model.User{}, &model.UserIdentity{}); err != nil {
+	if err := db.AutoMigrate(&model.User{}, &model.UserUsernameChange{}, &model.UserIdentity{}); err != nil {
 		t.Fatal(err)
 	}
 	user := model.User{ID: "user-1", Username: "canvas-user", DisplayName: "Canvas User", Role: model.UserRoleUser, Status: model.UserStatusActive}
@@ -41,7 +41,7 @@ func TestPublicAuthUserKeepsLocalUserWithoutIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&model.UserIdentity{}); err != nil {
+	if err := db.AutoMigrate(&model.UserUsernameChange{}, &model.UserIdentity{}); err != nil {
 		t.Fatal(err)
 	}
 	user := model.User{ID: "user-1", Username: "local-user", DisplayName: "Local User"}

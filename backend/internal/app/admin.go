@@ -193,7 +193,7 @@ func (s *Service) AdminReferences(actor *model.User) (*AdminReferenceData, error
 		Channels: make([]AdminChannelReference, 0, len(channels)),
 	}
 	for _, user := range users {
-		result.Users = append(result.Users, AdminUserReference{ID: user.ID, Username: user.Username, DisplayName: user.DisplayName})
+		result.Users = append(result.Users, AdminUserReference{ID: user.ID, Username: user.Username, DisplayName: user.Username})
 	}
 	for _, channel := range channels {
 		items, itemErr := s.repo.ChannelModels(channel.ID, true)
@@ -219,7 +219,7 @@ func (s *Service) CreateAdminUser(actor *model.User, req CreateAdminUserRequest)
 	}
 	username := normalizeUsername(req.Username)
 	email := normalizeEmail(req.Email)
-	displayName := normalizeDisplayName(req.DisplayName, username)
+	displayName := username
 	if err := validateUsername(username); err != nil {
 		return nil, err
 	}
@@ -255,16 +255,17 @@ func (s *Service) CreateAdminUser(actor *model.User, req CreateAdminUserRequest)
 	}
 	now := time.Now()
 	user := &model.User{
-		ID:           newID(),
-		Username:     username,
-		Email:        email,
-		DisplayName:  displayName,
-		ProfileName:  displayName,
-		Role:         req.Role,
-		Status:       req.Status,
-		PasswordHash: passwordHash,
-		CreatedAt:    now,
-		UpdatedAt:    now,
+		ID:                   newID(),
+		Username:             username,
+		Email:                email,
+		DisplayName:          displayName,
+		ProfileName:          displayName,
+		Role:                 req.Role,
+		Status:               req.Status,
+		PasswordHash:         passwordHash,
+		UsernameCustomizedAt: &now,
+		CreatedAt:            now,
+		UpdatedAt:            now,
 	}
 	if err := s.repo.Create(user); err != nil {
 		return nil, err
@@ -323,10 +324,8 @@ func (s *Service) UpdateUser(actor *model.User, userID string, req UpdateUserReq
 			return nil, BadAuthRequest("至少需要保留一个可用管理员")
 		}
 	}
-	if strings.TrimSpace(req.DisplayName) != "" {
-		user.DisplayName = normalizeDisplayName(req.DisplayName, user.Username)
-		user.ProfileName = user.DisplayName
-	}
+	user.DisplayName = user.Username
+	user.ProfileName = user.Username
 	if req.Email != "" {
 		email := normalizeEmail(req.Email)
 		if err := validateEmail(email); err != nil {

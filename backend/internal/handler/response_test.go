@@ -41,6 +41,21 @@ func TestFailServiceProjectsAppError(t *testing.T) {
 	}
 }
 
+func TestFailServiceProjectsUsernameChangeLimitRetryAfter(t *testing.T) {
+	recorder, context := responseTestContext()
+	err := &service.AppError{
+		Status: http.StatusTooManyRequests, Code: service.CodeUsernameChangeLimit,
+		Reason: service.ReasonUsernameChangeLimit, Message: "用户名修改次数已达上限", RetryAfterSeconds: 3600,
+	}
+
+	failService(context, err)
+
+	response := decodeFailureEnvelope(t, recorder)
+	if recorder.Code != http.StatusTooManyRequests || response.Code != service.CodeUsernameChangeLimit || response.Reason != string(service.ReasonUsernameChangeLimit) || recorder.Header().Get("Retry-After") != "3600" {
+		t.Fatalf("username limit response: status=%d header=%s body=%#v", recorder.Code, recorder.Header().Get("Retry-After"), response)
+	}
+}
+
 func TestFailServiceProjectsDNSFailureWithoutTransportDetails(t *testing.T) {
 	recorder, context := responseTestContext()
 	err := service.WrapAppError(http.StatusBadGateway, "外部服务域名解析失败，请检查渠道域名和后端 DNS 配置", errors.New("private-sentinel resolver failure"))

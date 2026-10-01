@@ -8,6 +8,7 @@ export type LocalUser = {
     email?: string;
     displayName: string;
     profileName?: string;
+    usernameChangePolicy: UsernameChangePolicy;
     avatarResourceId?: string;
     avatarUrl?: string;
     identityProvider?: string;
@@ -18,6 +19,15 @@ export type LocalUser = {
     lastLoginAt?: string;
     createdAt?: string;
     updatedAt?: string;
+};
+
+export type UsernameChangePolicy = {
+    customized: boolean;
+    limit: number | null;
+    used: number;
+    remaining: number | null;
+    windowDays: number;
+    nextAvailableAt?: string;
 };
 
 export type RuntimeLimits = {

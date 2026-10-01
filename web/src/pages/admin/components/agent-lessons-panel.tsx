@@ -206,7 +206,7 @@ export default function AgentLessonsPanel() {
                             onChange={(value) => setUserId(value)}
                             options={users.map((user) => ({
                                 value: user.id,
-                                label: user.displayName ? `${user.displayName}（${user.username}）` : user.username,
+                                label: user.username,
                             }))}
                         />
                         <Input.Search allowClear placeholder="主题、内容或用户名" className="w-[220px]" value={keyword} onChange={(event) => setKeyword(event.target.value)} />

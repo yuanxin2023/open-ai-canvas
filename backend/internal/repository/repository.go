@@ -233,7 +233,7 @@ func (r *Repository) AdminUsers(keyword string, role model.UserRole, status mode
 	query := r.db.Model(&model.User{})
 	if value := strings.TrimSpace(keyword); value != "" {
 		pattern := "%" + strings.ToLower(value) + "%"
-		query = query.Where("lower(username) LIKE ? OR lower(display_name) LIKE ? OR lower(email) LIKE ?", pattern, pattern, pattern)
+		query = query.Where("lower(username) LIKE ? OR lower(email) LIKE ?", pattern, pattern)
 	}
 	if role == model.UserRoleAdmin || role == model.UserRoleUser {
 		query = query.Where("role = ?", role)
@@ -252,7 +252,7 @@ func (r *Repository) AdminUsers(keyword string, role model.UserRole, status mode
 
 func (r *Repository) AdminUserReferences() ([]model.User, error) {
 	var users []model.User
-	err := r.db.Select("id", "username", "display_name").Order("created_at desc").Limit(100).Find(&users).Error
+	err := r.db.Select("id", "username").Order("created_at desc").Limit(100).Find(&users).Error
 	return users, err
 }
 

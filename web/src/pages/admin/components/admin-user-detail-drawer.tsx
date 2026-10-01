@@ -111,7 +111,7 @@ export function AdminUserDetailModal({ userId, onClose, previousUserId, nextUser
         <AdminModal
             title={(
                 <div className="flex items-center justify-between gap-4">
-                    <span className="min-w-0 truncate">{detail ? `${detail.user.displayName || detail.user.username} · 用户详情` : "用户详情"}</span>
+                    <span className="min-w-0 truncate">{detail ? `${detail.user.username} · 用户详情` : "用户详情"}</span>
                     {onNavigate ? (
                         <div className="flex shrink-0 items-center gap-1">
                             <IconButton size="sm" variant="ghost" aria-label="上一条用户" disabled={!previousUserId} icon={ChevronLeft} onClick={() => previousUserId && onNavigate(previousUserId)} />

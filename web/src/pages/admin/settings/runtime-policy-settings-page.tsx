@@ -138,7 +138,7 @@ export default function RuntimePolicySettingsPage() {
     const formReadyRef = useRef(false);
     const navigationConfirmOpenRef = useRef(false);
     const navigationTriggerRef = useRef<HTMLElement | null>(null);
-    const userNameById = useMemo(() => new Map(references.users.map((user) => [user.id, user.displayName || user.username])), [references.users]);
+    const userNameById = useMemo(() => new Map(references.users.map((user) => [user.id, user.username])), [references.users]);
 
     const load = useCallback(
         async (initial = false, announce = false) => {

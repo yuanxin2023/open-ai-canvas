@@ -681,8 +681,8 @@ func (r *Repository) AdminBillingOrders(status string, keyword string, limit int
 	if value := strings.TrimSpace(keyword); value != "" {
 		pattern := "%" + strings.ToLower(value) + "%"
 		query = query.Joins("LEFT JOIN users ON users.id = billing_orders.user_id").Where(
-			"lower(billing_orders.model) LIKE ? OR lower(billing_orders.scene) LIKE ? OR lower(billing_orders.provider_request_id) LIKE ? OR lower(users.username) LIKE ? OR lower(users.display_name) LIKE ?",
-			pattern, pattern, pattern, pattern, pattern,
+			"lower(billing_orders.model) LIKE ? OR lower(billing_orders.scene) LIKE ? OR lower(billing_orders.provider_request_id) LIKE ? OR lower(users.username) LIKE ?",
+			pattern, pattern, pattern, pattern,
 		)
 	}
 	if err := query.Count(&total).Error; err != nil {
@@ -1290,7 +1290,7 @@ func (r *Repository) AdminRedeemCodes(batchID string, status string, limit int, 
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
-	err := query.Select("redeem_codes.*, users.username AS redeemed_username, users.display_name AS redeemed_display_name").
+	err := query.Select("redeem_codes.*, users.username AS redeemed_username, users.username AS redeemed_display_name").
 		Joins("LEFT JOIN users ON users.id = redeem_codes.redeemed_by").
 		Order("redeem_codes.created_at asc, redeem_codes.id asc").Limit(limit).Offset(offset).Scan(&items).Error
 	return items, total, err
@@ -1299,7 +1299,7 @@ func (r *Repository) AdminRedeemCodes(batchID string, status string, limit int, 
 func (r *Repository) AdminRedeemCodeByHash(codeHash string) (*AdminRedeemCodeRow, error) {
 	var item AdminRedeemCodeRow
 	result := r.db.Model(&model.RedeemCode{}).
-		Select("redeem_codes.*, users.username AS redeemed_username, users.display_name AS redeemed_display_name").
+		Select("redeem_codes.*, users.username AS redeemed_username, users.username AS redeemed_display_name").
 		Joins("LEFT JOIN users ON users.id = redeem_codes.redeemed_by").
 		Where("redeem_codes.code_hash = ?", codeHash).
 		Limit(1).
@@ -1319,7 +1319,7 @@ func (r *Repository) AdminRedeemCodesByHashes(codeHashes []string) ([]AdminRedee
 	}
 	var items []AdminRedeemCodeRow
 	err := r.db.Model(&model.RedeemCode{}).
-		Select("redeem_codes.*, users.username AS redeemed_username, users.display_name AS redeemed_display_name").
+		Select("redeem_codes.*, users.username AS redeemed_username, users.username AS redeemed_display_name").
 		Joins("LEFT JOIN users ON users.id = redeem_codes.redeemed_by").
 		Where("redeem_codes.code_hash IN ?", codeHashes).
 		Scan(&items).Error

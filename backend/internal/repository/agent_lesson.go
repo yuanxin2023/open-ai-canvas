@@ -136,8 +136,8 @@ func (r *Repository) AdminAgentLessons(status, userID, keyword string, limit int
 	if trimmed := strings.TrimSpace(keyword); trimmed != "" {
 		like := "%" + trimmed + "%"
 		query = query.Where(
-			"topic LIKE ? OR situation LIKE ? OR lesson LIKE ? OR author_user_id LIKE ? OR author_user_id IN (SELECT id FROM users WHERE username LIKE ? OR display_name LIKE ?)",
-			like, like, like, like, like, like,
+			"topic LIKE ? OR situation LIKE ? OR lesson LIKE ? OR author_user_id LIKE ? OR author_user_id IN (SELECT id FROM users WHERE username LIKE ?)",
+			like, like, like, like, like,
 		)
 	}
 	if limit <= 0 || limit > 200 {

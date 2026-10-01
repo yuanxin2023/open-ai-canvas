@@ -5,14 +5,13 @@ import { useLocation, useNavigate } from "react-router";
 
 import { UserAvatar } from "@/components/layout/user-avatar";
 import { AppModal } from "@/components/ui/product/app-modal";
+import { normalizeUsername, usernameValidationMessage } from "@/lib/username";
 import { changePassword, updateProfile } from "@/services/api/auth";
 import { resourceFileUrl, uploadResourceFile } from "@/services/api/resources";
-import { useUserStore } from "@/stores/use-user-store";
+import { useUserStore, type LocalUser } from "@/stores/use-user-store";
 
 const MAX_AVATAR_BYTES = 2 << 20;
 const AVATAR_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
-const USERNAME_PATTERN = /^[a-zA-Z0-9_-]{3,32}$/;
-
 export default function ProfilePage() {
     const { message, modal } = App.useApp();
     const navigate = useNavigate();
@@ -20,7 +19,7 @@ export default function ProfilePage() {
     const inputRef = useRef<HTMLInputElement>(null);
     const user = useUserStore((state) => state.user);
     const setUser = useUserStore((state) => state.setUser);
-    const initialUsername = user && user.username !== user.id ? user.username : "";
+    const initialUsername = user?.username || "";
     const [username, setUsername] = useState(initialUsername);
     const [avatarResourceId, setAvatarResourceId] = useState(user?.avatarResourceId || "");
     const [avatarUrl, setAvatarUrl] = useState(user?.avatarUrl || "");
@@ -34,15 +33,16 @@ export default function ProfilePage() {
     const [activeSection, setActiveSection] = useState<"profile" | "password">("profile");
 
     useEffect(() => {
-        const nextUsername = user && user.username !== user.id ? user.username : "";
+        const nextUsername = user?.username || "";
         setUsername(nextUsername);
         setAvatarResourceId(user?.avatarResourceId || "");
         setAvatarUrl(user?.avatarUrl || "");
     }, [user]);
 
-    const normalizedUsername = username.trim();
-    const usernameChanged = normalizedUsername !== initialUsername;
-    const unchanged = normalizedUsername === initialUsername && avatarResourceId === (user?.avatarResourceId || "");
+    const normalizedUsername = normalizeUsername(username);
+    const usernameChanged = normalizedUsername !== normalizeUsername(initialUsername);
+    const usernameError = usernameChanged ? usernameValidationMessage(normalizedUsername) : "";
+    const unchanged = !usernameChanged && avatarResourceId === (user?.avatarResourceId || "");
     const registeredAt = useMemo(() => formatRegistrationTime(user?.createdAt), [user?.createdAt]);
     const returnTo = profileReturnPath(location.state);
     const busy = saving || uploading || changingPassword;
@@ -57,7 +57,7 @@ export default function ProfilePage() {
     const saveProfile = async () => {
         setSaving(true);
         try {
-            const result = await updateProfile({ username: normalizedUsername, avatarResourceId });
+            const result = await updateProfile({ username: usernameChanged ? normalizedUsername : initialUsername, avatarResourceId });
             setUser(result.user);
             message.success("个人资料已保存");
             navigate(returnTo, { replace: true });
@@ -70,8 +70,8 @@ export default function ProfilePage() {
 
     const submit = (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
-        if (!USERNAME_PATTERN.test(normalizedUsername)) {
-            message.warning("用户名需为 3-32 位字母、数字、下划线或连字符");
+        if (usernameError) {
+            message.warning(usernameError);
             return;
         }
         if (!usernameChanged) {
@@ -81,11 +81,12 @@ export default function ProfilePage() {
 
         modal.confirm({
             title: "确认修改用户名？",
-            content: `修改用户名后，您将使用“${normalizedUsername}”${user.email ? `或邮箱“${user.email}”` : ""}登录。原有用户名将失效。`,
+            content: `修改后，您将使用“${normalizedUsername}”${user.email ? `或邮箱“${user.email}”` : ""}登录，原用户名立即失效。${usernameChangeQuotaText(user)}`,
             okText: "确定修改",
             cancelText: "取消",
             centered: true,
             onOk: saveProfile,
+            onCancel: () => setUsername(initialUsername),
         });
     };
 
@@ -220,7 +221,7 @@ export default function ProfilePage() {
                                             <UserAvatar user={previewUser} className="size-20 rounded-full bg-[var(--user-surface-muted)] p-1 text-[var(--user-ink-muted)] ring-1 ring-[var(--user-border)] sm:size-24" />
                                             <div className="min-w-0 flex-1">
                                                 <div className="flex flex-wrap items-center gap-2">
-                                                    <h3 className="truncate text-base font-semibold">{normalizedUsername || user.displayName || user.email || "未设置用户名"}</h3>
+                                                    <h3 className="truncate text-base font-semibold">{normalizedUsername || user.username}</h3>
                                                     <span className="rounded-full bg-[var(--user-surface-muted)] px-2.5 py-1 text-xs text-[var(--user-ink-muted)]">{user.role === "admin" ? "管理员" : "创作者"}</span>
                                                 </div>
                                                 <p className="mt-1 truncate text-sm text-[var(--user-ink-muted)]">{user.email || "未绑定邮箱"}</p>
@@ -236,9 +237,10 @@ export default function ProfilePage() {
 
                                     <section className="border-t border-[var(--user-border)] p-5 sm:p-7">
                                         <h3 className="text-base font-semibold">公开资料</h3>
-                                        <label htmlFor="profile-username" className="mt-4 mb-2 block text-sm font-medium">用户名</label>
-                                        <Input id="profile-username" size="large" prefix={<UserRound className="size-4 text-[var(--user-ink-soft)]" />} value={username} placeholder="输入登录用户名" maxLength={32} showCount onChange={(event) => setUsername(event.target.value)} autoComplete="username" />
-                                        <p className="mt-2 text-xs text-[var(--user-ink-muted)]">使用 3-32 位字母、数字、下划线或连字符；保存后可使用邮箱或用户名登录，用户 ID 不会改变。</p>
+                                        <label htmlFor="profile-username" className="mt-4 mb-2 block text-sm font-medium">登录用户名</label>
+                                        <Input id="profile-username" size="large" prefix={<UserRound className="size-4 text-[var(--user-ink-soft)]" />} value={username} placeholder="输入登录用户名" showCount={{ formatter: ({ value }) => `${Array.from(value).length}/6` }} status={usernameError ? "error" : undefined} onChange={(event) => setUsername(event.target.value)} autoComplete="username" />
+                                        <p className={`mt-2 text-xs ${usernameError ? "text-red-500" : "text-[var(--user-ink-muted)]"}`}>{usernameError || "含中文时 2-6 位，其他情况 3-6 位；仅支持中文、英文字母和数字，英文统一为小写。"}</p>
+                                        <p className="mt-1 text-xs text-[var(--user-ink-muted)]">{usernamePolicyText(user)}</p>
                                     </section>
 
                                     <section className="border-t border-[var(--user-border)] p-5 sm:p-7">
@@ -259,7 +261,7 @@ export default function ProfilePage() {
 
                                     <div className="flex flex-col-reverse gap-2 border-t border-[var(--user-border)] px-5 py-5 sm:flex-row sm:justify-end sm:px-7">
                                         <Button htmlType="button" size="large" onClick={close}>取消</Button>
-                                        <Button type="primary" htmlType="submit" size="large" icon={<Save className="size-4" />} loading={saving} disabled={uploading || !USERNAME_PATTERN.test(normalizedUsername) || unchanged}>保存资料</Button>
+                                        <Button type="primary" htmlType="submit" size="large" icon={<Save className="size-4" />} loading={saving} disabled={uploading || Boolean(usernameError) || unchanged}>保存资料</Button>
                                     </div>
                                 </form>
                             </div>
@@ -299,6 +301,27 @@ export default function ProfilePage() {
             </div>
         </AppModal>
     );
+}
+
+function usernamePolicyText(user: LocalUser) {
+    const policy = user.usernameChangePolicy;
+    if (!policy) return "用户名修改次数以服务端返回为准。";
+    if (policy.limit === null) return "管理员修改用户名不受次数限制。";
+    if (!policy.customized) return "首次将系统生成的用户名改为自选名称不计入限额。";
+    if ((policy.remaining ?? 0) === 0 && policy.nextAvailableAt) return `过去 ${policy.windowDays} 天的修改次数已用完，${formatPolicyTime(policy.nextAvailableAt)}后可再次修改。`;
+    return `过去 ${policy.windowDays} 天还可修改 ${policy.remaining ?? 0} 次。`;
+}
+
+function usernameChangeQuotaText(user: LocalUser) {
+    const policy = user.usernameChangePolicy;
+    if (!policy || policy.limit === null) return "";
+    return policy.customized ? `本次修改将计入过去 ${policy.windowDays} 天最多 ${policy.limit} 次的限额。` : "这是首次自选用户名，不计入修改限额。";
+}
+
+function formatPolicyTime(value: string) {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "额度恢复";
+    return new Intl.DateTimeFormat("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).format(date);
 }
 
 function InfoRow({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {

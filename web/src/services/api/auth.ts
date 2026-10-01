@@ -3,6 +3,7 @@ import type { BillingOrder, CreditLedgerEntry } from "@/services/api/wallet";
 import type { GenerationTask, TaskStatus } from "@/services/api/task-center";
 import type { CanvasDrawingEngineSetting } from "@/lib/canvas/canvas-drawing-engine";
 import type { FeatureAvailability } from "@/stores/use-user-store";
+import type { UsernameChangePolicy } from "@/stores/use-user-store";
 import { http, apiBaseURL } from "@/services/api/request";
 import type { PublicLogicalModel } from "@/services/api/logical-models";
 import type { OSSConnectionTestInput, OSSConnectionTestResult, OSSProvider, S3Preset } from "@/lib/oss-settings";
@@ -22,6 +23,7 @@ export type LocalUser = {
     email?: string;
     displayName: string;
     profileName?: string;
+    usernameChangePolicy: UsernameChangePolicy;
     avatarResourceId?: string;
     avatarUrl?: string;
     identityProvider?: string;
@@ -477,7 +479,7 @@ export function listAdminUsers(params: AdminListParams = {}) {
     return http.get<{ users: AdminUser[]; total: number; page: number; pageSize: number }>("/admin/users", { params });
 }
 
-export function createAdminUser(input: { username: string; displayName: string; email?: string; password: string; role: LocalUser["role"]; status: LocalUser["status"] }) {
+export function createAdminUser(input: { username: string; email?: string; password: string; role: LocalUser["role"]; status: LocalUser["status"] }) {
     return http.post<{ user: AdminUser }>("/admin/users", input);
 }
 
@@ -505,7 +507,7 @@ export function listAdminUserAuditEvents(id: string, params: { page?: number; pa
     return http.get<{ events: AdminAuditEvent[]; total: number; page: number; pageSize: number }>(`/admin/users/${encodeURIComponent(id)}/audit-events`, { params });
 }
 
-export function updateAdminUser(id: string, input: Partial<Pick<LocalUser, "displayName" | "email" | "role" | "status">> & { password?: string }) {
+export function updateAdminUser(id: string, input: Partial<Pick<LocalUser, "email" | "role" | "status">> & { password?: string }) {
     return http.patch<{ user: LocalUser }>(`/admin/users/${encodeURIComponent(id)}`, input);
 }
 

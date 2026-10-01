@@ -62,7 +62,7 @@ export default function CreditOperationsPanel({ users, activeOperation, onOperat
 
     const userLabels = useMemo(() => {
         const labels = new Map<string, string>();
-        for (const user of [...users, ...adjustmentUsers]) labels.set(user.id, user.displayName || user.username);
+        for (const user of [...users, ...adjustmentUsers]) labels.set(user.id, user.username);
         return labels;
     }, [adjustmentUsers, users]);
     const selectedAdjustmentUser = adjustmentUsers.find((user) => user.id === selectedAdjustmentUserId);
@@ -648,7 +648,7 @@ export default function CreditOperationsPanel({ users, activeOperation, onOperat
                                 placeholder="搜索用户名、显示名称或邮箱"
                                 onSearch={setAdjustmentSearch}
                                 options={adjustmentUsers.map((user) => ({
-                                    label: `${user.displayName || user.username} · @${user.username}`,
+                                    label: `@${user.username}`,
                                     value: user.id,
                                 }))}
                             />
@@ -818,7 +818,7 @@ function hasCreditBalance(user?: AdjustmentUser): user is AdjustmentUser & Pick<
 }
 
 function formatUserLabel(user: AdjustmentUser | undefined, fallback: string) {
-    return user ? `${user.displayName || user.username} · @${user.username}` : fallback;
+    return user ? `@${user.username}` : fallback;
 }
 
 function toMicrocredits(value: number) {

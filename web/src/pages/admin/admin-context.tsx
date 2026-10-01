@@ -37,7 +37,7 @@ export function AdminProvider({ children }: { children: ReactNode }) {
     const updateUserReference = useCallback((user: LocalUser) => {
         setReferences((current) => ({
             ...current,
-            users: current.users.map((item) => item.id === user.id ? { id: user.id, username: user.username, displayName: user.displayName } : item),
+            users: current.users.map((item) => item.id === user.id ? { id: user.id, username: user.username, displayName: user.username } : item),
         }));
     }, []);
 

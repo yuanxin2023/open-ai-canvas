@@ -432,8 +432,8 @@ func TestAdminPaymentOrdersSearchUserIdentity(t *testing.T) {
 		keyword, status string
 		total           int64
 	}{
-		{"ALICE@EXAMPLE.COM", "", 1}, {"alice", "", 1}, {"小林", "", 2},
-		{"小林", "pending", 1}, {"alice", "closed", 0}, {"user-bob", "", 1},
+		{"ALICE@EXAMPLE.COM", "", 1}, {"alice", "", 1}, {"小林", "", 0},
+		{"alice", "closed", 0}, {"user-bob", "", 1},
 		{"merchant-c", "", 1}, {"trade-c", "", 1}, {"missing-user", "", 1}, {"", "", 3},
 	} {
 		t.Run(tc.keyword+"/"+tc.status, func(t *testing.T) {

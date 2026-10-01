@@ -81,14 +81,14 @@ func TestRedeemBatchCanBeReviewedAndRecordsAuditIP(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(redeemed.Codes) != 1 || redeemed.Codes[0].RedeemedBy != user.ID || redeemed.Codes[0].RedeemedUsername != user.Username || redeemed.Codes[0].RedeemedIP != "203.0.113.8" || redeemed.Codes[0].RedeemedAt == nil {
+	if len(redeemed.Codes) != 1 || redeemed.Codes[0].RedeemedBy != user.ID || redeemed.Codes[0].RedeemedUsername != user.Username || redeemed.Codes[0].RedeemedDisplayName != user.Username || redeemed.Codes[0].RedeemedIP != "203.0.113.8" || redeemed.Codes[0].RedeemedAt == nil {
 		t.Fatalf("redeemed code = %#v", redeemed.Codes)
 	}
 	lookup, err = svc.AdminLookupRedeemCode(admin, AdminRedeemCodeLookupRequest{Code: created.Codes[0]})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if lookup.Code.Status != string(model.RedeemCodeRedeemed) || lookup.Code.RedeemedBy != user.ID || lookup.Code.RedeemedUsername != user.Username || lookup.Code.RedeemedIP != "203.0.113.8" || lookup.Code.RedeemedAt == nil {
+	if lookup.Code.Status != string(model.RedeemCodeRedeemed) || lookup.Code.RedeemedBy != user.ID || lookup.Code.RedeemedUsername != user.Username || lookup.Code.RedeemedDisplayName != user.Username || lookup.Code.RedeemedIP != "203.0.113.8" || lookup.Code.RedeemedAt == nil {
 		t.Fatalf("redeemed lookup = %#v", lookup.Code)
 	}
 	if err := svc.AdminDisableRedeemCode(admin, created.Batch.ID, page.Codes[1].ID); err != nil {

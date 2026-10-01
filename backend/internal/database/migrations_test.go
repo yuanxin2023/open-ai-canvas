@@ -22,8 +22,8 @@ func TestCurrentSchemaVersionMatchesMigrationPlan(t *testing.T) {
 			}
 		}
 		latest := plan[len(plan)-1]
-		if CurrentSchemaVersion != latest.version || latest.name != "platform_skill_availability" {
-			t.Fatalf("%s latest migration = %d/%q, want %d/platform_skill_availability", name, latest.version, latest.name, CurrentSchemaVersion)
+		if CurrentSchemaVersion != latest.version || latest.name != "short_login_usernames" {
+			t.Fatalf("%s latest migration = %d/%q, want %d/short_login_usernames", name, latest.version, latest.name, CurrentSchemaVersion)
 		}
 	}
 }
@@ -36,8 +36,8 @@ func TestMigrateSchemaSupportsLocalAndUpstreamPost23Lineages(t *testing.T) {
 		expectedV24Name  string
 		expectedTailName string
 	}{
-		{name: "local", plan: schemaMigrations, appliedThrough: 27, expectedV24Name: "topup_product_benefits", expectedTailName: "platform_skill_availability"},
-		{name: "upstream", plan: upstreamFirstMigrationPlan(), appliedThrough: 32, expectedV24Name: "channel_model_label", expectedTailName: "platform_skill_availability"},
+		{name: "local", plan: schemaMigrations, appliedThrough: 27, expectedV24Name: "topup_product_benefits", expectedTailName: "short_login_usernames"},
+		{name: "upstream", plan: upstreamFirstMigrationPlan(), appliedThrough: 32, expectedV24Name: "channel_model_label", expectedTailName: "short_login_usernames"},
 	} {
 		t.Run(scenario.name, func(t *testing.T) {
 			db, err := Open(Config{Driver: "sqlite", DSN: "file:" + t.Name() + "?mode=memory&cache=shared"})
@@ -861,6 +861,66 @@ func TestMigrateUserLoginEnvironmentAddsRegistrationIPAndEventTable(t *testing.T
 	}
 	if !db.Migrator().HasTable(&model.UserLoginEvent{}) {
 		t.Fatal("user_login_events table was not created")
+	}
+}
+
+func TestMigrateShortLoginUsernamesBackfillsGeneratedNames(t *testing.T) {
+	db, err := Open(Config{Driver: "sqlite", DSN: "file:migration-short-login-usernames-v41?mode=memory&cache=shared"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AutoMigrate(&model.User{}); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().Add(-24 * time.Hour)
+	users := []model.User{
+		{ID: "generated-one", Username: "generated-one", Email: "Creator.Name+tag@example.com", DisplayName: "old", Role: model.UserRoleUser, Status: model.UserStatusActive, CreatedAt: now},
+		{ID: "generated-two", Username: "generated-two", Email: "Creator.Name@example.com", DisplayName: "old", Role: model.UserRoleUser, Status: model.UserStatusActive, CreatedAt: now},
+		{ID: "generated-empty", Username: "generated-empty", Email: "", DisplayName: "old", Role: model.UserRoleUser, Status: model.UserStatusActive, CreatedAt: now},
+		{ID: "legacy-long", Username: "Legacy_User_Name", Email: "legacy@example.com", DisplayName: "Old display", ProfileName: "Old profile", Role: model.UserRoleUser, Status: model.UserStatusActive, CreatedAt: now},
+	}
+	if err := db.Create(&users).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := migrateUserLoginNames(db); err != nil {
+		t.Fatal(err)
+	}
+	if err := migrateShortLoginUsernames(db); err != nil {
+		t.Fatal(err)
+	}
+	if !db.Migrator().HasTable(&model.UserUsernameChange{}) || !db.Migrator().HasColumn(&model.User{}, "UsernameCustomizedAt") {
+		t.Fatal("short username migration did not create its schema")
+	}
+	var migrated []model.User
+	if err := db.Order("id").Find(&migrated).Error; err != nil {
+		t.Fatal(err)
+	}
+	byID := make(map[string]model.User, len(migrated))
+	seen := map[string]struct{}{}
+	for _, user := range migrated {
+		byID[user.ID] = user
+		key := strings.ToLower(user.Username)
+		if _, duplicate := seen[key]; duplicate {
+			t.Fatalf("duplicate migrated username %q", user.Username)
+		}
+		seen[key] = struct{}{}
+	}
+	for _, id := range []string{"generated-one", "generated-two"} {
+		user := byID[id]
+		if user.Username == id || user.UsernameCustomizedAt != nil || user.DisplayName != user.Username || user.ProfileName != user.Username {
+			t.Fatalf("generated user %q migration = %#v", id, user)
+		}
+	}
+	noEmail := byID["generated-empty"]
+	if noEmail.Username != noEmail.ID || noEmail.UsernameCustomizedAt == nil || noEmail.DisplayName != noEmail.Username || noEmail.ProfileName != noEmail.Username {
+		t.Fatalf("no-email legacy user migration = %#v", noEmail)
+	}
+	legacy := byID["legacy-long"]
+	if legacy.Username != "Legacy_User_Name" || legacy.UsernameCustomizedAt == nil || legacy.DisplayName != legacy.Username || legacy.ProfileName != legacy.Username {
+		t.Fatalf("legacy user migration = %#v", legacy)
+	}
+	if err := db.Create(&model.User{ID: "case-conflict", Username: strings.ToLower(legacy.Username), Role: model.UserRoleUser, Status: model.UserStatusActive}).Error; err == nil {
+		t.Fatal("case-insensitive username index was not preserved")
 	}
 }
 

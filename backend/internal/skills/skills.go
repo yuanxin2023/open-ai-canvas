@@ -436,9 +436,7 @@ func (s *Service) skillItems(userID string, skills []model.Skill, includeInstruc
 		owner := owners[skill.OwnerID]
 		ownerName := strings.TrimSpace(skill.AuthorName)
 		ownerAvatarURL := strings.TrimSpace(skill.AuthorAvatarURL)
-		if strings.TrimSpace(owner.DisplayName) != "" {
-			ownerName = strings.TrimSpace(owner.DisplayName)
-		} else if strings.TrimSpace(owner.Username) != "" {
+		if strings.TrimSpace(owner.Username) != "" {
 			ownerName = strings.TrimSpace(owner.Username)
 		}
 		if ownerAvatars[skill.OwnerID] != "" {

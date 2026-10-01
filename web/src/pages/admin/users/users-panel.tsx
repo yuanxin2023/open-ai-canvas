@@ -229,7 +229,7 @@ export default function UsersPanel({ onUserChanged, onUserDeleted }: { onUserCha
                         selectedRowKeys: selectedUserIds,
                         preserveSelectedRowKeys: false,
                         onChange: (keys) => setSelectedUserIds(keys.map(String)),
-                        getCheckboxProps: (user) => ({ disabled: user.id === actor?.id || user.status === "disabled", name: user.displayName || user.username }),
+                        getCheckboxProps: (user) => ({ disabled: user.id === actor?.id || user.status === "disabled", name: user.username }),
                     },
                     columns,
                     dataSource: users,

@@ -22,7 +22,7 @@ export function WorkspaceAccountCard({ onBuyCredits, onNavigate }: { onBuyCredit
     return <section className="workspace-account-card" aria-label="我的账户">
         <header className="workspace-account-card-identity">
             <UserAvatar user={user} className="workspace-account-card-avatar" />
-            <div><strong>{user.profileName || user.displayName || user.username}</strong><span>{user.email || `用户 ${user.id.slice(0, 8)}`}</span></div>
+            <div><strong>{user.username}</strong><span>{user.email || `用户 ${user.id.slice(0, 8)}`}</span></div>
             <em>{user.role === "admin" ? "管理员" : "创作者"}</em>
         </header>
         {creditsEnabled ? <div className="workspace-account-card-wallet">

@@ -415,7 +415,7 @@ func (r *Repository) paymentOrderQuery(filter PaymentOrderFilter) *gorm.DB {
 	}
 	if normalized := strings.TrimSpace(filter.Keyword); normalized != "" {
 		like := "%" + normalized + "%"
-		users := r.db.Model(&model.User{}).Select("id").Where("LOWER(username) LIKE ? OR LOWER(display_name) LIKE ? OR LOWER(email) LIKE ?", strings.ToLower(like), strings.ToLower(like), strings.ToLower(like))
+		users := r.db.Model(&model.User{}).Select("id").Where("LOWER(username) LIKE ? OR LOWER(email) LIKE ?", strings.ToLower(like), strings.ToLower(like))
 		query = query.Where("merchant_order_no LIKE ? OR provider_trade_no LIKE ? OR user_id = ? OR user_id IN (?)", like, like, normalized, users)
 	}
 	if filter.ProviderID != "" && filter.ProviderID != "all" {

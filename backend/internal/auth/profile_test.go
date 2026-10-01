@@ -1,9 +1,12 @@
 package auth
 
 import (
+	"errors"
 	"strings"
 	"testing"
+	"time"
 
+	"infinite-canvas/backend/internal/kernel"
 	"infinite-canvas/backend/internal/model"
 )
 
@@ -26,11 +29,11 @@ func TestUpdateProfileSetsLoginUsernameAndKeepsEmailLogin(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	updated, err := svc.UpdateProfile(&user, UpdateProfileRequest{Username: "  new_creator  "})
+	updated, err := svc.UpdateProfile(&user, UpdateProfileRequest{Username: "  Maker1  "})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if updated.Username != "new_creator" || updated.ProfileName != "new_creator" || updated.DisplayName != "new_creator" || updated.ID != user.ID || updated.Email != user.Email || updated.Role != user.Role {
+	if updated.Username != "maker1" || updated.ProfileName != "maker1" || updated.DisplayName != "maker1" || updated.ID != user.ID || updated.Email != user.Email || updated.Role != user.Role {
 		t.Fatalf("updated profile = %#v", updated)
 	}
 
@@ -38,10 +41,10 @@ func TestUpdateProfileSetsLoginUsernameAndKeepsEmailLogin(t *testing.T) {
 	if err := db.First(&stored, "id = ?", user.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if stored.Username != "new_creator" || stored.ProfileName != "new_creator" || stored.DisplayName != "new_creator" || stored.Email != user.Email {
+	if stored.Username != "maker1" || stored.ProfileName != "maker1" || stored.DisplayName != "maker1" || stored.Email != user.Email {
 		t.Fatalf("stored profile = %#v", stored)
 	}
-	for _, account := range []string{"new_creator", "NEW_CREATOR", user.Email} {
+	for _, account := range []string{"maker1", "MAKER1", user.Email} {
 		if _, err := svc.Login(LoginRequest{Username: account, Password: "strong-password"}); err != nil {
 			t.Fatalf("login with %q failed: %v", account, err)
 		}
@@ -58,7 +61,7 @@ func TestUpdateProfileValidatesLoginUsername(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for _, input := range []string{"   ", "ab", "中文用户名", strings.Repeat("a", 33), "name with spaces"} {
+	for _, input := range []string{"   ", "ab", "用户名太长了", strings.Repeat("a", 7), "name with spaces", "123456", "user_name", "😀用户", "admin"} {
 		if _, err := svc.UpdateProfile(&user, UpdateProfileRequest{Username: input}); err == nil {
 			t.Fatalf("invalid login username %q was accepted", input)
 		}
@@ -90,7 +93,7 @@ func TestUpdateProfileBindsAndRemovesOwnedAvatar(t *testing.T) {
 		t.Fatal(err)
 	}
 	avatarID := resource.ID
-	updated, err := svc.UpdateProfile(&user, UpdateProfileRequest{Username: "Creator", AvatarResourceID: &avatarID})
+	updated, err := svc.UpdateProfile(&user, UpdateProfileRequest{Username: "maker", AvatarResourceID: &avatarID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,7 +102,7 @@ func TestUpdateProfileBindsAndRemovesOwnedAvatar(t *testing.T) {
 	}
 
 	empty := ""
-	updated, err = svc.UpdateProfile(&user, UpdateProfileRequest{Username: "Creator", AvatarResourceID: &empty})
+	updated, err = svc.UpdateProfile(&user, UpdateProfileRequest{Username: "maker", AvatarResourceID: &empty})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,8 +127,101 @@ func TestUpdateProfileRejectsInvalidAvatar(t *testing.T) {
 	}
 	for _, resource := range resources {
 		id := resource.ID
-		if _, err := svc.UpdateProfile(&user, UpdateProfileRequest{Username: "Creator", AvatarResourceID: &id}); err == nil {
+		if _, err := svc.UpdateProfile(&user, UpdateProfileRequest{Username: "maker", AvatarResourceID: &id}); err == nil {
 			t.Fatalf("invalid avatar %q was accepted", id)
 		}
+	}
+}
+
+func TestUpdateProfileAllowsAvatarOnlyForLegacyUsername(t *testing.T) {
+	svc, db := newPasswordResetTestService(t)
+	user := model.User{ID: "legacy-user", Username: "legacy_user_name", DisplayName: "Before", Role: model.UserRoleUser, Status: model.UserStatusActive}
+	if err := db.Create(&user).Error; err != nil {
+		t.Fatal(err)
+	}
+	resource := model.Resource{ID: "legacy-avatar", UserID: user.ID, Kind: "image", Status: model.ResourceStatusReady, MimeType: "image/png", Size: 1024}
+	if err := db.Create(&resource).Error; err != nil {
+		t.Fatal(err)
+	}
+	avatarID := resource.ID
+	updated, err := svc.UpdateProfile(&user, UpdateProfileRequest{Username: user.Username, AvatarResourceID: &avatarID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.Username != user.Username || updated.AvatarResourceID != avatarID {
+		t.Fatalf("avatar-only update changed legacy identity: %#v", updated)
+	}
+}
+
+func TestUpdateProfileUsernameChangeQuota(t *testing.T) {
+	svc, db := newPasswordResetTestService(t)
+	user := model.User{ID: "quota-user", Username: "system1", DisplayName: "system1", ProfileName: "system1", Role: model.UserRoleUser, Status: model.UserStatusActive}
+	if err := db.Create(&user).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	names := []string{"第一名", "second", "third1", "fourth", "fifth1"}
+	for index, name := range names {
+		updated, err := svc.UpdateProfile(&user, UpdateProfileRequest{Username: name})
+		if index < 4 {
+			if err != nil {
+				t.Fatalf("change %d failed: %v", index+1, err)
+			}
+			user.Username = updated.Username
+			user.UsernameCustomizedAt = updated.UsernameCustomizedAt
+			if index == 0 {
+				replacement := model.User{ID: "replacement-user", Username: "system1", DisplayName: "system1", ProfileName: "system1", Role: model.UserRoleUser, Status: model.UserStatusActive}
+				if createErr := db.Create(&replacement).Error; createErr != nil {
+					t.Fatalf("released old username was not reusable: %v", createErr)
+				}
+				if _, invalidErr := svc.UpdateProfile(&user, UpdateProfileRequest{Username: "bad_name"}); invalidErr == nil {
+					t.Fatal("invalid failed change was accepted")
+				}
+				if _, duplicateErr := svc.UpdateProfile(&user, UpdateProfileRequest{Username: "system1"}); duplicateErr == nil {
+					t.Fatal("duplicate failed change was accepted")
+				}
+			}
+			continue
+		}
+		var appErr *kernel.AppError
+		if !errors.As(err, &appErr) || appErr.Status != 429 || appErr.Reason != kernel.ReasonUsernameChangeLimit || appErr.RetryAfterSeconds <= 0 {
+			t.Fatalf("fifth change error = %#v, want username change limit", err)
+		}
+	}
+
+	var changes []model.UserUsernameChange
+	if err := db.Where("user_id = ?", user.ID).Order("created_at asc").Find(&changes).Error; err != nil {
+		t.Fatal(err)
+	}
+	if len(changes) != 4 || changes[0].CountsTowardLimit || !changes[1].CountsTowardLimit || !changes[2].CountsTowardLimit || !changes[3].CountsTowardLimit {
+		t.Fatalf("username change history = %#v", changes)
+	}
+}
+
+func TestUpdateProfileExpiredQuotaAndAdminUnlimited(t *testing.T) {
+	svc, db := newPasswordResetTestService(t)
+	now := time.Now()
+	customizedAt := now.Add(-60 * 24 * time.Hour)
+	user := model.User{ID: "expired-user", Username: "start1", DisplayName: "start1", ProfileName: "start1", UsernameCustomizedAt: &customizedAt, Role: model.UserRoleUser, Status: model.UserStatusActive}
+	admin := model.User{ID: "admin-user", Username: "boss01", DisplayName: "boss01", ProfileName: "boss01", UsernameCustomizedAt: &customizedAt, Role: model.UserRoleAdmin, Status: model.UserStatusActive}
+	if err := db.Create(&[]model.User{user, admin}).Error; err != nil {
+		t.Fatal(err)
+	}
+	for index := 0; index < 3; index++ {
+		createdAt := now.Add(-31*24*time.Hour - time.Duration(index)*time.Hour)
+		if err := db.Create(&model.UserUsernameChange{ID: kernel.NewID(), UserID: user.ID, OldUsername: "oldone", NewUsername: "oldtwo", CountsTowardLimit: true, CreatedAt: createdAt}).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := svc.UpdateProfile(&user, UpdateProfileRequest{Username: "fresh1"}); err != nil {
+		t.Fatalf("expired quota was not restored: %v", err)
+	}
+	for _, name := range []string{"boss02", "boss03", "boss04", "boss05"} {
+		updated, err := svc.UpdateProfile(&admin, UpdateProfileRequest{Username: name})
+		if err != nil {
+			t.Fatalf("admin change to %q failed: %v", name, err)
+		}
+		admin.Username = updated.Username
+		admin.UsernameCustomizedAt = updated.UsernameCustomizedAt
 	}
 }

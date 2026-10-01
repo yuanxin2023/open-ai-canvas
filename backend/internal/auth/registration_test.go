@@ -34,10 +34,10 @@ func TestRegisterFirstUserUsesEmailIdentityWithoutVerification(t *testing.T) {
 		t.Fatal(err)
 	}
 	user := result.User.User
-	if len(user.ID) != 32 || user.Username != user.ID {
+	if len(user.ID) != 32 || user.Username != "creato" {
 		t.Fatalf("generated identity = %#v", user)
 	}
-	if user.Email != "creator.name@example.com" || user.DisplayName != "creator.name" {
+	if user.Email != "creator.name@example.com" || user.DisplayName != user.Username {
 		t.Fatalf("normalized profile = %#v", user)
 	}
 	if user.Role != model.UserRoleAdmin || user.Status != model.UserStatusActive {
@@ -50,11 +50,19 @@ func TestRegisterFirstUserUsesEmailIdentityWithoutVerification(t *testing.T) {
 	if err := db.First(&stored, "id = ?", user.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if stored.Username != user.ID || stored.Email != user.Email || stored.DisplayName != user.DisplayName {
+	if stored.Username != user.Username || stored.Email != user.Email || stored.DisplayName != user.Username {
 		t.Fatalf("stored user = %#v", stored)
 	}
 	if stored.RegistrationIP != "203.0.113.9" {
 		t.Fatalf("registration IP = %q", stored.RegistrationIP)
+	}
+	if stored.UsernameCustomizedAt != nil || result.User.UsernameChangePolicy.Customized {
+		t.Fatalf("generated username was marked customized: stored=%#v policy=%#v", stored.UsernameCustomizedAt, result.User.UsernameChangePolicy)
+	}
+	for _, account := range []string{user.Username, strings.ToUpper(user.Username), user.Email} {
+		if _, err := svc.Login(LoginRequest{Username: account, Password: "strong-password"}); err != nil {
+			t.Fatalf("login with generated account %q failed: %v", account, err)
+		}
 	}
 	var loginEvent model.UserLoginEvent
 	if err := db.First(&loginEvent, "user_id = ?", user.ID).Error; err != nil {
@@ -62,6 +70,26 @@ func TestRegisterFirstUserUsesEmailIdentityWithoutVerification(t *testing.T) {
 	}
 	if loginEvent.LoginMethod != "email_register" || loginEvent.IPAddress != stored.RegistrationIP || loginEvent.Browser != "Chrome" || loginEvent.OS != "Windows" {
 		t.Fatalf("registration login event = %#v", loginEvent)
+	}
+}
+
+func TestRegisterGeneratesValidFallbackUsernames(t *testing.T) {
+	for _, email := range []string{"123456@example.com", "admin@example.com", "a.b+c@example.com", "verylongprefix@example.com"} {
+		t.Run(email, func(t *testing.T) {
+			svc, _ := newPasswordResetTestService(t)
+			result, err := svc.Register(RegisterRequest{Email: email, Password: "strong-password"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := ValidateUsername(result.User.Username); err != nil {
+				t.Fatalf("generated username %q is invalid: %v", result.User.Username, err)
+			}
+			for _, account := range []string{result.User.Username, email} {
+				if _, err := svc.Login(LoginRequest{Username: account, Password: "strong-password"}); err != nil {
+					t.Fatalf("login with %q failed: %v", account, err)
+				}
+			}
+		})
 	}
 }
 
@@ -99,7 +127,7 @@ func TestRegisterOrdinaryUserConsumesEmailCode(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.User.Role != model.UserRoleUser || result.User.Username != result.User.ID || result.User.DisplayName != "member" {
+	if result.User.Role != model.UserRoleUser || result.User.Username != "member" || result.User.DisplayName != "member" {
 		t.Fatalf("registered user = %#v", result.User)
 	}
 	var code model.EmailVerificationCode
@@ -108,6 +136,37 @@ func TestRegisterOrdinaryUserConsumesEmailCode(t *testing.T) {
 	}
 	if code.UsedAt == nil {
 		t.Fatal("registration code was not consumed")
+	}
+}
+
+func TestRegisterRetriesConflictingGeneratedUsername(t *testing.T) {
+	svc, db := newPasswordResetTestService(t)
+	admin := model.User{ID: "admin", Username: "member", Email: "admin@example.com", DisplayName: "member", ProfileName: "member", Role: model.UserRoleAdmin, Status: model.UserStatusActive}
+	if err := db.Create(&admin).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&model.SystemSetting{Key: registrationSettingKey, ValueJSON: `{"enabled":true}`}).Error; err != nil {
+		t.Fatal(err)
+	}
+	var deliveredCode string
+	svc.SetMailSender(func(_ EmailSettingValue, _, _ string, body string) error {
+		deliveredCode = codeFromEmailBody(body)
+		return nil
+	})
+	if err := svc.SendRegistrationEmailCode("member@example.com"); err != nil {
+		t.Fatal(err)
+	}
+	result, err := svc.Register(RegisterRequest{Email: "member@example.com", EmailCode: deliveredCode, Password: "strong-password"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.User.Username == "member" || !strings.HasPrefix(result.User.Username, "mem") {
+		t.Fatalf("conflicting default username was not retried: %q", result.User.Username)
+	}
+	for _, account := range []string{result.User.Username, result.User.Email} {
+		if _, err := svc.Login(LoginRequest{Username: account, Password: "strong-password"}); err != nil {
+			t.Fatalf("login with retried account %q failed: %v", account, err)
+		}
 	}
 }
 

@@ -169,9 +169,6 @@ func readyResourceBytes(resource model.Resource) int64 {
 }
 
 func adminResourceUserName(user model.User) string {
-	if value := strings.TrimSpace(user.DisplayName); value != "" {
-		return value
-	}
 	if value := strings.TrimSpace(user.Username); value != "" {
 		return value
 	}

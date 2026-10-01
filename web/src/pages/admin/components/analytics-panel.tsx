@@ -211,7 +211,7 @@ export default function AnalyticsPanel({ users, channels }: Props) {
                 active={Boolean(userId || model || channelId || capability)}
                 activeFilters={
                     <>
-                        {userId ? <AdminFilterChip label={`用户：${userOptions.find((user) => user.id === userId)?.displayName || userId}`} onRemove={() => setUserId(undefined)} /> : null}
+                        {userId ? <AdminFilterChip label={`用户：${userOptions.find((user) => user.id === userId)?.username || userId}`} onRemove={() => setUserId(undefined)} /> : null}
                         {model ? <AdminFilterChip label={`模型：${model}`} onRemove={() => setModel(undefined)} /> : null}
                         {channelId ? <AdminFilterChip label={`渠道：${channels.find((channel) => channel.id === channelId)?.name || channelId}`} onRemove={() => setChannelId(undefined)} /> : null}
                         {capability ? <AdminFilterChip label={`能力：${capabilityLabel(capability)}`} onRemove={() => setCapability(undefined)} /> : null}
@@ -250,7 +250,7 @@ export default function AnalyticsPanel({ users, channels }: Props) {
                             label="用户"
                             value={userId}
                             onChange={setUserId}
-                            options={userOptions.map((user) => ({ label: user.displayName || user.username, value: user.id }))}
+                            options={userOptions.map((user) => ({ label: user.username, value: user.id }))}
                             filterOption={false}
                             loading={searchingUsers}
                             onSearch={(value) => void searchUsers(value)}

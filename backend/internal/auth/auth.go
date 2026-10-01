@@ -5,16 +5,16 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
-	"infinite-canvas/backend/internal/kernel"
 	"log"
 	"net"
 	"net/mail"
 	"net/url"
-	"regexp"
 	"strings"
 	"time"
 
+	"infinite-canvas/backend/internal/kernel"
 	"infinite-canvas/backend/internal/model"
+	"infinite-canvas/backend/internal/repository"
 
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
@@ -24,7 +24,8 @@ const SessionCookieName = "open_ai_canvas_session"
 
 const sessionMaxAge = 30 * 24 * time.Hour
 
-var usernamePattern = regexp.MustCompile(`^[a-zA-Z0-9_-]{3,32}$`)
+const usernameChangeLimit = 3
+const usernameChangeWindow = 30 * 24 * time.Hour
 
 // AuthError 保留为兼容别名；跨认证域的新代码应直接使用 AppError。
 type AuthError = kernel.AppError
@@ -77,11 +78,21 @@ type AuthSessionResult struct {
 
 type AuthUser struct {
 	model.User
-	AvatarResourceID string `json:"avatarResourceId,omitempty"`
-	AvatarURL        string `json:"avatarUrl,omitempty"`
-	IdentityProvider string `json:"identityProvider,omitempty"`
-	IdentityID       string `json:"identityId,omitempty"`
-	IdentityUsername string `json:"identityUsername,omitempty"`
+	AvatarResourceID     string               `json:"avatarResourceId,omitempty"`
+	AvatarURL            string               `json:"avatarUrl,omitempty"`
+	IdentityProvider     string               `json:"identityProvider,omitempty"`
+	IdentityID           string               `json:"identityId,omitempty"`
+	IdentityUsername     string               `json:"identityUsername,omitempty"`
+	UsernameChangePolicy UsernameChangePolicy `json:"usernameChangePolicy"`
+}
+
+type UsernameChangePolicy struct {
+	Customized      bool       `json:"customized"`
+	Limit           *int       `json:"limit"`
+	Used            int        `json:"used"`
+	Remaining       *int       `json:"remaining"`
+	WindowDays      int        `json:"windowDays"`
+	NextAvailableAt *time.Time `json:"nextAvailableAt,omitempty"`
 }
 
 func (s *Service) PublicAuthSettings() (*PublicAuthSettings, error) {
@@ -155,9 +166,7 @@ func (s *Service) RegisterWithEnvironment(req RegisterRequest, environment Login
 	userID := kernel.NewID()
 	user := model.User{
 		ID:             userID,
-		Username:       userID,
 		Email:          email,
-		DisplayName:    registrationDisplayName(email, userID),
 		Role:           model.UserRoleUser,
 		Status:         model.UserStatusActive,
 		PasswordHash:   passwordHash,
@@ -168,25 +177,31 @@ func (s *Service) RegisterWithEnvironment(req RegisterRequest, environment Login
 	if count == 0 {
 		user.Role = model.UserRoleAdmin
 	}
-	if verifiedCode != nil {
-		if err := s.repo.CreateUserWithEmailVerification(&user, verifiedCode.ID, time.Now()); err != nil {
+	created := false
+	for attempt := 0; attempt < 32; attempt++ {
+		user.Username = kernel.DefaultLoginUsernameCandidate(email, userID, attempt)
+		user.DisplayName = user.Username
+		user.ProfileName = user.Username
+		if verifiedCode != nil {
+			err = s.repo.CreateUserWithEmailVerification(&user, verifiedCode.ID, time.Now())
+		} else {
+			err = s.repo.Create(&user)
+		}
+		if err == nil {
+			created = true
+			break
+		}
+		if !isUsernameUniqueViolation(err) {
 			return nil, err
 		}
-	} else if err := s.repo.Create(&user); err != nil {
-		return nil, err
+	}
+	if !created {
+		return nil, kernel.WrapAppError(500, "无法生成唯一用户名", err)
 	}
 	if err := s.host.EnsureSignupBonus(user.ID); err != nil {
 		return nil, err
 	}
 	return s.createAuthSession(&user, "email_register", environment)
-}
-
-func registrationDisplayName(email string, fallback string) string {
-	local, _, found := strings.Cut(NormalizeEmail(email), "@")
-	if !found {
-		local = ""
-	}
-	return NormalizeDisplayName(local, fallback)
 }
 
 func (s *Service) Login(req LoginRequest) (*AuthSessionResult, error) {
@@ -195,7 +210,7 @@ func (s *Service) Login(req LoginRequest) (*AuthSessionResult, error) {
 
 func (s *Service) LoginWithEnvironment(req LoginRequest, environment LoginEnvironment) (*AuthSessionResult, error) {
 	environment = normalizeLoginEnvironment(environment)
-	account := strings.TrimSpace(req.Username)
+	account := NormalizeUsername(req.Username)
 	user, err := s.repo.UserByAccount(account)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -261,8 +276,18 @@ func (s *Service) CurrentUser(cookieValue string) (*model.User, error) {
 // 认证响应只补充当前用户自己的第三方公开身份，不把身份表或密钥字段暴露给其他列表接口。
 func (s *Service) PublicAuthUser(user *model.User) (AuthUser, error) {
 	result := AuthUser{User: *user, AvatarResourceID: user.AvatarResourceID}
-	if result.ProfileName == "" && result.Username != result.ID {
-		result.ProfileName = result.Username
+	result.UsernameChangePolicy = UsernameChangePolicy{Customized: user.UsernameCustomizedAt != nil, WindowDays: 30}
+	if user.Role != model.UserRoleAdmin {
+		limit := usernameChangeLimit
+		usage, err := s.repo.UsernameChangeUsage(user.ID, time.Now().Add(-usernameChangeWindow), int64(limit))
+		if err != nil {
+			return AuthUser{}, err
+		}
+		remaining := max(0, limit-int(usage.Used))
+		result.UsernameChangePolicy.Limit = &limit
+		result.UsernameChangePolicy.Used = int(usage.Used)
+		result.UsernameChangePolicy.Remaining = &remaining
+		result.UsernameChangePolicy.NextAvailableAt = usage.NextAvailableAt
 	}
 	if user.AvatarResourceID != "" {
 		resource, err := s.repo.ResourceForUser(user.ID, user.AvatarResourceID)
@@ -289,10 +314,6 @@ func (s *Service) UpdateProfile(user *model.User, req UpdateProfileRequest) (Aut
 	if user == nil || strings.TrimSpace(user.ID) == "" {
 		return AuthUser{}, kernel.Unauthorized("请先登录")
 	}
-	username := NormalizeUsername(req.Username)
-	if err := ValidateUsername(username); err != nil {
-		return AuthUser{}, err
-	}
 	stored, err := s.repo.User(user.ID)
 	if err != nil {
 		return AuthUser{}, err
@@ -300,17 +321,28 @@ func (s *Service) UpdateProfile(user *model.User, req UpdateProfileRequest) (Aut
 	if stored.Status != model.UserStatusActive {
 		return AuthUser{}, kernel.Forbidden("该账号已被禁用")
 	}
-	if existing, lookupErr := s.repo.UserByUsername(username); lookupErr == nil {
-		if existing.ID != stored.ID {
-			return AuthUser{}, kernel.BadAuthRequest("用户名已存在")
+	username := NormalizeUsername(req.Username)
+	usernameChanged := username != NormalizeUsername(stored.Username)
+	if usernameChanged {
+		if err := ValidateUsername(username); err != nil {
+			return AuthUser{}, err
 		}
-	} else if !errors.Is(lookupErr, gorm.ErrRecordNotFound) {
-		return AuthUser{}, lookupErr
+		if existing, lookupErr := s.repo.UserByUsername(username); lookupErr == nil {
+			if existing.ID != stored.ID {
+				return AuthUser{}, kernel.BadAuthRequest("用户名已存在")
+			}
+		} else if !errors.Is(lookupErr, gorm.ErrRecordNotFound) {
+			return AuthUser{}, lookupErr
+		}
+	} else {
+		username = stored.Username
 	}
+	var avatarResourceID *string
 	if req.AvatarResourceID != nil {
-		avatarResourceID := strings.TrimSpace(*req.AvatarResourceID)
-		if avatarResourceID != "" {
-			resource, err := s.repo.ResourceForUser(stored.ID, avatarResourceID)
+		value := strings.TrimSpace(*req.AvatarResourceID)
+		avatarResourceID = &value
+		if value != "" {
+			resource, err := s.repo.ResourceForUser(stored.ID, value)
 			if err != nil {
 				if errors.Is(err, gorm.ErrRecordNotFound) {
 					return AuthUser{}, kernel.BadAuthRequest("头像资源不存在或不属于当前用户")
@@ -324,19 +356,26 @@ func (s *Service) UpdateProfile(user *model.User, req UpdateProfileRequest) (Aut
 				return AuthUser{}, kernel.BadAuthRequest("头像大小不能超过 2 MB")
 			}
 		}
-		stored.AvatarResourceID = avatarResourceID
 	}
-	stored.Username = username
-	stored.ProfileName = username
-	stored.DisplayName = username
-	stored.UpdatedAt = time.Now()
-	if err := s.repo.Save(stored); err != nil {
+	now := time.Now()
+	updated, usage, err := s.repo.UpdateUserProfile(repository.UpdateUserProfileInput{
+		UserID: stored.ID, Username: username, AvatarResourceID: avatarResourceID,
+		ChangeID: kernel.NewID(), Now: now, Window: usernameChangeWindow, Limit: usernameChangeLimit,
+	})
+	if errors.Is(err, repository.ErrUsernameChangeLimit) {
+		retryAfter := 1
+		if usage.NextAvailableAt != nil {
+			retryAfter = max(1, int(time.Until(*usage.NextAvailableAt).Seconds()+0.999))
+		}
+		return AuthUser{}, &kernel.AppError{Status: 429, Code: kernel.CodeUsernameChangeLimit, Reason: kernel.ReasonUsernameChangeLimit, Message: "过去 30 天已修改 3 次用户名，请稍后再试", Retryable: true, RetryAfterSeconds: retryAfter}
+	}
+	if err != nil {
 		if isUsernameUniqueViolation(err) {
 			return AuthUser{}, kernel.BadAuthRequest("用户名已存在")
 		}
 		return AuthUser{}, err
 	}
-	return s.PublicAuthUser(stored)
+	return s.PublicAuthUser(updated)
 }
 
 func isUsernameUniqueViolation(err error) bool {
@@ -344,7 +383,7 @@ func isUsernameUniqueViolation(err error) bool {
 		return false
 	}
 	message := strings.ToLower(err.Error())
-	return strings.Contains(message, "idx_users_username") ||
+	return strings.Contains(message, "idx_users_username") || strings.Contains(message, "idx_users_username_ci") ||
 		(strings.Contains(message, "users.username") && strings.Contains(message, "unique")) ||
 		(strings.Contains(message, "username") && strings.Contains(message, "duplicate key"))
 }
@@ -483,7 +522,7 @@ func parseSessionCookie(value string) (string, string) {
 }
 
 func NormalizeUsername(value string) string {
-	return strings.TrimSpace(value)
+	return kernel.NormalizeLoginUsername(value)
 }
 
 func NormalizeEmail(value string) string {
@@ -503,8 +542,8 @@ func NormalizeDisplayName(value string, fallback string) string {
 }
 
 func ValidateUsername(value string) error {
-	if !usernamePattern.MatchString(value) {
-		return kernel.BadAuthRequest("用户名需为 3-32 位字母、数字、下划线或连字符")
+	if err := kernel.ValidateLoginUsername(value); err != nil {
+		return kernel.BadAuthRequest(err.Error())
 	}
 	return nil
 }
