@@ -14,7 +14,7 @@ const AVATAR_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const USERNAME_PATTERN = /^[a-zA-Z0-9_-]{3,32}$/;
 
 export default function ProfilePage() {
-    const { message } = App.useApp();
+    const { message, modal } = App.useApp();
     const navigate = useNavigate();
     const location = useLocation();
     const inputRef = useRef<HTMLInputElement>(null);
@@ -41,6 +41,7 @@ export default function ProfilePage() {
     }, [user]);
 
     const normalizedUsername = username.trim();
+    const usernameChanged = normalizedUsername !== initialUsername;
     const unchanged = normalizedUsername === initialUsername && avatarResourceId === (user?.avatarResourceId || "");
     const registeredAt = useMemo(() => formatRegistrationTime(user?.createdAt), [user?.createdAt]);
     const returnTo = profileReturnPath(location.state);
@@ -53,12 +54,7 @@ export default function ProfilePage() {
         navigate(returnTo, { replace: true });
     };
 
-    const submit = async (event: FormEvent<HTMLFormElement>) => {
-        event.preventDefault();
-        if (!USERNAME_PATTERN.test(normalizedUsername)) {
-            message.warning("用户名需为 3-32 位字母、数字、下划线或连字符");
-            return;
-        }
+    const saveProfile = async () => {
         setSaving(true);
         try {
             const result = await updateProfile({ username: normalizedUsername, avatarResourceId });
@@ -70,6 +66,27 @@ export default function ProfilePage() {
         } finally {
             setSaving(false);
         }
+    };
+
+    const submit = (event: FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        if (!USERNAME_PATTERN.test(normalizedUsername)) {
+            message.warning("用户名需为 3-32 位字母、数字、下划线或连字符");
+            return;
+        }
+        if (!usernameChanged) {
+            void saveProfile();
+            return;
+        }
+
+        modal.confirm({
+            title: "确认修改用户名？",
+            content: `修改用户名后，您将使用“${normalizedUsername}”${user.email ? `或邮箱“${user.email}”` : ""}登录。原有用户名将失效。`,
+            okText: "确定修改",
+            cancelText: "取消",
+            centered: true,
+            onOk: saveProfile,
+        });
     };
 
     const submitPassword = async (event: FormEvent<HTMLFormElement>) => {
