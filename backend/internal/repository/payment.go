@@ -53,6 +53,9 @@ func (r *Repository) CreateTopupProduct(product *model.TopupProduct) error {
 func (r *Repository) UpdateTopupProduct(product *model.TopupProduct) error {
 	return r.db.Model(&model.TopupProduct{}).Where("id = ?", product.ID).Updates(map[string]any{
 		"name": product.Name, "description": product.Description, "benefits": product.Benefits, "amount_fen": product.AmountFen,
+		"ribbon_text": product.RibbonText, "badge_text": product.BadgeText, "compare_amount_fen": product.CompareAmountFen,
+		"price_caption": product.PriceCaption, "quota_caption": product.QuotaCaption, "quota_detail": product.QuotaDetail,
+		"action_text": product.ActionText, "featured": product.Featured,
 		"credits_microcredits": product.CreditsMicrocredits, "enabled": product.Enabled,
 		"sort_order": product.SortOrder, "updated_by": product.UpdatedBy, "updated_at": time.Now(),
 	}).Error

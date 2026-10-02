@@ -253,6 +253,10 @@ Skills 的 `tool_completed` / `tool_failed` 事件附带 `skillId`、`skillName`
 
 模型任务失败的 `run_failed` 事件保留 `taskId`，并提供安全分类 `reason`：`model_connection_reset`、`model_request_timeout`、`model_connection_refused` 或 `model_task_failed`。`text` 不透传原始上游错误，避免泄露地址和凭证；前端用事件类型而非摘要关键词判断工具成功 / 失败。失败不会触发自动付费重试。
 
+## 充值套餐商品
+
+`GET /api/payments/products` 返回已上架商品；`GET /api/admin/payments/products` 及 `POST/PUT /api/admin/payments/products` 仅允许管理员访问。商品包含真实交易字段 `amountFen`、`creditsMicrocredits`，以及卡片展示字段 `name`、`description`、`benefits`、`ribbonText`、`badgeText`、`compareAmountFen`、`priceCaption`、`quotaCaption`、`quotaDetail`、`actionText`、`featured`。`benefits` 按换行分为权益项；未配置 `priceCaption` 时卡片根据真实售价和积分显示每 100 积分价格，其他可选展示字段为空时不显示。`compareAmountFen` 为可选划线价，非零时必须高于真实售价，不能用于创建订单金额。`featured` 控制卡片突出样式，后台预览与用户端共用卡片组件。
+
 ## 用户支付订单
 
 `GET /api/payments/orders` 仅返回当前登录用户自己的充值订单，支持 `page`、`pageSize` 和归并筛选 `status=all|unpaid|completed|failed|closed`。`unpaid` 包含创建中、待支付和关单中，接口不接受原始数据库状态绕过归并筛选。结果按创建时间倒序返回 `{ orders, total, page, pageSize }`。

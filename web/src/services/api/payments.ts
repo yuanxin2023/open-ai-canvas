@@ -19,6 +19,14 @@ export type TopupProduct = {
     name: string;
     description?: string;
     benefits?: string;
+    ribbonText: string;
+    badgeText: string;
+    compareAmountFen: number;
+    priceCaption: string;
+    quotaCaption: string;
+    quotaDetail: string;
+    actionText: string;
+    featured: boolean;
     amountFen: number;
     creditsMicrocredits: number;
     enabled: boolean;
@@ -124,7 +132,7 @@ export function listAdminTopupProducts() {
     return http.get<{ products: TopupProduct[] }>("/admin/payments/products");
 }
 
-export type TopupProductInput = Pick<TopupProduct, "name" | "amountFen" | "creditsMicrocredits" | "enabled" | "sortOrder"> & { description?: string; benefits?: string };
+export type TopupProductInput = Pick<TopupProduct, "name" | "amountFen" | "creditsMicrocredits" | "enabled" | "sortOrder" | "ribbonText" | "badgeText" | "compareAmountFen" | "priceCaption" | "quotaCaption" | "quotaDetail" | "actionText" | "featured"> & { description?: string; benefits?: string };
 
 export function createAdminTopupProduct(input: TopupProductInput) {
     return http.post<{ product: TopupProduct }>("/admin/payments/products", input);

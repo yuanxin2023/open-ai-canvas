@@ -14,7 +14,7 @@ import (
 	"gorm.io/gorm"
 )
 
-const CurrentSchemaVersion int64 = 42
+const CurrentSchemaVersion int64 = 43
 
 //go:embed seed/inspirations.json
 var inspirationSeedJSON []byte
@@ -134,6 +134,9 @@ var schemaMigrations = []migration{
 	}},
 	{version: 41, name: "short_login_usernames", checksum: "sha256:short-login-usernames-v41-20261001", apply: migrateShortLoginUsernames},
 	{version: 42, name: "user_admin_remarks", checksum: "sha256:user-admin-remarks-v42-20261002", apply: migrateUserAdminRemarks},
+	{version: 43, name: "topup_product_card_fields", checksum: "sha256:topup-product-card-fields-v43-20261002", apply: func(tx *gorm.DB) error {
+		return tx.AutoMigrate(&model.TopupProduct{})
+	}},
 }
 
 func migrateUserAdminRemarks(tx *gorm.DB) error {
@@ -418,7 +421,7 @@ func migrationsForDatabase(db *gorm.DB) ([]migration, error) {
 func upstreamFirstMigrationPlan() []migration {
 	const sharedCount = 23
 	const localCount = 4
-	const commonTailCount = 5
+	const commonTailCount = 6
 	plan := append([]migration(nil), schemaMigrations[:sharedCount]...)
 	middleEnd := len(schemaMigrations) - commonTailCount
 	for index, item := range schemaMigrations[sharedCount+localCount : middleEnd] {

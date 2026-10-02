@@ -62,6 +62,14 @@ type TopupProductRequest struct {
 	Name                string `json:"name"`
 	Description         string `json:"description"`
 	Benefits            string `json:"benefits"`
+	RibbonText          string `json:"ribbonText"`
+	BadgeText           string `json:"badgeText"`
+	CompareAmountFen    int64  `json:"compareAmountFen"`
+	PriceCaption        string `json:"priceCaption"`
+	QuotaCaption        string `json:"quotaCaption"`
+	QuotaDetail         string `json:"quotaDetail"`
+	ActionText          string `json:"actionText"`
+	Featured            bool   `json:"featured"`
 	AmountFen           int64  `json:"amountFen"`
 	CreditsMicrocredits int64  `json:"creditsMicrocredits"`
 	Enabled             bool   `json:"enabled"`
@@ -517,8 +525,22 @@ func topupProductFromRequest(id, actorID string, request TopupProductRequest) (*
 	if !validCreditPrecision(request.CreditsMicrocredits) {
 		return nil, BadAuthRequest("充值积分最多保留 2 位小数")
 	}
+	if request.CompareAmountFen < 0 || request.CompareAmountFen > 100_000_000 || (request.CompareAmountFen > 0 && request.CompareAmountFen <= request.AmountFen) {
+		return nil, BadAuthRequest("对比价必须高于售价且不超过 100 万元")
+	}
+	for _, field := range []struct {
+		value string
+		limit int
+	}{{request.RibbonText, 120}, {request.BadgeText, 80}, {request.PriceCaption, 240}, {request.QuotaCaption, 120}, {request.QuotaDetail, 240}, {request.ActionText, 80}} {
+		if len([]rune(strings.TrimSpace(field.value))) > field.limit {
+			return nil, BadAuthRequest("套餐卡片文案超过长度限制")
+		}
+	}
 	return &model.TopupProduct{
 		ID: id, Name: name, Description: truncateRunes(strings.TrimSpace(request.Description), 500), Benefits: truncateRunes(strings.TrimSpace(request.Benefits), 1000),
+		RibbonText: strings.TrimSpace(request.RibbonText), BadgeText: strings.TrimSpace(request.BadgeText), CompareAmountFen: request.CompareAmountFen,
+		PriceCaption: strings.TrimSpace(request.PriceCaption), QuotaCaption: strings.TrimSpace(request.QuotaCaption), QuotaDetail: strings.TrimSpace(request.QuotaDetail),
+		ActionText: strings.TrimSpace(request.ActionText), Featured: request.Featured,
 		AmountFen: request.AmountFen, CreditsMicrocredits: request.CreditsMicrocredits,
 		Enabled: request.Enabled, SortOrder: request.SortOrder, CreatedBy: actorID, UpdatedBy: actorID,
 	}, nil

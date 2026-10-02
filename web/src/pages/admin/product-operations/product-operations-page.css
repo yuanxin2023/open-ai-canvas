@@ -65,9 +65,9 @@
 }
 
 .admin-payment-product-preview-card .workspace-credit-product-card {
-    min-height: 540px;
+    min-height: 0;
     border-radius: 16px;
-    padding: 24px 22px 22px;
+    padding: 0;
     box-shadow: none;
     transform: none;
 }
@@ -77,7 +77,7 @@
 }
 
 .admin-payment-product-preview-card .workspace-credit-product-price strong {
-    font-size: 44px;
+    font-size: 40px;
 }
 
 .admin-payment-product-preview > p {

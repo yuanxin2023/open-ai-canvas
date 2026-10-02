@@ -142,6 +142,26 @@ func TestTopupProductCreditAmountStaysWithinSafeLimit(t *testing.T) {
 	}
 }
 
+func TestTopupProductCardFieldsAreValidatedAndStored(t *testing.T) {
+	request := TopupProductRequest{
+		Name: "创作套餐", AmountFen: 9900, CreditsMicrocredits: CreditScale * 100,
+		RibbonText: "限时加赠", BadgeText: "热门", CompareAmountFen: 12900,
+		PriceCaption: "购买后到账", QuotaCaption: "到账积分", QuotaDetail: "用于创作",
+		ActionText: "立即开通", Featured: true,
+	}
+	product, err := topupProductFromRequest("product", "admin", request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if product.RibbonText != request.RibbonText || product.BadgeText != request.BadgeText || product.CompareAmountFen != request.CompareAmountFen || product.ActionText != request.ActionText || !product.Featured {
+		t.Fatalf("card fields were not preserved: %+v", product)
+	}
+	request.CompareAmountFen = request.AmountFen
+	if _, err := topupProductFromRequest("product", "admin", request); err == nil {
+		t.Fatal("compare price must exceed payable price")
+	}
+}
+
 func TestXunHuPayOfficialPackageIsPaymentPlugin(t *testing.T) {
 	center, err := newPluginRuntime(t.TempDir())
 	if err != nil {

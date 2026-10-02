@@ -3,7 +3,7 @@ import type { ColumnsType } from "antd/es/table";
 import { Plus, RefreshCw } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
-import { CreditProductCard, findBestValueProductId, type CreditProductCardData } from "@/components/payments/credit-product-card";
+import { CreditProductCard, type CreditProductCardData } from "@/components/payments/credit-product-card";
 import { formatCredits } from "@/constant/credits";
 import { AdminPageFrame } from "@/pages/admin/components/admin-shell";
 import { AdminDataTable, AdminStatusBadge, AdminTableEmpty } from "@/pages/admin/components/admin-ui";
@@ -22,6 +22,14 @@ type ProductFormValues = {
     name: string;
     description?: string;
     benefits?: string;
+    ribbonText?: string;
+    badgeText?: string;
+    compareAmountYuan?: number;
+    priceCaption?: string;
+    quotaCaption?: string;
+    quotaDetail?: string;
+    actionText?: string;
+    featured: boolean;
     amountYuan: number;
     credits: number;
     enabled: boolean;
@@ -44,16 +52,19 @@ export default function ProductOperationsPage() {
             name: watchedProduct?.name?.trim() || "套餐名称",
             description: watchedProduct?.description?.trim(),
             benefits: watchedProduct?.benefits,
+            ribbonText: watchedProduct?.ribbonText,
+            badgeText: watchedProduct?.badgeText,
+            compareAmountFen: Math.round(finiteNumber(watchedProduct?.compareAmountYuan, 0) * 100),
+            priceCaption: watchedProduct?.priceCaption,
+            quotaCaption: watchedProduct?.quotaCaption,
+            quotaDetail: watchedProduct?.quotaDetail,
+            actionText: watchedProduct?.actionText,
+            featured: watchedProduct?.featured,
             amountFen: Math.max(0, Math.round(amountYuan * 100)),
             creditsMicrocredits: Math.max(0, Math.round(credits * 1_000_000)),
         };
     }, [productDrawer, watchedProduct]);
-    const productPreviewCatalog = useMemo(
-        () => [...products.filter((product) => product.enabled && product.id !== productPreview.id), productPreview],
-        [productPreview, products],
-    );
-    const productPreviewMaxCredits = useMemo(() => productPreviewCatalog.reduce((maximum, product) => Math.max(maximum, product.creditsMicrocredits), 0), [productPreviewCatalog]);
-    const productPreviewIsBestValue = watchedProduct?.enabled !== false && findBestValueProductId(productPreviewCatalog) === productPreview.id;
+    const productPreviewMaxCredits = useMemo(() => products.reduce((maximum, product) => product.enabled && product.id !== productPreview.id ? Math.max(maximum, product.creditsMicrocredits) : maximum, productPreview.creditsMicrocredits), [productPreview, products]);
 
     const loadProducts = async () => {
         setLoading(true);
@@ -79,12 +90,20 @@ export default function ProductOperationsPage() {
                       name: product.name,
                       description: product.description,
                       benefits: product.benefits,
+                      ribbonText: product.ribbonText,
+                      badgeText: product.badgeText,
+                      compareAmountYuan: product.compareAmountFen / 100,
+                      priceCaption: product.priceCaption,
+                      quotaCaption: product.quotaCaption,
+                      quotaDetail: product.quotaDetail,
+                      actionText: product.actionText,
+                      featured: product.featured,
                       amountYuan: product.amountFen / 100,
                       credits: product.creditsMicrocredits / 1_000_000,
                       enabled: product.enabled,
                       sortOrder: product.sortOrder,
                   }
-                : { enabled: true, sortOrder: products.length * 10, amountYuan: 10, credits: 10 },
+                : { enabled: true, featured: false, sortOrder: products.length * 10, amountYuan: 10, credits: 10, quotaCaption: "到账积分", actionText: "立即购买" },
         );
         setProductDrawer(product || null);
     };
@@ -96,6 +115,14 @@ export default function ProductOperationsPage() {
             name: values.name.trim(),
             description: values.description?.trim(),
             benefits: values.benefits?.trim(),
+            ribbonText: values.ribbonText?.trim() || "",
+            badgeText: values.badgeText?.trim() || "",
+            compareAmountFen: Math.round((values.compareAmountYuan || 0) * 100),
+            priceCaption: values.priceCaption?.trim() || "",
+            quotaCaption: values.quotaCaption?.trim() || "",
+            quotaDetail: values.quotaDetail?.trim() || "",
+            actionText: values.actionText?.trim() || "",
+            featured: values.featured || false,
             amountFen: Math.round(values.amountYuan * 100),
             creditsMicrocredits: Math.round(values.credits * 1_000_000),
             enabled: values.enabled,
@@ -206,6 +233,15 @@ export default function ProductOperationsPage() {
                             <Form.Item name="description" label="商品说明" rules={[{ max: 500 }]}>
                                 <Input.TextArea rows={3} />
                             </Form.Item>
+                            <div className="grid grid-cols-2 gap-3">
+                                <Form.Item name="ribbonText" label="顶部横幅" rules={[{ max: 120 }]}><Input placeholder="例如：限时加赠" /></Form.Item>
+                                <Form.Item name="badgeText" label="标题角标" rules={[{ max: 80 }]}><Input placeholder="例如：热门选择" /></Form.Item>
+                            </div>
+                            <Form.Item name="featured" label="突出展示" valuePropName="checked"><Switch /></Form.Item>
+                            <div className="grid grid-cols-2 gap-3">
+                                <Form.Item name="compareAmountYuan" label="划线对比价（元）" rules={[{ type: "number", min: 0, max: 1_000_000 }, { validator: (_, value) => !value || value > Number(productForm.getFieldValue("amountYuan")) ? Promise.resolve() : Promise.reject(new Error("对比价须高于售价")) }]}><InputNumber min={0} max={1_000_000} precision={2} className="w-full" /></Form.Item>
+                                <Form.Item name="priceCaption" label="价格补充说明" rules={[{ max: 240 }]} extra="留空时按售价与到账积分显示每 100 积分的价格。"><Input placeholder="例如：一次购买，积分即时到账" /></Form.Item>
+                            </div>
                             <Form.Item name="benefits" label="套餐权益（每行一项）" rules={[{ max: 1000 }]} extra="用户端商品卡片会将每一行显示为一条勾选说明；留空则不显示权益区域。">
                                 <Input.TextArea rows={4} placeholder={'例如：\n支持图片与文本生成\n支付成功后积分自动到账'} />
                             </Form.Item>
@@ -230,6 +266,11 @@ export default function ProductOperationsPage() {
                                     <InputNumber min={0.01} max={1_000_000_000} precision={2} className="w-full" />
                                 </Form.Item>
                             </div>
+                            <div className="grid grid-cols-2 gap-3">
+                                <Form.Item name="quotaCaption" label="积分区标题" rules={[{ max: 120 }]}><Input placeholder="到账积分" /></Form.Item>
+                                <Form.Item name="actionText" label="购买按钮文字" rules={[{ max: 80 }]}><Input placeholder="立即购买" /></Form.Item>
+                            </div>
+                            <Form.Item name="quotaDetail" label="积分区补充说明" rules={[{ max: 240 }]}><Input placeholder="例如：可用于图片、视频与文本生成" /></Form.Item>
                             <Form.Item name="sortOrder" label="排序" rules={[{ required: true }]}>
                                 <InputNumber precision={0} className="w-full" />
                             </Form.Item>
@@ -248,12 +289,11 @@ export default function ProductOperationsPage() {
                             <div className="admin-payment-product-preview-card">
                                 <CreditProductCard
                                     product={productPreview}
-                                    isBestValue={productPreviewIsBestValue}
                                     maxCreditsMicrocredits={productPreviewMaxCredits}
                                     preview
                                 />
                             </div>
-                            <p>“积分更划算”会按当前已上架商品的积分与价格比例自动计算。</p>
+                            <p>横幅、角标、对比价和权益可留空；售价与到账积分会用于实际订单。</p>
                         </aside>
                     </div>
                 </Form>

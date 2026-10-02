@@ -22,8 +22,35 @@ func TestCurrentSchemaVersionMatchesMigrationPlan(t *testing.T) {
 			}
 		}
 		latest := plan[len(plan)-1]
-		if CurrentSchemaVersion != latest.version || latest.name != "user_admin_remarks" {
-			t.Fatalf("%s latest migration = %d/%q, want %d/user_admin_remarks", name, latest.version, latest.name, CurrentSchemaVersion)
+		if CurrentSchemaVersion != latest.version || latest.name != "topup_product_card_fields" {
+			t.Fatalf("%s latest migration = %d/%q, want %d/topup_product_card_fields", name, latest.version, latest.name, CurrentSchemaVersion)
+		}
+	}
+}
+
+func TestTopupProductCardFieldsMigrationIsSharedTail(t *testing.T) {
+	for name, plan := range map[string][]migration{"local": schemaMigrations, "upstream": upstreamFirstMigrationPlan()} {
+		last := plan[len(plan)-1]
+		if last.version != 43 || last.name != "topup_product_card_fields" {
+			t.Fatalf("%s latest migration = %d/%s", name, last.version, last.name)
+		}
+	}
+}
+
+func TestTopupProductCardFieldsMigrationAddsColumns(t *testing.T) {
+	db, err := Open(Config{Driver: "sqlite", DSN: "file:migration-topup-card-v43?mode=memory&cache=shared"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec("CREATE TABLE topup_products (id text PRIMARY KEY, name text, amount_fen integer, credits_microcredits integer)").Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := schemaMigrations[len(schemaMigrations)-1].apply(db); err != nil {
+		t.Fatal(err)
+	}
+	for _, column := range []string{"RibbonText", "BadgeText", "CompareAmountFen", "PriceCaption", "QuotaCaption", "QuotaDetail", "ActionText", "Featured"} {
+		if !db.Migrator().HasColumn(&model.TopupProduct{}, column) {
+			t.Fatalf("migration v43 did not add %s", column)
 		}
 	}
 }
@@ -52,8 +79,8 @@ func TestMigrateSchemaSupportsLocalAndUpstreamPost23Lineages(t *testing.T) {
 		expectedV24Name  string
 		expectedTailName string
 	}{
-		{name: "local", plan: schemaMigrations, appliedThrough: 27, expectedV24Name: "topup_product_benefits", expectedTailName: "user_admin_remarks"},
-		{name: "upstream", plan: upstreamFirstMigrationPlan(), appliedThrough: 32, expectedV24Name: "channel_model_label", expectedTailName: "user_admin_remarks"},
+		{name: "local", plan: schemaMigrations, appliedThrough: 27, expectedV24Name: "topup_product_benefits", expectedTailName: "topup_product_card_fields"},
+		{name: "upstream", plan: upstreamFirstMigrationPlan(), appliedThrough: 32, expectedV24Name: "channel_model_label", expectedTailName: "topup_product_card_fields"},
 	} {
 		t.Run(scenario.name, func(t *testing.T) {
 			db, err := Open(Config{Driver: "sqlite", DSN: "file:" + t.Name() + "?mode=memory&cache=shared"})

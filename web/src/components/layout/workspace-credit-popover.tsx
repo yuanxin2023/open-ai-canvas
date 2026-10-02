@@ -4,7 +4,7 @@ import { Check, CircleCheck, CreditCard, Gift, Sparkles } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { CreditProductCard, findBestValueProductId } from "@/components/payments/credit-product-card";
+import { CreditProductCard } from "@/components/payments/credit-product-card";
 import { AppModal } from "@/components/ui/product/app-modal";
 import { formatCredits } from "@/constant/credits";
 import { useWalletBalance } from "@/hooks/use-wallet-balance";
@@ -46,7 +46,6 @@ export function WorkspaceCreditPopover({ userId }: { userId: string }) {
     const products = useMemo(() => paymentCatalogQuery.data?.products ?? [], [paymentCatalogQuery.data?.products]);
     const providers = useMemo(() => paymentCatalogQuery.data?.providers ?? [], [paymentCatalogQuery.data?.providers]);
     const maxProductCredits = useMemo(() => products.reduce((maximum, product) => Math.max(maximum, product.creditsMicrocredits), 0), [products]);
-    const bestValueProductId = useMemo(() => findBestValueProductId(products), [products]);
     const productsLoading = paymentCatalogQuery.isPending;
     const productsError = !paymentCatalogQuery.data && paymentCatalogQuery.error
         ? paymentCatalogQuery.error instanceof Error ? paymentCatalogQuery.error.message : "读取商品套餐失败"
@@ -284,7 +283,7 @@ export function WorkspaceCreditPopover({ userId }: { userId: string }) {
                 open={productsOpen}
                 title={null}
                 footer={null}
-                width="min(1480px, calc(100vw - 32px))"
+                width="min(1280px, calc(100vw - 32px))"
                 rootClassName="workspace-credit-products-modal"
                 onCancel={() => setProductsOpen(false)}
             >
@@ -311,9 +310,8 @@ export function WorkspaceCreditPopover({ userId }: { userId: string }) {
                                 <CreditProductCard
                                     key={product.id}
                                     product={product}
-                                    isBestValue={product.id === bestValueProductId}
                                     maxCreditsMicrocredits={maxProductCredits}
-                                    actionLabel={providers.length ? "立即购买" : "暂无可用支付方式"}
+                                    actionLabel={providers.length ? undefined : "暂无可用支付方式"}
                                     actionDisabled={!providers.length}
                                     onAction={() => openPaymentSelector(product)}
                                 />
