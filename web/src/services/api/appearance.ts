@@ -15,6 +15,12 @@ export type PublicAppearance = {
     authVideoUrl: string;
     authVideoPosterUrl: string;
     authVideoAutoplay: boolean;
+    composerGlowColor: string;
+    composerGlowEnabled: boolean;
+    composerGlowIntensity: number;
+    composerGlowSize: number;
+    composerGlowPositionX: number;
+    composerGlowPositionY: number;
     seoTitle: string;
     seoDescription: string;
     seoKeywords: string;
@@ -43,6 +49,12 @@ export type AdminAppearance = {
     authVideoResourceId: string;
     authVideoPosterResourceId: string;
     authVideoAutoplay: boolean;
+    composerGlowColor: string;
+    composerGlowEnabled: boolean;
+    composerGlowIntensity: number;
+    composerGlowSize: number;
+    composerGlowPositionX: number;
+    composerGlowPositionY: number;
     seoTitle: string;
     seoDescription: string;
     seoKeywords: string;
@@ -90,6 +102,12 @@ export async function updateAdminAppearance(
         | "authVideoResourceId"
         | "authVideoPosterResourceId"
         | "authVideoAutoplay"
+        | "composerGlowColor"
+        | "composerGlowEnabled"
+        | "composerGlowIntensity"
+        | "composerGlowSize"
+        | "composerGlowPositionX"
+        | "composerGlowPositionY"
         | "seoTitle"
         | "seoDescription"
         | "seoKeywords"

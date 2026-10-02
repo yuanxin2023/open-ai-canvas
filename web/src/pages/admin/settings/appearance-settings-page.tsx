@@ -1,7 +1,7 @@
-import { App, Button, Form, Input, Skeleton, Tabs } from "antd";
+import { App, Button, ColorPicker, Form, Input, Skeleton, Slider, Tabs } from "antd";
 import { Switch } from "@/pages/admin/ui/controls";
-import { Copyright, Globe2, Image as ImageIcon, MonitorPlay, Moon, Palette, RefreshCw, RotateCcw, Save, Search, Sun, Undo2, Upload } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
+import { Copyright, Globe2, Image as ImageIcon, MonitorPlay, Moon, Palette, Plus, RefreshCw, RotateCcw, Save, Search, Sparkles, Sun, Undo2, Upload } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
 import { useBlocker } from "react-router";
 
 import { AdminPageFrame } from "@/pages/admin/components/admin-shell";
@@ -36,6 +36,12 @@ export default function AppearanceSettingsPage() {
     const [authHeroTitle, setAuthHeroTitle] = useState("");
     const [authHeroDescription, setAuthHeroDescription] = useState("");
     const [authVideoAutoplay, setAuthVideoAutoplay] = useState(true);
+    const [composerGlowColor, setComposerGlowColor] = useState(DEFAULT_PUBLIC_APPEARANCE.composerGlowColor);
+    const [composerGlowEnabled, setComposerGlowEnabled] = useState(DEFAULT_PUBLIC_APPEARANCE.composerGlowEnabled);
+    const [composerGlowIntensity, setComposerGlowIntensity] = useState(DEFAULT_PUBLIC_APPEARANCE.composerGlowIntensity);
+    const [composerGlowSize, setComposerGlowSize] = useState(DEFAULT_PUBLIC_APPEARANCE.composerGlowSize);
+    const [composerGlowPositionX, setComposerGlowPositionX] = useState(DEFAULT_PUBLIC_APPEARANCE.composerGlowPositionX);
+    const [composerGlowPositionY, setComposerGlowPositionY] = useState(DEFAULT_PUBLIC_APPEARANCE.composerGlowPositionY);
     const [logoFrameEnabled, setLogoFrameEnabled] = useState(true);
     const [seoTitle, setSeoTitle] = useState("");
     const [seoDescription, setSeoDescription] = useState("");
@@ -65,6 +71,12 @@ export default function AppearanceSettingsPage() {
             normalizeDraftCopy(authHeroTitle) !== setting?.authHeroTitle ||
             normalizeDraftCopy(authHeroDescription) !== setting?.authHeroDescription ||
             authVideoAutoplay !== setting?.authVideoAutoplay ||
+            composerGlowColor !== (setting?.composerGlowColor || DEFAULT_PUBLIC_APPEARANCE.composerGlowColor) ||
+            composerGlowEnabled !== (setting?.composerGlowEnabled !== false) ||
+            composerGlowIntensity !== (setting?.composerGlowIntensity || DEFAULT_PUBLIC_APPEARANCE.composerGlowIntensity) ||
+            composerGlowSize !== (setting?.composerGlowSize || DEFAULT_PUBLIC_APPEARANCE.composerGlowSize) ||
+            composerGlowPositionX !== (setting?.composerGlowPositionX || DEFAULT_PUBLIC_APPEARANCE.composerGlowPositionX) ||
+            composerGlowPositionY !== (setting?.composerGlowPositionY ?? DEFAULT_PUBLIC_APPEARANCE.composerGlowPositionY) ||
             logoFrameEnabled !== setting?.logoFrameEnabled ||
             normalizeSingleLine(seoTitle) !== setting?.seoTitle ||
             normalizeDraftCopy(seoDescription) !== setting?.seoDescription ||
@@ -84,6 +96,12 @@ export default function AppearanceSettingsPage() {
         setAuthHeroTitle(value.authHeroTitle);
         setAuthHeroDescription(value.authHeroDescription);
         setAuthVideoAutoplay(value.authVideoAutoplay);
+        setComposerGlowColor(value.composerGlowColor || DEFAULT_PUBLIC_APPEARANCE.composerGlowColor);
+        setComposerGlowEnabled(value.composerGlowEnabled !== false);
+        setComposerGlowIntensity(value.composerGlowIntensity || DEFAULT_PUBLIC_APPEARANCE.composerGlowIntensity);
+        setComposerGlowSize(value.composerGlowSize || DEFAULT_PUBLIC_APPEARANCE.composerGlowSize);
+        setComposerGlowPositionX(value.composerGlowPositionX || DEFAULT_PUBLIC_APPEARANCE.composerGlowPositionX);
+        setComposerGlowPositionY(value.composerGlowPositionY ?? DEFAULT_PUBLIC_APPEARANCE.composerGlowPositionY);
         setLogoFrameEnabled(value.logoFrameEnabled);
         setSeoTitle(value.seoTitle);
         setSeoDescription(value.seoDescription);
@@ -130,7 +148,7 @@ export default function AppearanceSettingsPage() {
         if (blocker.state !== "blocked") return;
         modal.confirm({
             title: "放弃站点及外观调整？",
-            content: "当前品牌、画布 Agent、SEO、备案或媒体配置尚未保存，离开后草稿会丢失。线上站点不会改变。",
+            content: "当前品牌、创作首屏、画布 Agent、SEO、备案或媒体配置尚未保存，离开后草稿会丢失。线上站点不会改变。",
             okText: "放弃并离开",
             cancelText: "继续编辑",
             okButtonProps: { danger: true },
@@ -192,6 +210,12 @@ export default function AppearanceSettingsPage() {
         setAuthHeroTitle(setting.authHeroTitle);
         setAuthHeroDescription(setting.authHeroDescription);
         setAuthVideoAutoplay(setting.authVideoAutoplay);
+        setComposerGlowColor(setting.composerGlowColor || DEFAULT_PUBLIC_APPEARANCE.composerGlowColor);
+        setComposerGlowEnabled(setting.composerGlowEnabled !== false);
+        setComposerGlowIntensity(setting.composerGlowIntensity || DEFAULT_PUBLIC_APPEARANCE.composerGlowIntensity);
+        setComposerGlowSize(setting.composerGlowSize || DEFAULT_PUBLIC_APPEARANCE.composerGlowSize);
+        setComposerGlowPositionX(setting.composerGlowPositionX || DEFAULT_PUBLIC_APPEARANCE.composerGlowPositionX);
+        setComposerGlowPositionY(setting.composerGlowPositionY ?? DEFAULT_PUBLIC_APPEARANCE.composerGlowPositionY);
         setLogoFrameEnabled(setting.logoFrameEnabled);
         setSeoTitle(setting.seoTitle);
         setSeoDescription(setting.seoDescription);
@@ -215,7 +239,7 @@ export default function AppearanceSettingsPage() {
         }
         modal.confirm({
             title: "放弃调整并重新读取？",
-            content: "重新读取会丢弃当前品牌、画布 Agent、SEO、备案和待上传文件。",
+            content: "重新读取会丢弃当前品牌、创作首屏、画布 Agent、SEO、备案和待上传文件。",
             okText: "放弃并刷新",
             cancelText: "继续编辑",
             okButtonProps: { danger: true },
@@ -227,7 +251,7 @@ export default function AppearanceSettingsPage() {
         if (!setting?.configured || saving || refreshing || restoring || canvasUploading) return;
         modal.confirm({
             title: "恢复系统默认品牌标识？",
-            content: "品牌名称、英文标识、Logo、画布 Agent 名称/文案/形象、登录页文案、视频、封面、SEO 和备案会立即恢复为项目内置值。已上传文件仍保留在存储资源中，不会被删除。",
+            content: "品牌名称、英文标识、Logo、创作首屏光晕、画布 Agent 名称/文案/形象、登录页文案、视频、封面、SEO 和备案会立即恢复为项目内置值。已上传文件仍保留在存储资源中，不会被删除。",
             okText: "恢复默认",
             cancelText: "取消",
             okButtonProps: { danger: true },
@@ -334,6 +358,12 @@ export default function AppearanceSettingsPage() {
                 authVideoResourceId: ids.video,
                 authVideoPosterResourceId: ids.poster,
                 authVideoAutoplay,
+                composerGlowColor,
+                composerGlowEnabled,
+                composerGlowIntensity,
+                composerGlowSize,
+                composerGlowPositionX,
+                composerGlowPositionY,
                 seoTitle: nextSeoTitle,
                 seoDescription: nextSeoDescription,
                 seoKeywords: nextSeoKeywords,
@@ -367,9 +397,10 @@ export default function AppearanceSettingsPage() {
     const darkLogoSelected = Boolean(files["logo-dark"] || (!resets["logo-dark"] && setting?.darkLogoResourceId));
     const status = setting?.configured ? <AdminStatusBadge label="已自定义" tone="success" /> : <AdminStatusBadge label="使用原始外观" tone="neutral" />;
     const copyCustomized = normalizeDraftCopy(authHeroTitle) !== DEFAULT_PUBLIC_APPEARANCE.authHeroTitle || normalizeDraftCopy(authHeroDescription) !== DEFAULT_PUBLIC_APPEARANCE.authHeroDescription;
+    const composerGlowCustomized = composerGlowEnabled !== DEFAULT_PUBLIC_APPEARANCE.composerGlowEnabled || composerGlowColor !== DEFAULT_PUBLIC_APPEARANCE.composerGlowColor || composerGlowIntensity !== DEFAULT_PUBLIC_APPEARANCE.composerGlowIntensity || composerGlowSize !== DEFAULT_PUBLIC_APPEARANCE.composerGlowSize || composerGlowPositionX !== DEFAULT_PUBLIC_APPEARANCE.composerGlowPositionX || composerGlowPositionY !== DEFAULT_PUBLIC_APPEARANCE.composerGlowPositionY;
     const draftBrandName = brandName.trim() || "站点名称";
     return (
-        <AdminPageFrame title="站点及外观" description="统一管理品牌身份、登录页、画布 Agent、搜索信息与备案展示" scroll>
+        <AdminPageFrame title="站点及外观" description="统一管理品牌身份、创作首屏、登录页、画布 Agent、搜索信息与备案展示" scroll>
             {loading ? (
                 <AppearanceSkeleton />
             ) : loadError || !setting ? (
@@ -396,7 +427,7 @@ export default function AppearanceSettingsPage() {
                                     <strong>{dirty ? "站点配置有调整待保存" : "站点及外观已与服务端同步"}</strong>
                                     <AdminStatusBadge label={dirty ? "尚未生效" : "服务端当前值"} tone={dirty ? "warning" : "neutral"} />
                                 </div>
-                                <p>{dirty ? "切换分类保留草稿；保存修改会一次应用品牌、登录页、画布 Agent、SEO 和备案调整。" : "按分类管理站点配置，所有修改统一保存。"}</p>
+                                <p>{dirty ? "切换分类保留草稿；保存修改会一次应用品牌、创作首屏、登录页、画布 Agent、SEO 和备案调整。" : "按分类管理站点配置，所有修改统一保存。"}</p>
                             </div>
                         </div>
                         <div className="admin-appearance-command-actions">
@@ -495,6 +526,87 @@ export default function AppearanceSettingsPage() {
                                                 <div className="admin-appearance-logo-preview-grid" aria-label="深浅模式 Logo 预览">
                                                     <LogoThemePreview label="浅色界面" icon={<Sun />} src={previews.logoLight} dark={false} frameEnabled={logoFrameEnabled} />
                                                     <LogoThemePreview label="深色界面" icon={<Moon />} src={previews.logoDark} dark frameEnabled={logoFrameEnabled} />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </SettingsSectionCard>
+                                ),
+                            },
+                            {
+                                key: "composer",
+                                label: "创作首屏",
+                                children: (
+                                    <SettingsSectionCard
+                                        className="admin-appearance-section"
+                                        icon={<Sparkles className="size-4" aria-hidden="true" />}
+                                        title="创作首屏氛围"
+                                        description="为创作首页的标题、模式、输入框和快捷建议区域加入柔和光晕，可调整开关、强度、颜色、大小与位置。"
+                                        status={<AdminStatusBadge label={!composerGlowEnabled ? "已关闭" : composerGlowCustomized ? "自定义效果" : "默认效果"} tone={!composerGlowEnabled ? "neutral" : composerGlowCustomized ? "success" : "neutral"} />}
+                                    >
+                                        <div className="admin-appearance-composer-layout">
+                                            <Form className="admin-appearance-form" layout="vertical" requiredMark={false} disabled={saving || refreshing || restoring}>
+                                                <div className="admin-appearance-logo-frame-option admin-appearance-glow-switch">
+                                                    <div className="admin-appearance-logo-frame-copy">
+                                                        <strong>显示创作首屏光晕</strong>
+                                                        <p id="appearance-composer-glow-help">关闭后保留颜色、强度、大小和位置偏好，创作首页不渲染光晕。</p>
+                                                    </div>
+                                                    <div className="admin-appearance-logo-frame-control">
+                                                        <span>{composerGlowEnabled ? "已开启" : "已关闭"}</span>
+                                                        <Switch checked={composerGlowEnabled} aria-label="显示创作首屏光晕" aria-describedby="appearance-composer-glow-help" onChange={setComposerGlowEnabled} />
+                                                    </div>
+                                                </div>
+                                                <Form.Item label="氛围渐变颜色" extra="系统会自动降低不透明度并柔化边缘，在亮色与暗色模式中保持克制。">
+                                                    <ColorPicker
+                                                        value={composerGlowColor}
+                                                        disabledAlpha
+                                                        disabled={!composerGlowEnabled}
+                                                        showText={(color) => color.toHexString().toUpperCase()}
+                                                        presets={[{ label: "温和色彩", colors: ["#B9DEFF", "#C7C4FF", "#F4C9E5", "#BDEBD8", "#F7D5A7"] }]}
+                                                        onChange={(color) => setComposerGlowColor(color.toHexString().toUpperCase())}
+                                                    />
+                                                </Form.Item>
+                                                <Form.Item label={`显示强度 · ${composerGlowIntensity}%`} extra="控制光晕的整体可见度，不改变所选颜色。">
+                                                    <Slider disabled={!composerGlowEnabled} min={10} max={100} step={5} value={composerGlowIntensity} tooltip={{ formatter: (value) => `${value}%` }} onChange={setComposerGlowIntensity} />
+                                                </Form.Item>
+                                                <Form.Item label={`光晕大小 · ${composerGlowSize}%`} extra="以默认光晕为 100%，可缩小到 50% 或放大到 180%。">
+                                                    <Slider disabled={!composerGlowEnabled} min={50} max={180} step={5} value={composerGlowSize} tooltip={{ formatter: (value) => `${value}%` }} onChange={setComposerGlowSize} />
+                                                </Form.Item>
+                                                <Form.Item label="水平位置" extra="调整光晕中心在整个创作首屏区域中的横向位置。">
+                                                    <Slider disabled={!composerGlowEnabled} min={10} max={90} step={1} value={composerGlowPositionX} marks={{ 10: "左", 50: "居中", 90: "右" }} tooltip={{ formatter: (value) => `${value}%` }} onChange={setComposerGlowPositionX} />
+                                                </Form.Item>
+                                                <Form.Item label="上下位置" extra="0px 位于创作首屏区域中心；负值向上，正值向下。">
+                                                    <Slider disabled={!composerGlowEnabled} min={-100} max={100} step={4} value={composerGlowPositionY} marks={{ [-100]: "上", 0: "基准", 100: "下" }} tooltip={{ formatter: (value) => `${Number(value) > 0 ? "+" : ""}${value}px` }} onChange={setComposerGlowPositionY} />
+                                                </Form.Item>
+                                            </Form>
+                                            <div
+                                                className="admin-appearance-composer-preview"
+                                                data-glow-enabled={composerGlowEnabled}
+                                                style={{
+                                                    "--appearance-composer-glow": composerGlowColor,
+                                                    "--appearance-composer-glow-opacity": composerGlowIntensity / 100,
+                                                    "--appearance-composer-glow-scale": composerGlowSize / 100,
+                                                    "--appearance-composer-glow-x": `${composerGlowPositionX}%`,
+                                                    "--appearance-composer-glow-y": `${composerGlowPositionY}px`,
+                                                } as CSSProperties}
+                                                aria-label="创作首屏光晕预览"
+                                            >
+                                                <div className="admin-appearance-composer-preview-stage">
+                                                    <span className="admin-appearance-composer-preview-glow" aria-hidden="true" />
+                                                    <div className="admin-appearance-composer-preview-heading">
+                                                        <strong>和创作助手聊聊创作想法</strong>
+                                                        <span>从一个画面、一个角色或一句话开始。</span>
+                                                    </div>
+                                                    <div className="admin-appearance-composer-preview-tabs" aria-hidden="true">
+                                                        <span>视频</span><span>图片</span><span className="is-active">文本</span><span>Agent</span>
+                                                    </div>
+                                                    <div className="admin-appearance-composer-preview-field">
+                                                        <Plus aria-hidden="true" />
+                                                        <span>描述画面、角色或故事想法…</span>
+                                                        <strong>开始创作</strong>
+                                                    </div>
+                                                    <div className="admin-appearance-composer-preview-suggestions" aria-hidden="true">
+                                                        <span>生成第一个镜头</span><span>从参考图开始</span><span>续写故事</span>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>

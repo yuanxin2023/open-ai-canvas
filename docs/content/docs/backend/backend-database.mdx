@@ -7,7 +7,7 @@ description: AI 创作工作台后端核心持久化表与状态边界
 
 ## 画布 Agent 外观配置
 
-`system_settings` 的 `appearance` JSON 当前合同版本为 10。版本 9 新增 `canvas`：助手名称、入口标签、面板标题、欢迎文案、输入提示、`avatarType`（`orb|live2d`）、`avatarHeight`（120–360）、`live2dResourceId` 和服务端确认的 `live2dEntry`；版本 10 自动迁移此前的内置身份默认值，同时保留部署方自定义内容。画布助手独立于站点品牌；缺失时读取内置画布默认值。不新增数据库结构迁移，不改变全局 schema 版本。
+`system_settings` 的 `appearance` JSON 当前合同版本为 13。版本 9 新增 `canvas`：助手名称、入口标签、面板标题、欢迎文案、输入提示、`avatarType`（`orb|live2d`）、`avatarHeight`（120–360）、`live2dResourceId` 和服务端确认的 `live2dEntry`；版本 10 自动迁移此前的内置身份默认值，同时保留部署方自定义内容；版本 11 新增 `composerGlowColor`；版本 12 新增 `composerGlowSize`、`composerGlowPositionX` 和 `composerGlowPositionY`；版本 13 新增 `composerGlowEnabled`、`composerGlowIntensity`，并把光晕作用域扩展为标题、模式、输入框和快捷建议组成的创作首屏区域。画布助手独立于站点品牌；缺失时读取内置画布默认值。不新增数据库结构迁移，不改变全局 schema 版本。
 
 模型包复用 `resources` 表，`kind=live2d`、`provider=local`，ZIP 不解压到磁盘。该 kind 仅由验证后的管理员导入路径保留，普通上传不能声明它。外观配置中的模型 ID 参与删除引用检查；清除引用不删除资源。默认球仍可保留模型引用，便于切换。
 
@@ -96,9 +96,9 @@ docker compose -f docker-compose.deploy.yml up -d backend web
 
 ## 平台外观配置
 
-平台外观复用既有 `system_settings` 表，不新增结构迁移。键 `appearance` 当前使用 JSON 合同版本 9，保存品牌名称、英文品牌标识、登录页文案与媒体、深浅 Logo、Logo 外框、SEO、版权、备案，以及 Canvas Agent 名称、面板文案、入口文案、头像类型和 Live2D 资源引用。旧 JSON 中的皮肤字段读取时忽略，并在管理员下次保存后移除；只配置一套 Logo 时，公开投影在亮色和暗色模式复用同一资源。Live2D 文件仍由 `resources` 和当前资源存储承担，启用前必须通过入口文件及资源归属校验。恢复默认外观会删除设置记录并回到内置值，不级联删除已上传资源。详细合同见[画布 Agent 外观与 Live2D](/docs/backend/canvas-agent-appearance)。
+平台外观复用既有 `system_settings` 表，不新增结构迁移。键 `appearance` 当前使用 JSON 合同版本 13，保存品牌名称、英文品牌标识、登录页文案与媒体、深浅 Logo、Logo 外框、创作首屏光晕开关/强度/颜色/大小/位置、SEO、版权、备案，以及 Canvas Agent 名称、面板文案、入口文案、头像类型和 Live2D 资源引用。旧 JSON 中的皮肤字段读取时忽略，并在管理员下次保存后移除；只配置一套 Logo 时，公开投影在亮色和暗色模式复用同一资源。Live2D 文件仍由 `resources` 和当前资源存储承担，启用前必须通过入口文件及资源归属校验。恢复默认外观会删除设置记录并回到内置值，不级联删除已上传资源。详细合同见[画布 Agent 外观与 Live2D](/docs/backend/canvas-agent-appearance)。
 
-公开接口只投影品牌名、英文品牌标识、登录页公开文案、深浅主题使用的稳定 slot 资源 URL、Logo 外框状态、配置状态和修订标识，不返回内部资源 ID、对象路径或存储凭据。管理员保存新配置前，服务层会校验文本长度与安全字符、资源为就绪状态、类型与 slot 匹配，且新绑定资源由当前管理员上传；两套 Logo、视频和封面中任何正在使用的资源都会进入管理员删除保护。品牌变更同时写入 `admin_audit_events`。
+公开接口只投影品牌名、英文品牌标识、登录页公开文案、深浅主题使用的稳定 slot 资源 URL、Logo 外框状态、创作首屏光晕开关/强度/颜色/大小/位置、配置状态和修订标识，不返回内部资源 ID、对象路径或存储凭据。管理员保存新配置前，服务层会校验文本长度与安全字符、氛围色为 `#RRGGBB`、强度/大小/位置处于允许范围、资源为就绪状态、类型与 slot 匹配，且新绑定资源由当前管理员上传；两套 Logo、视频和封面中任何正在使用的资源都会进入管理员删除保护。品牌变更同时写入 `admin_audit_events`。
 
 ## 账号认证与密码找回
 

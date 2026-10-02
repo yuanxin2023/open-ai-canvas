@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { App, Spin } from "antd";
 import { Tooltip } from "@/components/ui/base/tooltip";
 import { History, Sparkles, Maximize2 } from "lucide-react";
@@ -68,6 +68,12 @@ export default function CreatePage() {
     const [openingCanvas, setOpeningCanvas] = useState(false);
     const openingCanvasRef = useRef(false);
     const assistantName = useAppearanceStore((state) => state.appearance.canvas?.agentName || "创作助手");
+    const composerGlowColor = useAppearanceStore((state) => state.appearance.composerGlowColor);
+    const composerGlowEnabled = useAppearanceStore((state) => state.appearance.composerGlowEnabled);
+    const composerGlowIntensity = useAppearanceStore((state) => state.appearance.composerGlowIntensity);
+    const composerGlowSize = useAppearanceStore((state) => state.appearance.composerGlowSize);
+    const composerGlowPositionX = useAppearanceStore((state) => state.appearance.composerGlowPositionX);
+    const composerGlowPositionY = useAppearanceStore((state) => state.appearance.composerGlowPositionY);
     const config = useEffectiveConfig();
     const composerPreferencesHydrated = useCreationPreferencesStore((state) => state.hydrated);
     const rememberMode = useCreationPreferencesStore((state) => state.rememberMode);
@@ -1104,20 +1110,32 @@ export default function CreatePage() {
                     </motion.div> : null}
                 </AnimatePresence>
                 <main ref={threadScrollRef} onScroll={handleThreadScroll} className="creation-empty-workspace creation-scrollbar">
-                <div className="creation-home-heading">
-                    <h1>和{assistantName}聊聊创作想法</h1>
-                    <p>从一个画面、一个角色或一句话开始，继续你的创作。</p>
-                </div>
-                <section ref={launchpadRef} className="creation-launchpad" aria-label="开始创作">
-                    <div className={cn("creation-composer-stage is-home-mode", agentMode && "is-agent-mode")}>
-                        <CreationModeTabs mode={mode} agentActive={agentMode} onAgentSelect={() => setAgentMode(true)} onModeChange={(next) => { setAgentMode(false); selectMode(next); }} />
-                        {agentMode ? <CreationAgentEntry /> : <div className="creation-empty-composer"><CreationComposer {...composerProps} variant="empty" /></div>}
+                <div
+                    className="creation-home-hero"
+                    data-glow-enabled={composerGlowEnabled}
+                    style={{
+                            "--creation-composer-glow": composerGlowColor,
+                            "--creation-composer-glow-opacity": composerGlowIntensity / 100,
+                            "--creation-composer-glow-scale": composerGlowSize / 100,
+                            "--creation-composer-glow-x": `${composerGlowPositionX}%`,
+                            "--creation-composer-glow-y": `${composerGlowPositionY}px`,
+                        } as CSSProperties}
+                >
+                    <div className="creation-home-heading">
+                        <h1>和{assistantName}聊聊创作想法</h1>
+                        <p>从一个画面、一个角色或一句话开始，继续你的创作。</p>
                     </div>
-                    <CreationEmptySuggest
-                        onStartPrompt={(nextMode, prompt) => { setAgentMode(false); selectMode(nextMode); setPrompt(prompt); window.requestAnimationFrame(() => composerFocusRef.current?.focus()); }}
-                        onOpenLibrary={() => { setAgentMode(false); selectMode("image"); setLibraryOpen(true); }}
-                    />
-                </section>
+                    <section ref={launchpadRef} className="creation-launchpad" aria-label="开始创作">
+                        <div className={cn("creation-composer-stage is-home-mode", agentMode && "is-agent-mode")}>
+                            <CreationModeTabs mode={mode} agentActive={agentMode} onAgentSelect={() => setAgentMode(true)} onModeChange={(next) => { setAgentMode(false); selectMode(next); }} />
+                            {agentMode ? <CreationAgentEntry /> : <div className="creation-empty-composer"><CreationComposer {...composerProps} variant="empty" /></div>}
+                        </div>
+                        <CreationEmptySuggest
+                            onStartPrompt={(nextMode, prompt) => { setAgentMode(false); selectMode(nextMode); setPrompt(prompt); window.requestAnimationFrame(() => composerFocusRef.current?.focus()); }}
+                            onOpenLibrary={() => { setAgentMode(false); selectMode("image"); setLibraryOpen(true); }}
+                        />
+                    </section>
+                </div>
                 <CreationFeaturedWorks
                     onStartPrompt={(nextMode, prompt) => { setAgentMode(false); selectMode(nextMode); setPrompt(prompt); window.requestAnimationFrame(() => composerFocusRef.current?.focus()); }}
                 />

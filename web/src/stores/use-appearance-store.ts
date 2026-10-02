@@ -5,7 +5,7 @@ import type { PublicAppearance } from "@/services/api/appearance";
 
 export const DEFAULT_PUBLIC_APPEARANCE: PublicAppearance = {
 	canvas: DEFAULT_CANVAS_APPEARANCE,
-	schemaVersion: 10,
+	schemaVersion: 13,
     brandName: "AI 创作工作台",
     brandSlug: "open-ai-canvas",
     authHeroTitle: "让一个故事，\n从文字走向银幕。",
@@ -16,6 +16,12 @@ export const DEFAULT_PUBLIC_APPEARANCE: PublicAppearance = {
     authVideoUrl: "https://boss-shjd.biliapi.net/updream/aniforge/video/video_bbcb00bd-650d-4249-9346-5cd21fd2484c_m1hc-u0-1pu13x-3v1s.mp4",
     authVideoPosterUrl: "https://i0.hdslb.com/bfs/aitool/aniforge/image/02933f26-5f1b-49ff-a811-b7f95ee5e5b8_m1hc-u0-sau.jpg",
     authVideoAutoplay: true,
+    composerGlowColor: "#B9DEFF",
+    composerGlowEnabled: true,
+    composerGlowIntensity: 100,
+    composerGlowSize: 100,
+    composerGlowPositionX: 50,
+    composerGlowPositionY: 0,
     seoTitle: "AI 创作工作台",
     seoDescription: "面向 AI 影视与短剧创作的一体化工作台。",
     seoKeywords: "",
@@ -59,7 +65,7 @@ export function normalizePublicAppearance(value?: Partial<PublicAppearance> | nu
 	return {
 		...DEFAULT_PUBLIC_APPEARANCE,
 		...value,
-		schemaVersion: 10,
+		schemaVersion: 13,
 		canvas: { ...DEFAULT_CANVAS_APPEARANCE, ...value?.canvas },
         brandName: resolvedBrandName,
         brandSlug,
@@ -71,6 +77,12 @@ export function normalizePublicAppearance(value?: Partial<PublicAppearance> | nu
         authVideoUrl: safeAppearanceURL(value?.authVideoUrl, DEFAULT_PUBLIC_APPEARANCE.authVideoUrl),
         authVideoPosterUrl: safeAppearanceURL(value?.authVideoPosterUrl, customVideo ? "" : DEFAULT_PUBLIC_APPEARANCE.authVideoPosterUrl),
         authVideoAutoplay: value?.authVideoAutoplay !== false,
+        composerGlowColor: normalizeAppearanceHexColor(value?.composerGlowColor, DEFAULT_PUBLIC_APPEARANCE.composerGlowColor),
+        composerGlowEnabled: value?.composerGlowEnabled !== false,
+        composerGlowIntensity: normalizeAppearanceNumber(value?.composerGlowIntensity, DEFAULT_PUBLIC_APPEARANCE.composerGlowIntensity, 10, 100),
+        composerGlowSize: normalizeAppearanceNumber(value?.composerGlowSize, DEFAULT_PUBLIC_APPEARANCE.composerGlowSize, 50, 180),
+        composerGlowPositionX: normalizeAppearanceNumber(value?.composerGlowPositionX, DEFAULT_PUBLIC_APPEARANCE.composerGlowPositionX, 10, 90),
+        composerGlowPositionY: normalizeAppearanceNumber(value?.composerGlowPositionY, DEFAULT_PUBLIC_APPEARANCE.composerGlowPositionY, -100, 100),
         seoTitle,
         seoDescription,
         seoKeywords,
@@ -85,6 +97,16 @@ export function normalizePublicAppearance(value?: Partial<PublicAppearance> | nu
         revision: String(value?.revision || DEFAULT_PUBLIC_APPEARANCE.revision),
         updatedAt: typeof value?.updatedAt === "string" ? value.updatedAt : undefined,
     };
+}
+
+function normalizeAppearanceHexColor(value: unknown, fallback: string) {
+    const candidate = String(value || "").trim().toUpperCase();
+    return /^#[0-9A-F]{6}$/.test(candidate) ? candidate : fallback;
+}
+
+function normalizeAppearanceNumber(value: unknown, fallback: number, min: number, max: number) {
+    const candidate = Number(value);
+    return Number.isFinite(candidate) && candidate >= min && candidate <= max ? Math.round(candidate) : fallback;
 }
 
 function normalizeAppearanceCopy(value: unknown, fallback: string, allowEmpty = false) {

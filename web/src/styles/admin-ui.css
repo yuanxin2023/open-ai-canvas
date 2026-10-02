@@ -513,6 +513,158 @@
     gap: 16px;
 }
 
+.admin-appearance-composer-layout {
+    display: grid;
+    grid-template-columns: minmax(240px, 0.55fr) minmax(360px, 1fr);
+    align-items: center;
+    gap: 28px;
+    padding: 20px;
+}
+
+.admin-appearance-composer-layout .ant-color-picker-trigger {
+    width: min(220px, 100%);
+    justify-content: flex-start;
+}
+
+.admin-appearance-glow-switch {
+    margin-bottom: 24px;
+}
+
+.admin-appearance-composer-preview {
+    position: relative;
+    display: grid;
+    min-height: 330px;
+    place-items: center;
+    overflow: hidden;
+    border: 1px solid var(--admin-card-border);
+    border-radius: var(--r-lg);
+    background: var(--admin-layer-2);
+    padding: 30px;
+    isolation: isolate;
+}
+
+.admin-appearance-composer-preview-stage {
+    position: relative;
+    z-index: 0;
+    display: grid;
+    width: min(520px, 100%);
+    gap: 12px;
+    isolation: isolate;
+}
+
+.admin-appearance-composer-preview-glow {
+    position: absolute;
+    z-index: -1;
+    top: calc(50% + var(--appearance-composer-glow-y, 0px));
+    left: var(--appearance-composer-glow-x, 50%);
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background: radial-gradient(ellipse at 50% 50%, color-mix(in srgb, var(--appearance-composer-glow) 38%, transparent) 0%, color-mix(in srgb, var(--appearance-composer-glow) 18%, transparent) 48%, transparent 78%);
+    filter: blur(24px);
+    opacity: var(--appearance-composer-glow-opacity, 1);
+    transform: translate(-50%, -50%) scale(var(--appearance-composer-glow-scale, 1));
+}
+
+.admin-appearance-composer-preview[data-glow-enabled="false"] .admin-appearance-composer-preview-glow {
+    display: none;
+}
+
+.dark .admin-appearance-composer-preview-glow {
+    background: radial-gradient(ellipse at 50% 50%, color-mix(in srgb, var(--appearance-composer-glow) 28%, transparent) 0%, color-mix(in srgb, var(--appearance-composer-glow) 12%, transparent) 48%, transparent 78%);
+}
+
+.admin-appearance-composer-preview-heading {
+    display: grid;
+    justify-items: center;
+    gap: 4px;
+    text-align: center;
+}
+
+.admin-appearance-composer-preview-heading strong {
+    color: var(--admin-text-primary);
+    font-size: 15px;
+    font-weight: 700;
+}
+
+.admin-appearance-composer-preview-heading span {
+    color: var(--admin-text-muted);
+    font-size: 10px;
+}
+
+.admin-appearance-composer-preview-tabs {
+    display: grid;
+    width: min(300px, 76%);
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    justify-self: center;
+    border-radius: var(--r-md);
+    background: var(--admin-layer-2);
+    padding: 4px;
+}
+
+.admin-appearance-composer-preview-tabs span {
+    border-radius: var(--r-sm);
+    color: var(--admin-text-muted);
+    padding: 7px 4px;
+    font-size: 9px;
+    text-align: center;
+}
+
+.admin-appearance-composer-preview-tabs .is-active {
+    background: var(--admin-layer-1);
+    color: var(--admin-text-primary);
+    box-shadow: var(--admin-card-shadow);
+}
+
+.admin-appearance-composer-preview-field {
+    display: grid;
+    width: 100%;
+    min-height: 72px;
+    grid-template-columns: 24px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+    border: 1px solid var(--admin-card-border);
+    border-radius: var(--r-lg);
+    background: var(--admin-layer-1);
+    padding: 12px 14px;
+    box-shadow: var(--admin-card-shadow);
+}
+
+.admin-appearance-composer-preview-field > svg {
+    width: 20px;
+    height: 20px;
+    color: var(--admin-text-secondary);
+}
+
+.admin-appearance-composer-preview-field > span {
+    color: var(--admin-text-muted);
+    font-size: var(--fs-caption);
+}
+
+.admin-appearance-composer-preview-field > strong {
+    border-radius: var(--r-sm);
+    background: var(--admin-text-primary);
+    color: var(--admin-layer-1);
+    padding: 8px 10px;
+    font-size: var(--fs-micro);
+    font-weight: 650;
+}
+
+.admin-appearance-composer-preview-suggestions {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.admin-appearance-composer-preview-suggestions span {
+    border-radius: var(--r-sm);
+    background: color-mix(in srgb, var(--admin-layer-1) 78%, transparent);
+    color: var(--admin-text-secondary);
+    padding: 9px 7px;
+    font-size: 9px;
+    text-align: center;
+}
+
 .admin-appearance-footer-settings {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(340px, 0.72fr);
@@ -571,7 +723,9 @@
         grid-template-columns: 1fr;
     }
 
-
+    .admin-appearance-composer-layout {
+        grid-template-columns: 1fr;
+    }
 }
 
 @media (max-width: 1120px) {

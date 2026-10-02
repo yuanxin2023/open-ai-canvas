@@ -32,19 +32,25 @@ const (
 )
 
 const (
-	appearanceSchemaVersion        = 10
+	appearanceSchemaVersion        = 13
 	appearanceLogoMaxBytes   int64 = 5 << 20
 	appearancePosterMaxBytes int64 = 10 << 20
 	appearanceVideoMaxBytes  int64 = 256 << 20
 )
 
 const (
-	defaultAppearanceBrandName = "AI 创作工作台"
-	defaultAppearanceBrandSlug = "open-ai-canvas"
-	defaultAppearanceLogoURL   = "/logo.svg"
-	defaultAppearanceVideoURL  = "https://boss-shjd.biliapi.net/updream/aniforge/video/video_bbcb00bd-650d-4249-9346-5cd21fd2484c_m1hc-u0-1pu13x-3v1s.mp4"
-	defaultAppearancePosterURL = "https://i0.hdslb.com/bfs/aitool/aniforge/image/02933f26-5f1b-49ff-a811-b7f95ee5e5b8_m1hc-u0-sau.jpg"
-	defaultAppearanceHeroTitle = "让一个故事，\n从文字走向银幕。"
+	defaultAppearanceBrandName   = "AI 创作工作台"
+	defaultAppearanceBrandSlug   = "open-ai-canvas"
+	defaultAppearanceLogoURL     = "/logo.svg"
+	defaultAppearanceVideoURL    = "https://boss-shjd.biliapi.net/updream/aniforge/video/video_bbcb00bd-650d-4249-9346-5cd21fd2484c_m1hc-u0-1pu13x-3v1s.mp4"
+	defaultAppearancePosterURL   = "https://i0.hdslb.com/bfs/aitool/aniforge/image/02933f26-5f1b-49ff-a811-b7f95ee5e5b8_m1hc-u0-sau.jpg"
+	defaultAppearanceHeroTitle   = "让一个故事，\n从文字走向银幕。"
+	defaultComposerGlowColor     = "#B9DEFF"
+	defaultComposerGlowEnabled   = true
+	defaultComposerGlowIntensity = 100
+	defaultComposerGlowSize      = 100
+	defaultComposerGlowX         = 50
+	defaultComposerGlowY         = 0
 )
 
 type AppearanceSetting struct {
@@ -60,6 +66,12 @@ type AppearanceSetting struct {
 	AuthVideoResourceID       string           `json:"authVideoResourceId"`
 	AuthVideoPosterResourceID string           `json:"authVideoPosterResourceId"`
 	AuthVideoAutoplay         bool             `json:"authVideoAutoplay"`
+	ComposerGlowColor         string           `json:"composerGlowColor"`
+	ComposerGlowEnabled       bool             `json:"composerGlowEnabled"`
+	ComposerGlowIntensity     int              `json:"composerGlowIntensity"`
+	ComposerGlowSize          int              `json:"composerGlowSize"`
+	ComposerGlowPositionX     int              `json:"composerGlowPositionX"`
+	ComposerGlowPositionY     int              `json:"composerGlowPositionY"`
 	SEOTitle                  string           `json:"seoTitle"`
 	SEODescription            string           `json:"seoDescription"`
 	SEOKeywords               string           `json:"seoKeywords"`
@@ -81,6 +93,12 @@ type PublicAppearanceSetting struct {
 	AuthVideoURL              string           `json:"authVideoUrl"`
 	AuthVideoPosterURL        string           `json:"authVideoPosterUrl"`
 	AuthVideoAutoplay         bool             `json:"authVideoAutoplay"`
+	ComposerGlowColor         string           `json:"composerGlowColor"`
+	ComposerGlowEnabled       bool             `json:"composerGlowEnabled"`
+	ComposerGlowIntensity     int              `json:"composerGlowIntensity"`
+	ComposerGlowSize          int              `json:"composerGlowSize"`
+	ComposerGlowPositionX     int              `json:"composerGlowPositionX"`
+	ComposerGlowPositionY     int              `json:"composerGlowPositionY"`
 	SEOTitle                  string           `json:"seoTitle"`
 	SEODescription            string           `json:"seoDescription"`
 	SEOKeywords               string           `json:"seoKeywords"`
@@ -107,13 +125,19 @@ type AdminAppearanceSetting struct {
 
 func defaultAppearanceSetting() AppearanceSetting {
 	return AppearanceSetting{
-		Canvas:            defaultCanvasAppearance(),
-		SchemaVersion:     appearanceSchemaVersion,
-		BrandName:         defaultAppearanceBrandName,
-		BrandSlug:         defaultAppearanceBrandSlug,
-		AuthHeroTitle:     defaultAppearanceHeroTitle,
-		AuthVideoAutoplay: true,
-		LogoFrameEnabled:  true,
+		Canvas:                defaultCanvasAppearance(),
+		SchemaVersion:         appearanceSchemaVersion,
+		BrandName:             defaultAppearanceBrandName,
+		BrandSlug:             defaultAppearanceBrandSlug,
+		AuthHeroTitle:         defaultAppearanceHeroTitle,
+		AuthVideoAutoplay:     true,
+		ComposerGlowColor:     defaultComposerGlowColor,
+		ComposerGlowEnabled:   defaultComposerGlowEnabled,
+		ComposerGlowIntensity: defaultComposerGlowIntensity,
+		ComposerGlowSize:      defaultComposerGlowSize,
+		ComposerGlowPositionX: defaultComposerGlowX,
+		ComposerGlowPositionY: defaultComposerGlowY,
+		LogoFrameEnabled:      true,
 	}
 }
 
@@ -179,6 +203,19 @@ func (s *Service) UpdateAppearance(actor *model.User, value AppearanceSetting) (
 	value.DarkLogoResourceID = strings.TrimSpace(value.DarkLogoResourceID)
 	value.AuthVideoResourceID = strings.TrimSpace(value.AuthVideoResourceID)
 	value.AuthVideoPosterResourceID = strings.TrimSpace(value.AuthVideoPosterResourceID)
+	value.ComposerGlowColor = strings.ToUpper(strings.TrimSpace(value.ComposerGlowColor))
+	if value.ComposerGlowColor == "" {
+		value.ComposerGlowColor = defaultComposerGlowColor
+	}
+	if value.ComposerGlowIntensity == 0 {
+		value.ComposerGlowIntensity = defaultComposerGlowIntensity
+	}
+	if value.ComposerGlowSize == 0 {
+		value.ComposerGlowSize = defaultComposerGlowSize
+	}
+	if value.ComposerGlowPositionX == 0 {
+		value.ComposerGlowPositionX = defaultComposerGlowX
+	}
 	value.SEOTitle = normalizeAppearanceSingleLine(value.SEOTitle)
 	value.SEODescription = normalizeAppearanceCopy(value.SEODescription)
 	value.SEOKeywords = normalizeAppearanceSingleLine(value.SEOKeywords)
@@ -378,6 +415,19 @@ func (s *Service) readAppearance() (*model.SystemSetting, AppearanceSetting, err
 		value.AuthHeroTitle = defaultAppearanceHeroTitle
 	}
 	value.AuthHeroDescription = normalizeAppearanceCopy(value.AuthHeroDescription)
+	value.ComposerGlowColor = strings.ToUpper(strings.TrimSpace(value.ComposerGlowColor))
+	if value.ComposerGlowColor == "" {
+		value.ComposerGlowColor = defaultComposerGlowColor
+	}
+	if value.ComposerGlowIntensity == 0 {
+		value.ComposerGlowIntensity = defaultComposerGlowIntensity
+	}
+	if value.ComposerGlowSize == 0 {
+		value.ComposerGlowSize = defaultComposerGlowSize
+	}
+	if value.ComposerGlowPositionX == 0 {
+		value.ComposerGlowPositionX = defaultComposerGlowX
+	}
 	value.SEOTitle = normalizeAppearanceSingleLine(value.SEOTitle)
 	value.SEODescription = normalizeAppearanceCopy(value.SEODescription)
 	value.SEOKeywords = normalizeAppearanceSingleLine(value.SEOKeywords)
@@ -505,6 +555,21 @@ func validateAppearanceSetting(value AppearanceSetting) error {
 	if value.ICPFilingEnabled && value.ICPFilingNumber == "" {
 		return BadAuthRequest("显示备案号前请先填写备案号")
 	}
+	if !validAppearanceHexColor(value.ComposerGlowColor) {
+		return BadAuthRequest("创作输入框氛围色必须是 #RRGGBB 格式")
+	}
+	if value.ComposerGlowIntensity < 10 || value.ComposerGlowIntensity > 100 {
+		return BadAuthRequest("创作区光晕显示强度必须在 10% 到 100% 之间")
+	}
+	if value.ComposerGlowSize < 50 || value.ComposerGlowSize > 180 {
+		return BadAuthRequest("创作首屏光晕大小必须在 50% 到 180% 之间")
+	}
+	if value.ComposerGlowPositionX < 10 || value.ComposerGlowPositionX > 90 {
+		return BadAuthRequest("创作首屏光晕水平位置必须在 10% 到 90% 之间")
+	}
+	if value.ComposerGlowPositionY < -100 || value.ComposerGlowPositionY > 100 {
+		return BadAuthRequest("创作首屏光晕上下位置必须在 -100px 到 100px 之间")
+	}
 	for _, resourceID := range []string{value.LogoResourceID, value.DarkLogoResourceID, value.AuthVideoResourceID, value.AuthVideoPosterResourceID} {
 		if len(resourceID) > 80 {
 			return BadAuthRequest("外观资源 ID 无效")
@@ -527,6 +592,18 @@ func validAppearanceBrandSlug(value string) bool {
 	}
 	for _, char := range value {
 		if (char < 'a' || char > 'z') && (char < '0' || char > '9') && char != '-' {
+			return false
+		}
+	}
+	return true
+}
+
+func validAppearanceHexColor(value string) bool {
+	if len(value) != 7 || value[0] != '#' {
+		return false
+	}
+	for _, char := range value[1:] {
+		if (char < '0' || char > '9') && (char < 'A' || char > 'F') {
 			return false
 		}
 	}
@@ -663,26 +740,32 @@ func publicAppearanceSetting(setting *model.SystemSetting, value AppearanceSetti
 		revision = strconv.FormatInt(setting.UpdatedAt.UTC().UnixNano(), 36)
 	}
 	result := &PublicAppearanceSetting{
-		Canvas:              value.Canvas,
-		SchemaVersion:       appearanceSchemaVersion,
-		BrandName:           value.BrandName,
-		BrandSlug:           value.BrandSlug,
-		AuthHeroTitle:       value.AuthHeroTitle,
-		AuthHeroDescription: value.AuthHeroDescription,
-		LogoURL:             defaultAppearanceLogoURL,
-		DarkLogoURL:         defaultAppearanceLogoURL,
-		LogoFrameEnabled:    value.LogoFrameEnabled,
-		AuthVideoURL:        defaultAppearanceVideoURL,
-		AuthVideoPosterURL:  defaultAppearancePosterURL,
-		AuthVideoAutoplay:   value.AuthVideoAutoplay,
-		SEOTitle:            effectiveAppearanceSEOTitle(value),
-		SEODescription:      effectiveAppearanceSEODescription(value),
-		SEOKeywords:         value.SEOKeywords,
-		FooterCopyright:     effectiveAppearanceCopyright(value),
-		ICPFilingEnabled:    value.ICPFilingEnabled && value.ICPFilingNumber != "",
-		ICPFilingNumber:     value.ICPFilingNumber,
-		Configured:          setting != nil,
-		Revision:            revision,
+		Canvas:                value.Canvas,
+		SchemaVersion:         appearanceSchemaVersion,
+		BrandName:             value.BrandName,
+		BrandSlug:             value.BrandSlug,
+		AuthHeroTitle:         value.AuthHeroTitle,
+		AuthHeroDescription:   value.AuthHeroDescription,
+		LogoURL:               defaultAppearanceLogoURL,
+		DarkLogoURL:           defaultAppearanceLogoURL,
+		LogoFrameEnabled:      value.LogoFrameEnabled,
+		AuthVideoURL:          defaultAppearanceVideoURL,
+		AuthVideoPosterURL:    defaultAppearancePosterURL,
+		AuthVideoAutoplay:     value.AuthVideoAutoplay,
+		ComposerGlowColor:     value.ComposerGlowColor,
+		ComposerGlowEnabled:   value.ComposerGlowEnabled,
+		ComposerGlowIntensity: value.ComposerGlowIntensity,
+		ComposerGlowSize:      value.ComposerGlowSize,
+		ComposerGlowPositionX: value.ComposerGlowPositionX,
+		ComposerGlowPositionY: value.ComposerGlowPositionY,
+		SEOTitle:              effectiveAppearanceSEOTitle(value),
+		SEODescription:        effectiveAppearanceSEODescription(value),
+		SEOKeywords:           value.SEOKeywords,
+		FooterCopyright:       effectiveAppearanceCopyright(value),
+		ICPFilingEnabled:      value.ICPFilingEnabled && value.ICPFilingNumber != "",
+		ICPFilingNumber:       value.ICPFilingNumber,
+		Configured:            setting != nil,
+		Revision:              revision,
 	}
 	if setting != nil {
 		result.UpdatedAt = setting.UpdatedAt

@@ -16,7 +16,7 @@ describe("site appearance", () => {
         });
 
         expect(appearance).toMatchObject({
-            schemaVersion: 10,
+            schemaVersion: 13,
             brandName: "HIMA Studio",
             brandSlug: "hima-studio",
             seoTitle: "HIMA Studio - AI 影视工作台",
@@ -27,6 +27,13 @@ describe("site appearance", () => {
         });
         expect(appearance).not.toHaveProperty("skinId");
         expect(appearance).not.toHaveProperty("activeSkin");
+    });
+
+    test("composer glow color is normalized and unsafe values fall back", () => {
+        expect(normalizePublicAppearance({ composerGlowColor: "#c7c4ff" }).composerGlowColor).toBe("#C7C4FF");
+        expect(normalizePublicAppearance({ composerGlowColor: "red; background: url(javascript:alert(1))" }).composerGlowColor).toBe("#B9DEFF");
+        expect(normalizePublicAppearance({ composerGlowEnabled: false, composerGlowIntensity: 65, composerGlowSize: 150, composerGlowPositionX: 72, composerGlowPositionY: -32 })).toMatchObject({ composerGlowEnabled: false, composerGlowIntensity: 65, composerGlowSize: 150, composerGlowPositionX: 72, composerGlowPositionY: -32 });
+        expect(normalizePublicAppearance({ composerGlowIntensity: 999, composerGlowSize: 999, composerGlowPositionX: -1, composerGlowPositionY: 999 })).toMatchObject({ composerGlowEnabled: true, composerGlowIntensity: 100, composerGlowSize: 100, composerGlowPositionX: 50, composerGlowPositionY: 0 });
     });
 
     test("metadata uses fixed classic colors for light and dark mode", () => {

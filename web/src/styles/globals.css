@@ -11287,6 +11287,36 @@ html:not(.dark) .creation-home {
     animation: creation-composer-arrive var(--motion-dur-slow-calc) var(--motion-ease-out) both;
 }
 
+.creation-home-hero {
+    position: relative;
+    z-index: 0;
+    isolation: isolate;
+}
+
+.creation-home-hero::before {
+    position: absolute;
+    z-index: -1;
+    top: calc(50% + var(--creation-composer-glow-y, 0px));
+    left: var(--creation-composer-glow-x, 50%);
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background: radial-gradient(ellipse at 50% 50%, color-mix(in srgb, var(--creation-composer-glow, #b9deff) 38%, transparent) 0%, color-mix(in srgb, var(--creation-composer-glow, #b9deff) 18%, transparent) 48%, transparent 78%);
+    filter: blur(34px);
+    opacity: var(--creation-composer-glow-opacity, 1);
+    transform: translate(-50%, -50%) scale(var(--creation-composer-glow-scale, 1));
+    pointer-events: none;
+    content: "";
+}
+
+.creation-home-hero[data-glow-enabled="false"]::before {
+    display: none;
+}
+
+html.dark .creation-home-hero::before {
+    background: radial-gradient(ellipse at 50% 50%, color-mix(in srgb, var(--creation-composer-glow, #b9deff) 28%, transparent) 0%, color-mix(in srgb, var(--creation-composer-glow, #b9deff) 12%, transparent) 48%, transparent 78%);
+}
+
 .creation-chat-composer {
     width: 100%;
     overflow: hidden;

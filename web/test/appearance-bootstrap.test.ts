@@ -37,6 +37,34 @@ test("login video autoplay defaults on and can be disabled explicitly", () => {
     expect(normalizePublicAppearance({ authVideoAutoplay: false }).authVideoAutoplay).toBe(false);
 });
 
+test("appearance management exposes the composer glow color and live preview", async () => {
+    const [pageSource, createSource, globalStyles] = await Promise.all([
+        Bun.file(new URL("../src/pages/admin/settings/appearance-settings-page.tsx", import.meta.url)).text(),
+        Bun.file(new URL("../src/pages/create/index.tsx", import.meta.url)).text(),
+        Bun.file(new URL("../src/styles/globals.css", import.meta.url)).text(),
+    ]);
+
+    expect(pageSource).toContain("创作首屏氛围");
+    expect(pageSource).toContain("composerGlowColor");
+    expect(pageSource).toContain("composerGlowEnabled");
+    expect(pageSource).toContain("composerGlowIntensity");
+    expect(pageSource).toContain("composerGlowSize");
+    expect(pageSource).toContain("composerGlowPositionX");
+    expect(pageSource).toContain("composerGlowPositionY");
+    expect(pageSource).toContain("ColorPicker");
+    expect(pageSource).toContain("<Slider");
+    expect(pageSource).toContain("显示创作首屏光晕");
+    expect(createSource).toContain('"--creation-composer-glow": composerGlowColor');
+    expect(createSource).toContain('data-glow-enabled={composerGlowEnabled}');
+    expect(createSource).toContain('"--creation-composer-glow-opacity": composerGlowIntensity / 100');
+    expect(createSource).toContain('"--creation-composer-glow-scale": composerGlowSize / 100');
+    expect(createSource).toContain('"--creation-composer-glow-x": `${composerGlowPositionX}%`');
+    expect(createSource).toContain('"--creation-composer-glow-y": `${composerGlowPositionY}px`');
+    expect(globalStyles).toContain(".creation-home-hero::before");
+    expect(globalStyles).toContain('.creation-home-hero[data-glow-enabled="false"]::before');
+    expect(globalStyles).toContain("color-mix(in srgb, var(--creation-composer-glow");
+});
+
 test("appearance URLs reject executable and insecure remote schemes", () => {
     const appearance = normalizePublicAppearance({
         logoConfigured: true,
