@@ -14,7 +14,7 @@ import (
 	"gorm.io/gorm"
 )
 
-const CurrentSchemaVersion int64 = 41
+const CurrentSchemaVersion int64 = 42
 
 //go:embed seed/inspirations.json
 var inspirationSeedJSON []byte
@@ -133,6 +133,17 @@ var schemaMigrations = []migration{
 		return tx.AutoMigrate(&model.SkillPlatformState{}, &model.SkillCategoryPlatformState{})
 	}},
 	{version: 41, name: "short_login_usernames", checksum: "sha256:short-login-usernames-v41-20261001", apply: migrateShortLoginUsernames},
+	{version: 42, name: "user_admin_remarks", checksum: "sha256:user-admin-remarks-v42-20261002", apply: migrateUserAdminRemarks},
+}
+
+func migrateUserAdminRemarks(tx *gorm.DB) error {
+	if !tx.Migrator().HasTable(&model.User{}) {
+		return tx.AutoMigrate(&model.User{})
+	}
+	if tx.Migrator().HasColumn(&model.User{}, "AdminRemark") {
+		return nil
+	}
+	return tx.Migrator().AddColumn(&model.User{}, "AdminRemark")
 }
 
 func migrateShortLoginUsernames(tx *gorm.DB) error {
@@ -407,7 +418,7 @@ func migrationsForDatabase(db *gorm.DB) ([]migration, error) {
 func upstreamFirstMigrationPlan() []migration {
 	const sharedCount = 23
 	const localCount = 4
-	const commonTailCount = 4
+	const commonTailCount = 5
 	plan := append([]migration(nil), schemaMigrations[:sharedCount]...)
 	middleEnd := len(schemaMigrations) - commonTailCount
 	for index, item := range schemaMigrations[sharedCount+localCount : middleEnd] {

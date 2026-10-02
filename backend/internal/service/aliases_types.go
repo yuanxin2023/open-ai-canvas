@@ -64,6 +64,7 @@ type (
 	AdminStorageStats                      = app.AdminStorageStats
 	AdminSystemPerformance                 = app.AdminSystemPerformance
 	AdminTaskPage                          = app.AdminTaskPage
+	AdminManagedUser                       = app.AdminManagedUser
 	AdminUser                              = app.AdminUser
 	AdminUserDetail                        = app.AdminUserDetail
 	AdminUserPage                          = app.AdminUserPage

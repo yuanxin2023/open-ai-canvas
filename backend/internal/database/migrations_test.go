@@ -22,9 +22,25 @@ func TestCurrentSchemaVersionMatchesMigrationPlan(t *testing.T) {
 			}
 		}
 		latest := plan[len(plan)-1]
-		if CurrentSchemaVersion != latest.version || latest.name != "short_login_usernames" {
-			t.Fatalf("%s latest migration = %d/%q, want %d/short_login_usernames", name, latest.version, latest.name, CurrentSchemaVersion)
+		if CurrentSchemaVersion != latest.version || latest.name != "user_admin_remarks" {
+			t.Fatalf("%s latest migration = %d/%q, want %d/user_admin_remarks", name, latest.version, latest.name, CurrentSchemaVersion)
 		}
+	}
+}
+
+func TestMigrateUserAdminRemarksAddsPrivateRemarkColumn(t *testing.T) {
+	db, err := Open(Config{Driver: "sqlite", DSN: "file:migration-user-admin-remarks-v42?mode=memory&cache=shared"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec("CREATE TABLE users (id text PRIMARY KEY, username text)").Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := migrateUserAdminRemarks(db); err != nil {
+		t.Fatal(err)
+	}
+	if !db.Migrator().HasColumn(&model.User{}, "AdminRemark") {
+		t.Fatal("migration v42 did not add users.admin_remark")
 	}
 }
 
@@ -36,8 +52,8 @@ func TestMigrateSchemaSupportsLocalAndUpstreamPost23Lineages(t *testing.T) {
 		expectedV24Name  string
 		expectedTailName string
 	}{
-		{name: "local", plan: schemaMigrations, appliedThrough: 27, expectedV24Name: "topup_product_benefits", expectedTailName: "short_login_usernames"},
-		{name: "upstream", plan: upstreamFirstMigrationPlan(), appliedThrough: 32, expectedV24Name: "channel_model_label", expectedTailName: "short_login_usernames"},
+		{name: "local", plan: schemaMigrations, appliedThrough: 27, expectedV24Name: "topup_product_benefits", expectedTailName: "user_admin_remarks"},
+		{name: "upstream", plan: upstreamFirstMigrationPlan(), appliedThrough: 32, expectedV24Name: "channel_model_label", expectedTailName: "user_admin_remarks"},
 	} {
 		t.Run(scenario.name, func(t *testing.T) {
 			db, err := Open(Config{Driver: "sqlite", DSN: "file:" + t.Name() + "?mode=memory&cache=shared"})

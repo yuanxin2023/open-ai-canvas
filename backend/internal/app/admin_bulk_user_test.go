@@ -132,6 +132,69 @@ func TestUpdateUserAllowsAdminToResetPasswordAndRevokesTargetSessions(t *testing
 	}
 }
 
+func TestAdminUserRemarkCanBeUpdatedAndSearchedWithoutLeakingFromUserJSON(t *testing.T) {
+	db := newBulkUserTestDB(t)
+	actor := model.User{ID: "admin-1", Username: "admin", Role: model.UserRoleAdmin, Status: model.UserStatusActive}
+	target := model.User{ID: "user-1", Username: "user-one", Role: model.UserRoleUser, Status: model.UserStatusActive}
+	if err := db.Create(&[]model.User{actor, target}).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	remark := "重点客户 YC-2042"
+	svc := &Service{repo: repository.New(db)}
+	updated, err := svc.UpdateUser(&actor, target.ID, UpdateUserRequest{Remark: &remark})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.Remark != remark || updated.AdminRemark != remark {
+		t.Fatalf("updated remark = %q/%q, want %q", updated.Remark, updated.AdminRemark, remark)
+	}
+	page, err := svc.AdminUsers(&actor, AdminListQuery{Keyword: "yc-2042", Page: 1, Limit: 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if page.Total != 1 || len(page.Users) != 1 || page.Users[0].Remark != remark {
+		t.Fatalf("remark search result = %+v", page)
+	}
+	publicJSON, err := json.Marshal(updated.User)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(publicJSON), "重点客户") || strings.Contains(string(publicJSON), "adminRemark") {
+		t.Fatalf("ordinary user JSON leaked admin remark: %s", publicJSON)
+	}
+}
+
+func TestAdminRemarkNormalizationAndUserJSONPrivacy(t *testing.T) {
+	remark, err := normalizeAdminRemark("  跟进客户  ")
+	if err != nil || remark != "跟进客户" {
+		t.Fatalf("normalizeAdminRemark() = %q, %v", remark, err)
+	}
+	if _, err := normalizeAdminRemark(strings.Repeat("备", 501)); err == nil {
+		t.Fatal("normalizeAdminRemark() oversized remark error = nil")
+	}
+	encoded, err := json.Marshal(model.User{ID: "user-1", AdminRemark: "仅管理员可见"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(encoded), "仅管理员可见") || strings.Contains(string(encoded), "adminRemark") {
+		t.Fatalf("ordinary user JSON leaked admin remark: %s", encoded)
+	}
+}
+
+func TestUpdateUserRejectsOversizedRemark(t *testing.T) {
+	db := newBulkUserTestDB(t)
+	actor := model.User{ID: "admin-1", Username: "admin", Role: model.UserRoleAdmin, Status: model.UserStatusActive}
+	target := model.User{ID: "user-1", Username: "user-one", Role: model.UserRoleUser, Status: model.UserStatusActive}
+	if err := db.Create(&[]model.User{actor, target}).Error; err != nil {
+		t.Fatal(err)
+	}
+	remark := strings.Repeat("备", 501)
+	if _, err := (&Service{repo: repository.New(db)}).UpdateUser(&actor, target.ID, UpdateUserRequest{Remark: &remark}); err == nil {
+		t.Fatal("UpdateUser() oversized remark error = nil")
+	}
+}
+
 func TestUpdateUserPasswordRequiresAdmin(t *testing.T) {
 	db := newBulkUserTestDB(t)
 	oldHash, err := hashPassword("old-password")

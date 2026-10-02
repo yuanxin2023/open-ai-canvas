@@ -13,6 +13,7 @@ type User struct {
 	Role                 UserRole   `json:"role" gorm:"index;size:24"`
 	Status               UserStatus `json:"status" gorm:"index;size:24"`
 	PasswordHash         string     `json:"-"`
+	AdminRemark          string     `json:"-" gorm:"size:500"`
 	RegistrationIP       string     `json:"-" gorm:"size:64"`
 	LastLoginAt          *time.Time `json:"lastLoginAt"`
 	CreatedAt            time.Time  `json:"createdAt"`

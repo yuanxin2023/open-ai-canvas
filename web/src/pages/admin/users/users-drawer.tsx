@@ -7,11 +7,11 @@ import { useEffect, useState, type ChangeEvent } from "react";
 import { useCopyText } from "@/hooks/use-copy-text";
 import { normalizeUsername, usernameValidationMessage } from "@/lib/username";
 import { formatCredits } from "@/constant/credits";
-import { createAdminUser, updateAdminUser, type AdminUser, type LocalUser } from "@/services/api/auth";
+import { createAdminUser, updateAdminUser, type AdminManagedUser, type AdminUser, type LocalUser } from "@/services/api/auth";
 import { adjustAdminUserCredits, type CreditAccount } from "@/services/api/wallet";
 import { generateAdminPassword } from "./admin-password";
 
-type UserFormValues = Pick<LocalUser, "email" | "role" | "status"> & { password?: string };
+type UserFormValues = Pick<LocalUser, "email" | "role" | "status"> & { remark: string; password?: string };
 type CreditAdjustmentFormValues = { amount: number; note: string };
 
 export function AdminUserEditModal({
@@ -24,7 +24,7 @@ export function AdminUserEditModal({
     user: AdminUser | null;
     actorId?: string;
     onClose: () => void;
-    onSaved: (user: LocalUser) => void;
+    onSaved: (user: AdminManagedUser) => void;
     onCreditsAdjusted: (account: CreditAccount) => void;
 }) {
     const { message, modal } = App.useApp();
@@ -47,6 +47,7 @@ export function AdminUserEditModal({
         setReservedMicrocredits(user.reservedMicrocredits);
         form.setFieldsValue({
             email: user.email || "",
+            remark: user.remark || "",
             password: "",
             role: user.role,
             status: user.status,
@@ -61,7 +62,7 @@ export function AdminUserEditModal({
         }
         modal.confirm({
             title: "放弃用户修改？",
-            content: "尚未保存的账号、密码、角色、状态或积分调整内容将丢失。",
+            content: "尚未保存的账号、备注、密码、角色、状态或积分调整内容将丢失。",
             okText: "放弃修改",
             cancelText: "继续编辑",
             okButtonProps: { danger: true },
@@ -82,6 +83,7 @@ export function AdminUserEditModal({
         try {
             const result = await updateAdminUser(user.id, {
                 email: values.email?.trim() || "",
+                remark: values.remark?.trim() || "",
                 role: values.role,
                 status: values.status,
                 ...(password ? { password } : {}),
@@ -164,6 +166,9 @@ export function AdminUserEditModal({
                 </Form.Item>
                 <Form.Item name="email" label="邮箱" rules={[{ type: "email", message: "请输入有效邮箱" }]}>
                     <Input placeholder="name@example.com" />
+                </Form.Item>
+                <Form.Item name="remark" label="备注" extra="仅管理员可见，可通过用户列表搜索。">
+                    <Input.TextArea rows={3} maxLength={500} showCount placeholder="例如：企业客户、工单编号或跟进说明" />
                 </Form.Item>
                 <Form.Item
                     name="password"
@@ -326,6 +331,7 @@ function AdminPasswordField({
 type CreateUserFormValues = {
     username: string;
     email?: string;
+    remark?: string;
     password: string;
     role: LocalUser["role"];
     status: LocalUser["status"];
@@ -373,6 +379,7 @@ export function AdminUserCreateDrawer({
             const result = await createAdminUser({
                 username: normalizeUsername(values.username),
                 email: values.email?.trim() || "",
+                remark: values.remark?.trim() || "",
                 password: values.password,
                 role: values.role,
                 status: values.status,
@@ -404,6 +411,9 @@ export function AdminUserCreateDrawer({
                 </Form.Item>
                 <Form.Item name="email" label={"\u90ae\u7bb1"} rules={[{ type: "email", message: "\u8bf7\u8f93\u5165\u6709\u6548\u90ae\u7bb1" }]}>
                     <Input placeholder="name@example.com" />
+                </Form.Item>
+                <Form.Item name="remark" label="备注" extra="仅管理员可见，可通过用户列表搜索。">
+                    <Input.TextArea rows={3} maxLength={500} showCount placeholder="例如：企业客户、工单编号或跟进说明" />
                 </Form.Item>
                 <Form.Item name="password" label={"\u521d\u59cb\u5bc6\u7801"} rules={[{ required: true, message: "\u8bf7\u8bbe\u7f6e\u521d\u59cb\u5bc6\u7801" }]}>
                     <Input.Password placeholder={"\u81f3\u5c11 8 \u4f4d"} />

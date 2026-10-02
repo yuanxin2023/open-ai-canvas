@@ -6,10 +6,11 @@ import { IdentityProviderBadge } from "@/components/layout/identity-provider-bad
 import { AdminRowActions, AdminStatusBadge } from "../components/admin-ui";
 import type { AdminUser } from "@/services/api/auth";
 
-export type UserColumnKey = "user" | "email" | "credits" | "role" | "status" | "createdAt" | "actions";
+export type UserColumnKey = "user" | "remark" | "email" | "credits" | "role" | "status" | "createdAt" | "actions";
 
 export const userColumnOptions: Array<{ key: UserColumnKey; label: string; locked?: boolean }> = [
     { key: "user", label: "用户", locked: true },
+    { key: "remark", label: "备注", locked: true },
     { key: "email", label: "邮箱" },
     { key: "credits", label: "当前积分" },
     { key: "role", label: "角色" },
@@ -42,6 +43,14 @@ export function createUserColumns({
                     <div className="text-xs text-foreground/45">@{user.username}</div>
                 </div>
             ),
+        },
+        {
+            key: "remark",
+            title: "备注",
+            dataIndex: "remark",
+            width: 180,
+            ellipsis: true,
+            render: (remark) => remark || <span className="text-foreground/40">未备注</span>,
         },
         { key: "email", title: "邮箱", dataIndex: "email", align: "center", render: (email) => email || <span className="text-foreground/40">未填写</span> },
         {
@@ -84,7 +93,7 @@ export function createUserColumns({
             ),
         },
     ];
-    return columns.filter((column) => visibleColumns.has(column.key));
+    return columns.filter((column) => column.key === "remark" || visibleColumns.has(column.key));
 }
 
 function formatTime(value?: string) {

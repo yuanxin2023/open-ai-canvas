@@ -233,7 +233,7 @@ func (r *Repository) AdminUsers(keyword string, role model.UserRole, status mode
 	query := r.db.Model(&model.User{})
 	if value := strings.TrimSpace(keyword); value != "" {
 		pattern := "%" + strings.ToLower(value) + "%"
-		query = query.Where("lower(username) LIKE ? OR lower(email) LIKE ?", pattern, pattern)
+		query = query.Where("lower(username) LIKE ? OR lower(email) LIKE ? OR lower(admin_remark) LIKE ?", pattern, pattern, pattern)
 	}
 	if role == model.UserRoleAdmin || role == model.UserRoleUser {
 		query = query.Where("role = ?", role)

@@ -37,8 +37,13 @@ export type LocalUser = {
 };
 
 export type AdminUser = LocalUser & {
+    remark: string;
     availableMicrocredits: number;
     reservedMicrocredits: number;
+};
+
+export type AdminManagedUser = LocalUser & {
+    remark: string;
 };
 
 export type AuthSessionPayload = {
@@ -126,7 +131,7 @@ export type AdminAuditEvent = {
 };
 
 export type AdminUserDetail = {
-    user: LocalUser;
+    user: AdminManagedUser;
     registrationIp?: string;
     account: { userId: string; availableMicrocredits: number; reservedMicrocredits: number; version: number };
     counts: { ledgerEntries: number; tasks: number; apiCalls: number; auditEvents: number; loginEvents: number };
@@ -480,7 +485,7 @@ export function listAdminUsers(params: AdminListParams = {}) {
     return http.get<{ users: AdminUser[]; total: number; page: number; pageSize: number }>("/admin/users", { params });
 }
 
-export function createAdminUser(input: { username: string; email?: string; password: string; role: LocalUser["role"]; status: LocalUser["status"] }) {
+export function createAdminUser(input: { username: string; email?: string; remark?: string; password: string; role: LocalUser["role"]; status: LocalUser["status"] }) {
     return http.post<{ user: AdminUser }>("/admin/users", input);
 }
 
@@ -508,8 +513,8 @@ export function listAdminUserAuditEvents(id: string, params: { page?: number; pa
     return http.get<{ events: AdminAuditEvent[]; total: number; page: number; pageSize: number }>(`/admin/users/${encodeURIComponent(id)}/audit-events`, { params });
 }
 
-export function updateAdminUser(id: string, input: Partial<Pick<LocalUser, "email" | "role" | "status">> & { password?: string }) {
-    return http.patch<{ user: LocalUser }>(`/admin/users/${encodeURIComponent(id)}`, input);
+export function updateAdminUser(id: string, input: Partial<Pick<LocalUser, "email" | "role" | "status">> & { remark?: string; password?: string }) {
+    return http.patch<{ user: AdminManagedUser }>(`/admin/users/${encodeURIComponent(id)}`, input);
 }
 
 export function deleteAdminUser(id: string) {

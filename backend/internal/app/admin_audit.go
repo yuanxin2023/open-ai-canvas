@@ -10,7 +10,7 @@ import (
 )
 
 type AdminUserDetail struct {
-	User             model.User                  `json:"user"`
+	User             AdminManagedUser            `json:"user"`
 	RegistrationIP   string                      `json:"registrationIp"`
 	Account          model.CreditAccount         `json:"account"`
 	Counts           repository.AdminUserCounts  `json:"counts"`
@@ -100,7 +100,7 @@ func (s *Service) AdminUserDetail(actor *model.User, userID string) (*AdminUserD
 		return nil, err
 	}
 	return &AdminUserDetail{
-		User: *user, RegistrationIP: user.RegistrationIP, Account: *account, Counts: counts, StorageUsage: usage,
+		User: AdminManagedUser{User: *user, Remark: user.AdminRemark}, RegistrationIP: user.RegistrationIP, Account: *account, Counts: counts, StorageUsage: usage,
 		StoredFileBytes: storedFileBytes, DailyUploadBytes: dailyUploadBytes, Quota: policy.Resource,
 	}, nil
 }

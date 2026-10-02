@@ -156,6 +156,7 @@ export function AdminUserDetailModal({ userId, onClose, previousUserId, nextUser
                                             { key: "registrationIp", label: "注册 IP", children: <span className="font-mono text-xs">{detail.registrationIp || "未记录"}</span> },
                                             { key: "username", label: "用户名", children: `@${detail.user.username}` },
                                             { key: "email", label: "邮箱", children: detail.user.email || "未填写" },
+                                            { key: "remark", label: "备注", span: 2, children: <span className="whitespace-pre-wrap break-words">{detail.user.remark || "未备注"}</span> },
                                             { key: "role", label: "角色", children: detail.user.role === "admin" ? "管理员" : "普通用户" },
                                             { key: "status", label: "状态", children: <AdminStatusBadge label={detail.user.status === "active" ? "启用" : "停用"} tone={detail.user.status === "active" ? "success" : "neutral"} /> },
                                             { key: "available", label: "可用积分", children: formatCredits(detail.account.availableMicrocredits) },

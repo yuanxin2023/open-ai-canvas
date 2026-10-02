@@ -19,6 +19,7 @@ type CreateAdminUserRequest struct {
 	Username    string           `json:"username"`
 	DisplayName string           `json:"displayName"`
 	Email       string           `json:"email"`
+	Remark      string           `json:"remark"`
 	Password    string           `json:"password"`
 	Role        model.UserRole   `json:"role"`
 	Status      model.UserStatus `json:"status"`
@@ -26,6 +27,7 @@ type CreateAdminUserRequest struct {
 type UpdateUserRequest struct {
 	DisplayName string           `json:"displayName"`
 	Email       string           `json:"email"`
+	Remark      *string          `json:"remark"`
 	Password    string           `json:"password"`
 	Role        model.UserRole   `json:"role"`
 	Status      model.UserStatus `json:"status"`
@@ -57,8 +59,14 @@ type AdminUserPage struct {
 
 type AdminUser struct {
 	model.User
-	AvailableMicrocredits int64 `json:"availableMicrocredits"`
-	ReservedMicrocredits  int64 `json:"reservedMicrocredits"`
+	Remark                string `json:"remark"`
+	AvailableMicrocredits int64  `json:"availableMicrocredits"`
+	ReservedMicrocredits  int64  `json:"reservedMicrocredits"`
+}
+
+type AdminManagedUser struct {
+	model.User
+	Remark string `json:"remark"`
 }
 
 type AdminChannelPage struct {
@@ -171,7 +179,7 @@ func (s *Service) AdminUsers(actor *model.User, query AdminListQuery) (*AdminUse
 	result := make([]AdminUser, 0, len(users))
 	for _, user := range users {
 		account := accountByUserID[user.ID]
-		result = append(result, AdminUser{User: user, AvailableMicrocredits: account.AvailableMicrocredits, ReservedMicrocredits: account.ReservedMicrocredits})
+		result = append(result, AdminUser{User: user, Remark: user.AdminRemark, AvailableMicrocredits: account.AvailableMicrocredits, ReservedMicrocredits: account.ReservedMicrocredits})
 	}
 	return &AdminUserPage{Users: result, Total: total, Page: page, Limit: limit}, nil
 }
@@ -254,6 +262,10 @@ func (s *Service) CreateAdminUser(actor *model.User, req CreateAdminUserRequest)
 		return nil, err
 	}
 	now := time.Now()
+	remark, err := normalizeAdminRemark(req.Remark)
+	if err != nil {
+		return nil, err
+	}
 	user := &model.User{
 		ID:                   newID(),
 		Username:             username,
@@ -263,6 +275,7 @@ func (s *Service) CreateAdminUser(actor *model.User, req CreateAdminUserRequest)
 		Role:                 req.Role,
 		Status:               req.Status,
 		PasswordHash:         passwordHash,
+		AdminRemark:          remark,
 		UsernameCustomizedAt: &now,
 		CreatedAt:            now,
 		UpdatedAt:            now,
@@ -273,7 +286,7 @@ func (s *Service) CreateAdminUser(actor *model.User, req CreateAdminUserRequest)
 	if err := s.ensureSignupBonus(user.ID); err != nil {
 		return nil, err
 	}
-	if err := s.appendAdminAudit(actor, "user.create", "user", user.ID, "\u521b\u5efa\u7528\u6237\u8d26\u53f7", map[string]any{"role": user.Role, "status": user.Status}); err != nil {
+	if err := s.appendAdminAudit(actor, "user.create", "user", user.ID, "\u521b\u5efa\u7528\u6237\u8d26\u53f7", map[string]any{"role": user.Role, "status": user.Status, "remarkSet": remark != ""}); err != nil {
 		return nil, err
 	}
 	account, err := s.repo.CreditAccount(user.ID)
@@ -282,12 +295,13 @@ func (s *Service) CreateAdminUser(actor *model.User, req CreateAdminUserRequest)
 	}
 	return &AdminUser{
 		User:                  *user,
+		Remark:                user.AdminRemark,
 		AvailableMicrocredits: account.AvailableMicrocredits,
 		ReservedMicrocredits:  account.ReservedMicrocredits,
 	}, nil
 }
 
-func (s *Service) UpdateUser(actor *model.User, userID string, req UpdateUserRequest) (*model.User, error) {
+func (s *Service) UpdateUser(actor *model.User, userID string, req UpdateUserRequest) (*AdminManagedUser, error) {
 	if err := s.RequireAdmin(actor); err != nil {
 		return nil, err
 	}
@@ -341,6 +355,15 @@ func (s *Service) UpdateUser(actor *model.User, userID string, req UpdateUserReq
 		user.Email = email
 	}
 	passwordReset := false
+	remarkChanged := false
+	if req.Remark != nil {
+		remark, err := normalizeAdminRemark(*req.Remark)
+		if err != nil {
+			return nil, err
+		}
+		remarkChanged = user.AdminRemark != remark
+		user.AdminRemark = remark
+	}
 	if req.Password != "" {
 		if err := validatePassword(req.Password); err != nil {
 			return nil, err
@@ -365,10 +388,18 @@ func (s *Service) UpdateUser(actor *model.User, userID string, req UpdateUserReq
 	if passwordReset {
 		auditSummary = "更新用户资料并重置密码"
 	}
-	if err := s.appendAdminAudit(actor, "user.update", "user", user.ID, auditSummary, map[string]any{"role": user.Role, "status": user.Status, "passwordReset": passwordReset}); err != nil {
+	if err := s.appendAdminAudit(actor, "user.update", "user", user.ID, auditSummary, map[string]any{"role": user.Role, "status": user.Status, "passwordReset": passwordReset, "remarkChanged": remarkChanged}); err != nil {
 		return nil, err
 	}
-	return user, nil
+	return &AdminManagedUser{User: *user, Remark: user.AdminRemark}, nil
+}
+
+func normalizeAdminRemark(value string) (string, error) {
+	remark := strings.TrimSpace(value)
+	if len([]rune(remark)) > 500 {
+		return "", BadAuthRequest("用户备注不能超过 500 个字符")
+	}
+	return remark, nil
 }
 
 func (s *Service) DeleteUser(actor *model.User, userID string) error {

@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { PaginationBar } from "@/pages/admin/components/admin-ui";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
-import { bulkDisableAdminUsers, listAdminUsers, purgeAdminUser, type AdminUser, type LocalUser } from "@/services/api/auth";
+import { bulkDisableAdminUsers, listAdminUsers, purgeAdminUser, type AdminManagedUser, type AdminUser, type LocalUser } from "@/services/api/auth";
 import type { CreditAccount } from "@/services/api/wallet";
 import { useUserStore } from "@/stores/use-user-store";
 import { AdminBatchBar, AdminDataTable, AdminTableEmpty } from "../components/admin-ui";
@@ -14,7 +14,7 @@ import { AdminUserDetailModal } from "../components/admin-user-detail-drawer";
 import { createUserColumns, userColumnOptions, type UserColumnKey } from "./users-columns";
 import { AdminUserCreateDrawer, AdminUserEditModal } from "./users-drawer";
 
-const columnStorageKey = "admin-users-visible-columns";
+const columnStorageKey = "admin-users-visible-columns-v2";
 const allColumnKeys = userColumnOptions.map((item) => item.key);
 
 export default function UsersPanel({ onUserChanged, onUserDeleted }: { onUserChanged?: (user: LocalUser) => void; onUserDeleted?: (userId: string) => void }) {
@@ -37,7 +37,7 @@ export default function UsersPanel({ onUserChanged, onUserDeleted }: { onUserCha
         try {
             const saved = JSON.parse(window.localStorage.getItem(columnStorageKey) || "[]") as UserColumnKey[];
             const valid = saved.filter((key) => allColumnKeys.includes(key));
-            return new Set(valid.length ? [...valid, "user", "actions"] : allColumnKeys);
+            return new Set(valid.length ? [...valid, "user", "remark", "actions"] : allColumnKeys);
         } catch {
             return new Set(allColumnKeys);
         }
@@ -83,7 +83,7 @@ export default function UsersPanel({ onUserChanged, onUserDeleted }: { onUserCha
             });
     }, [debouncedFilter, message, retry, state.page, state.pageSize, state.role, state.status, update]);
 
-    const replaceUser = useCallback((nextUser: LocalUser) => {
+    const replaceUser = useCallback((nextUser: LocalUser | AdminManagedUser) => {
         setUsers((items) => items.map((item) => item.id === nextUser.id ? { ...item, ...nextUser } : item));
         onUserChanged?.(nextUser);
     }, [onUserChanged]);
@@ -160,7 +160,7 @@ export default function UsersPanel({ onUserChanged, onUserDeleted }: { onUserCha
                             prefix={<Search className="size-4 text-foreground/40" />}
                             value={state.filter}
                             aria-label="搜索用户"
-                            placeholder="搜索用户名、名称或邮箱"
+                            placeholder="搜索用户名、邮箱或备注"
                             onChange={(event) => update({ filter: event.target.value, page: 1 }, true)}
                         />
                     </>
@@ -198,7 +198,7 @@ export default function UsersPanel({ onUserChanged, onUserDeleted }: { onUserCha
                                             <label key={option.key} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-muted/60">
                                                 <Checkbox
                                                     bare
-                                                    checked={visibleColumns.has(option.key)}
+                                                    checked={option.locked || visibleColumns.has(option.key)}
                                                     disabled={option.locked}
                                                     onChange={(event) => setVisibleColumns((current) => {
                                                         const next = new Set(current);
@@ -234,7 +234,7 @@ export default function UsersPanel({ onUserChanged, onUserDeleted }: { onUserCha
                     columns,
                     dataSource: users,
                     pagination: false,
-                    scroll: { x: 860 },
+                    scroll: { x: 1040 },
                 }}
                 empty={loadError ? <div className="admin-inline-load-error" role="status"><span>用户数据暂不可用：{loadError}</span><Button size="small" onClick={() => setRetry((value) => value + 1)}>重试</Button></div> : <AdminTableEmpty filtered={hasFilters} />}
                 footer={<PaginationBar alwaysShow current={state.page} pageSize={state.pageSize} total={total} onChange={(page, pageSize) => update({ page: pageSize !== state.pageSize ? 1 : page, pageSize })} />}
