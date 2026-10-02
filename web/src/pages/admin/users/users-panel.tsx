@@ -21,7 +21,9 @@ export default function UsersPanel({ onUserChanged, onUserDeleted }: { onUserCha
     const actor = useUserStore((state) => state.user);
     const { message, modal } = App.useApp();
     const { state, update } = useTableUrlState();
-    const debouncedFilter = useDebouncedValue(state.filter);
+    const [filterDraft, setFilterDraft] = useState(state.filter);
+    const [isFilterComposing, setIsFilterComposing] = useState(false);
+    const debouncedFilterDraft = useDebouncedValue(isFilterComposing ? state.filter : filterDraft);
     const [users, setUsers] = useState<AdminUser[]>([]);
     const [total, setTotal] = useState(0);
     const [loading, setLoading] = useState(true);
@@ -43,7 +45,9 @@ export default function UsersPanel({ onUserChanged, onUserDeleted }: { onUserCha
         }
     });
     const requestSequence = useRef(0);
-    const hasFilters = Boolean(state.filter || state.role !== "all" || state.status !== "all");
+    const pendingFilterUrlRef = useRef<string | null>(null);
+    const skipFilterUrlCommitRef = useRef(false);
+    const hasFilters = Boolean(filterDraft || state.role !== "all" || state.status !== "all");
     const detailIndex = detailUserId ? users.findIndex((user) => user.id === detailUserId) : -1;
     const previousUserId = detailIndex > 0 ? users[detailIndex - 1]?.id : undefined;
     const nextUserId = detailIndex >= 0 && detailIndex < users.length - 1 ? users[detailIndex + 1]?.id : undefined;
@@ -53,13 +57,33 @@ export default function UsersPanel({ onUserChanged, onUserDeleted }: { onUserCha
     }, [visibleColumns]);
 
     useEffect(() => {
+        if (pendingFilterUrlRef.current === state.filter) {
+            pendingFilterUrlRef.current = null;
+            return;
+        }
+        pendingFilterUrlRef.current = null;
+        skipFilterUrlCommitRef.current = true;
+        setFilterDraft(state.filter);
+    }, [state.filter]);
+
+    useEffect(() => {
+        if (skipFilterUrlCommitRef.current) {
+            skipFilterUrlCommitRef.current = false;
+            return;
+        }
+        if (isFilterComposing || debouncedFilterDraft === state.filter) return;
+        pendingFilterUrlRef.current = debouncedFilterDraft;
+        update({ filter: debouncedFilterDraft, page: 1 }, true);
+    }, [debouncedFilterDraft, isFilterComposing, state.filter, update]);
+
+    useEffect(() => {
         const sequence = ++requestSequence.current;
         setLoading(true);
         setLoadError("");
         setUsers([]);
         setTotal(0);
         void listAdminUsers({
-            keyword: debouncedFilter || undefined,
+            keyword: state.filter || undefined,
             role: state.role === "all" ? undefined : state.role,
             status: state.status === "all" ? undefined : state.status,
             page: state.page,
@@ -81,7 +105,7 @@ export default function UsersPanel({ onUserChanged, onUserDeleted }: { onUserCha
             .finally(() => {
                 if (sequence === requestSequence.current) setLoading(false);
             });
-    }, [debouncedFilter, message, retry, state.page, state.pageSize, state.role, state.status, update]);
+    }, [message, retry, state.filter, state.page, state.pageSize, state.role, state.status, update]);
 
     const replaceUser = useCallback((nextUser: LocalUser | AdminManagedUser) => {
         setUsers((items) => items.map((item) => item.id === nextUser.id ? { ...item, ...nextUser } : item));
@@ -124,7 +148,10 @@ export default function UsersPanel({ onUserChanged, onUserDeleted }: { onUserCha
         },
     }), [actor?.id, detailUserId, editingUser?.id, message, onUserDeleted, visibleColumns]);
 
-    const resetFilters = () => update({ filter: "", role: "all", status: "all", page: 1 });
+    const resetFilters = () => {
+        setFilterDraft("");
+        update({ filter: "", role: "all", status: "all", page: 1 });
+    };
 
     const bulkDisable = () => {
         modal.confirm({
@@ -156,12 +183,18 @@ export default function UsersPanel({ onUserChanged, onUserDeleted }: { onUserCha
                     <>
                         <Input
                             allowClear
+                            autoComplete="off"
                             className="app-list-search"
                             prefix={<Search className="size-4 text-foreground/40" />}
-                            value={state.filter}
+                            value={filterDraft}
                             aria-label="搜索用户"
                             placeholder="搜索用户名、邮箱或备注"
-                            onChange={(event) => update({ filter: event.target.value, page: 1 }, true)}
+                            onChange={(event) => setFilterDraft(event.target.value)}
+                            onCompositionStart={() => setIsFilterComposing(true)}
+                            onCompositionEnd={(event) => {
+                                setFilterDraft(event.currentTarget.value);
+                                setIsFilterComposing(false);
+                            }}
                         />
                     </>
                 }

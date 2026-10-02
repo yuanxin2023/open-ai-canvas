@@ -4,7 +4,7 @@ import type { MenuProps } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { ChevronDown, Download, Eye, Play, RefreshCw, Search } from "lucide-react";
 import { saveAs } from "file-saver";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 
 import { PaginationBar } from "@/pages/admin/components/admin-ui";
@@ -35,7 +35,9 @@ export default function LogsPage() {
     const recordType = searchParams.get("recordType") === "download" ? "download" : searchParams.get("recordType") === "all" ? "all" : "request";
     const page = positiveInt(searchParams.get("page"), 1);
     const pageSize = normalizePageSize(searchParams.get("pageSize"));
-    const debouncedKeyword = useDebouncedValue(keyword);
+    const [keywordDraft, setKeywordDraft] = useState(keyword);
+    const [isKeywordComposing, setIsKeywordComposing] = useState(false);
+    const debouncedKeywordDraft = useDebouncedValue(isKeywordComposing ? keyword : keywordDraft);
     const [logs, setLogs] = useState<ApiCallLog[]>([]);
     const [total, setTotal] = useState(0);
     const [loading, setLoading] = useState(true);
@@ -47,7 +49,10 @@ export default function LogsPage() {
     const [detailLogId, setDetailLogId] = useState<string | null>(null);
     const [mediaPreview, setMediaPreview] = useState<{ url: string; kind: "image" | "video"; title: string } | null>(null);
     const requestSequence = useRef(0);
-    const hasFilters = Boolean(keyword || status !== "all" || recordType !== "request");
+    const searchParamsRef = useRef(searchParams);
+    const pendingKeywordUrlRef = useRef<string | null>(null);
+    const skipKeywordUrlCommitRef = useRef(false);
+    const hasFilters = Boolean(keywordDraft || status !== "all" || recordType !== "request");
 
     useEffect(() => {
         const preference = readAutoRefreshPreference(userId);
@@ -55,15 +60,42 @@ export default function LogsPage() {
         setCountdown(preference.intervalSeconds);
     }, [userId]);
 
-    const updateUrl = (patch: Record<string, string | number>, replace = false) => {
-        const next = new URLSearchParams(searchParams);
-        Object.entries(patch).forEach(([key, value]) => {
-            const isDefault = (key === "filter" && value === "") || (key === "status" && value === "all") || (key === "page" && value === 1) || (key === "pageSize" && value === 20);
-            if (isDefault) next.delete(key);
-            else next.set(key, String(value));
-        });
-        setSearchParams(next, { replace });
-    };
+    useEffect(() => {
+        searchParamsRef.current = searchParams;
+    }, [searchParams]);
+
+    const updateUrl = useCallback((patch: Record<string, string | number>, replace = false) => {
+        setSearchParams((current) => {
+            const next = new URLSearchParams(searchParamsRef.current || current);
+            Object.entries(patch).forEach(([key, value]) => {
+                const isDefault = (key === "filter" && value === "") || (key === "status" && value === "all") || (key === "page" && value === 1) || (key === "pageSize" && value === 20);
+                if (isDefault) next.delete(key);
+                else next.set(key, String(value));
+            });
+            searchParamsRef.current = next;
+            return next;
+        }, { replace });
+    }, [setSearchParams]);
+
+    useEffect(() => {
+        if (pendingKeywordUrlRef.current === keyword) {
+            pendingKeywordUrlRef.current = null;
+            return;
+        }
+        pendingKeywordUrlRef.current = null;
+        skipKeywordUrlCommitRef.current = true;
+        setKeywordDraft(keyword);
+    }, [keyword]);
+
+    useEffect(() => {
+        if (skipKeywordUrlCommitRef.current) {
+            skipKeywordUrlCommitRef.current = false;
+            return;
+        }
+        if (isKeywordComposing || debouncedKeywordDraft === keyword) return;
+        pendingKeywordUrlRef.current = debouncedKeywordDraft;
+        updateUrl({ filter: debouncedKeywordDraft, page: 1 }, true);
+    }, [debouncedKeywordDraft, isKeywordComposing, keyword, updateUrl]);
 
     useEffect(() => {
         const sequence = ++requestSequence.current;
@@ -72,7 +104,7 @@ export default function LogsPage() {
         setLogs([]);
         setTotal(0);
         setSelectedIds([]);
-        void listAdminApiLogs({ recordType, keyword: debouncedKeyword || undefined, status: status === "all" ? undefined : status, page, pageSize })
+        void listAdminApiLogs({ recordType, keyword: keyword || undefined, status: status === "all" ? undefined : status, page, pageSize })
             .then((result) => {
                 if (sequence !== requestSequence.current) return;
                 setLogs(result.logs);
@@ -88,7 +120,7 @@ export default function LogsPage() {
             })
             .finally(() => sequence === requestSequence.current && setLoading(false));
         return () => { requestSequence.current += 1; };
-    }, [debouncedKeyword, status, recordType, page, pageSize, retry]);
+    }, [keyword, status, recordType, page, pageSize, retry, updateUrl]);
 
     useEffect(() => {
         setCountdown(autoRefresh.intervalSeconds);
@@ -104,7 +136,7 @@ export default function LogsPage() {
         }, 1_000);
 
         return () => window.clearInterval(timer);
-    }, [autoRefresh, loading, debouncedKeyword, status, recordType, page, pageSize, retry]);
+    }, [autoRefresh, loading, keyword, status, recordType, page, pageSize, retry]);
 
     const updateAutoRefresh = (preference: AutoRefreshPreference) => {
         setAutoRefresh(preference);
@@ -235,7 +267,7 @@ export default function LogsPage() {
                         </Button>
                     </Dropdown>
                     <AdminExportButton
-                        exportFile={() => exportAdminApiLogs({ recordType, keyword: debouncedKeyword || undefined, status: status === "all" ? undefined : status })}
+                        exportFile={() => exportAdminApiLogs({ recordType, keyword: keyword || undefined, status: status === "all" ? undefined : status })}
                         fileName={() => `请求明细-${new Date().toISOString().slice(0, 10)}.csv`}
                         label="导出当前筛选"
                         successMessage="已按当前筛选导出请求明细"
@@ -251,16 +283,22 @@ export default function LogsPage() {
                 toolbar={
                     <Input
                         allowClear
+                        autoComplete="off"
                         className="app-list-search"
                         prefix={<Search className="size-4 text-foreground/40" />}
-                        value={keyword}
+                        value={keywordDraft}
                         placeholder="搜索用户、渠道、模型、路径或请求号"
-                        onChange={(event) => updateUrl({ filter: event.target.value, page: 1 }, true)}
+                        onChange={(event) => setKeywordDraft(event.target.value)}
+                        onCompositionStart={() => setIsKeywordComposing(true)}
+                        onCompositionEnd={(event) => {
+                            setKeywordDraft(event.currentTarget.value);
+                            setIsKeywordComposing(false);
+                        }}
                     />
                 }
                 toolbarActiveFilters={
                     <>
-                        {keyword ? <AdminFilterChip label={`搜索：${keyword}`} onRemove={() => updateUrl({ filter: "", page: 1 })} /> : null}
+                        {keywordDraft ? <AdminFilterChip label={`搜索：${keywordDraft}`} onRemove={() => setKeywordDraft("")} /> : null}
                         {status !== "all" ? <AdminFilterChip label={`结果：${status === "succeeded" ? "成功" : "失败"}`} onRemove={() => updateUrl({ status: "all", page: 1 })} /> : null}
                     </>
                 }
@@ -281,7 +319,10 @@ export default function LogsPage() {
                     </>
                 }
                 toolbarActive={hasFilters}
-                onReset={() => updateUrl({ filter: "", status: "all", recordType: "request", page: 1 })}
+                onReset={() => {
+                    setKeywordDraft("");
+                    updateUrl({ filter: "", status: "all", recordType: "request", page: 1 });
+                }}
                 batchActions={
                     <AdminBatchBar count={selectedIds.length} onClear={() => setSelectedIds([])}>
                         <AdminExportButton
