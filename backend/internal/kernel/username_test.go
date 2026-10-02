@@ -14,16 +14,17 @@ func TestValidateLoginUsername(t *testing.T) {
 		value string
 		valid bool
 	}{
-		{name: "two Chinese", value: "小序", valid: true},
-		{name: "six Chinese", value: "一二三四五六", valid: true},
+		{name: "three Chinese", value: "小序君", valid: true},
+		{name: "nine Chinese", value: "一二三四五六七八九", valid: true},
 		{name: "ascii letters", value: "abc", valid: true},
 		{name: "ascii mixed digits", value: "a12", valid: true},
-		{name: "mixed Chinese", value: "小a", valid: true},
+		{name: "mixed Chinese", value: "小a1", valid: true},
 		{name: "case normalized", value: "AbC12", valid: true},
 		{name: "full width normalized", value: "ＡＢＣ", valid: true},
 		{name: "one Chinese", value: "小", valid: false},
+		{name: "two Chinese", value: "小序", valid: false},
 		{name: "short ascii", value: "ab", valid: false},
-		{name: "too long", value: "abcdefg", valid: false},
+		{name: "too long", value: "abcdefghij", valid: false},
 		{name: "pure digits", value: "123456", valid: false},
 		{name: "underscore", value: "abc_1", valid: false},
 		{name: "hyphen", value: "abc-1", valid: false},

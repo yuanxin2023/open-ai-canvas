@@ -13,7 +13,7 @@ export function usernameValidationMessage(value: string) {
     const hasHan = HAN_PATTERN.test(normalized);
     if (!ALLOWED_PATTERN.test(normalized)) return "用户名只支持中文、英文字母和数字";
     if (!hasHan && !LETTER_PATTERN.test(normalized)) return "用户名至少需要包含中文或英文字母";
-    if (characters.length > 6 || (hasHan && characters.length < 2) || (!hasHan && characters.length < 3)) return "含中文的用户名需为 2-6 位，其他用户名需为 3-6 位";
+    if (characters.length < 3 || characters.length > 9) return "用户名需为 3-9 位";
     if (RESERVED_USERNAMES.has(normalized)) return "该用户名为系统保留名称";
     return "";
 }

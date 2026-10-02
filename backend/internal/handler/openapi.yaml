@@ -1213,7 +1213,7 @@ paths:
     patch:
       tags: [auth]
       summary: 更新当前用户的个人资料
-      description: 更新大小写无关唯一的登录用户名，并同步废弃的显示名称别名；可同时绑定或移除当前用户已上传的头像资源。含中文时为 2–6 个 Unicode 字符，否则为 3–6 个字符，只允许汉字、英文字母和数字且不能为纯数字。邮箱、角色、状态和用户 ID 不接受客户端修改。
+      description: 更新大小写无关唯一的登录用户名，并同步废弃的显示名称别名；可同时绑定或移除当前用户已上传的头像资源。用户名为 3–9 个 Unicode 字符，只允许汉字、英文字母和数字且不能为纯数字，英文统一转为小写。邮箱、角色、状态和用户 ID 不接受客户端修改。
       requestBody:
         required: true
         content:
@@ -1224,9 +1224,9 @@ paths:
               properties:
                 username:
                   type: string
-                  minLength: 2
-                  maxLength: 6
-                  description: 含中文时 2–6 位，否则 3–6 位；只允许汉字、英文字母和数字，且不能为纯数字或系统保留名。
+                  minLength: 3
+                  maxLength: 9
+                  description: 3–9 位；只允许汉字、英文字母和数字，且不能为纯数字或系统保留名，英文统一转为小写。
                 avatarResourceId:
                   type: string
                   description: 省略表示不修改；空字符串表示移除；非空值须为当前用户拥有的就绪 JPG、PNG 或 WebP 图片资源，且不超过 2 MB。

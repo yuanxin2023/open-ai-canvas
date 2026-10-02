@@ -407,7 +407,7 @@ export function AdminUserCreateDrawer({
         >
             <Form form={form} layout="vertical" requiredMark={false}>
                 <Form.Item name="username" label={"\u7528\u6237\u540d"} rules={[{ validator: (_, value?: string) => { const error = usernameValidationMessage(value || ""); return error ? Promise.reject(new Error(error)) : Promise.resolve(); } }]}>
-                    <Input placeholder={"\u542b\u4e2d\u6587 2-6 \u4f4d\uff0c\u5176\u4ed6 3-6 \u4f4d"} />
+                    <Input placeholder={"3-9 \u4f4d\u4e2d\u6587\u3001\u82f1\u6587\u5b57\u6bcd\u6216\u6570\u5b57"} />
                 </Form.Item>
                 <Form.Item name="email" label={"\u90ae\u7bb1"} rules={[{ type: "email", message: "\u8bf7\u8f93\u5165\u6709\u6548\u90ae\u7bb1" }]}>
                     <Input placeholder="name@example.com" />

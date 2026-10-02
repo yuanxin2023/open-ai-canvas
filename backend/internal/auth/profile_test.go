@@ -61,7 +61,7 @@ func TestUpdateProfileValidatesLoginUsername(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for _, input := range []string{"   ", "ab", "用户名太长了", strings.Repeat("a", 7), "name with spaces", "123456", "user_name", "😀用户", "admin"} {
+	for _, input := range []string{"   ", "ab", "用户名实在太长了啊呢", strings.Repeat("a", 10), "name with spaces", "123456", "user_name", "😀用户", "admin"} {
 		if _, err := svc.UpdateProfile(&user, UpdateProfileRequest{Username: input}); err == nil {
 			t.Fatalf("invalid login username %q was accepted", input)
 		}

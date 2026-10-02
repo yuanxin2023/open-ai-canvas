@@ -238,9 +238,8 @@ export default function ProfilePage() {
                                     <section className="border-t border-[var(--user-border)] p-5 sm:p-7">
                                         <h3 className="text-base font-semibold">公开资料</h3>
                                         <label htmlFor="profile-username" className="mt-4 mb-2 block text-sm font-medium">登录用户名</label>
-                                        <Input id="profile-username" size="large" prefix={<UserRound className="size-4 text-[var(--user-ink-soft)]" />} value={username} placeholder="输入登录用户名" showCount={{ formatter: ({ value }) => `${Array.from(value).length}/6` }} status={usernameError ? "error" : undefined} onChange={(event) => setUsername(event.target.value)} autoComplete="username" />
-                                        <p className={`mt-2 text-xs ${usernameError ? "text-red-500" : "text-[var(--user-ink-muted)]"}`}>{usernameError || "含中文时 2-6 位，其他情况 3-6 位；仅支持中文、英文字母和数字，英文统一为小写。"}</p>
-                                        <p className="mt-1 text-xs text-[var(--user-ink-muted)]">{usernamePolicyText(user)}</p>
+                                        <Input id="profile-username" size="large" prefix={<UserRound className="size-4 text-[var(--user-ink-soft)]" />} value={username} placeholder="输入登录用户名" showCount={{ formatter: ({ value }) => `${Array.from(value).length}/9` }} status={usernameError ? "error" : undefined} onChange={(event) => setUsername(event.target.value)} autoComplete="username" />
+                                        <p className={`mt-2 text-xs ${usernameError ? "text-red-500" : "text-[var(--user-ink-muted)]"}`}>{usernameError || "用户名为 3–9 位，可使用中文、英文字母和数字；英文字母将自动转为小写。"}</p>
                                     </section>
 
                                     <section className="border-t border-[var(--user-border)] p-5 sm:p-7">
@@ -303,25 +302,10 @@ export default function ProfilePage() {
     );
 }
 
-function usernamePolicyText(user: LocalUser) {
-    const policy = user.usernameChangePolicy;
-    if (!policy) return "用户名修改次数以服务端返回为准。";
-    if (policy.limit === null) return "管理员修改用户名不受次数限制。";
-    if (!policy.customized) return "首次将系统生成的用户名改为自选名称不计入限额。";
-    if ((policy.remaining ?? 0) === 0 && policy.nextAvailableAt) return `过去 ${policy.windowDays} 天的修改次数已用完，${formatPolicyTime(policy.nextAvailableAt)}后可再次修改。`;
-    return `过去 ${policy.windowDays} 天还可修改 ${policy.remaining ?? 0} 次。`;
-}
-
 function usernameChangeQuotaText(user: LocalUser) {
     const policy = user.usernameChangePolicy;
     if (!policy || policy.limit === null) return "";
     return policy.customized ? `本次修改将计入过去 ${policy.windowDays} 天最多 ${policy.limit} 次的限额。` : "这是首次自选用户名，不计入修改限额。";
-}
-
-function formatPolicyTime(value: string) {
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return "额度恢复";
-    return new Intl.DateTimeFormat("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).format(date);
 }
 
 function InfoRow({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {

@@ -38,8 +38,8 @@ func ValidateLoginUsername(value string) error {
 	if !hasHan && !hasLetter {
 		return errors.New("用户名至少需要包含中文或英文字母")
 	}
-	if len(runes) > 6 || (hasHan && len(runes) < 2) || (!hasHan && len(runes) < 3) {
-		return errors.New("含中文的用户名需为 2-6 位，其他用户名需为 3-6 位")
+	if len(runes) < 3 || len(runes) > 9 {
+		return errors.New("用户名需为 3-9 位")
 	}
 	if _, reserved := reservedUsernames[value]; reserved {
 		return errors.New("该用户名为系统保留名称")
