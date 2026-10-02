@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
-import { App, Button, Descriptions, Progress, Skeleton, Tabs } from "antd";
+import { App, Button, Descriptions, Progress, Select, Skeleton, Tabs } from "antd";
 import { AdminModal } from "@/pages/admin/ui/overlays";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 import { formatCredits } from "@/constant/credits";
 import { IconButton } from "@/pages/admin/ui/controls";
 import { AdminDataTable, AdminEmpty, AdminStatusBadge, AdminTableEmpty, PaginationBar, type AdminStatusTone } from "./admin-ui";
-import { getAdminUserDetail, listAdminUserAuditEvents, listAdminUserLedger, listAdminUserLoginEvents, listAdminUserTasks, type AdminAuditEvent, type AdminUserDetail, type AdminUserLoginEvent, type AdminUserTask } from "@/services/api/auth";
+import { getAdminUserDetail, listAdminUserAuditEvents, listAdminUserLedger, listAdminUserLoginEvents, listAdminUserTasks, type AdminAuditEvent, type AdminUserDetail, type AdminUserLedgerFilter, type AdminUserLoginEvent, type AdminUserTask } from "@/services/api/auth";
 import type { CreditLedgerEntry } from "@/services/api/wallet";
 
 export function AdminUserDetailModal({ userId, onClose, previousUserId, nextUserId, onNavigate }: { userId: string | null; onClose: () => void; previousUserId?: string; nextUserId?: string; onNavigate?: (userId: string) => void }) {
@@ -17,6 +17,8 @@ export function AdminUserDetailModal({ userId, onClose, previousUserId, nextUser
     const [events, setEvents] = useState<AdminAuditEvent[]>([]);
     const [loginEvents, setLoginEvents] = useState<AdminUserLoginEvent[]>([]);
     const [loading, setLoading] = useState(false);
+    const [ledgerLoading, setLedgerLoading] = useState(false);
+    const [ledgerFilter, setLedgerFilter] = useState<AdminUserLedgerFilter>("all");
     const [ledgerPage, setLedgerPage] = useState(1);
     const [ledgerTotal, setLedgerTotal] = useState(0);
     const [taskPage, setTaskPage] = useState(1);
@@ -31,6 +33,7 @@ export function AdminUserDetailModal({ userId, onClose, previousUserId, nextUser
         let active = true;
         setLoading(true);
         setDetail(null);
+        setLedgerFilter("all");
         setLedgerPage(1);
         setTaskPage(1);
         setAuditPage(1);
@@ -49,18 +52,25 @@ export function AdminUserDetailModal({ userId, onClose, previousUserId, nextUser
     useEffect(() => {
         if (!userId) return;
         let active = true;
-        void listAdminUserLedger(userId, { page: ledgerPage, pageSize: 20 })
+        setLedgerLoading(true);
+        void listAdminUserLedger(userId, { page: ledgerPage, pageSize: 20, type: ledgerFilter })
             .then((result) => {
                 if (active) {
                     setLedger(result.entries);
                     setLedgerTotal(result.total);
                 }
             })
-            .catch((error) => active && message.error(error instanceof Error ? error.message : "读取积分流水失败"));
+            .catch((error) => {
+                if (!active) return;
+                setLedger([]);
+                setLedgerTotal(0);
+                message.error(error instanceof Error ? error.message : "读取积分流水失败");
+            })
+            .finally(() => active && setLedgerLoading(false));
         return () => {
             active = false;
         };
-    }, [ledgerPage, message, userId]);
+    }, [ledgerFilter, ledgerPage, message, userId]);
     useEffect(() => {
         if (!userId) return;
         let active = true;
@@ -184,9 +194,27 @@ export function AdminUserDetailModal({ userId, onClose, previousUserId, nextUser
                             label: `积分流水 ${detail.counts.ledgerEntries}`,
                             children: (
                                 <AdminDataTable
+                                    toolbar={(
+                                        <Select<AdminUserLedgerFilter>
+                                            aria-label="筛选积分流水"
+                                            className="w-40"
+                                            value={ledgerFilter}
+                                            options={[
+                                                { label: "全部流水", value: "all" },
+                                                { label: "增加积分", value: "increase" },
+                                                { label: "消耗积分", value: "consume" },
+                                                { label: "管理调整", value: "admin" },
+                                            ]}
+                                            onChange={(value) => {
+                                                setLedgerFilter(value);
+                                                setLedgerPage(1);
+                                            }}
+                                        />
+                                    )}
                                     table={{
                                         rowKey: "id",
                                         size: "small",
+                                        loading: ledgerLoading,
                                         dataSource: ledger,
                                         pagination: false,
                                         columns: [
@@ -197,7 +225,7 @@ export function AdminUserDetailModal({ userId, onClose, previousUserId, nextUser
                                         ],
                                         scroll: { x: 720 },
                                     }}
-                                    empty={<AdminTableEmpty />}
+                                    empty={<AdminTableEmpty filtered={ledgerFilter !== "all"} />}
                                     footer={<PaginationBar alwaysShow current={ledgerPage} pageSize={20} total={ledgerTotal} onChange={(page) => setLedgerPage(page)} pageSizeOptions={[20]} />}
                                 />
                             ),

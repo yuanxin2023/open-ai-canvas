@@ -474,6 +474,7 @@ function normalizeUserAvatar(user: LocalUser | null) {
 }
 
 export type AdminListParams = { keyword?: string; status?: string; role?: string; page?: number; pageSize?: number };
+export type AdminUserLedgerFilter = "all" | "increase" | "consume" | "admin";
 
 export function listAdminUsers(params: AdminListParams = {}) {
     return http.get<{ users: AdminUser[]; total: number; page: number; pageSize: number }>("/admin/users", { params });
@@ -491,7 +492,7 @@ export function getAdminUserDetail(id: string) {
     return http.get<AdminUserDetail>(`/admin/users/${encodeURIComponent(id)}/detail`);
 }
 
-export function listAdminUserLedger(id: string, params: { page?: number; pageSize?: number; type?: string } = {}) {
+export function listAdminUserLedger(id: string, params: { page?: number; pageSize?: number; type?: AdminUserLedgerFilter } = {}) {
     return http.get<{ entries: CreditLedgerEntry[]; total: number; page: number; pageSize: number }>(`/admin/users/${encodeURIComponent(id)}/ledger`, { params });
 }
 
