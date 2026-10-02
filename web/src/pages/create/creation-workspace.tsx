@@ -600,7 +600,7 @@ export function CreationComposer(props: ComposerProps) {
         return !items.length || items.some((item) => !item.type || item.type.startsWith("image/"));
     };
     const handleComposerDragOver = (event: DragEvent<HTMLDivElement>) => {
-        if (props.variant !== "empty" || !hasDraggedFiles(event)) return;
+        if (!hasDraggedFiles(event)) return;
         event.preventDefault();
         const acceptsImage = !interactionBusy && canAcceptDraggedImage(event);
         event.dataTransfer.dropEffect = acceptsImage ? "copy" : "none";
@@ -611,7 +611,7 @@ export function CreationComposer(props: ComposerProps) {
         setFileDropActive(false);
     };
     const handleComposerDrop = (event: DragEvent<HTMLDivElement>) => {
-        if (props.variant !== "empty" || !hasDraggedFiles(event)) return;
+        if (!hasDraggedFiles(event)) return;
         setFileDropActive(false);
         if (event.defaultPrevented) return;
         event.preventDefault();
@@ -625,7 +625,7 @@ export function CreationComposer(props: ComposerProps) {
             onDragLeave={handleComposerDragLeave}
             onDrop={handleComposerDrop}
         >
-        {props.variant === "empty" && (fileDropActive || props.referenceUploadBusy) ? <div className="creation-reference-drop-overlay" role="status" aria-live="polite">
+        {fileDropActive || props.referenceUploadBusy ? <div className="creation-reference-drop-overlay" role="status" aria-live="polite">
             {props.referenceUploadBusy ? <LoaderCircle className="animate-spin" aria-hidden="true" /> : <ImageIcon aria-hidden="true" />}
             <strong>{props.referenceUploadBusy ? "正在上传图片" : "松开即可添加为参考图"}</strong>
             <span>{props.referenceUploadBusy ? "上传完成后会同步保存到素材库" : "图片会同时保存到素材库"}</span>
