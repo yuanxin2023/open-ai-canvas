@@ -2399,20 +2399,20 @@
     .workspace-credit-products-balance {
     display: inline-flex;
     align-items: center;
-    gap: 7px;
+    gap: 8px;
     margin-top: 14px;
     border: 1px solid var(--workspace-border);
     border-radius: var(--r-full);
-    padding: 8px 14px;
+    padding: 10px 18px;
     background: var(--workspace-surface-strong);
     color: color-mix(in srgb, var(--foreground) 66%, transparent);
-    font-size: var(--fs-label);
+    font-size: 15px;
     font-variant-numeric: tabular-nums;
     }
 
     .workspace-credit-products-balance svg {
-    width: 15px;
-    height: 15px;
+    width: 18px;
+    height: 18px;
     color: var(--workspace-accent);
     }
 
@@ -2427,45 +2427,71 @@
     .workspace-credit-product-card {
     --workspace-credit-product-accent: #d8ff4f;
     --workspace-credit-product-accent-foreground: #111111;
+    --workspace-credit-product-micro: 10px;
+    --workspace-credit-product-label: 12px;
+    position: relative;
+    display: flex;
+    min-width: 0;
+    min-height: 0;
+    flex-direction: column;
+    padding-top: 34px;
+    transition: transform var(--motion-fast) ease;
+    }
+
+    .workspace-credit-product-surface {
+    position: relative;
+    z-index: 1;
     display: flex;
     min-width: 0;
     min-height: 0;
     flex-direction: column;
     border: 1px solid var(--workspace-border);
     border-radius: 20px;
-    padding: 0;
     background: var(--workspace-surface-strong);
     overflow: hidden;
-    transition: border-color var(--motion-fast) ease, box-shadow var(--motion-fast) ease, transform var(--motion-fast) ease;
+    transition: border-color var(--motion-fast) ease, box-shadow var(--motion-fast) ease;
     }
 
     .workspace-credit-product-card:hover {
-    border-color: color-mix(in srgb, var(--foreground) 24%, var(--workspace-border));
-    box-shadow: 0 18px 44px color-mix(in srgb, var(--foreground) 8%, transparent);
     transform: translateY(-2px);
     }
 
-    .workspace-credit-product-card.is-featured {
+    .workspace-credit-product-card:hover .workspace-credit-product-surface {
+    border-color: color-mix(in srgb, var(--foreground) 24%, var(--workspace-border));
+    box-shadow: 0 18px 44px color-mix(in srgb, var(--foreground) 8%, transparent);
+    }
+
+    .workspace-credit-product-card.is-featured .workspace-credit-product-surface {
     border-color: var(--workspace-credit-product-accent);
     background: color-mix(in srgb, var(--workspace-credit-product-accent) 7%, var(--workspace-surface-strong));
     box-shadow: 0 0 0 1px color-mix(in srgb, var(--workspace-credit-product-accent) 20%, transparent);
     }
 
     .workspace-credit-product-ribbon {
-    padding: 7px 12px;
-    background: var(--workspace-credit-product-accent);
-    color: var(--workspace-credit-product-accent-foreground);
-    font-size: var(--fs-micro);
+    position: absolute;
+    z-index: 0;
+    top: 0;
+    right: 0;
+    left: 0;
+    display: flex;
+    min-height: 46px;
+    align-items: flex-start;
+    justify-content: center;
+    border-radius: 20px 20px 0 0;
+    padding: 8px 12px 16px;
+    background: color-mix(in srgb, var(--foreground) 9%, var(--workspace-surface-strong));
+    color: var(--foreground);
+    font-size: 11px;
     font-weight: 650;
     text-align: center;
     }
 
     .workspace-credit-product-card.is-featured .workspace-credit-product-ribbon {
     background: var(--workspace-credit-product-accent);
+    color: var(--foreground);
     }
 
     .workspace-credit-product-main {
-    border-radius: 18px 18px 0 0;
     padding: 22px 22px 20px;
     background: var(--workspace-surface-strong);
     }
@@ -2495,8 +2521,8 @@
     border-radius: var(--r-md);
     padding: 5px 8px;
     background: color-mix(in srgb, var(--workspace-credit-product-accent) 42%, var(--workspace-surface-strong));
-    color: color-mix(in srgb, var(--workspace-credit-product-accent) 58%, var(--foreground));
-    font-size: var(--fs-micro);
+    color: var(--foreground);
+    font-size: var(--workspace-credit-product-micro);
     font-weight: 650;
     }
 
@@ -2512,13 +2538,17 @@
     .workspace-credit-product-price small {
     margin-top: 0;
     color: var(--foreground);
-    font-size: 20px;
+    font-size: 30px;
     font-weight: 550;
     }
 
-    .workspace-credit-product-price strong {
+    .workspace-credit-product-price-value {
+    color: var(--foreground);
+    font-family: var(--font-sans);
     font-size: clamp(36px, 3.5vw, 46px);
-    font-weight: 560;
+    font-weight: 480;
+    font-variation-settings: "wght" 480;
+    font-synthesis: none;
     letter-spacing: -0.055em;
     line-height: 1;
     }
@@ -2531,7 +2561,7 @@
     .workspace-credit-product-description {
     margin: 10px 0 0;
     color: color-mix(in srgb, var(--foreground) 48%, transparent);
-    font-size: var(--fs-label);
+    font-size: var(--workspace-credit-product-label);
     line-height: 1.65;
     white-space: pre-line;
     }
@@ -2539,7 +2569,7 @@
     .workspace-credit-product-caption {
     margin: 4px 0 0;
     color: color-mix(in srgb, var(--foreground) 52%, transparent);
-    font-size: var(--fs-micro);
+    font-size: var(--workspace-credit-product-label);
     line-height: 1.5;
     }
 
@@ -2582,7 +2612,7 @@
 
     .workspace-credit-product-quota span {
     color: color-mix(in srgb, var(--foreground) 46%, transparent);
-    font-size: var(--fs-micro);
+    font-size: var(--workspace-credit-product-micro);
     line-height: 1.5;
     }
 
@@ -2600,7 +2630,7 @@
     }
 
     .workspace-credit-product-meter i.is-active {
-    background: color-mix(in srgb, var(--workspace-credit-product-accent) 54%, var(--foreground));
+    background: var(--foreground);
     }
 
     .workspace-credit-product-facts {
@@ -2611,7 +2641,7 @@
     border-top: 1px solid var(--workspace-border);
     padding: 17px 0 0;
     color: color-mix(in srgb, var(--foreground) 74%, transparent);
-    font-size: var(--fs-label);
+    font-size: var(--workspace-credit-product-label);
     line-height: 1.55;
     }
 

@@ -242,8 +242,8 @@ export default function ProductOperationsPage() {
                                 <Form.Item name="badgeText" label="标题角标" rules={[{ max: 80 }]}><Input placeholder="例如：热门选择" /></Form.Item>
                             </div>
                             <div className="grid grid-cols-2 gap-3">
-                                <Form.Item name="featured" label="推荐套餐" valuePropName="checked" extra="开启后使用主题色突出边框与底色；未填写顶部横幅时显示“推荐套餐”。"><Switch /></Form.Item>
-                                <Form.Item name="accentColor" label="套餐主题色" rules={[{ required: true }, { pattern: /^#[0-9a-fA-F]{6}$/, message: "请选择 6 位十六进制颜色" }]} extra="用于横幅、边框、角标和购买按钮。">
+                                <Form.Item name="featured" label="推荐套餐" valuePropName="checked" extra="开启后在卡片主体外侧增加主题色顶栏和描边；未填写顶部横幅时显示“推荐套餐”。"><Switch /></Form.Item>
+                                <Form.Item name="accentColor" label="套餐主题色" rules={[{ required: true }, { pattern: /^#[0-9a-fA-F]{6}$/, message: "请选择 6 位十六进制颜色" }]} extra="用于推荐顶栏、边框、角标和购买按钮。">
                                     <Input type="color" className="admin-payment-product-color-input" />
                                 </Form.Item>
                             </div>

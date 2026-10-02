@@ -47,34 +47,36 @@ export function CreditProductCard({ product, maxCreditsMicrocredits, actionLabel
     return (
         <article className={`workspace-credit-product-card ${featured ? "is-featured" : ""}`} style={cardStyle}>
             {ribbonText ? <div className="workspace-credit-product-ribbon">{ribbonText}</div> : null}
-            <div className="workspace-credit-product-main">
-                <div className="workspace-credit-product-card-heading">
-                    <h3>{product.name || "套餐名称"}</h3>
-                    {product.badgeText ? <span>{product.badgeText}</span> : null}
+            <div className="workspace-credit-product-surface">
+                <div className="workspace-credit-product-main">
+                    <div className="workspace-credit-product-card-heading">
+                        <h3>{product.name || "套餐名称"}</h3>
+                        {product.badgeText ? <span>{product.badgeText}</span> : null}
+                    </div>
+                    <div className="workspace-credit-product-price">
+                        <small>¥</small>
+                        <span className="workspace-credit-product-price-value">{formatProductPrice(product.amountFen)}</span>
+                        {product.compareAmountFen ? <del>¥{formatProductPrice(product.compareAmountFen)}</del> : null}
+                    </div>
+                    {product.description ? <p className="workspace-credit-product-description">{product.description}</p> : null}
+                    <p className="workspace-credit-product-caption">{priceCaption}</p>
+                    <Button className="workspace-credit-product-action" type="primary" block disabled={actionDisabled} tabIndex={preview ? -1 : undefined} aria-disabled={preview || actionDisabled} onClick={preview ? undefined : onAction}>
+                        {actionLabel || product.actionText || "立即购买"}
+                    </Button>
                 </div>
-                <div className="workspace-credit-product-price">
-                    <small>¥</small>
-                    <strong>{formatProductPrice(product.amountFen)}</strong>
-                    {product.compareAmountFen ? <del>¥{formatProductPrice(product.compareAmountFen)}</del> : null}
+                <div className="workspace-credit-product-quota">
+                    <strong>{product.quotaCaption || "到账积分"} {formatCredits(product.creditsMicrocredits)}</strong>
+                    {product.quotaDetail ? <span>{product.quotaDetail}</span> : null}
                 </div>
-                {product.description ? <p className="workspace-credit-product-description">{product.description}</p> : null}
-                <p className="workspace-credit-product-caption">{priceCaption}</p>
-                <Button className="workspace-credit-product-action" type="primary" block disabled={actionDisabled} tabIndex={preview ? -1 : undefined} aria-disabled={preview || actionDisabled} onClick={preview ? undefined : onAction}>
-                    {actionLabel || product.actionText || "立即购买"}
-                </Button>
-            </div>
-            <div className="workspace-credit-product-quota">
-                <strong>{product.quotaCaption || "到账积分"} {formatCredits(product.creditsMicrocredits)}</strong>
-                {product.quotaDetail ? <span>{product.quotaDetail}</span> : null}
-            </div>
-            <div className="workspace-credit-product-meter" aria-hidden="true">
-                {Array.from({ length: 28 }, (_, index) => <i key={index} className={index < activeSegments ? "is-active" : ""} />)}
-            </div>
-            {benefits.length ? (
-                <div className="workspace-credit-product-facts">
-                    {benefits.map((benefit, index) => <span key={`${product.id}-benefit-${index}`}><Check aria-hidden />{benefit}</span>)}
+                <div className="workspace-credit-product-meter" aria-hidden="true">
+                    {Array.from({ length: 28 }, (_, index) => <i key={index} className={index < activeSegments ? "is-active" : ""} />)}
                 </div>
-            ) : null}
+                {benefits.length ? (
+                    <div className="workspace-credit-product-facts">
+                        {benefits.map((benefit, index) => <span key={`${product.id}-benefit-${index}`}><Check aria-hidden />{benefit}</span>)}
+                    </div>
+                ) : null}
+            </div>
         </article>
     );
 }
