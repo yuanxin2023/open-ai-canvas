@@ -34,7 +34,7 @@ func defaultResponseInterceptionSetting() ResponseInterceptionSetting {
 }
 
 func (s *Service) AdminResponseInterceptionSetting(actor *model.User) (*ResponseInterceptionSetting, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionResponseInterception); err != nil {
 		return nil, err
 	}
 	value, err := s.responseInterceptionSetting()
@@ -45,7 +45,7 @@ func (s *Service) AdminResponseInterceptionSetting(actor *model.User) (*Response
 }
 
 func (s *Service) UpdateResponseInterceptionSetting(actor *model.User, value ResponseInterceptionSetting) (*ResponseInterceptionSetting, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionResponseInterception); err != nil {
 		return nil, err
 	}
 	value = normalizeResponseInterceptionSetting(value)

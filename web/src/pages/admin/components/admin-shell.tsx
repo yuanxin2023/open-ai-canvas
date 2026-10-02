@@ -49,6 +49,7 @@ import { AppChangelogButton } from "@/components/layout/app-changelog-modal";
 import { BrandLogoFrame } from "@/components/brand/brand-logo";
 import { publishWorkspaceSidebarCollapsed, readWorkspaceSidebarCollapsed, subscribeWorkspaceSidebarCollapsed } from "@/components/layout/workspace-sidebar-state";
 import { cn } from "@/lib/utils";
+import { ADMIN_PERMISSION_GROUPS, hasAdminPermission, type AdminAccess } from "@/lib/admin-permissions";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { useUserStore } from "@/stores/use-user-store";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
@@ -165,6 +166,16 @@ const adminNavigation: AdminNavigationGroup[] = [
         ],
     },
 ];
+
+const permissionByAdminPath = new Map<string, (typeof ADMIN_PERMISSION_GROUPS)[number]["items"][number]["permission"]>();
+for (const group of ADMIN_PERMISSION_GROUPS) {
+    for (const item of group.items) permissionByAdminPath.set(item.path, item.permission);
+}
+
+function canAccessAdminItem(item: AdminNavigationItem, access: AdminAccess | undefined) {
+    const permission = permissionByAdminPath.get(item.path);
+    return Boolean(permission && hasAdminPermission(access, permission));
+}
 
 function isAdminNavigationPath(pathname: string, navigationPath: string) {
     if (navigationPath === "/admin") {
@@ -330,8 +341,9 @@ function AdminThemeButton() {
 
 function MobileAdminNavigation() {
     const features = useUserStore((state) => state.features);
+    const adminAccess = useUserStore((state) => state.user?.adminAccess);
     const location = useLocation();
-    const visibleGroups = adminNavigation.map((group) => ({ ...group, items: group.items.filter((item) => !item.requireFeature || features[item.requireFeature]) })).filter((group) => group.items.length > 0);
+    const visibleGroups = adminNavigation.map((group) => ({ ...group, items: group.items.filter((item) => canAccessAdminItem(item, adminAccess) && (!item.requireFeature || features[item.requireFeature])) })).filter((group) => group.items.length > 0);
     const visibleItems = visibleGroups.flatMap((group) => group.items);
     const currentItem = visibleItems.find((item) => item.path === location.pathname) || visibleItems[0];
     const menuItems: MenuProps["items"] = visibleGroups.map((group) => ({
@@ -375,6 +387,7 @@ function MobileAdminNavigation() {
 
 function AdminNavigation({ collapsed }: { collapsed: boolean }) {
     const features = useUserStore((state) => state.features);
+    const adminAccess = useUserStore((state) => state.user?.adminAccess);
     const location = useLocation();
     const [openGroups, setOpenGroups] = useState(readAdminNavigationGroupState);
 
@@ -396,7 +409,7 @@ function AdminNavigation({ collapsed }: { collapsed: boolean }) {
     return (
         <nav className="admin-sidebar-nav flex-1 overflow-y-auto" aria-label="管理后台菜单">
             {adminNavigation.map((group, groupIndex) => {
-                const visibleItems = group.items.filter((item) => !item.requireFeature || features[item.requireFeature]);
+                const visibleItems = group.items.filter((item) => canAccessAdminItem(item, adminAccess) && (!item.requireFeature || features[item.requireFeature]));
                 if (visibleItems.length === 0) return null;
 
                 const links = visibleItems.map((item) => (

@@ -128,7 +128,7 @@ type ModelPricingRequest struct {
 }
 
 func (s *Service) AdminAnalytics(actor *model.User, query AnalyticsQuery) (*AnalyticsOverview, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionAnalyticsOverview); err != nil {
 		return nil, err
 	}
 	filter := normalizeAnalyticsFilter(query)
@@ -188,7 +188,7 @@ func (s *Service) AdminAnalytics(actor *model.User, query AnalyticsQuery) (*Anal
 }
 
 func (s *Service) AdminAPICallLogs(actor *model.User, query APICallLogQuery) (*APICallLogPage, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionAPILogs); err != nil {
 		return nil, err
 	}
 	if query.RecordType != "" && query.RecordType != "request" && query.RecordType != "download" && query.RecordType != "all" {
@@ -343,7 +343,7 @@ func (s *Service) PrepareAdminAPICallLogMediaDelivery(actor *model.User, logID s
 }
 
 func (s *Service) adminAPICallLogMediaResource(actor *model.User, logID string) (string, *model.Resource, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionAPILogs); err != nil {
 		return "", nil, err
 	}
 	log, err := s.repo.APICallLog(strings.TrimSpace(logID))
@@ -373,7 +373,7 @@ func (s *Service) adminAPICallLogMediaResource(actor *model.User, logID string) 
 }
 
 func (s *Service) AdminAPICallLog(actor *model.User, id string) (*model.ApiCallLog, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionAPILogs); err != nil {
 		return nil, err
 	}
 	log, err := s.repo.APICallLog(strings.TrimSpace(id))
@@ -388,7 +388,7 @@ func (s *Service) AdminAPICallLog(actor *model.User, id string) (*model.ApiCallL
 }
 
 func (s *Service) AdminAPICallLogByBillingOrder(actor *model.User, billingOrderID string) (*model.ApiCallLog, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAnyAdminPermission(actor, model.AdminPermissionAPILogs, model.AdminPermissionCredits, model.AdminPermissionPaymentOrders); err != nil {
 		return nil, err
 	}
 	order, err := s.repo.BillingOrder(strings.TrimSpace(billingOrderID))
@@ -413,7 +413,7 @@ func (s *Service) AdminAPICallLogByBillingOrder(actor *model.User, billingOrderI
 }
 
 func (s *Service) AdminAPICallLogsCSV(actor *model.User, query APICallLogQuery) ([]byte, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionAPILogs); err != nil {
 		return nil, err
 	}
 	if query.RecordType != "" && query.RecordType != "request" && query.RecordType != "download" && query.RecordType != "all" {
@@ -466,7 +466,7 @@ func (s *Service) AdminAPICallLogsCSV(actor *model.User, query APICallLogQuery) 
 }
 
 func (s *Service) AdminAnalyticsCSV(actor *model.User, query AnalyticsQuery) ([]byte, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionAnalyticsOverview); err != nil {
 		return nil, err
 	}
 	filter := normalizeAnalyticsFilter(query)
@@ -504,14 +504,14 @@ func (s *Service) AdminAnalyticsCSV(actor *model.User, query AnalyticsQuery) ([]
 }
 
 func (s *Service) AdminModelPricings(actor *model.User) ([]model.ModelPricing, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionChannels); err != nil {
 		return nil, err
 	}
 	return s.repo.ModelPricings()
 }
 
 func (s *Service) SaveModelPricing(actor *model.User, id string, req ModelPricingRequest) (*model.ModelPricing, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionChannels); err != nil {
 		return nil, err
 	}
 	req.Model = strings.TrimSpace(req.Model)
@@ -552,7 +552,7 @@ func (s *Service) SaveModelPricing(actor *model.User, id string, req ModelPricin
 }
 
 func (s *Service) DeleteModelPricing(actor *model.User, id string) error {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionChannels); err != nil {
 		return err
 	}
 	return s.repo.DeleteModelPricing(id)

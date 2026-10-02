@@ -34,6 +34,8 @@ import {
 import { AdminPageFrame } from "../components/admin-shell";
 import { AdminDataTable, AdminExportButton, AdminRowActions, AdminStatusBadge, AdminTableEmpty, configuredSecretText } from "../components/admin-ui";
 import { AdminUserDetailModal } from "../components/admin-user-detail-drawer";
+import { hasAdminPermission } from "@/lib/admin-permissions";
+import { useUserStore } from "@/stores/use-user-store";
 
 type ProviderFormValues = {
     enabled: boolean;
@@ -70,6 +72,8 @@ const paymentPageMeta: Record<AdminPaymentView, { title: string; description: st
 
 export default function AdminPaymentsPage({ view = "providers" }: { view?: AdminPaymentView }) {
     const { message, modal } = App.useApp();
+	const adminAccess = useUserStore((state) => state.user?.adminAccess);
+	const canViewUserDetails = hasAdminPermission(adminAccess, "admin.users.accounts");
     const [providers, setProviders] = useState<AdminPaymentProvider[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -376,7 +380,7 @@ export default function AdminPaymentsPage({ view = "providers" }: { view?: Admin
                 <div className="min-w-0">
                     {order.user ? <>
                         <div className="flex min-w-0 items-baseline gap-2">
-                            <button type="button" className="admin-table-primary-link truncate font-medium" title={order.user.username} onClick={() => setSelectedUserId(order.user!.id)}>{order.user.username}</button>
+							{canViewUserDetails ? <button type="button" className="admin-table-primary-link truncate font-medium" title={order.user.username} onClick={() => setSelectedUserId(order.user!.id)}>{order.user.username}</button> : <span className="truncate font-medium" title={order.user.username}>{order.user.username}</span>}
                             <span className="truncate text-xs text-foreground/45" title={`@${order.user.username}`}>@{order.user.username}</span>
                         </div>
                         <div className="mt-1 truncate text-xs text-foreground/60" title={order.user.email}>{order.user.email || "未填写邮箱"}</div>
@@ -648,7 +652,7 @@ export default function AdminPaymentsPage({ view = "providers" }: { view?: Admin
 
             <AdminDrawer title="支付订单详情" size="min(680px, 100vw)" open={Boolean(selectedOrder)} onClose={() => setSelectedOrder(null)}>
                 {selectedOrder && <Descriptions column={1} bordered size="small" items={[
-                    { key: "user", label: "用户", children: selectedOrder.user ? <button type="button" className="admin-table-primary-link" onClick={() => { setSelectedUserId(selectedOrder.user!.id); setSelectedOrder(null); }}>@{selectedOrder.user.username}</button> : "用户不存在" },
+					{ key: "user", label: "用户", children: selectedOrder.user ? (canViewUserDetails ? <button type="button" className="admin-table-primary-link" onClick={() => { setSelectedUserId(selectedOrder.user!.id); setSelectedOrder(null); }}>@{selectedOrder.user.username}</button> : `@${selectedOrder.user.username}`) : "用户不存在" },
                     { key: "email", label: "邮箱", children: selectedOrder.user?.email || "未填写邮箱" },
                     { key: "userId", label: "用户 ID", children: <Typography.Text copyable className="break-all">{selectedOrder.userId || "--"}</Typography.Text> },
                     { key: "order", label: "订单号", children: <Typography.Text copyable className="break-all">{selectedOrder.merchantOrderNo}</Typography.Text> },
@@ -660,7 +664,7 @@ export default function AdminPaymentsPage({ view = "providers" }: { view?: Admin
                     ...([{ key: "createdAt", label: "创建时间" }, { key: "expiresAt", label: "过期时间" }, { key: "providerPaidAt", label: "支付时间" }, { key: "creditedAt", label: "入账时间" }, { key: "closedAt", label: "关闭时间" }] as const).map(({ key, label }) => ({ key, label, children: selectedOrder[key] ? formatDateTime(selectedOrder[key]!) : "--" })),
                 ]} />}
             </AdminDrawer>
-            <AdminUserDetailModal userId={selectedUserId} onClose={() => setSelectedUserId(null)} />
+			{canViewUserDetails ? <AdminUserDetailModal userId={selectedUserId} onClose={() => setSelectedUserId(null)} /> : null}
 
             <Drawer
                 title={providerDrawer ? `配置 ${providerDrawer.name}` : "配置支付渠道"}

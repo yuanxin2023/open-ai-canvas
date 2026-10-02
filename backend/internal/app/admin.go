@@ -3,7 +3,6 @@ package app
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"infinite-canvas/backend/internal/kernel"
 	stdlog "log"
 	"strings"
@@ -16,21 +15,33 @@ import (
 )
 
 type CreateAdminUserRequest struct {
-	Username    string           `json:"username"`
-	DisplayName string           `json:"displayName"`
-	Email       string           `json:"email"`
-	Remark      string           `json:"remark"`
-	Password    string           `json:"password"`
-	Role        model.UserRole   `json:"role"`
-	Status      model.UserStatus `json:"status"`
+	Username    string            `json:"username"`
+	DisplayName string            `json:"displayName"`
+	Email       string            `json:"email"`
+	Remark      string            `json:"remark"`
+	Password    string            `json:"password"`
+	Role        model.UserRole    `json:"role"`
+	Status      model.UserStatus  `json:"status"`
+	AdminAccess *AdminAccessInput `json:"adminAccess"`
 }
 type UpdateUserRequest struct {
-	DisplayName string           `json:"displayName"`
-	Email       string           `json:"email"`
-	Remark      *string          `json:"remark"`
-	Password    string           `json:"password"`
-	Role        model.UserRole   `json:"role"`
-	Status      model.UserStatus `json:"status"`
+	DisplayName string            `json:"displayName"`
+	Email       string            `json:"email"`
+	Remark      *string           `json:"remark"`
+	Password    string            `json:"password"`
+	Role        model.UserRole    `json:"role"`
+	Status      model.UserStatus  `json:"status"`
+	AdminAccess *AdminAccessInput `json:"adminAccess"`
+}
+
+type AdminAccessInput struct {
+	Level       model.AdminLevel        `json:"level"`
+	Permissions []model.AdminPermission `json:"permissions"`
+}
+
+type AdminAccessView struct {
+	Level       model.AdminLevel        `json:"level"`
+	Permissions []model.AdminPermission `json:"permissions"`
 }
 
 type BulkDisableUsersRequest struct {
@@ -59,14 +70,16 @@ type AdminUserPage struct {
 
 type AdminUser struct {
 	model.User
-	Remark                string `json:"remark"`
-	AvailableMicrocredits int64  `json:"availableMicrocredits"`
-	ReservedMicrocredits  int64  `json:"reservedMicrocredits"`
+	Remark                string           `json:"remark"`
+	AvailableMicrocredits int64            `json:"availableMicrocredits"`
+	ReservedMicrocredits  int64            `json:"reservedMicrocredits"`
+	AdminAccess           *AdminAccessView `json:"adminAccess,omitempty"`
 }
 
 type AdminManagedUser struct {
 	model.User
-	Remark string `json:"remark"`
+	Remark      string           `json:"remark"`
+	AdminAccess *AdminAccessView `json:"adminAccess,omitempty"`
 }
 
 type AdminChannelPage struct {
@@ -77,9 +90,11 @@ type AdminChannelPage struct {
 }
 
 type AdminUserReference struct {
-	ID          string `json:"id"`
-	Username    string `json:"username"`
-	DisplayName string `json:"displayName"`
+	ID                    string `json:"id"`
+	Username              string `json:"username"`
+	DisplayName           string `json:"displayName"`
+	AvailableMicrocredits *int64 `json:"availableMicrocredits,omitempty"`
+	ReservedMicrocredits  *int64 `json:"reservedMicrocredits,omitempty"`
 }
 
 type AdminChannelReference struct {
@@ -155,9 +170,106 @@ func (s *Service) RequireAdmin(user *model.User) error {
 	return nil
 }
 
-func (s *Service) AdminUsers(actor *model.User, query AdminListQuery) (*AdminUserPage, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+func (s *Service) RequireFullAdmin(user *model.User) error {
+	if err := s.RequireAdmin(user); err != nil {
+		return err
+	}
+	if user.AdminLevel != model.AdminLevelFull && user.AdminLevel != "" {
+		return adminPermissionDenied("需要全权限管理员权限")
+	}
+	return nil
+}
+
+func (s *Service) RequireOrdinaryUserTarget(actor *model.User, userID string) (*model.User, error) {
+	user, err := s.repo.User(strings.TrimSpace(userID))
+	if err != nil {
 		return nil, err
+	}
+	if user.Role == model.UserRoleAdmin && actor.AdminLevel != model.AdminLevelFull && actor.AdminLevel != "" {
+		return nil, adminPermissionDenied("只有全权限管理员可以操作管理员账号")
+	}
+	return user, nil
+}
+
+func (s *Service) RequireAdminPermission(user *model.User, permission model.AdminPermission) error {
+	if err := s.RequireAdmin(user); err != nil {
+		return err
+	}
+	// 空级别只可能来自未迁移的内存测试对象；持久化管理员会在 v45 迁移后拥有明确级别。
+	if user.AdminLevel == "" || user.HasAdminPermission(permission) {
+		return nil
+	}
+	return adminPermissionDenied("缺少该后台模块权限")
+}
+
+func (s *Service) RequireAnyAdminPermission(user *model.User, permissions ...model.AdminPermission) error {
+	if err := s.RequireAdmin(user); err != nil {
+		return err
+	}
+	if user.AdminLevel == "" || user.AdminLevel == model.AdminLevelFull {
+		return nil
+	}
+	for _, permission := range permissions {
+		if user.HasAdminPermission(permission) {
+			return nil
+		}
+	}
+	return adminPermissionDenied("缺少该后台模块权限")
+}
+
+func adminPermissionDenied(message string) error {
+	err := Forbidden(message)
+	err.Reason = kernel.ReasonAdminPermission
+	return err
+}
+
+func normalizeAdminAccess(input *AdminAccessInput) (model.AdminLevel, []model.AdminPermission, error) {
+	if input == nil {
+		return "", nil, BadAuthRequest("管理员权限配置不能为空")
+	}
+	if input.Level == model.AdminLevelFull {
+		return model.AdminLevelFull, nil, nil
+	}
+	if input.Level != model.AdminLevelScoped {
+		return "", nil, BadAuthRequest("管理员级别无效")
+	}
+	seen := make(map[model.AdminPermission]struct{}, len(input.Permissions))
+	permissions := make([]model.AdminPermission, 0, len(input.Permissions))
+	for _, permission := range input.Permissions {
+		if !model.IsAdminPermission(permission) {
+			return "", nil, BadAuthRequest("管理员权限项无效")
+		}
+		if _, exists := seen[permission]; exists {
+			continue
+		}
+		seen[permission] = struct{}{}
+		permissions = append(permissions, permission)
+	}
+	if len(permissions) == 0 {
+		return "", nil, BadAuthRequest("模块管理员至少需要一个模块权限")
+	}
+	return model.AdminLevelScoped, permissions, nil
+}
+
+func adminAccessView(user *model.User) *AdminAccessView {
+	if user == nil || user.Role != model.UserRoleAdmin {
+		return nil
+	}
+	permissions := user.AdminPermissions
+	level := user.AdminLevel
+	if level == model.AdminLevelFull || level == "" {
+		level = model.AdminLevelFull
+		permissions = model.AllAdminPermissions
+	}
+	return &AdminAccessView{Level: level, Permissions: append([]model.AdminPermission(nil), permissions...)}
+}
+
+func (s *Service) AdminUsers(actor *model.User, query AdminListQuery) (*AdminUserPage, error) {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionUsers); err != nil {
+		return nil, err
+	}
+	if actor.AdminLevel == model.AdminLevelScoped {
+		query.Type = string(model.UserRoleUser)
 	}
 	page, limit := normalizeAdminPage(query.Page, query.Limit)
 	users, total, err := s.repo.AdminUsers(query.Keyword, model.UserRole(query.Type), model.UserStatus(query.Status), limit, (page-1)*limit)
@@ -178,8 +290,13 @@ func (s *Service) AdminUsers(actor *model.User, query AdminListQuery) (*AdminUse
 	}
 	result := make([]AdminUser, 0, len(users))
 	for _, user := range users {
+		if actor.AdminLevel == model.AdminLevelFull || actor.AdminLevel == "" {
+			if err := s.repo.HydrateAdminAccess(&user); err != nil {
+				return nil, err
+			}
+		}
 		account := accountByUserID[user.ID]
-		result = append(result, AdminUser{User: user, Remark: user.AdminRemark, AvailableMicrocredits: account.AvailableMicrocredits, ReservedMicrocredits: account.ReservedMicrocredits})
+		result = append(result, AdminUser{User: user, Remark: user.AdminRemark, AvailableMicrocredits: account.AvailableMicrocredits, ReservedMicrocredits: account.ReservedMicrocredits, AdminAccess: adminAccessView(&user)})
 	}
 	return &AdminUserPage{Users: result, Total: total, Page: page, Limit: limit}, nil
 }
@@ -188,41 +305,91 @@ func (s *Service) AdminReferences(actor *model.User) (*AdminReferenceData, error
 	if err := s.RequireAdmin(actor); err != nil {
 		return nil, err
 	}
-	users, err := s.repo.AdminUserReferences()
-	if err != nil {
-		return nil, err
-	}
-	channels, err := s.repo.AdminSystemChannelReferences()
-	if err != nil {
-		return nil, err
-	}
 	result := &AdminReferenceData{
-		Users:    make([]AdminUserReference, 0, len(users)),
-		Channels: make([]AdminChannelReference, 0, len(channels)),
+		Users:    []AdminUserReference{},
+		Channels: []AdminChannelReference{},
 	}
-	for _, user := range users {
-		result.Users = append(result.Users, AdminUserReference{ID: user.ID, Username: user.Username, DisplayName: user.Username})
-	}
-	for _, channel := range channels {
-		items, itemErr := s.repo.ChannelModels(channel.ID, true)
-		if itemErr != nil {
-			return nil, itemErr
+	if actor.AdminLevel == model.AdminLevelFull || actor.AdminLevel == "" ||
+		actor.HasAdminPermission(model.AdminPermissionAnalyticsOverview) || actor.HasAdminPermission(model.AdminPermissionAPILogs) ||
+		actor.HasAdminPermission(model.AdminPermissionUsers) || actor.HasAdminPermission(model.AdminPermissionAgentLessons) ||
+		actor.HasAdminPermission(model.AdminPermissionCredits) || actor.HasAdminPermission(model.AdminPermissionStorageResources) {
+		users, err := s.repo.AdminUserReferences("", actor.AdminLevel == model.AdminLevelFull || actor.AdminLevel == "", 100)
+		if err != nil {
+			return nil, err
 		}
-		models := make([]string, 0, len(items))
-		displayNames := make([]string, 0, len(items))
-		for _, item := range items {
-			if item.Enabled {
-				models = append(models, item.ModelKey)
+		for _, user := range users {
+			result.Users = append(result.Users, AdminUserReference{ID: user.ID, Username: user.Username, DisplayName: user.Username})
+		}
+	}
+	if actor.AdminLevel == model.AdminLevelFull || actor.AdminLevel == "" ||
+		actor.HasAdminPermission(model.AdminPermissionAnalyticsOverview) || actor.HasAdminPermission(model.AdminPermissionAPILogs) ||
+		actor.HasAdminPermission(model.AdminPermissionChannels) || actor.HasAdminPermission(model.AdminPermissionLogicalModels) {
+		channels, err := s.repo.AdminSystemChannelReferences()
+		if err != nil {
+			return nil, err
+		}
+		for _, channel := range channels {
+			items, itemErr := s.repo.ChannelModels(channel.ID, true)
+			if itemErr != nil {
+				return nil, itemErr
 			}
-			displayNames = append(displayNames, firstNonEmpty(strings.TrimSpace(item.DisplayName), item.ModelKey))
+			models := make([]string, 0, len(items))
+			displayNames := make([]string, 0, len(items))
+			for _, item := range items {
+				if item.Enabled {
+					models = append(models, item.ModelKey)
+				}
+				displayNames = append(displayNames, firstNonEmpty(strings.TrimSpace(item.DisplayName), item.ModelKey))
+			}
+			result.Channels = append(result.Channels, AdminChannelReference{ID: channel.ID, Name: channel.Name, Enabled: channel.Enabled, Models: uniqueNonEmpty(models), ModelDisplayNames: uniqueNonEmpty(displayNames)})
 		}
-		result.Channels = append(result.Channels, AdminChannelReference{ID: channel.ID, Name: channel.Name, Enabled: channel.Enabled, Models: uniqueNonEmpty(models), ModelDisplayNames: uniqueNonEmpty(displayNames)})
+	}
+	return result, nil
+}
+
+func (s *Service) SearchAdminUserReferences(actor *model.User, keyword string, limit int) ([]AdminUserReference, error) {
+	if err := s.RequireAnyAdminPermission(actor, model.AdminPermissionUsers, model.AdminPermissionAnalyticsOverview, model.AdminPermissionAPILogs,
+		model.AdminPermissionAgentLessons, model.AdminPermissionCredits, model.AdminPermissionStorageResources); err != nil {
+		return nil, err
+	}
+	if limit <= 0 {
+		limit = 50
+	}
+	limit = min(limit, 100)
+	users, err := s.repo.AdminUserReferences(keyword, actor.AdminLevel == model.AdminLevelFull || actor.AdminLevel == "", limit)
+	if err != nil {
+		return nil, err
+	}
+	includeBalances := actor.AdminLevel == model.AdminLevelFull || actor.AdminLevel == "" || actor.HasAdminPermission(model.AdminPermissionCredits)
+	accountByUserID := map[string]model.CreditAccount{}
+	if includeBalances {
+		ids := make([]string, 0, len(users))
+		for _, user := range users {
+			ids = append(ids, user.ID)
+		}
+		accounts, accountErr := s.repo.CreditAccounts(ids)
+		if accountErr != nil {
+			return nil, accountErr
+		}
+		for _, account := range accounts {
+			accountByUserID[account.UserID] = account
+		}
+	}
+	result := make([]AdminUserReference, 0, len(users))
+	for _, user := range users {
+		item := AdminUserReference{ID: user.ID, Username: user.Username, DisplayName: user.Username}
+		if account, exists := accountByUserID[user.ID]; exists {
+			available, reserved := account.AvailableMicrocredits, account.ReservedMicrocredits
+			item.AvailableMicrocredits = &available
+			item.ReservedMicrocredits = &reserved
+		}
+		result = append(result, item)
 	}
 	return result, nil
 }
 
 func (s *Service) CreateAdminUser(actor *model.User, req CreateAdminUserRequest) (*AdminUser, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionUsers); err != nil {
 		return nil, err
 	}
 	username := normalizeUsername(req.Username)
@@ -241,6 +408,20 @@ func (s *Service) CreateAdminUser(actor *model.User, req CreateAdminUserRequest)
 	}
 	if req.Role != model.UserRoleAdmin && req.Role != model.UserRoleUser {
 		return nil, BadAuthRequest("\u7528\u6237\u89d2\u8272\u65e0\u6548")
+	}
+	var adminPermissions []model.AdminPermission
+	adminLevel := model.AdminLevel("")
+	if req.Role == model.UserRoleAdmin {
+		if err := s.RequireFullAdmin(actor); err != nil {
+			return nil, err
+		}
+		var accessErr error
+		adminLevel, adminPermissions, accessErr = normalizeAdminAccess(req.AdminAccess)
+		if accessErr != nil {
+			return nil, accessErr
+		}
+	} else if req.AdminAccess != nil {
+		return nil, BadAuthRequest("普通用户不能配置管理员权限")
 	}
 	if req.Status != model.UserStatusActive && req.Status != model.UserStatusDisabled {
 		return nil, BadAuthRequest("\u7528\u6237\u72b6\u6001\u65e0\u6548")
@@ -273,6 +454,7 @@ func (s *Service) CreateAdminUser(actor *model.User, req CreateAdminUserRequest)
 		DisplayName:          displayName,
 		ProfileName:          displayName,
 		Role:                 req.Role,
+		AdminLevel:           adminLevel,
 		Status:               req.Status,
 		PasswordHash:         passwordHash,
 		AdminRemark:          remark,
@@ -280,13 +462,18 @@ func (s *Service) CreateAdminUser(actor *model.User, req CreateAdminUserRequest)
 		CreatedAt:            now,
 		UpdatedAt:            now,
 	}
-	if err := s.repo.Create(user); err != nil {
+	if err := s.repo.CreateAdminManagedUser(user, adminPermissions, actor.ID); err != nil {
+		return nil, err
+	}
+	if err := s.repo.HydrateAdminAccess(user); err != nil {
 		return nil, err
 	}
 	if err := s.ensureSignupBonus(user.ID); err != nil {
 		return nil, err
 	}
-	if err := s.appendAdminAudit(actor, "user.create", "user", user.ID, "\u521b\u5efa\u7528\u6237\u8d26\u53f7", map[string]any{"role": user.Role, "status": user.Status, "remarkSet": remark != ""}); err != nil {
+	if err := s.appendAdminAudit(actor, "user.create", "user", user.ID, "\u521b\u5efa\u7528\u6237\u8d26\u53f7", map[string]any{
+		"role": user.Role, "status": user.Status, "adminLevel": user.AdminLevel, "permissions": user.AdminPermissions, "remarkSet": remark != "",
+	}); err != nil {
 		return nil, err
 	}
 	account, err := s.repo.CreditAccount(user.ID)
@@ -298,19 +485,27 @@ func (s *Service) CreateAdminUser(actor *model.User, req CreateAdminUserRequest)
 		Remark:                user.AdminRemark,
 		AvailableMicrocredits: account.AvailableMicrocredits,
 		ReservedMicrocredits:  account.ReservedMicrocredits,
+		AdminAccess:           adminAccessView(user),
 	}, nil
 }
 
 func (s *Service) UpdateUser(actor *model.User, userID string, req UpdateUserRequest) (*AdminManagedUser, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionUsers); err != nil {
 		return nil, err
 	}
 	user, err := s.repo.User(userID)
 	if err != nil {
 		return nil, err
 	}
-	if actor.ID == user.ID && req.Status == model.UserStatusDisabled {
-		return nil, BadAuthRequest("不能禁用当前管理员账号")
+	if err := s.repo.HydrateAdminAccess(user); err != nil {
+		return nil, err
+	}
+	previousRole := user.Role
+	previousLevel := user.AdminLevel
+	previousPermissions := append([]model.AdminPermission(nil), user.AdminPermissions...)
+	actorIsFull := actor.AdminLevel == model.AdminLevelFull || actor.AdminLevel == ""
+	if user.Role == model.UserRoleAdmin && !actorIsFull {
+		return nil, adminPermissionDenied("只有全权限管理员可以管理其他管理员")
 	}
 	nextRole := user.Role
 	if req.Role == model.UserRoleAdmin || req.Role == model.UserRoleUser {
@@ -320,24 +515,44 @@ func (s *Service) UpdateUser(actor *model.User, userID string, req UpdateUserReq
 	if req.Status == model.UserStatusActive || req.Status == model.UserStatusDisabled {
 		nextStatus = req.Status
 	}
-	if user.Role == model.UserRoleAdmin && nextRole != model.UserRoleAdmin {
-		count, err := s.repo.ActiveAdminCountExcluding(user.ID)
-		if err != nil {
-			return nil, err
+	if (nextRole != user.Role || req.AdminAccess != nil) && !actorIsFull {
+		return nil, adminPermissionDenied("只有全权限管理员可以任命管理员和分配权限")
+	}
+	if actor.ID == user.ID && (nextRole != user.Role || nextStatus != user.Status || req.AdminAccess != nil) {
+		return nil, BadAuthRequest("不能修改当前全权限管理员自己的角色、状态或权限")
+	}
+	nextLevel := user.AdminLevel
+	nextPermissions := append([]model.AdminPermission(nil), user.AdminPermissions...)
+	if nextRole == model.UserRoleAdmin {
+		if user.Role != model.UserRoleAdmin && req.AdminAccess == nil {
+			return nil, BadAuthRequest("任命管理员时必须配置管理员权限")
+		}
+		if req.AdminAccess != nil {
+			nextLevel, nextPermissions, err = normalizeAdminAccess(req.AdminAccess)
+			if err != nil {
+				return nil, err
+			}
+		}
+	} else {
+		if req.AdminAccess != nil {
+			return nil, BadAuthRequest("普通用户不能配置管理员权限")
+		}
+		nextLevel = ""
+		nextPermissions = nil
+	}
+	protectLastFull := user.Role == model.UserRoleAdmin && (user.AdminLevel == model.AdminLevelFull || user.AdminLevel == "") &&
+		(nextRole != model.UserRoleAdmin || nextLevel != model.AdminLevelFull || nextStatus != model.UserStatusActive)
+	if protectLastFull {
+		count, countErr := s.repo.ActiveFullAdminCountExcluding(user.ID)
+		if countErr != nil {
+			return nil, countErr
 		}
 		if count == 0 {
-			return nil, BadAuthRequest("至少需要保留一个管理员")
+			return nil, BadAuthRequest("至少需要保留一个可用的全权限管理员")
 		}
 	}
-	if user.Role == model.UserRoleAdmin && nextStatus != model.UserStatusActive {
-		count, err := s.repo.ActiveAdminCountExcluding(user.ID)
-		if err != nil {
-			return nil, err
-		}
-		if count == 0 {
-			return nil, BadAuthRequest("至少需要保留一个可用管理员")
-		}
-	}
+	accessChanged := user.Role != nextRole || user.AdminLevel != nextLevel || !adminPermissionsEqual(user.AdminPermissions, nextPermissions)
+	statusChanged := user.Status != nextStatus
 	user.DisplayName = user.Username
 	user.ProfileName = user.Username
 	if req.Email != "" {
@@ -373,25 +588,52 @@ func (s *Service) UpdateUser(actor *model.User, userID string, req UpdateUserReq
 			return nil, err
 		}
 		user.PasswordHash = hash
-		if err := s.repo.DeleteUserAuthSessions(user.ID); err != nil {
-			return nil, fmt.Errorf("清理旧登录会话失败，密码未更新：%w", err)
-		}
 		passwordReset = true
 	}
 	user.Role = nextRole
+	user.AdminLevel = nextLevel
 	user.Status = nextStatus
 	user.UpdatedAt = time.Now()
-	if err := s.repo.Save(user); err != nil {
+	if err := s.repo.SaveAdminManagedUser(user, nextPermissions, actor.ID, passwordReset || accessChanged || statusChanged, protectLastFull); errors.Is(err, repository.ErrLastActiveFullAdmin) {
+		return nil, BadAuthRequest("至少需要保留一个可用的全权限管理员")
+	} else if err != nil {
+		return nil, err
+	}
+	if err := s.repo.HydrateAdminAccess(user); err != nil {
 		return nil, err
 	}
 	auditSummary := "更新用户账号状态或资料"
 	if passwordReset {
 		auditSummary = "更新用户资料并重置密码"
 	}
-	if err := s.appendAdminAudit(actor, "user.update", "user", user.ID, auditSummary, map[string]any{"role": user.Role, "status": user.Status, "passwordReset": passwordReset, "remarkChanged": remarkChanged}); err != nil {
+	if err := s.appendAdminAudit(actor, "user.update", "user", user.ID, auditSummary, map[string]any{
+		"role": user.Role, "status": user.Status,
+		"adminAccessBefore": map[string]any{"role": previousRole, "level": previousLevel, "permissions": previousPermissions},
+		"adminAccessAfter":  map[string]any{"role": user.Role, "level": user.AdminLevel, "permissions": user.AdminPermissions},
+		"accessChanged":     accessChanged, "passwordReset": passwordReset, "remarkChanged": remarkChanged,
+	}); err != nil {
 		return nil, err
 	}
-	return &AdminManagedUser{User: *user, Remark: user.AdminRemark}, nil
+	return &AdminManagedUser{User: *user, Remark: user.AdminRemark, AdminAccess: adminAccessView(user)}, nil
+}
+
+func adminPermissionsEqual(left, right []model.AdminPermission) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	counts := make(map[model.AdminPermission]int, len(left))
+	for _, permission := range left {
+		counts[permission]++
+	}
+	for _, permission := range right {
+		counts[permission]--
+	}
+	for _, count := range counts {
+		if count != 0 {
+			return false
+		}
+	}
+	return true
 }
 
 func normalizeAdminRemark(value string) (string, error) {
@@ -403,7 +645,7 @@ func normalizeAdminRemark(value string) (string, error) {
 }
 
 func (s *Service) DeleteUser(actor *model.User, userID string) error {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionUsers); err != nil {
 		return err
 	}
 	if actor.ID == userID {
@@ -413,32 +655,42 @@ func (s *Service) DeleteUser(actor *model.User, userID string) error {
 	if err != nil {
 		return err
 	}
+	if err := s.repo.HydrateAdminAccess(user); err != nil {
+		return err
+	}
+	protectLastFull := user.Role == model.UserRoleAdmin && user.AdminLevel == model.AdminLevelFull && user.Status == model.UserStatusActive
 	if user.Role == model.UserRoleAdmin {
-		count, err := s.repo.ActiveAdminCountExcluding(user.ID)
+		if err := s.RequireFullAdmin(actor); err != nil {
+			return err
+		}
+		count, err := s.repo.ActiveFullAdminCountExcluding(user.ID)
 		if err != nil {
 			return err
 		}
 		if count == 0 {
-			return BadAuthRequest("至少需要保留一个管理员")
+			return BadAuthRequest("至少需要保留一个可用的全权限管理员")
 		}
-	}
-	if err := s.repo.DeleteUserAuthSessions(user.ID); err != nil {
-		return err
-	}
-	if err := s.repo.DeleteUserTaskTextDeltas(user.ID); err != nil {
-		return err
 	}
 	// 有资金流水后必须保留用户主体，删除入口改为停用并清除全部登录态。
 	user.Status = model.UserStatusDisabled
 	user.UpdatedAt = time.Now()
-	if err := s.repo.Save(user); err != nil {
+	permissions := user.AdminPermissions
+	if user.AdminLevel == model.AdminLevelFull {
+		permissions = nil
+	}
+	if err := s.repo.SaveAdminManagedUser(user, permissions, actor.ID, true, protectLastFull); errors.Is(err, repository.ErrLastActiveFullAdmin) {
+		return BadAuthRequest("至少需要保留一个可用的全权限管理员")
+	} else if err != nil {
+		return err
+	}
+	if err := s.repo.DeleteUserTaskTextDeltas(user.ID); err != nil {
 		return err
 	}
 	return s.appendAdminAudit(actor, "user.disable", "user", user.ID, "停用用户并清除登录态", nil)
 }
 
 func (s *Service) PurgeUser(actor *model.User, userID string) error {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionUsers); err != nil {
 		return err
 	}
 	if actor.ID == userID {
@@ -448,13 +700,17 @@ func (s *Service) PurgeUser(actor *model.User, userID string) error {
 	if err != nil {
 		return err
 	}
+	protectLastFull := user.Role == model.UserRoleAdmin && (user.AdminLevel == model.AdminLevelFull || user.AdminLevel == "") && user.Status == model.UserStatusActive
 	if user.Role == model.UserRoleAdmin {
-		count, err := s.repo.ActiveAdminCountExcluding(user.ID)
+		if err := s.RequireFullAdmin(actor); err != nil {
+			return err
+		}
+		count, err := s.repo.ActiveFullAdminCountExcluding(user.ID)
 		if err != nil {
 			return err
 		}
 		if count == 0 {
-			return BadAuthRequest("至少需要保留一个可用管理员")
+			return BadAuthRequest("至少需要保留一个可用的全权限管理员")
 		}
 	}
 
@@ -497,9 +753,12 @@ func (s *Service) PurgeUser(actor *model.User, userID string) error {
 		ID: newID(), ActorUserID: actor.ID, Action: "user.purge", TargetType: "user", TargetID: user.ID,
 		Summary: "注销用户并清理全部用户数据", MetadataJSON: string(metadata), CreatedAt: time.Now(),
 	}
-	if err := s.repo.PurgeUserData(user.ID, resourceIDs, deletionJobs, audit); err != nil {
+	if err := s.repo.PurgeUserData(user.ID, resourceIDs, deletionJobs, audit, protectLastFull); err != nil {
 		if errors.Is(err, repository.ErrUserPurgeChanged) {
 			return BadAuthRequest("用户数据正在变化，请稍后重试注销")
+		}
+		if errors.Is(err, repository.ErrLastActiveFullAdmin) {
+			return BadAuthRequest("至少需要保留一个可用的全权限管理员")
 		}
 		return err
 	}
@@ -510,7 +769,7 @@ func (s *Service) PurgeUser(actor *model.User, userID string) error {
 }
 
 func (s *Service) BulkDisableUsers(actor *model.User, req BulkDisableUsersRequest) (*BulkDisableUsersResult, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionUsers); err != nil {
 		return nil, err
 	}
 	seen := make(map[string]struct{}, len(req.UserIDs))
@@ -531,6 +790,26 @@ func (s *Service) BulkDisableUsers(actor *model.User, req BulkDisableUsersReques
 	}
 	if len(userIDs) > 100 {
 		return nil, BadAuthRequest("单次最多停用 100 个用户")
+	}
+	for _, userID := range userIDs {
+		user, userErr := s.repo.User(userID)
+		if userErr != nil {
+			return nil, userErr
+		}
+		if user.Role == model.UserRoleAdmin {
+			if err := s.RequireFullAdmin(actor); err != nil {
+				return nil, err
+			}
+			if user.AdminLevel == model.AdminLevelFull || user.AdminLevel == "" {
+				remaining, countErr := s.repo.ActiveFullAdminCountExcluding(user.ID)
+				if countErr != nil {
+					return nil, countErr
+				}
+				if remaining == 0 {
+					return nil, BadAuthRequest("批量操作后至少需要保留一个可用的全权限管理员")
+				}
+			}
+		}
 	}
 	metadata, err := json.Marshal(map[string]any{"userIds": userIDs, "count": len(userIDs)})
 	if err != nil {
@@ -596,9 +875,10 @@ func (s *Service) adminSystemChannel(id string) (*model.ModelChannel, error) {
 }
 
 func (s *Service) AdminSystemChannelPage(actor *model.User, query AdminListQuery) (*AdminChannelPage, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAnyAdminPermission(actor, model.AdminPermissionChannels, model.AdminPermissionLogicalModels); err != nil {
 		return nil, err
 	}
+	includeSecrets := actor.AdminLevel == "" || actor.AdminLevel == model.AdminLevelFull || actor.HasAdminPermission(model.AdminPermissionChannels)
 	page, limit := normalizeAdminPage(query.Page, query.Limit)
 	channels, total, err := s.repo.AdminSystemChannels(query.Keyword, query.Status, limit, (page-1)*limit)
 	if err != nil {
@@ -610,7 +890,7 @@ func (s *Service) AdminSystemChannelPage(actor *model.User, query AdminListQuery
 		if itemErr != nil {
 			return nil, itemErr
 		}
-		result = append(result, publicChannel(channel, true, items))
+		result = append(result, publicChannel(channel, includeSecrets, items))
 	}
 	return &AdminChannelPage{Channels: result, Total: total, Page: page, Limit: limit}, nil
 }
@@ -626,7 +906,7 @@ func normalizeAdminPage(page int, limit int) (int, int) {
 }
 
 func (s *Service) CreateSystemChannel(actor *model.User, req ChannelRequest) (*PublicModelChannel, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionChannels); err != nil {
 		return nil, err
 	}
 	channelID, err := s.repo.NextPrefixedID("CHANNEL")
@@ -656,7 +936,7 @@ func (s *Service) CreateSystemChannel(actor *model.User, req ChannelRequest) (*P
 }
 
 func (s *Service) DuplicateSystemChannel(actor *model.User, id string) (*PublicModelChannel, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionChannels); err != nil {
 		return nil, err
 	}
 	source, err := s.adminSystemChannel(id)
@@ -743,7 +1023,7 @@ func duplicateChannelName(name string) string {
 }
 
 func (s *Service) UpdateSystemChannel(actor *model.User, id string, req ChannelRequest) (*PublicModelChannel, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionChannels); err != nil {
 		return nil, err
 	}
 	if req.presentationOnly() {
@@ -821,7 +1101,7 @@ func (s *Service) decryptSystemChannelSecrets(channel *model.ModelChannel) error
 }
 
 func (s *Service) DeleteSystemChannel(actor *model.User, id string) error {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionChannels); err != nil {
 		return err
 	}
 	channel, err := s.repo.AdminSystemChannel(id)

@@ -198,7 +198,7 @@ func validateLive2DArchive(reader io.ReaderAt, size int64) (string, error) {
 }
 
 func (s *Service) UploadLive2D(actor *model.User, header *multipart.FileHeader) (*Live2DImport, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionAppearance); err != nil {
 		return nil, err
 	}
 	if header == nil {
@@ -254,7 +254,7 @@ func (s *Service) Live2DAsset(actor *model.User, id, name string) ([]byte, strin
 		return nil, "", BadAuthRequest("模型资源不可用")
 	}
 	if appearance.Canvas.AvatarType != "live2d" || appearance.Canvas.Live2DResourceID != id {
-		if err := s.RequireAdmin(actor); err != nil {
+		if err := s.RequireAdminPermission(actor, model.AdminPermissionAppearance); err != nil {
 			return nil, "", err
 		}
 		if resource.UserID != actor.ID && appearance.Canvas.Live2DResourceID != id {

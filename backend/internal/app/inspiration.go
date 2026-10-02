@@ -69,7 +69,7 @@ func (s *Service) Inspirations(user *model.User) ([]model.Inspiration, error) {
 }
 
 func (s *Service) AdminInspirationPage(actor *model.User, query AdminListQuery) (*InspirationPage, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionInspirations); err != nil {
 		return nil, err
 	}
 	if query.Status != "" && query.Status != string(model.InspirationStatusActive) && query.Status != string(model.InspirationStatusDisabled) {
@@ -156,7 +156,7 @@ func validInspirationMode(mode model.InspirationMode) bool {
 }
 
 func (s *Service) CreateInspiration(actor *model.User, req InspirationRequest) (*model.Inspiration, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionInspirations); err != nil {
 		return nil, err
 	}
 	req, tagsJSON, err := normalizeInspirationRequest(req, false)
@@ -194,7 +194,7 @@ func (s *Service) CreateInspiration(actor *model.User, req InspirationRequest) (
 }
 
 func (s *Service) UpdateInspiration(actor *model.User, id string, req InspirationRequest) (*model.Inspiration, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionInspirations); err != nil {
 		return nil, err
 	}
 	s.storageMu.Lock()
@@ -259,7 +259,7 @@ func (s *Service) UpdateInspiration(actor *model.User, id string, req Inspiratio
 }
 
 func (s *Service) SetInspirationStatus(actor *model.User, id string, status model.InspirationStatus) (*model.Inspiration, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionInspirations); err != nil {
 		return nil, err
 	}
 	if status != model.InspirationStatusActive && status != model.InspirationStatusDisabled {
@@ -284,7 +284,7 @@ func (s *Service) SetInspirationStatus(actor *model.User, id string, status mode
 }
 
 func (s *Service) InspirationOrder(actor *model.User) ([]InspirationOrderItem, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionInspirations); err != nil {
 		return nil, err
 	}
 	rows, err := s.repo.InspirationOrder()
@@ -299,7 +299,7 @@ func (s *Service) InspirationOrder(actor *model.User) ([]InspirationOrderItem, e
 }
 
 func (s *Service) SaveInspirationOrder(actor *model.User, req InspirationOrderRequest) error {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionInspirations); err != nil {
 		return err
 	}
 	if len(req.IDs) == 0 || len(req.IDs) > 2000 {
@@ -315,7 +315,7 @@ func (s *Service) SaveInspirationOrder(actor *model.User, req InspirationOrderRe
 }
 
 func (s *Service) DeleteInspirations(actor *model.User, ids []string) error {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionInspirations); err != nil {
 		return err
 	}
 	if len(ids) == 0 || len(ids) > 100 {
@@ -373,7 +373,7 @@ func (s *Service) DeleteInspirations(actor *model.User, ids []string) error {
 }
 
 func (s *Service) UploadInspirationCover(actor *model.User, header *multipart.FileHeader, width, height int) (*model.Resource, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionInspirations); err != nil {
 		return nil, err
 	}
 	if header == nil {
@@ -434,7 +434,7 @@ func (s *Service) validateInspirationCoverDraft(actor *model.User, id string) (*
 }
 
 func (s *Service) DiscardInspirationCover(actor *model.User, id string) error {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionInspirations); err != nil {
 		return err
 	}
 	if err := s.discardInspirationCoverDraft(actor.ID, id); err != nil {
@@ -497,7 +497,7 @@ func (s *Service) OpenInspirationCover(actor *model.User, id, rangeHeader string
 }
 
 func (s *Service) OpenInspirationCoverDraft(actor *model.User, id, rangeHeader string) (*ResourceStream, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionInspirations); err != nil {
 		return nil, err
 	}
 	if _, err := s.repo.InspirationCoverDraftForUser(actor.ID, id); err != nil {

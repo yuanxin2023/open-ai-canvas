@@ -31,7 +31,7 @@ func (r *Repository) UserPurgeSnapshot(userID string) (*UserPurgeSnapshot, error
 // PurgeUserData removes one user's account and all user-scoped business data in
 // a single transaction. ResourceDeletionJob rows intentionally survive until
 // the physical objects have been removed by the outbox worker.
-func (r *Repository) PurgeUserData(userID string, expectedResourceIDs []string, deletionJobs []model.ResourceDeletionJob, audit model.AdminAuditEvent) error {
+func (r *Repository) PurgeUserData(userID string, expectedResourceIDs []string, deletionJobs []model.ResourceDeletionJob, audit model.AdminAuditEvent, protectLastFull bool) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		var user model.User
 		query := tx.Where("id = ?", userID)
@@ -40,6 +40,27 @@ func (r *Repository) PurgeUserData(userID string, expectedResourceIDs []string, 
 		}
 		if err := query.First(&user).Error; err != nil {
 			return err
+		}
+		if protectLastFull {
+			var fullAdminIDs []string
+			fullQuery := tx.Model(&model.User{}).
+				Where("role = ? AND status = ? AND (admin_level = ? OR admin_level = '')", model.UserRoleAdmin, model.UserStatusActive, model.AdminLevelFull).
+				Order("id")
+			if r.Dialect() == "postgres" {
+				fullQuery = fullQuery.Clauses(clause.Locking{Strength: "UPDATE"})
+			}
+			if err := fullQuery.Pluck("id", &fullAdminIDs).Error; err != nil {
+				return err
+			}
+			remaining := 0
+			for _, id := range fullAdminIDs {
+				if id != userID {
+					remaining++
+				}
+			}
+			if remaining == 0 {
+				return ErrLastActiveFullAdmin
+			}
 		}
 
 		var currentResourceIDs []string
@@ -390,6 +411,7 @@ func (r *Repository) PurgeUserData(userID string, expectedResourceIDs []string, 
 			{&model.UserLoginEvent{}, "user_id = ?"},
 			{&model.UserUsernameChange{}, "user_id = ?"},
 			{&model.AuthSession{}, "user_id = ?"},
+			{&model.AdminPermissionGrant{}, "user_id = ?"},
 		} {
 			if err := tx.Where(owned.query, userID).Delete(owned.model).Error; err != nil {
 				return err

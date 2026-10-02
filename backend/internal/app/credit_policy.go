@@ -74,14 +74,14 @@ func (s *Service) creditPolicy() (CreditPolicy, error) {
 }
 
 func (s *Service) AdminCreditPolicy(actor *model.User) (CreditPolicy, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionCredits); err != nil {
 		return CreditPolicy{}, err
 	}
 	return s.creditPolicy()
 }
 
 func (s *Service) UpdateCreditPolicy(actor *model.User, policy CreditPolicy) (CreditPolicy, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionCredits); err != nil {
 		return CreditPolicy{}, err
 	}
 	if policy.ModelMultiplierBPS == nil {

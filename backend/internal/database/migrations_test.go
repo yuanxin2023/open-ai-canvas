@@ -22,17 +22,17 @@ func TestCurrentSchemaVersionMatchesMigrationPlan(t *testing.T) {
 			}
 		}
 		latest := plan[len(plan)-1]
-		if CurrentSchemaVersion != latest.version || latest.name != "topup_product_accent_color" {
-			t.Fatalf("%s latest migration = %d/%q, want %d/topup_product_accent_color", name, latest.version, latest.name, CurrentSchemaVersion)
+		if CurrentSchemaVersion != latest.version || latest.name != "scoped_admin_permissions" {
+			t.Fatalf("%s latest migration = %d/%q, want %d/scoped_admin_permissions", name, latest.version, latest.name, CurrentSchemaVersion)
 		}
 	}
 }
 
 func TestTopupProductAccentColorMigrationIsSharedTail(t *testing.T) {
 	for name, plan := range map[string][]migration{"local": schemaMigrations, "upstream": upstreamFirstMigrationPlan()} {
-		last := plan[len(plan)-1]
-		if last.version != 44 || last.name != "topup_product_accent_color" {
-			t.Fatalf("%s latest migration = %d/%s", name, last.version, last.name)
+		item := plan[len(plan)-2]
+		if item.version != 44 || item.name != "topup_product_accent_color" {
+			t.Fatalf("%s migration 44 = %d/%s", name, item.version, item.name)
 		}
 	}
 }
@@ -63,11 +63,38 @@ func TestTopupProductAccentColorMigrationAddsColumn(t *testing.T) {
 	if err := db.Exec("CREATE TABLE topup_products (id text PRIMARY KEY, name text, amount_fen integer, credits_microcredits integer)").Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := schemaMigrations[len(schemaMigrations)-1].apply(db); err != nil {
+	if err := schemaMigrations[43].apply(db); err != nil {
 		t.Fatal(err)
 	}
 	if !db.Migrator().HasColumn(&model.TopupProduct{}, "AccentColor") {
 		t.Fatal("migration v44 did not add AccentColor")
+	}
+}
+
+func TestScopedAdminPermissionMigrationBackfillsExistingAdmins(t *testing.T) {
+	db, err := Open(Config{Driver: "sqlite", DSN: "file:migration-admin-permissions-v45?mode=memory&cache=shared"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AutoMigrate(&model.User{}); err != nil {
+		t.Fatal(err)
+	}
+	admin := model.User{ID: "admin", Username: "admin", Role: model.UserRoleAdmin, Status: model.UserStatusActive}
+	user := model.User{ID: "user", Username: "user", Role: model.UserRoleUser, Status: model.UserStatusActive}
+	if err := db.Create(&[]model.User{admin, user}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := migrateScopedAdminPermissions(db); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.First(&admin, "id = ?", admin.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if admin.AdminLevel != model.AdminLevelFull {
+		t.Fatalf("admin level = %q, want full", admin.AdminLevel)
+	}
+	if !db.Migrator().HasTable(&model.AdminPermissionGrant{}) {
+		t.Fatal("admin_permission_grants table was not created")
 	}
 }
 

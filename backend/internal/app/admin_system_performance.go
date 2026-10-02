@@ -137,7 +137,7 @@ var runtimeCacheDefinitions = []runtimeCacheDefinition{
 }
 
 func (s *Service) AdminSystemPerformance(ctx context.Context, actor *model.User) (*AdminSystemPerformance, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionSystemPerformance); err != nil {
 		return nil, err
 	}
 	ctx, cancel := context.WithTimeout(ctx, systemPerformanceTimeout)
@@ -231,7 +231,7 @@ func (s *Service) collectRedisPerformance(ctx context.Context) SystemPerformance
 }
 
 func (s *Service) ClearAdminRuntimeCache(ctx context.Context, actor *model.User, request AdminCacheClearRequest) (*AdminCacheClearResult, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionSystemPerformance); err != nil {
 		return nil, err
 	}
 	if strings.TrimSpace(request.Scope) != "runtime" {

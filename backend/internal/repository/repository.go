@@ -197,6 +197,100 @@ func (r *Repository) User(id string) (*model.User, error) {
 	return &user, nil
 }
 
+func (r *Repository) HydrateAdminAccess(user *model.User) error {
+	if user == nil || user.Role != model.UserRoleAdmin {
+		return nil
+	}
+	if user.AdminLevel == model.AdminLevelFull || user.AdminLevel == "" {
+		user.AdminLevel = model.AdminLevelFull
+		user.AdminPermissions = append([]model.AdminPermission(nil), model.AllAdminPermissions...)
+		return nil
+	}
+	var permissions []model.AdminPermission
+	if err := r.db.Model(&model.AdminPermissionGrant{}).
+		Where("user_id = ?", user.ID).Order("permission asc").Pluck("permission", &permissions).Error; err != nil {
+		return err
+	}
+	user.AdminPermissions = permissions
+	return nil
+}
+
+func (r *Repository) AdminPermissions(userID string) ([]model.AdminPermission, error) {
+	var permissions []model.AdminPermission
+	err := r.db.Model(&model.AdminPermissionGrant{}).
+		Where("user_id = ?", userID).Order("permission asc").Pluck("permission", &permissions).Error
+	return permissions, err
+}
+
+func (r *Repository) ReplaceAdminPermissions(userID string, permissions []model.AdminPermission, grantedBy string, now time.Time) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		return replaceAdminPermissions(tx, userID, permissions, grantedBy, now)
+	})
+}
+
+// SaveAdminManagedUser keeps the account, permission grants, and session
+// invalidation atomic so a failed grant write cannot leave partial access.
+func (r *Repository) SaveAdminManagedUser(user *model.User, permissions []model.AdminPermission, grantedBy string, revokeSessions bool, protectLastFull bool) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if protectLastFull {
+			var fullAdminIDs []string
+			query := tx.Model(&model.User{}).
+				Where("role = ? AND status = ? AND (admin_level = ? OR admin_level = '')", model.UserRoleAdmin, model.UserStatusActive, model.AdminLevelFull).
+				Order("id")
+			if r.Dialect() == "postgres" {
+				query = query.Clauses(clause.Locking{Strength: "UPDATE"})
+			}
+			if err := query.Pluck("id", &fullAdminIDs).Error; err != nil {
+				return err
+			}
+			remaining := 0
+			for _, id := range fullAdminIDs {
+				if id != user.ID {
+					remaining++
+				}
+			}
+			if remaining == 0 {
+				return ErrLastActiveFullAdmin
+			}
+		}
+		if err := tx.Save(user).Error; err != nil {
+			return err
+		}
+		if err := replaceAdminPermissions(tx, user.ID, permissions, grantedBy, user.UpdatedAt); err != nil {
+			return err
+		}
+		if revokeSessions {
+			if err := tx.Delete(&model.AuthSession{}, "user_id = ?", user.ID).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+func (r *Repository) CreateAdminManagedUser(user *model.User, permissions []model.AdminPermission, grantedBy string) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(user).Error; err != nil {
+			return err
+		}
+		return replaceAdminPermissions(tx, user.ID, permissions, grantedBy, user.CreatedAt)
+	})
+}
+
+func replaceAdminPermissions(tx *gorm.DB, userID string, permissions []model.AdminPermission, grantedBy string, now time.Time) error {
+	if err := tx.Delete(&model.AdminPermissionGrant{}, "user_id = ?", userID).Error; err != nil {
+		return err
+	}
+	if len(permissions) == 0 {
+		return nil
+	}
+	grants := make([]model.AdminPermissionGrant, 0, len(permissions))
+	for _, permission := range permissions {
+		grants = append(grants, model.AdminPermissionGrant{UserID: userID, Permission: permission, GrantedByUserID: grantedBy, CreatedAt: now, UpdatedAt: now})
+	}
+	return tx.Create(&grants).Error
+}
+
 func (r *Repository) UserByAccount(account string) (*model.User, error) {
 	var user model.User
 	if err := r.db.Where("lower(username) = lower(?) OR lower(email) = lower(?)", account, account).First(&user).Error; err != nil {
@@ -250,15 +344,33 @@ func (r *Repository) AdminUsers(keyword string, role model.UserRole, status mode
 	return users, total, nil
 }
 
-func (r *Repository) AdminUserReferences() ([]model.User, error) {
+func (r *Repository) AdminUserReferences(keyword string, includeAdmins bool, limit int) ([]model.User, error) {
 	var users []model.User
-	err := r.db.Select("id", "username").Order("created_at desc").Limit(100).Find(&users).Error
+	query := r.db.Select("id", "username", "role")
+	if value := strings.TrimSpace(keyword); value != "" {
+		pattern := "%" + strings.ToLower(value) + "%"
+		query = query.Where("lower(username) LIKE ? OR lower(email) LIKE ?", pattern, pattern)
+	}
+	if !includeAdmins {
+		query = query.Where("role = ?", model.UserRoleUser)
+	}
+	err := query.Order("created_at desc").Limit(limit).Find(&users).Error
 	return users, err
 }
 
 func (r *Repository) ActiveAdminCountExcluding(userID string) (int64, error) {
 	var count int64
 	query := r.db.Model(&model.User{}).Where("role = ? AND status = ?", model.UserRoleAdmin, model.UserStatusActive)
+	if userID != "" {
+		query = query.Where("id <> ?", userID)
+	}
+	err := query.Count(&count).Error
+	return count, err
+}
+
+func (r *Repository) ActiveFullAdminCountExcluding(userID string) (int64, error) {
+	var count int64
+	query := r.db.Model(&model.User{}).Where("role = ? AND (admin_level = ? OR admin_level = '') AND status = ?", model.UserRoleAdmin, model.AdminLevelFull, model.UserStatusActive)
 	if userID != "" {
 		query = query.Where("id <> ?", userID)
 	}

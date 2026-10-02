@@ -93,10 +93,10 @@ func (s *Service) EnsureSystemChannelModels() error {
 }
 
 func (s *Service) AdminChannelModels(actor *model.User, channelID string) ([]model.ChannelModel, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAnyAdminPermission(actor, model.AdminPermissionChannels, model.AdminPermissionLogicalModels); err != nil {
 		return nil, err
 	}
-	if _, err := s.adminSystemChannel(channelID); err != nil {
+	if _, err := s.repo.AdminSystemChannel(channelID); err != nil {
 		return nil, err
 	}
 	items, err := s.ensureChannelModels(channelID, true)
@@ -144,7 +144,7 @@ func (s *Service) SystemChannelHasProtocol(channelID string, protocol model.Chan
 }
 
 func (s *Service) FetchAdminChannelModels(ctx context.Context, actor *model.User, channelID string) (*AdminChannelModelFetchResult, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionChannels); err != nil {
 		return nil, err
 	}
 	channel, err := s.adminSystemChannel(channelID)
@@ -196,7 +196,7 @@ func (s *Service) FetchAdminChannelModels(ctx context.Context, actor *model.User
 
 // PreviewAdminChannelModels 只读取上游模型目录，不修改渠道模型配置。
 func (s *Service) PreviewAdminChannelModels(ctx context.Context, actor *model.User, channelID string) ([]string, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionChannels); err != nil {
 		return nil, err
 	}
 	return s.fetchAdminChannelModelCatalog(ctx, actor, channelID)
@@ -204,7 +204,7 @@ func (s *Service) PreviewAdminChannelModels(ctx context.Context, actor *model.Us
 
 // ImportAdminChannelModels 只导入管理员明确选择、且仍存在于上游目录中的模型。
 func (s *Service) ImportAdminChannelModels(ctx context.Context, actor *model.User, channelID string, selected []string) (*AdminChannelModelFetchResult, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionChannels); err != nil {
 		return nil, err
 	}
 	channel, err := s.adminSystemChannel(channelID)
@@ -297,7 +297,7 @@ func (s *Service) fetchAdminChannelModelCatalog(ctx context.Context, actor *mode
 }
 
 func (s *Service) SaveAdminChannelModel(actor *model.User, channelID string, id string, req ChannelModelRequest) (*model.ChannelModel, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionChannels); err != nil {
 		return nil, err
 	}
 	channelLabel := strings.TrimSpace(req.ChannelLabel)
@@ -674,7 +674,7 @@ func (s *Service) applyChannelModelPriceTierSummary(item *model.ChannelModel, ti
 }
 
 func (s *Service) TestAdminChannelModel(ctx context.Context, actor *model.User, channelID string, req ChannelModelRequest) (*AdminChannelModelTestResult, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionChannels); err != nil {
 		return nil, err
 	}
 	channel, err := s.adminSystemChannel(channelID)
@@ -879,7 +879,7 @@ func (s *Service) DeleteAdminChannelModel(actor *model.User, channelID string, i
 // repository to remove it atomically. This deliberately rejects partial success:
 // administrators can safely correct an in-use model and retry the same selection.
 func (s *Service) DeleteAdminChannelModels(actor *model.User, channelID string, ids []string) (int64, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionChannels); err != nil {
 		return 0, err
 	}
 	if _, err := s.repo.AdminSystemChannel(channelID); err != nil {

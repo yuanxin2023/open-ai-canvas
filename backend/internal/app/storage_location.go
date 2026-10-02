@@ -29,7 +29,7 @@ type OSSConnectionTestResult struct {
 var errOSSConnectionReadMismatch = errors.New("对象存储读取内容不一致")
 
 func (s *Service) TestAdminOSSSetting(actor *model.User, req OSSSettingRequest) (*OSSConnectionTestResult, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionStorageService); err != nil {
 		return nil, err
 	}
 	_, current, err := s.readOSSSetting()

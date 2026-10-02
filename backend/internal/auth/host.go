@@ -14,7 +14,7 @@ const DefaultBrandName = "AI 创作工作台"
 
 // Host 由组合根注入，避免 auth → service 回环。
 type Host interface {
-	RequireAdmin(user *model.User) error
+	RequireAdminPermission(user *model.User, permission model.AdminPermission) error
 	EncryptSecret(value string) (string, error)
 	DecryptSecret(value string) (string, error)
 	SettingsEncryptionKey() ([]byte, error)
@@ -27,7 +27,9 @@ type Host interface {
 
 type nopHost struct{}
 
-func (nopHost) RequireAdmin(user *model.User) error { return nil }
+func (nopHost) RequireAdminPermission(user *model.User, permission model.AdminPermission) error {
+	return nil
+}
 func (nopHost) EncryptSecret(value string) (string, error) {
 	return value, nil
 }

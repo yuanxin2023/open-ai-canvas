@@ -44,7 +44,7 @@ func validateChannelSortOrder(value int) error {
 }
 
 func (s *Service) UpdateAdminChannelModelSort(actor *model.User, channelID, modelID string, req ChannelModelSortRequest) error {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionChannels); err != nil {
 		return err
 	}
 	if req.SortOrder == nil {

@@ -110,7 +110,7 @@ func (s *Service) CustomerService() (*PublicCustomerServiceSetting, error) {
 }
 
 func (s *Service) AdminCustomerService(actor *model.User) (*AdminCustomerServiceSetting, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionCustomerService); err != nil {
 		return nil, err
 	}
 	setting, value, err := s.readCustomerService()
@@ -132,7 +132,7 @@ func (s *Service) AdminCustomerService(actor *model.User) (*AdminCustomerService
 }
 
 func (s *Service) UpdateCustomerService(actor *model.User, value CustomerServiceSetting) (*AdminCustomerServiceSetting, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionCustomerService); err != nil {
 		return nil, err
 	}
 	value.SchemaVersion = customerServiceSchemaVersion
@@ -173,7 +173,7 @@ func (s *Service) UpdateCustomerService(actor *model.User, value CustomerService
 }
 
 func (s *Service) UploadCustomerServiceButtonImage(actor *model.User, header *multipart.FileHeader) (*model.Resource, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionCustomerService); err != nil {
 		return nil, err
 	}
 	if err := validateCustomerServiceButtonImageUpload(header); err != nil {

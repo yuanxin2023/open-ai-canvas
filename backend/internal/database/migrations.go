@@ -14,7 +14,7 @@ import (
 	"gorm.io/gorm"
 )
 
-const CurrentSchemaVersion int64 = 44
+const CurrentSchemaVersion int64 = 45
 
 //go:embed seed/inspirations.json
 var inspirationSeedJSON []byte
@@ -140,6 +140,16 @@ var schemaMigrations = []migration{
 	{version: 44, name: "topup_product_accent_color", checksum: "sha256:topup-product-accent-color-v44-20261002", apply: func(tx *gorm.DB) error {
 		return tx.AutoMigrate(&model.TopupProduct{})
 	}},
+	{version: 45, name: "scoped_admin_permissions", checksum: "sha256:scoped-admin-permissions-v45-20261002", apply: migrateScopedAdminPermissions},
+}
+
+func migrateScopedAdminPermissions(tx *gorm.DB) error {
+	if err := tx.AutoMigrate(&model.User{}, &model.AdminPermissionGrant{}); err != nil {
+		return err
+	}
+	return tx.Model(&model.User{}).
+		Where("role = ? AND (admin_level IS NULL OR admin_level = '')", model.UserRoleAdmin).
+		Update("admin_level", model.AdminLevelFull).Error
 }
 
 func migrateUserAdminRemarks(tx *gorm.DB) error {
@@ -424,7 +434,7 @@ func migrationsForDatabase(db *gorm.DB) ([]migration, error) {
 func upstreamFirstMigrationPlan() []migration {
 	const sharedCount = 23
 	const localCount = 4
-	const commonTailCount = 7
+	const commonTailCount = 8
 	plan := append([]migration(nil), schemaMigrations[:sharedCount]...)
 	middleEnd := len(schemaMigrations) - commonTailCount
 	for index, item := range schemaMigrations[sharedCount+localCount : middleEnd] {

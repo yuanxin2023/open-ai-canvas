@@ -198,14 +198,25 @@ func (s *Service) PaymentProviders(actor *model.User) ([]PaymentProviderView, er
 }
 
 func (s *Service) AdminPaymentProviders(actor *model.User) ([]AdminPaymentProviderView, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAnyAdminPermission(actor, model.AdminPermissionPaymentProviders, model.AdminPermissionPaymentOrders, model.AdminPermissionPaymentReconciliation); err != nil {
 		return nil, err
 	}
+	canManage := actor.AdminLevel == model.AdminLevelFull || actor.AdminLevel == "" || actor.HasAdminPermission(model.AdminPermissionPaymentProviders)
 	items := make([]AdminPaymentProviderView, 0)
 	for _, descriptor := range s.paymentRegistry.Descriptors() {
 		base, config, err := s.paymentProviderView(descriptor)
 		if err != nil {
 			return nil, err
+		}
+		if !canManage {
+			items = append(items, AdminPaymentProviderView{
+				PaymentProviderView: base,
+				ConfigEnabled:       base.Configured,
+				Values:              map[string]string{},
+				SecretConfigured:    map[string]bool{},
+				ConfigFields:        []protocol.ManifestField{},
+			})
+			continue
 		}
 		manifest, _ := s.paymentManifestForProvider(descriptor.ID)
 		view := AdminPaymentProviderView{PaymentProviderView: base, Values: map[string]string{}, SecretConfigured: map[string]bool{}, ConfigFields: manifest.Configuration.Fields}
@@ -232,7 +243,7 @@ func (s *Service) AdminPaymentProviders(actor *model.User) ([]AdminPaymentProvid
 }
 
 func (s *Service) UpdatePaymentProviderConfig(actor *model.User, providerID string, request UpdatePaymentProviderConfigRequest) (*AdminPaymentProviderView, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionPaymentProviders); err != nil {
 		return nil, err
 	}
 	provider, ok := s.paymentRegistry.Get(providerID)
@@ -469,14 +480,14 @@ func (s *Service) TopupProducts(actor *model.User) ([]model.TopupProduct, error)
 }
 
 func (s *Service) AdminTopupProducts(actor *model.User) ([]model.TopupProduct, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionProducts); err != nil {
 		return nil, err
 	}
 	return s.repo.TopupProducts(true)
 }
 
 func (s *Service) CreateTopupProduct(actor *model.User, request TopupProductRequest) (*model.TopupProduct, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionProducts); err != nil {
 		return nil, err
 	}
 	product, err := topupProductFromRequest(newID(), actor.ID, request)
@@ -493,7 +504,7 @@ func (s *Service) CreateTopupProduct(actor *model.User, request TopupProductRequ
 }
 
 func (s *Service) UpdateTopupProduct(actor *model.User, id string, request TopupProductRequest) (*model.TopupProduct, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionProducts); err != nil {
 		return nil, err
 	}
 	if _, err := s.repo.TopupProduct(id); err != nil {
@@ -1047,7 +1058,7 @@ func paymentOrderView(order model.PaymentOrder) PaymentOrderView {
 }
 
 func (s *Service) AdminPaymentOrderPage(actor *model.User, query PaymentOrderQuery, page, limit int) (*AdminPaymentOrderPage, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionPaymentOrders); err != nil {
 		return nil, err
 	}
 	page, limit = normalizeAdminPage(page, limit)
@@ -1079,7 +1090,7 @@ func (s *Service) AdminPaymentOrderPage(actor *model.User, query PaymentOrderQue
 }
 
 func (s *Service) AdminQueryPaymentOrder(ctx context.Context, actor *model.User, id string) (*PaymentOrderView, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionPaymentOrders); err != nil {
 		return nil, err
 	}
 	order, err := s.repo.PaymentOrder(id)
@@ -1102,7 +1113,7 @@ func (s *Service) AdminQueryPaymentOrder(ctx context.Context, actor *model.User,
 }
 
 func (s *Service) AdminClosePaymentOrder(ctx context.Context, actor *model.User, id string) (*PaymentOrderView, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionPaymentOrders); err != nil {
 		return nil, err
 	}
 	order, err := s.repo.PaymentOrder(id)

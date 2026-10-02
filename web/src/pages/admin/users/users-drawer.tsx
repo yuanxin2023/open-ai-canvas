@@ -1,4 +1,4 @@
-import { App, Button, Drawer, Form, Input, InputNumber, Modal, Tooltip } from "antd";
+import { App, Button, Checkbox, Drawer, Form, Input, InputNumber, Modal, Tooltip } from "antd";
 import { Coins, Copy, RefreshCw } from "lucide-react";
 import { Select } from "@/pages/admin/ui/controls";
 import { AdminModal } from "@/pages/admin/ui/overlays";
@@ -10,8 +10,10 @@ import { formatCredits } from "@/constant/credits";
 import { createAdminUser, updateAdminUser, type AdminManagedUser, type AdminUser, type LocalUser } from "@/services/api/auth";
 import { adjustAdminUserCredits, type CreditAccount } from "@/services/api/wallet";
 import { generateAdminPassword } from "./admin-password";
+import { ADMIN_PERMISSION_GROUPS, hasAdminPermission, type AdminLevel, type AdminPermission } from "@/lib/admin-permissions";
+import { useUserStore } from "@/stores/use-user-store";
 
-type UserFormValues = Pick<LocalUser, "email" | "role" | "status"> & { remark: string; password?: string };
+type UserFormValues = Pick<LocalUser, "email" | "role" | "status"> & { remark: string; password?: string; adminLevel?: AdminLevel; permissions?: AdminPermission[] };
 type CreditAdjustmentFormValues = { amount: number; note: string };
 
 export function AdminUserEditModal({
@@ -36,7 +38,12 @@ export function AdminUserEditModal({
     const [form] = Form.useForm<UserFormValues>();
     const [adjustmentForm] = Form.useForm<CreditAdjustmentFormValues>();
     const copyText = useCopyText();
+    const actorAccess = useUserStore((state) => state.user?.adminAccess);
+    const actorIsFull = actorAccess?.level === "full";
+    const canAdjustCredits = hasAdminPermission(actorAccess, "admin.finance.credits");
     const editingSelf = user?.id === actorId;
+    const selectedRole = Form.useWatch("role", form);
+    const selectedAdminLevel = Form.useWatch("adminLevel", form);
 
     useEffect(() => {
         if (!user) return;
@@ -51,6 +58,8 @@ export function AdminUserEditModal({
             password: "",
             role: user.role,
             status: user.status,
+            adminLevel: user.adminAccess?.level,
+            permissions: user.adminAccess?.permissions || [],
         });
     }, [adjustmentForm, form, user]);
 
@@ -86,6 +95,7 @@ export function AdminUserEditModal({
                 remark: values.remark?.trim() || "",
                 role: values.role,
                 status: values.status,
+                ...(values.role === "admin" && !editingSelf ? { adminAccess: { level: values.adminLevel || "scoped", permissions: values.adminLevel === "full" ? [] : (values.permissions || []) } } : {}),
                 ...(password ? { password } : {}),
             });
             onSaved(result.user);
@@ -193,14 +203,15 @@ export function AdminUserEditModal({
                     />
                 </Form.Item>
                 <Form.Item name="role" label="角色" extra={editingSelf ? "不能在此修改当前管理员自己的角色。" : "角色变更会立即影响后台访问权限。"}>
-                    <Select disabled={editingSelf} options={[{ label: "管理员", value: "admin" }, { label: "普通用户", value: "user" }]} />
+                    <Select disabled={editingSelf || !actorIsFull} options={[{ label: "管理员", value: "admin" }, { label: "普通用户", value: "user" }]} />
                 </Form.Item>
                 <Form.Item name="status" label="账号状态" extra={editingSelf ? "不能停用当前登录账号。" : "停用后会清除登录态，但保留身份、任务和积分流水。"}>
-                    <Select disabled={editingSelf} options={[{ label: "已启用", value: "active" }, { label: "已停用", value: "disabled" }]} />
+                    <Select disabled={editingSelf || (user?.role === "admin" && !actorIsFull)} options={[{ label: "已启用", value: "active" }, { label: "已停用", value: "disabled" }]} />
                 </Form.Item>
+                {actorIsFull && selectedRole === "admin" && !editingSelf ? <AdminAccessFields level={selectedAdminLevel} /> : null}
             </Form>
 
-            <section className="mt-2 border-t border-border/60 pt-5" aria-labelledby="admin-user-credit-adjustment-heading">
+            {canAdjustCredits ? <section className="mt-2 border-t border-border/60 pt-5" aria-labelledby="admin-user-credit-adjustment-heading">
                 <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
                     <div>
                         <h3 id="admin-user-credit-adjustment-heading" className="text-sm font-semibold text-foreground">人工调账</h3>
@@ -236,7 +247,7 @@ export function AdminUserEditModal({
                         </Button>
                     </div>
                 </Form>
-            </section>
+            </section> : null}
         </AdminModal>
 
         <Modal
@@ -296,6 +307,64 @@ function toMicrocredits(value: number) {
     return result;
 }
 
+function AdminAccessFields({ level }: { level?: AdminLevel }) {
+	const form = Form.useFormInstance();
+	const selectedPermissions = (Form.useWatch("permissions", form) || []) as AdminPermission[];
+	const updateGroup = (permissions: AdminPermission[], select: boolean) => {
+		const next = new Set(selectedPermissions);
+		for (const permission of permissions) {
+			if (select) next.add(permission);
+			else next.delete(permission);
+		}
+		form.setFieldValue("permissions", Array.from(next));
+	};
+
+    return (
+        <section className="rounded-lg border border-border/60 p-4">
+            <Form.Item name="adminLevel" label="管理员级别" rules={[{ required: true, message: "请选择管理员级别" }]}>
+                <Select options={[
+                    { label: "模块管理员", value: "scoped" },
+                    { label: "全权限管理员", value: "full" },
+                ]} />
+            </Form.Item>
+            {level === "full" ? <p className="text-xs text-foreground/55">全权限管理员自动拥有当前及未来全部后台权限，也可以任命和配置其他管理员。</p> : (
+                <Form.Item
+                    name="permissions"
+                    label="模块权限"
+                    rules={[{ validator: (_, value?: AdminPermission[]) => value?.length ? Promise.resolve() : Promise.reject(new Error("至少选择一个模块权限")) }]}
+                >
+                    <Checkbox.Group className="w-full">
+                        <div className="grid gap-4">
+                            {ADMIN_PERMISSION_GROUPS.map((group) => (
+                                <div key={group.label}>
+                                    <div className="mb-2 flex items-center justify-between gap-2">
+										<span className="text-xs font-semibold text-foreground/65">{group.label}</span>
+										<Button
+											type="link"
+											size="small"
+											className="h-auto p-0 text-xs"
+											onClick={() => {
+												const permissions = group.items.map((item) => item.permission);
+												const allSelected = permissions.every((permission) => selectedPermissions.includes(permission));
+												updateGroup(permissions, !allSelected);
+											}}
+										>
+											{group.items.every((item) => selectedPermissions.includes(item.permission)) ? "清空本组" : "全选本组"}
+										</Button>
+									</div>
+                                    <div className="grid gap-2 sm:grid-cols-2">
+                                        {group.items.map((item) => <Checkbox key={item.permission} value={item.permission}>{item.label}</Checkbox>)}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </Checkbox.Group>
+                </Form.Item>
+            )}
+        </section>
+    );
+}
+
 function AdminPasswordField({
     value = "",
     onChange,
@@ -335,6 +404,8 @@ type CreateUserFormValues = {
     password: string;
     role: LocalUser["role"];
     status: LocalUser["status"];
+    adminLevel?: AdminLevel;
+    permissions?: AdminPermission[];
 };
 
 export function AdminUserCreateDrawer({
@@ -349,6 +420,10 @@ export function AdminUserCreateDrawer({
     const { message, modal } = App.useApp();
     const [saving, setSaving] = useState(false);
     const [form] = Form.useForm<CreateUserFormValues>();
+    const actorAccess = useUserStore((state) => state.user?.adminAccess);
+    const actorIsFull = actorAccess?.level === "full";
+    const selectedRole = Form.useWatch("role", form);
+    const selectedAdminLevel = Form.useWatch("adminLevel", form);
 
     useEffect(() => {
         if (!open) return;
@@ -383,6 +458,7 @@ export function AdminUserCreateDrawer({
                 password: values.password,
                 role: values.role,
                 status: values.status,
+                ...(values.role === "admin" ? { adminAccess: { level: values.adminLevel || "scoped", permissions: values.adminLevel === "full" ? [] : (values.permissions || []) } } : {}),
             });
             onCreated(result.user);
             form.resetFields();
@@ -419,8 +495,9 @@ export function AdminUserCreateDrawer({
                     <Input.Password placeholder={"\u81f3\u5c11 8 \u4f4d"} />
                 </Form.Item>
                 <Form.Item name="role" label={"\u89d2\u8272"}>
-                    <Select options={[{ label: "\u7ba1\u7406\u5458", value: "admin" }, { label: "\u666e\u901a\u7528\u6237", value: "user" }]} />
+                    <Select options={actorIsFull ? [{ label: "\u7ba1\u7406\u5458", value: "admin" }, { label: "\u666e\u901a\u7528\u6237", value: "user" }] : [{ label: "\u666e\u901a\u7528\u6237", value: "user" }]} />
                 </Form.Item>
+                {actorIsFull && selectedRole === "admin" ? <AdminAccessFields level={selectedAdminLevel} /> : null}
                 <Form.Item name="status" label={"\u8d26\u53f7\u72b6\u6001"}>
                     <Select options={[{ label: "\u5df2\u542f\u7528", value: "active" }, { label: "\u5df2\u505c\u7528", value: "disabled" }]} />
                 </Form.Item>

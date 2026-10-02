@@ -164,7 +164,7 @@ func (s *Service) Appearance() (*PublicAppearanceSetting, error) {
 }
 
 func (s *Service) AdminAppearance(actor *model.User) (*AdminAppearanceSetting, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionAppearance); err != nil {
 		return nil, err
 	}
 	setting, value, err := s.readAppearance()
@@ -186,7 +186,7 @@ func (s *Service) AdminAppearance(actor *model.User) (*AdminAppearanceSetting, e
 }
 
 func (s *Service) UpdateAppearance(actor *model.User, value AppearanceSetting) (*AdminAppearanceSetting, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionAppearance); err != nil {
 		return nil, err
 	}
 	value.SchemaVersion = appearanceSchemaVersion
@@ -270,7 +270,7 @@ func (s *Service) UpdateAppearance(actor *model.User, value AppearanceSetting) (
 }
 
 func (s *Service) ResetAppearance(actor *model.User) (*AdminAppearanceSetting, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionAppearance); err != nil {
 		return nil, err
 	}
 
@@ -291,7 +291,7 @@ func (s *Service) ResetAppearance(actor *model.User) (*AdminAppearanceSetting, e
 }
 
 func (s *Service) UploadAppearanceAsset(actor *model.User, slot string, header *multipart.FileHeader) (*model.Resource, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionAppearance); err != nil {
 		return nil, err
 	}
 	mimeType, err := validateAppearanceUpload(slot, header)

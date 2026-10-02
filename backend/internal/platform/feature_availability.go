@@ -71,14 +71,14 @@ func (s *Service) FeatureAvailability() (*PublicFeatureAvailability, error) {
 }
 
 func (s *Service) AdminFeatureAvailability(actor *model.User) (*PublicFeatureAvailability, error) {
-	if err := s.requireAdmin(actor); err != nil {
+	if err := s.requireAdminPermission(actor, model.AdminPermissionFeatures); err != nil {
 		return nil, err
 	}
 	return s.FeatureAvailability()
 }
 
 func (s *Service) UpdateFeatureAvailability(actor *model.User, value FeatureAvailability) (*PublicFeatureAvailability, error) {
-	if err := s.requireAdmin(actor); err != nil {
+	if err := s.requireAdminPermission(actor, model.AdminPermissionFeatures); err != nil {
 		return nil, err
 	}
 	current, before, err := s.readFeatureAvailability()

@@ -50,11 +50,11 @@ type authHost struct {
 	svc *Service
 }
 
-func (h authHost) RequireAdmin(user *model.User) error {
+func (h authHost) RequireAdminPermission(user *model.User, permission model.AdminPermission) error {
 	if h.svc == nil {
 		return nil
 	}
-	return h.svc.RequireAdmin(user)
+	return h.svc.RequireAdminPermission(user, permission)
 }
 
 func (h authHost) EncryptSecret(value string) (string, error) {

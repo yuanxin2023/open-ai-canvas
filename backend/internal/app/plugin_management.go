@@ -280,7 +280,7 @@ func (s *Service) SetUserPluginEnabled(actor *model.User, pluginID string, enabl
 }
 
 func (s *Service) AdminPluginStates(actor *model.User) (map[string]AdminPluginStateView, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionPlugins); err != nil {
 		return nil, err
 	}
 	states, err := s.PluginStatesForUser(actor)
@@ -299,7 +299,7 @@ func (s *Service) AdminPluginStates(actor *model.User) (map[string]AdminPluginSt
 }
 
 func (s *Service) SetPluginPlatformAvailability(actor *model.User, pluginID string, available bool) (AdminPluginStateView, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionPlugins); err != nil {
 		return AdminPluginStateView{}, err
 	}
 	items := s.Plugins()

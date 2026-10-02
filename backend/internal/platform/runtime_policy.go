@@ -208,7 +208,7 @@ func (s *Service) PublicRuntimeLimits() (*PublicRuntimeLimits, error) {
 }
 
 func (s *Service) AdminRuntimePolicySetting(actor *model.User) (*PublicRuntimePolicySetting, error) {
-	if err := s.requireAdmin(actor); err != nil {
+	if err := s.requireAdminPermission(actor, model.AdminPermissionRuntimePolicy); err != nil {
 		return nil, err
 	}
 	setting, value, err := s.readRuntimePolicy()
@@ -219,14 +219,14 @@ func (s *Service) AdminRuntimePolicySetting(actor *model.User) (*PublicRuntimePo
 }
 
 func (s *Service) AdminSelfUseRuntimePolicy(actor *model.User) (*PublicRuntimePolicySetting, error) {
-	if err := s.requireAdmin(actor); err != nil {
+	if err := s.requireAdminPermission(actor, model.AdminPermissionRuntimePolicy); err != nil {
 		return nil, err
 	}
 	return publicRuntimePolicy(nil, selfUseRuntimePolicy()), nil
 }
 
 func (s *Service) UpdateRuntimePolicySetting(actor *model.User, value RuntimePolicySetting) (*PublicRuntimePolicySetting, error) {
-	if err := s.requireAdmin(actor); err != nil {
+	if err := s.requireAdminPermission(actor, model.AdminPermissionRuntimePolicy); err != nil {
 		return nil, err
 	}
 	if err := validateRuntimePolicy(value); err != nil {
@@ -256,7 +256,7 @@ func (s *Service) UpdateRuntimePolicySetting(actor *model.User, value RuntimePol
 }
 
 func (s *Service) ResetRuntimePolicySetting(actor *model.User) (*PublicRuntimePolicySetting, error) {
-	if err := s.requireAdmin(actor); err != nil {
+	if err := s.requireAdminPermission(actor, model.AdminPermissionRuntimePolicy); err != nil {
 		return nil, err
 	}
 	_, before, err := s.readRuntimePolicy()

@@ -85,7 +85,7 @@ type LinuxDOCallbackResult struct {
 }
 
 func (s *Service) AdminLinuxDOSetting(actor *model.User) (*PublicLinuxDOSetting, error) {
-	if err := s.host.RequireAdmin(actor); err != nil {
+	if err := s.host.RequireAdminPermission(actor, model.AdminPermissionAccess); err != nil {
 		return nil, err
 	}
 	setting, value, err := s.readLinuxDOSetting()
@@ -96,7 +96,7 @@ func (s *Service) AdminLinuxDOSetting(actor *model.User) (*PublicLinuxDOSetting,
 }
 
 func (s *Service) UpdateLinuxDOSetting(actor *model.User, req LinuxDOSettingRequest) (*PublicLinuxDOSetting, error) {
-	if err := s.host.RequireAdmin(actor); err != nil {
+	if err := s.host.RequireAdminPermission(actor, model.AdminPermissionAccess); err != nil {
 		return nil, err
 	}
 	currentSetting, current, err := s.readLinuxDOSetting()

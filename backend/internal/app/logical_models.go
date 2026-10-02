@@ -361,7 +361,7 @@ func capabilityFingerprint(spec CapabilitySpec) string {
 }
 
 func (s *Service) AdminLogicalModels(actor *model.User) ([]AdminLogicalModel, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionLogicalModels); err != nil {
 		return nil, err
 	}
 	items, err := s.repo.LogicalModels(true)
@@ -525,7 +525,7 @@ func logicalModelAvailabilityError(pricePolicy string, product CapabilitySpec, s
 }
 
 func (s *Service) SaveAdminLogicalModel(actor *model.User, id string, req LogicalModelRequest) (*AdminLogicalModel, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionLogicalModels); err != nil {
 		return nil, err
 	}
 	item, revision, routes, creating, err := s.logicalModelBundle(actor, id, req)
@@ -560,7 +560,7 @@ func (s *Service) SaveAdminLogicalModel(actor *model.User, id string, req Logica
 }
 
 func (s *Service) DeleteAdminLogicalModel(actor *model.User, id string) error {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionLogicalModels); err != nil {
 		return err
 	}
 	item, err := s.repo.LogicalModel(strings.TrimSpace(id))
@@ -952,7 +952,7 @@ func channelModelDefaultOptions(channelModel model.ChannelModel, spec Capability
 }
 
 func (s *Service) SimulateLogicalModelRoute(actor *model.User, id string, intent ModelRequestIntent) (*RouteSimulationResult, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionLogicalModels); err != nil {
 		return nil, err
 	}
 	snapshot, err := s.routeCatalogSnapshot()

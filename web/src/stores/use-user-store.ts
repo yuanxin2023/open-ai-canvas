@@ -1,6 +1,7 @@
 import { create } from "zustand";
 
 import { DEFAULT_DRAWING_ENGINE, type CanvasDrawingEngineSetting } from "@/lib/canvas/canvas-drawing-engine";
+import type { AdminAccess } from "@/lib/admin-permissions";
 
 export type LocalUser = {
     id: string;
@@ -15,6 +16,7 @@ export type LocalUser = {
     identityId?: string;
     identityUsername?: string;
     role: "admin" | "user";
+    adminAccess?: AdminAccess;
     status: "active" | "disabled";
     lastLoginAt?: string;
     createdAt?: string;

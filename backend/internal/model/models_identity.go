@@ -3,21 +3,31 @@ package model
 import "time"
 
 type User struct {
-	ID                   string     `json:"id" gorm:"primaryKey;size:36"`
-	Username             string     `json:"username" gorm:"uniqueIndex;size:80"`
-	Email                string     `json:"email,omitempty" gorm:"size:160"`
-	DisplayName          string     `json:"displayName" gorm:"size:80"`
-	ProfileName          string     `json:"profileName" gorm:"size:80"`
-	UsernameCustomizedAt *time.Time `json:"-" gorm:"index"`
-	AvatarResourceID     string     `json:"-" gorm:"index;size:36"`
-	Role                 UserRole   `json:"role" gorm:"index;size:24"`
-	Status               UserStatus `json:"status" gorm:"index;size:24"`
-	PasswordHash         string     `json:"-"`
-	AdminRemark          string     `json:"-" gorm:"size:500"`
-	RegistrationIP       string     `json:"-" gorm:"size:64"`
-	LastLoginAt          *time.Time `json:"lastLoginAt"`
-	CreatedAt            time.Time  `json:"createdAt"`
-	UpdatedAt            time.Time  `json:"updatedAt"`
+	ID                   string            `json:"id" gorm:"primaryKey;size:36"`
+	Username             string            `json:"username" gorm:"uniqueIndex;size:80"`
+	Email                string            `json:"email,omitempty" gorm:"size:160"`
+	DisplayName          string            `json:"displayName" gorm:"size:80"`
+	ProfileName          string            `json:"profileName" gorm:"size:80"`
+	UsernameCustomizedAt *time.Time        `json:"-" gorm:"index"`
+	AvatarResourceID     string            `json:"-" gorm:"index;size:36"`
+	Role                 UserRole          `json:"role" gorm:"index;size:24"`
+	AdminLevel           AdminLevel        `json:"-" gorm:"index;size:24"`
+	AdminPermissions     []AdminPermission `json:"-" gorm:"-"`
+	Status               UserStatus        `json:"status" gorm:"index;size:24"`
+	PasswordHash         string            `json:"-"`
+	AdminRemark          string            `json:"-" gorm:"size:500"`
+	RegistrationIP       string            `json:"-" gorm:"size:64"`
+	LastLoginAt          *time.Time        `json:"lastLoginAt"`
+	CreatedAt            time.Time         `json:"createdAt"`
+	UpdatedAt            time.Time         `json:"updatedAt"`
+}
+
+type AdminPermissionGrant struct {
+	UserID          string          `json:"userId" gorm:"primaryKey;size:36"`
+	Permission      AdminPermission `json:"permission" gorm:"primaryKey;size:80"`
+	GrantedByUserID string          `json:"grantedByUserId" gorm:"index;size:36"`
+	CreatedAt       time.Time       `json:"createdAt"`
+	UpdatedAt       time.Time       `json:"updatedAt"`
 }
 
 // UserUsernameChange 记录每次成功的语义改名；旧用户名不会被保留占用。

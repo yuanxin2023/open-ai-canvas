@@ -7,7 +7,7 @@ import { useSearchParams } from "react-router";
 
 import { PaginationBar } from "@/pages/admin/components/admin-ui";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
-import { listAdminUsers, type AdminUser } from "@/services/api/auth";
+import { searchAdminUserReferences, type AdminUserReference } from "@/services/api/auth";
 import { adminResourceFileUrl, deleteAdminResources, downloadAdminResource, getAdminStorageStats, listAdminResources, previewAdminResourceDelete, type AdminStorageResource, type AdminStorageStats } from "@/services/api/admin-storage";
 import { AdminBatchBar, AdminDataTable, AdminFilterChip, AdminStatTile, AdminStatusBadge, AdminTableEmpty } from "./admin-ui";
 
@@ -27,7 +27,7 @@ export default function StorageResourcesPanel() {
     const debouncedUserId = useDebouncedValue(userId);
     const [userSearch, setUserSearch] = useState("");
     const debouncedUserSearch = useDebouncedValue(userSearch.trim(), 250);
-    const [userOptions, setUserOptions] = useState<AdminUser[]>([]);
+    const [userOptions, setUserOptions] = useState<AdminUserReference[]>([]);
     const [searchingUsers, setSearchingUsers] = useState(false);
     const [resources, setResources] = useState<AdminStorageResource[]>([]);
     const [stats, setStats] = useState<AdminStorageStats | null>(null);
@@ -67,7 +67,7 @@ export default function StorageResourcesPanel() {
     useEffect(() => {
         const sequence = ++userSearchSequence.current;
         setSearchingUsers(true);
-        void listAdminUsers({ keyword: debouncedUserSearch || undefined, page: 1, pageSize: 50 })
+        void searchAdminUserReferences({ keyword: debouncedUserSearch || undefined, limit: 50 })
             .then((result) => {
                 if (sequence !== userSearchSequence.current) return;
                 setUserOptions((current) => {
@@ -451,7 +451,7 @@ function resourceDimensions(resource: AdminStorageResource) {
     if (resource.durationMs > 0) return <span className="tabular-nums">{formatDuration(resource.durationMs)}</span>;
     return <span className="text-foreground/30">--</span>;
 }
-function adminUserLabel(user: Pick<AdminUser, "username">) {
+function adminUserLabel(user: Pick<AdminUserReference, "username">) {
     return `@${user.username}`;
 }
 function formatDuration(durationMs: number) {

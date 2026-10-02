@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -235,7 +236,7 @@ func RegisterAuthRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
-		if err := svc.RequireAdmin(actor); err != nil {
+		if err := svc.RequireAnyAdminPermission(actor, model.AdminPermissionChannels, model.AdminPermissionLogicalModels); err != nil {
 			failService(c, err)
 			return
 		}
@@ -318,6 +319,24 @@ func RegisterAdminRoutes(r *gin.RouterGroup, svc *service.Service) {
 			return
 		}
 		ok(c, data)
+	})
+	r.GET("/admin/user-references", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		limit, err := strconv.Atoi(c.DefaultQuery("limit", "50"))
+		if err != nil || limit <= 0 {
+			fail(c, http.StatusBadRequest, errors.New("limit 无效"))
+			return
+		}
+		users, err := svc.SearchAdminUserReferences(user, c.Query("keyword"), limit)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"users": users})
 	})
 	r.POST("/admin/users/bulk-disable", func(c *gin.Context) {
 		user, err := currentUser(c, svc)

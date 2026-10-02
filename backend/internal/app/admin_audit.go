@@ -67,11 +67,27 @@ func newAdminAuditEvent(actor *model.User, action string, targetType string, tar
 	}, nil
 }
 
-func (s *Service) AdminUserDetail(actor *model.User, userID string) (*AdminUserDetail, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+func (s *Service) manageableAdminUser(actor *model.User, userID string) (*model.User, error) {
+	user, err := s.repo.User(strings.TrimSpace(userID))
+	if err != nil {
 		return nil, err
 	}
-	user, err := s.repo.User(strings.TrimSpace(userID))
+	if user.Role == model.UserRoleAdmin {
+		if err := s.RequireFullAdmin(actor); err != nil {
+			return nil, adminPermissionDenied("只有全权限管理员可以查看或管理其他管理员")
+		}
+		if err := s.repo.HydrateAdminAccess(user); err != nil {
+			return nil, err
+		}
+	}
+	return user, nil
+}
+
+func (s *Service) AdminUserDetail(actor *model.User, userID string) (*AdminUserDetail, error) {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionUsers); err != nil {
+		return nil, err
+	}
+	user, err := s.manageableAdminUser(actor, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -100,17 +116,17 @@ func (s *Service) AdminUserDetail(actor *model.User, userID string) (*AdminUserD
 		return nil, err
 	}
 	return &AdminUserDetail{
-		User: AdminManagedUser{User: *user, Remark: user.AdminRemark}, RegistrationIP: user.RegistrationIP, Account: *account, Counts: counts, StorageUsage: usage,
+		User: AdminManagedUser{User: *user, Remark: user.AdminRemark, AdminAccess: adminAccessView(user)}, RegistrationIP: user.RegistrationIP, Account: *account, Counts: counts, StorageUsage: usage,
 		StoredFileBytes: storedFileBytes, DailyUploadBytes: dailyUploadBytes, Quota: policy.Resource,
 	}, nil
 }
 
 func (s *Service) AdminUserLoginEvents(actor *model.User, userID string, page int, limit int) (*AdminLoginEventPage, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionUsers); err != nil {
 		return nil, err
 	}
 	userID = strings.TrimSpace(userID)
-	if _, err := s.repo.User(userID); err != nil {
+	if _, err := s.manageableAdminUser(actor, userID); err != nil {
 		return nil, err
 	}
 	page, limit = normalizeAdminPage(page, limit)
@@ -119,10 +135,10 @@ func (s *Service) AdminUserLoginEvents(actor *model.User, userID string, page in
 }
 
 func (s *Service) AdminUserLedger(actor *model.User, userID string, entryType string, page int, limit int) (*WalletSummary, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionUsers); err != nil {
 		return nil, err
 	}
-	if _, err := s.repo.User(userID); err != nil {
+	if _, err := s.manageableAdminUser(actor, userID); err != nil {
 		return nil, err
 	}
 	page, limit = normalizeAdminPage(page, limit)
@@ -138,10 +154,10 @@ func (s *Service) AdminUserLedger(actor *model.User, userID string, entryType st
 }
 
 func (s *Service) AdminUserTasks(actor *model.User, userID string, page int, limit int) (*AdminTaskPage, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionUsers); err != nil {
 		return nil, err
 	}
-	if _, err := s.repo.User(userID); err != nil {
+	if _, err := s.manageableAdminUser(actor, userID); err != nil {
 		return nil, err
 	}
 	page, limit = normalizeAdminPage(page, limit)
@@ -150,10 +166,10 @@ func (s *Service) AdminUserTasks(actor *model.User, userID string, page int, lim
 }
 
 func (s *Service) AdminUserAuditEvents(actor *model.User, userID string, page int, limit int) (*AdminAuditPage, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionUsers); err != nil {
 		return nil, err
 	}
-	if _, err := s.repo.User(userID); err != nil {
+	if _, err := s.manageableAdminUser(actor, userID); err != nil {
 		return nil, err
 	}
 	page, limit = normalizeAdminPage(page, limit)

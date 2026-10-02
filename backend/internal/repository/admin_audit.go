@@ -14,6 +14,7 @@ var (
 	ErrBulkUserNotFound    = errors.New("bulk user not found")
 	ErrBulkCurrentAdmin    = errors.New("bulk includes current admin")
 	ErrBulkLastActiveAdmin = errors.New("bulk removes last active admin")
+	ErrLastActiveFullAdmin = errors.New("operation removes last active full admin")
 )
 
 type AdminUserCounts struct {
@@ -47,13 +48,27 @@ func (r *Repository) BulkDisableUsers(actorID string, userIDs []string, events [
 				return ErrBulkCurrentAdmin
 			}
 		}
-		var remainingAdmins int64
-		if err := tx.Model(&model.User{}).
-			Where("role = ? AND status = ? AND id NOT IN ?", model.UserRoleAdmin, model.UserStatusActive, userIDs).
-			Count(&remainingAdmins).Error; err != nil {
+		var activeFullAdminIDs []string
+		fullQuery := tx.Model(&model.User{}).
+			Where("role = ? AND status = ? AND (admin_level = ? OR admin_level = '')", model.UserRoleAdmin, model.UserStatusActive, model.AdminLevelFull).
+			Order("id")
+		if r.Dialect() == "postgres" {
+			fullQuery = fullQuery.Clauses(clause.Locking{Strength: "UPDATE"})
+		}
+		if err := fullQuery.Pluck("id", &activeFullAdminIDs).Error; err != nil {
 			return err
 		}
-		if remainingAdmins == 0 {
+		selected := make(map[string]struct{}, len(userIDs))
+		for _, id := range userIDs {
+			selected[id] = struct{}{}
+		}
+		remainingFullAdmins := 0
+		for _, id := range activeFullAdminIDs {
+			if _, disabling := selected[id]; !disabling {
+				remainingFullAdmins++
+			}
+		}
+		if remainingFullAdmins == 0 {
 			return ErrBulkLastActiveAdmin
 		}
 		if err := tx.Delete(&model.AuthSession{}, "user_id IN ?", userIDs).Error; err != nil {

@@ -37,11 +37,11 @@ type platformHost struct {
 	svc *Service
 }
 
-func (h platformHost) RequireAdmin(user *model.User) error {
+func (h platformHost) RequireAdminPermission(user *model.User, permission model.AdminPermission) error {
 	if h.svc == nil {
 		return nil
 	}
-	return h.svc.RequireAdmin(user)
+	return h.svc.RequireAdminPermission(user, permission)
 }
 
 func (h platformHost) AppendAudit(actor *model.User, action, targetType, targetID, summary string, metadata any) error {

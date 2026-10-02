@@ -7,7 +7,7 @@ import { PaginationBar } from "@/pages/admin/components/admin-ui";
 import { formatCredits } from "@/constant/credits";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { AdminModal } from "@/pages/admin/ui/overlays";
-import { listAdminUsers, type AdminReferenceData, type AdminUser } from "@/services/api/auth";
+import { searchAdminUserReferences, type AdminReferenceData, type AdminUserReference } from "@/services/api/auth";
 import { adjustAdminUserCredits, getAdminCreditPolicy, listAdminBillingOrders, resolveAdminBillingOrder, resolveAdminBillingOrders, updateAdminCreditPolicy, type BillingOrder } from "@/services/api/wallet";
 
 import { AdminBatchBar, AdminDataTable, AdminRowActions, AdminStatusBadge, AdminTableEmpty } from "./admin-ui";
@@ -20,7 +20,7 @@ type ResolutionFormValues = { note: string };
 type PolicyMultiplierRow = { model?: string; multiplier?: number };
 type PolicyFormValues = { signupBonus: number; checkinBonus: number; defaultMultiplier: number; modelMultipliers: PolicyMultiplierRow[] };
 type BillingResolutionAction = "settle" | "refund";
-type AdjustmentUser = AdminReferenceData["users"][number] & Partial<Pick<AdminUser, "email" | "availableMicrocredits" | "reservedMicrocredits">>;
+type AdjustmentUser = AdminUserReference;
 type BillingResolutionTarget = { kind: "single"; order: BillingOrder; action: BillingResolutionAction } | { kind: "batch"; orders: BillingOrder[]; action: BillingResolutionAction };
 
 const billingStatusLabels = {
@@ -137,7 +137,7 @@ export default function CreditOperationsPanel({ users, activeOperation, onOperat
         if (activeOperation !== "adjustment") return;
         const requestId = ++userSearchRequestRef.current;
         setSearchingUsers(true);
-        void listAdminUsers({ keyword: debouncedAdjustmentSearch.trim() || undefined, page: 1, pageSize: 50 })
+        void searchAdminUserReferences({ keyword: debouncedAdjustmentSearch.trim() || undefined, limit: 50 })
             .then((result) => {
                 if (requestId !== userSearchRequestRef.current) return;
                 const selectedId = adjustmentForm.getFieldValue("userId");
@@ -813,7 +813,7 @@ function getReservedAmount(order: BillingOrder) {
     return order.reservedAmountMicrocredits || order.amountMicrocredits;
 }
 
-function hasCreditBalance(user?: AdjustmentUser): user is AdjustmentUser & Pick<AdminUser, "availableMicrocredits" | "reservedMicrocredits"> {
+function hasCreditBalance(user?: AdjustmentUser): user is AdjustmentUser & Required<Pick<AdminUserReference, "availableMicrocredits" | "reservedMicrocredits">> {
     return Boolean(user && typeof user.availableMicrocredits === "number" && typeof user.reservedMicrocredits === "number");
 }
 

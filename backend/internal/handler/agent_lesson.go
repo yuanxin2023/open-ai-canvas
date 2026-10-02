@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"infinite-canvas/backend/internal/model"
 	"infinite-canvas/backend/internal/service"
 
 	"github.com/gin-gonic/gin"
@@ -186,7 +187,7 @@ func RegisterAgentLessonAdminRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
-		if err := svc.RequireAdmin(user); err != nil {
+		if err := svc.RequireAdminPermission(user, model.AdminPermissionAgentLessons); err != nil {
 			failService(c, err)
 			return
 		}
@@ -210,7 +211,7 @@ func RegisterAgentLessonAdminRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
-		if err := svc.RequireAdmin(user); err != nil {
+		if err := svc.RequireAdminPermission(user, model.AdminPermissionAgentLessons); err != nil {
 			failService(c, err)
 			return
 		}

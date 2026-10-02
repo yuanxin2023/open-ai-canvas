@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { agentLessonCategoryLabel, deleteAdminAgentLesson, listAdminAgentLessons, type AdminAgentLesson } from "@/services/api/admin-agent-lessons";
-import { listAdminUsers, type AdminUser } from "@/services/api/auth";
+import { searchAdminUserReferences, type AdminUserReference } from "@/services/api/auth";
 import { AdminDataTable, AdminStatusBadge, AdminTableEmpty } from "./admin-ui";
 
 function authorLabel(record: AdminAgentLesson) {
@@ -20,7 +20,7 @@ export default function AgentLessonsPanel() {
     const [status, setStatus] = useState<string>("all");
     const [keyword, setKeyword] = useState("");
     const [userId, setUserId] = useState<string | undefined>();
-    const [users, setUsers] = useState<AdminUser[]>([]);
+    const [users, setUsers] = useState<AdminUserReference[]>([]);
     const [userSearch, setUserSearch] = useState("");
     const [searchingUsers, setSearchingUsers] = useState(false);
     const debouncedKeyword = useDebouncedValue(keyword.trim(), 250);
@@ -54,7 +54,7 @@ export default function AgentLessonsPanel() {
     useEffect(() => {
         const requestId = ++userSearchRef.current;
         setSearchingUsers(true);
-        void listAdminUsers({ keyword: debouncedUserSearch || undefined, page: 1, pageSize: 50 })
+        void searchAdminUserReferences({ keyword: debouncedUserSearch || undefined, limit: 50 })
             .then((result) => {
                 if (requestId !== userSearchRef.current) return;
                 setUsers((current) => {

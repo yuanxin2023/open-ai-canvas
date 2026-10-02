@@ -178,7 +178,7 @@ type libTVNodeData struct {
 }
 
 func (s *Service) AdminLibTVSetting(actor *model.User) (*PublicLibTVSetting, error) {
-	if err := s.host.RequireAdmin(actor); err != nil {
+	if err := s.host.RequireAdminPermission(actor, model.AdminPermissionThirdParty); err != nil {
 		return nil, err
 	}
 	setting, value, err := s.readLibTVSetting()
@@ -189,7 +189,7 @@ func (s *Service) AdminLibTVSetting(actor *model.User) (*PublicLibTVSetting, err
 }
 
 func (s *Service) UpdateLibTVSetting(actor *model.User, req LibTVSettingRequest) (*PublicLibTVSetting, error) {
-	if err := s.host.RequireAdmin(actor); err != nil {
+	if err := s.host.RequireAdminPermission(actor, model.AdminPermissionThirdParty); err != nil {
 		return nil, err
 	}
 	_, current, err := s.readLibTVSetting()
@@ -229,7 +229,7 @@ func (s *Service) TestLibTV(actor *model.User, projectUUID string) error {
 	if actor == nil {
 		return kernel.Unauthorized("请先登录")
 	}
-	if err := s.host.RequireAdmin(actor); err != nil {
+	if err := s.host.RequireAdminPermission(actor, model.AdminPermissionThirdParty); err != nil {
 		return err
 	}
 	_, value, err := s.readLibTVSetting()

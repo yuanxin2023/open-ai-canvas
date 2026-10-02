@@ -192,7 +192,7 @@ func (s *Service) RedeemCredits(user *model.User, code string, redeemedIP string
 }
 
 func (s *Service) AdminCreateRedeemBatch(actor *model.User, req CreateRedeemBatchRequest) (*CreateRedeemBatchResult, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionRedeemCodes); err != nil {
 		return nil, err
 	}
 	if req.AmountMicrocredits <= 0 {
@@ -242,7 +242,7 @@ func (s *Service) AdminCreateRedeemBatch(actor *model.User, req CreateRedeemBatc
 }
 
 func (s *Service) AdminRedeemCodePage(actor *model.User, batchID string, status string, page int, limit int) (*AdminRedeemCodePage, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionRedeemCodes); err != nil {
 		return nil, err
 	}
 	batch, err := s.repo.RedeemBatch(strings.TrimSpace(batchID))
@@ -272,7 +272,7 @@ func (s *Service) AdminRedeemCodePage(actor *model.User, batchID string, status 
 }
 
 func (s *Service) AdminLookupRedeemCode(actor *model.User, req AdminRedeemCodeLookupRequest) (*AdminRedeemCodeLookupResult, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionRedeemCodes); err != nil {
 		return nil, err
 	}
 	code := strings.ToLower(strings.TrimSpace(req.Code))
@@ -298,7 +298,7 @@ func (s *Service) AdminLookupRedeemCode(actor *model.User, req AdminRedeemCodeLo
 }
 
 func (s *Service) AdminSearchRedeemCodes(actor *model.User, req AdminRedeemCodeSearchRequest) (*AdminRedeemCodeSearchResult, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionRedeemCodes); err != nil {
 		return nil, err
 	}
 	query := strings.ToLower(strings.TrimSpace(req.Query))
@@ -399,7 +399,7 @@ func (s *Service) redeemBatchPlainCodes(ciphertext string) ([]string, error) {
 }
 
 func (s *Service) AdminRedeemBatchPage(actor *model.User, query AdminListQuery) (*RedeemBatchPage, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionRedeemCodes); err != nil {
 		return nil, err
 	}
 	page, limit := normalizeAdminPage(query.Page, query.Limit)
@@ -411,7 +411,7 @@ func (s *Service) AdminRedeemBatchPage(actor *model.User, query AdminListQuery) 
 }
 
 func (s *Service) AdminAdjustCredits(actor *model.User, userID string, req AdminCreditAdjustmentRequest) (*model.CreditAccount, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionCredits); err != nil {
 		return nil, err
 	}
 	if req.AmountMicrocredits == 0 {
@@ -424,7 +424,7 @@ func (s *Service) AdminAdjustCredits(actor *model.User, userID string, req Admin
 	if note == "" {
 		return nil, BadAuthRequest("请填写调账原因")
 	}
-	if _, err := s.repo.User(userID); err != nil {
+	if _, err := s.RequireOrdinaryUserTarget(actor, userID); err != nil {
 		return nil, err
 	}
 	account, err := s.repo.AdjustCredits(userID, actor.ID, req.AmountMicrocredits, truncateRunes(note, 500))
@@ -441,7 +441,7 @@ func (s *Service) AdminAdjustCredits(actor *model.User, userID string, req Admin
 }
 
 func (s *Service) AdminBillingOrderPage(actor *model.User, query AdminListQuery) (*BillingOrderPage, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionCredits); err != nil {
 		return nil, err
 	}
 	page, limit := normalizeAdminPage(query.Page, query.Limit)
@@ -453,7 +453,7 @@ func (s *Service) AdminBillingOrderPage(actor *model.User, query AdminListQuery)
 }
 
 func (s *Service) ResolveBillingOrder(actor *model.User, id string, req ResolveBillingRequest) (*model.BillingOrder, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionCredits); err != nil {
 		return nil, err
 	}
 	note := strings.TrimSpace(req.Note)
@@ -468,7 +468,7 @@ func (s *Service) ResolveBillingOrder(actor *model.User, id string, req ResolveB
 }
 
 func (s *Service) ResolveBillingOrders(actor *model.User, req ResolveBillingBatchRequest) (*ResolveBillingBatchResult, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionCredits); err != nil {
 		return nil, err
 	}
 	note := strings.TrimSpace(req.Note)
@@ -538,7 +538,7 @@ func (s *Service) resolveBillingOrder(actor *model.User, id string, action strin
 }
 
 func (s *Service) AdminDisableRedeemBatch(actor *model.User, batchID string) (int64, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionRedeemCodes); err != nil {
 		return 0, err
 	}
 	if _, err := s.repo.RedeemBatch(strings.TrimSpace(batchID)); err != nil {
@@ -558,7 +558,7 @@ func (s *Service) AdminDisableRedeemBatch(actor *model.User, batchID string) (in
 }
 
 func (s *Service) AdminDisableRedeemCode(actor *model.User, batchID string, codeID string) error {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionRedeemCodes); err != nil {
 		return err
 	}
 	disabled, err := s.repo.DisableRedeemCode(batchID, codeID, time.Now())

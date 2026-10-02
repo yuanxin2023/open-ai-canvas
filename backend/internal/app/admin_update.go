@@ -21,7 +21,7 @@ func (s *Service) ConfigureUpdateManager(manager UpdateManager) {
 }
 
 func (s *Service) AdminUpdateStatus(ctx context.Context, actor *model.User) (hostupdate.Status, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionSystemUpdate); err != nil {
 		return hostupdate.Status{}, err
 	}
 	if s.updateManager == nil {
@@ -35,7 +35,7 @@ func (s *Service) AdminUpdateStatus(ctx context.Context, actor *model.User) (hos
 }
 
 func (s *Service) AdminCheckUpdate(ctx context.Context, actor *model.User) (hostupdate.Status, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionSystemUpdate); err != nil {
 		return hostupdate.Status{}, err
 	}
 	if s.updateManager == nil {
@@ -49,7 +49,7 @@ func (s *Service) AdminCheckUpdate(ctx context.Context, actor *model.User) (host
 }
 
 func (s *Service) AdminStartUpdate(ctx context.Context, actor *model.User, targetVersion string) (hostupdate.Status, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionSystemUpdate); err != nil {
 		return hostupdate.Status{}, err
 	}
 	if s.updateManager == nil {
@@ -67,7 +67,7 @@ func (s *Service) AdminStartUpdate(ctx context.Context, actor *model.User, targe
 }
 
 func (s *Service) AdminRollbackUpdate(ctx context.Context, actor *model.User, reason string) (hostupdate.Status, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionSystemUpdate); err != nil {
 		return hostupdate.Status{}, err
 	}
 	if s.updateManager == nil {

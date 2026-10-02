@@ -24,7 +24,7 @@ type ChannelModelTierRepriceRequest struct {
 
 // RepriceAdminChannelModels only changes sale prices, never model availability or cost.
 func (s *Service) RepriceAdminChannelModels(actor *model.User, channelID string, requests []ChannelModelRepriceRequest) (int, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionChannels); err != nil {
 		return 0, err
 	}
 	if _, err := s.adminSystemChannel(channelID); err != nil {

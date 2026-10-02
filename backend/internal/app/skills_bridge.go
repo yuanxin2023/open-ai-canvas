@@ -63,7 +63,7 @@ func (s *Service) SkillDetail(userID string, id string) (*SkillItem, error) {
 }
 
 func (s *Service) AdminSkills(actor *model.User) (*AdminSkillCatalog, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionSkills); err != nil {
 		return nil, err
 	}
 	globalAvailable, err := s.FeatureEnabled(FeatureSkillLibrary)
@@ -74,7 +74,7 @@ func (s *Service) AdminSkills(actor *model.User) (*AdminSkillCatalog, error) {
 }
 
 func (s *Service) AdminInstallSkillUpload(actor *model.User, sourceType string, header *multipart.FileHeader, req SkillInstallRequest) (*AdminSkillCatalog, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionSkills); err != nil {
 		return nil, err
 	}
 	skill, err := s.skillDomain().InstallPlatformSkillUpload(actor.ID, sourceType, header, req)
@@ -90,7 +90,7 @@ func (s *Service) AdminInstallSkillUpload(actor *model.User, sourceType string, 
 }
 
 func (s *Service) AdminInstallGitHubSkill(actor *model.User, req SkillGitHubInstallRequest) (*AdminSkillCatalog, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionSkills); err != nil {
 		return nil, err
 	}
 	skill, err := s.skillDomain().InstallPlatformGitHubSkill(actor.ID, req)
@@ -106,7 +106,7 @@ func (s *Service) AdminInstallGitHubSkill(actor *model.User, req SkillGitHubInst
 }
 
 func (s *Service) UpdateAdminSkillAvailability(actor *model.User, req AdminSkillAvailabilityRequest) (*AdminSkillCatalog, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionSkills); err != nil {
 		return nil, err
 	}
 	audit, err := newAdminAuditEvent(actor, "skill.availability.batch_update", "skill", "batch", "批量更新平台公共技能可用状态", map[string]any{
@@ -122,7 +122,7 @@ func (s *Service) UpdateAdminSkillAvailability(actor *model.User, req AdminSkill
 }
 
 func (s *Service) UpdateAdminSkillCategoryAvailability(actor *model.User, tag string, available bool) (*AdminSkillCatalog, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionSkills); err != nil {
 		return nil, err
 	}
 	audit, err := newAdminAuditEvent(actor, "skill.category_availability.update", "skill_category", tag, "更新平台技能分类可用状态", map[string]any{

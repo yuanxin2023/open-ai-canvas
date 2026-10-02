@@ -8,6 +8,7 @@ import { http, apiBaseURL } from "@/services/api/request";
 import type { PublicLogicalModel } from "@/services/api/logical-models";
 import type { OSSConnectionTestInput, OSSConnectionTestResult, OSSProvider, S3Preset } from "@/lib/oss-settings";
 import { resourceFileUrl } from "@/services/api/resources";
+import type { AdminAccess } from "@/lib/admin-permissions";
 
 
 let authSessionRequest: Promise<AuthSessionPayload> | null = null;
@@ -30,6 +31,7 @@ export type LocalUser = {
     identityId?: string;
     identityUsername?: string;
     role: "admin" | "user";
+    adminAccess?: AdminAccess;
     status: "active" | "disabled";
     lastLoginAt?: string;
     createdAt: string;
@@ -182,8 +184,16 @@ export type AnalyticsFilters = {
     capability?: string;
 };
 
+export type AdminUserReference = {
+    id: string;
+    username: string;
+    displayName: string;
+    availableMicrocredits?: number;
+    reservedMicrocredits?: number;
+};
+
 export type AdminReferenceData = {
-    users: Array<{ id: string; username: string; displayName: string }>;
+    users: AdminUserReference[];
     channels: Array<{ id: string; name: string; enabled: boolean; models: string[]; modelDisplayNames?: string[] }>;
 };
 
@@ -485,12 +495,16 @@ export function listAdminUsers(params: AdminListParams = {}) {
     return http.get<{ users: AdminUser[]; total: number; page: number; pageSize: number }>("/admin/users", { params });
 }
 
-export function createAdminUser(input: { username: string; email?: string; remark?: string; password: string; role: LocalUser["role"]; status: LocalUser["status"] }) {
+export function createAdminUser(input: { username: string; email?: string; remark?: string; password: string; role: LocalUser["role"]; status: LocalUser["status"]; adminAccess?: AdminAccess }) {
     return http.post<{ user: AdminUser }>("/admin/users", input);
 }
 
 export function getAdminReferences() {
     return http.get<AdminReferenceData>("/admin/references");
+}
+
+export function searchAdminUserReferences(params: { keyword?: string; limit?: number } = {}) {
+    return http.get<{ users: AdminUserReference[] }>("/admin/user-references", { params });
 }
 
 export function getAdminUserDetail(id: string) {
@@ -513,7 +527,7 @@ export function listAdminUserAuditEvents(id: string, params: { page?: number; pa
     return http.get<{ events: AdminAuditEvent[]; total: number; page: number; pageSize: number }>(`/admin/users/${encodeURIComponent(id)}/audit-events`, { params });
 }
 
-export function updateAdminUser(id: string, input: Partial<Pick<LocalUser, "email" | "role" | "status">> & { remark?: string; password?: string }) {
+export function updateAdminUser(id: string, input: Partial<Pick<LocalUser, "email" | "role" | "status" | "adminAccess">> & { remark?: string; password?: string }) {
     return http.patch<{ user: AdminManagedUser }>(`/admin/users/${encodeURIComponent(id)}`, input);
 }
 

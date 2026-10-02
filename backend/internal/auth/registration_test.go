@@ -43,6 +43,9 @@ func TestRegisterFirstUserUsesEmailIdentityWithoutVerification(t *testing.T) {
 	if user.Role != model.UserRoleAdmin || user.Status != model.UserStatusActive {
 		t.Fatalf("first user role/status = %s/%s", user.Role, user.Status)
 	}
+	if user.AdminLevel != model.AdminLevelFull {
+		t.Fatalf("first user admin level = %q, want full", user.AdminLevel)
+	}
 	if len(host.userIDs) != 1 || host.userIDs[0] != user.ID {
 		t.Fatalf("signup bonus user IDs = %#v", host.userIDs)
 	}

@@ -52,7 +52,7 @@ type AdminResourceDeleteResult struct {
 }
 
 func (s *Service) PreviewAdminResourceDelete(actor *model.User, req AdminResourceDeleteRequest) (*AdminResourceDeletePreview, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionStorageResources); err != nil {
 		return nil, err
 	}
 	resourceIDs, err := normalizeAdminResourceDeleteIDs(req.ResourceIDs)
@@ -67,7 +67,7 @@ func (s *Service) PreviewAdminResourceDelete(actor *model.User, req AdminResourc
 }
 
 func (s *Service) DeleteAdminResources(actor *model.User, req AdminResourceDeleteRequest) (*AdminResourceDeleteResult, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionStorageResources); err != nil {
 		return nil, err
 	}
 	resourceIDs, err := normalizeAdminResourceDeleteIDs(req.ResourceIDs)

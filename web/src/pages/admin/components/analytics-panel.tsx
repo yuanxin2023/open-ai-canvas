@@ -9,7 +9,7 @@ import { Area, CartesianGrid, ComposedChart, Legend, Line, ResponsiveContainer, 
 import { useSearchParams } from "react-router";
 
 import { ListToolbar, PaginationBar, AdminDataTable, AdminExportButton, AdminFilterChip, AdminStatusBadge, AdminTableEmpty, type AdminStatusTone } from "./admin-ui";
-import { exportAdminAnalytics, getAdminAnalytics, listAdminUsers, type AdminReferenceData, type AdminAnalytics, type AnalyticsFilters } from "@/services/api/auth";
+import { exportAdminAnalytics, getAdminAnalytics, searchAdminUserReferences, type AdminReferenceData, type AdminAnalytics, type AnalyticsFilters } from "@/services/api/auth";
 import { analyticsFinanceColumns, formatCredits, formatFinanceCost, formatFinanceMargin } from "./analytics-finance";
 
 type Props = {
@@ -109,7 +109,7 @@ export default function AnalyticsPanel({ users, channels }: Props) {
     const searchUsers = async (keyword: string) => {
         setSearchingUsers(true);
         try {
-            const result = await listAdminUsers({ keyword: keyword.trim() || undefined, page: 1, pageSize: 50 });
+            const result = await searchAdminUserReferences({ keyword: keyword.trim() || undefined, limit: 50 });
             setUserOptions(result.users);
         } catch (error) {
             message.error(error instanceof Error ? error.message : "搜索用户失败");

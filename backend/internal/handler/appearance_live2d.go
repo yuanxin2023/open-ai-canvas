@@ -17,7 +17,7 @@ func registerLive2DRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
-		if err := svc.RequireAdmin(actor); err != nil {
+		if err := svc.RequireAdminPermission(actor, model.AdminPermissionAppearance); err != nil {
 			failService(c, err)
 			return
 		}
@@ -51,7 +51,7 @@ func registerLive2DRoutes(r *gin.RouterGroup, svc *service.Service) {
 					failService(c, err)
 					return
 				}
-				if err := svc.RequireAdmin(actor); err != nil {
+				if err := svc.RequireAdminPermission(actor, model.AdminPermissionAppearance); err != nil {
 					failService(c, err)
 					return
 				}

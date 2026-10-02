@@ -35,6 +35,7 @@ const (
 	ReasonQuotaExceeded       ErrorReason = "quota_exceeded"
 	ReasonRateLimited         ErrorReason = "rate_limited"
 	ReasonUsernameChangeLimit ErrorReason = "username_change_limit"
+	ReasonAdminPermission     ErrorReason = "admin_permission_denied"
 	ReasonUnavailable         ErrorReason = "unavailable"
 	ReasonTimeout             ErrorReason = "timeout"
 	ReasonInternal            ErrorReason = "internal"

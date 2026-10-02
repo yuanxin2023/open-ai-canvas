@@ -84,6 +84,12 @@ type AuthUser struct {
 	IdentityID           string               `json:"identityId,omitempty"`
 	IdentityUsername     string               `json:"identityUsername,omitempty"`
 	UsernameChangePolicy UsernameChangePolicy `json:"usernameChangePolicy"`
+	AdminAccess          *AdminAccess         `json:"adminAccess,omitempty"`
+}
+
+type AdminAccess struct {
+	Level       model.AdminLevel        `json:"level"`
+	Permissions []model.AdminPermission `json:"permissions"`
 }
 
 type UsernameChangePolicy struct {
@@ -176,6 +182,7 @@ func (s *Service) RegisterWithEnvironment(req RegisterRequest, environment Login
 	}
 	if count == 0 {
 		user.Role = model.UserRoleAdmin
+		user.AdminLevel = model.AdminLevelFull
 	}
 	created := false
 	for attempt := 0; attempt < 32; attempt++ {
@@ -270,12 +277,21 @@ func (s *Service) CurrentUser(cookieValue string) (*model.User, error) {
 	if user.Status != model.UserStatusActive {
 		return nil, kernel.Forbidden("该账号已被禁用")
 	}
+	if err := s.repo.HydrateAdminAccess(user); err != nil {
+		return nil, err
+	}
 	return user, nil
 }
 
 // 认证响应只补充当前用户自己的第三方公开身份，不把身份表或密钥字段暴露给其他列表接口。
 func (s *Service) PublicAuthUser(user *model.User) (AuthUser, error) {
+	if err := s.repo.HydrateAdminAccess(user); err != nil {
+		return AuthUser{}, err
+	}
 	result := AuthUser{User: *user, AvatarResourceID: user.AvatarResourceID}
+	if user.Role == model.UserRoleAdmin {
+		result.AdminAccess = &AdminAccess{Level: user.AdminLevel, Permissions: append([]model.AdminPermission(nil), user.AdminPermissions...)}
+	}
 	result.UsernameChangePolicy = UsernameChangePolicy{Customized: user.UsernameCustomizedAt != nil, WindowDays: 30}
 	if user.Role != model.UserRoleAdmin {
 		limit := usernameChangeLimit

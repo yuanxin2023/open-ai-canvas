@@ -42,7 +42,7 @@ type arkPrivateAssetSettingValue struct {
 }
 
 func (s *Service) AdminArkPrivateAssetSetting(actor *model.User) (*PublicArkPrivateAssetSetting, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionArkPrivateAssets); err != nil {
 		return nil, err
 	}
 	setting, value, err := s.readArkPrivateAssetSetting()
@@ -54,7 +54,7 @@ func (s *Service) AdminArkPrivateAssetSetting(actor *model.User) (*PublicArkPriv
 }
 
 func (s *Service) UpdateArkPrivateAssetSetting(actor *model.User, req ArkPrivateAssetSettingRequest) (*PublicArkPrivateAssetSetting, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionArkPrivateAssets); err != nil {
 		return nil, err
 	}
 	currentSetting, current, err := s.readArkPrivateAssetSetting()

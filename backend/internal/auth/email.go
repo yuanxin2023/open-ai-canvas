@@ -82,7 +82,7 @@ type EmailSettingValue struct {
 }
 
 func (s *Service) AdminEmailSetting(actor *model.User) (*PublicEmailSetting, error) {
-	if err := s.host.RequireAdmin(actor); err != nil {
+	if err := s.host.RequireAdminPermission(actor, model.AdminPermissionEmail); err != nil {
 		return nil, err
 	}
 	setting, value, err := s.readEmailSetting()
@@ -93,7 +93,7 @@ func (s *Service) AdminEmailSetting(actor *model.User) (*PublicEmailSetting, err
 }
 
 func (s *Service) UpdateEmailSetting(actor *model.User, req EmailSettingRequest) (*PublicEmailSetting, error) {
-	if err := s.host.RequireAdmin(actor); err != nil {
+	if err := s.host.RequireAdminPermission(actor, model.AdminPermissionEmail); err != nil {
 		return nil, err
 	}
 	currentSetting, current, err := s.readEmailSetting()

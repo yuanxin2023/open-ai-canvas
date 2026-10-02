@@ -2,6 +2,8 @@ import { lazy, Suspense, type ReactNode } from "react";
 import { createBrowserRouter, Navigate, Outlet, useLocation } from "react-router";
 
 import { RequireAuth } from "@/components/auth/require-auth";
+import { AdminLanding, RequireAdminPermission } from "@/components/auth/require-admin-permission";
+import type { AdminPermission } from "@/lib/admin-permissions";
 import { CustomerServiceWidget } from "@/components/customer-service/customer-service-widget";
 import { FullScreenLoader, WorkspaceRouteLoader } from "@/components/ui/aceternity/full-screen-loader";
 import { loadAssetsPage, loadCanvasPage, loadCanvasProjectPage, loadCreatePage, loadProjectDetailPage, loadProjectsPage } from "@/lib/workspace-route-modules";
@@ -68,6 +70,10 @@ function deferred(element: ReactNode) {
 
 function fullScreenDeferred(element: ReactNode) {
     return <Suspense fallback={<FullScreenLoader label="正在打开创作空间" detail="准备当前页面" />}>{element}</Suspense>;
+}
+
+function adminRoute(permission: AdminPermission, element: ReactNode) {
+    return <RequireAdminPermission permission={permission}>{element}</RequireAdminPermission>;
 }
 
 function AuthenticatedWorkspaceLayout() {
@@ -200,41 +206,41 @@ export const router = createBrowserRouter([
                 path: "/admin",
                 element: <RequireAuth>{deferred(<AdminPage />)}</RequireAuth>,
                 children: [
-                    { index: true, element: <AnalyticsPage /> },
-                    { path: "users", element: <UsersPage /> },
-                    { path: "channels", element: <ChannelsPage /> },
-                    { path: "models", element: <RequireFeature feature="frontendModelsEnabled"><LogicalModelsPage /></RequireFeature> },
-                    { path: "plugins", element: <AdminPluginsPage /> },
-                    { path: "skills", element: <AdminSkillsPage /> },
-                    { path: "payments", element: <AdminPaymentsPage view="providers" /> },
-                    { path: "payment-orders", element: <AdminPaymentsPage view="orders" /> },
-                    { path: "payment-reconciliation", element: <AdminPaymentsPage view="reconciliation" /> },
-                    { path: "product-operations", element: <ProductOperationsPage /> },
-                    { path: "prompt-templates", element: <StoryboardPromptsPage /> },
+                    { index: true, element: <AdminLanding>{adminRoute("admin.analytics.overview", <AnalyticsPage />)}</AdminLanding> },
+                    { path: "users", element: adminRoute("admin.users.accounts", <UsersPage />) },
+                    { path: "channels", element: adminRoute("admin.platform.channels", <ChannelsPage />) },
+                    { path: "models", element: adminRoute("admin.platform.logical_models", <RequireFeature feature="frontendModelsEnabled"><LogicalModelsPage /></RequireFeature>) },
+                    { path: "plugins", element: adminRoute("admin.platform.plugins", <AdminPluginsPage />) },
+                    { path: "skills", element: adminRoute("admin.platform.skills", <AdminSkillsPage />) },
+                    { path: "payments", element: adminRoute("admin.finance.payment_providers", <AdminPaymentsPage view="providers" />) },
+                    { path: "payment-orders", element: adminRoute("admin.finance.payment_orders", <AdminPaymentsPage view="orders" />) },
+                    { path: "payment-reconciliation", element: adminRoute("admin.finance.reconciliation", <AdminPaymentsPage view="reconciliation" />) },
+                    { path: "product-operations", element: adminRoute("admin.commerce.products", <ProductOperationsPage />) },
+                    { path: "prompt-templates", element: adminRoute("admin.platform.prompt_templates", <StoryboardPromptsPage />) },
                     { path: "storyboard-prompts", element: <Navigate to="/admin/prompt-templates" replace /> },
-                    { path: "announcements", element: <AnnouncementsPage /> },
-                    { path: "customer-service", element: <CustomerServicePage /> },
-                    { path: "inspirations", element: <InspirationsPage /> },
-                    { path: "banner-announcements", element: <BannerAnnouncementsPage /> },
-                    { path: "agent-lessons", element: <AgentLessonsPage /> },
-                    { path: "resources", element: <StorageResourcesPage /> },
-                    { path: "credit-operations", element: <CreditOperationsPage /> },
-                    { path: "redemption-codes", element: <RedemptionCodesPage /> },
-                    { path: "logs", element: <LogsPage /> },
+                    { path: "announcements", element: adminRoute("admin.content.announcements", <AnnouncementsPage />) },
+                    { path: "customer-service", element: adminRoute("admin.users.customer_service", <CustomerServicePage />) },
+                    { path: "inspirations", element: adminRoute("admin.content.inspirations", <InspirationsPage />) },
+                    { path: "banner-announcements", element: adminRoute("admin.content.banner_announcements", <BannerAnnouncementsPage />) },
+                    { path: "agent-lessons", element: adminRoute("admin.users.agent_lessons", <AgentLessonsPage />) },
+                    { path: "resources", element: adminRoute("admin.storage.resources", <StorageResourcesPage />) },
+                    { path: "credit-operations", element: adminRoute("admin.finance.credits", <CreditOperationsPage />) },
+                    { path: "redemption-codes", element: adminRoute("admin.commerce.redeem_codes", <RedemptionCodesPage />) },
+                    { path: "logs", element: adminRoute("admin.analytics.api_logs", <LogsPage />) },
                     { path: "settings", element: <Navigate to="runtime-policy" replace /> },
-                    { path: "settings/appearance", element: <AppearanceSettingsPage /> },
-                    { path: "settings/drawing-engine", element: <DrawingEngineSettingsPage /> },
+                    { path: "settings/appearance", element: adminRoute("admin.settings.appearance", <AppearanceSettingsPage />) },
+                    { path: "settings/drawing-engine", element: adminRoute("admin.settings.drawing_engine", <DrawingEngineSettingsPage />) },
                     { path: "settings/concurrency", element: <Navigate to="/admin/settings/runtime-policy" replace /> },
-                    { path: "settings/runtime-policy", element: <RuntimePolicySettingsPage /> },
-                    { path: "settings/features", element: <FeatureAvailabilityPage /> },
-                    { path: "settings/access", element: <AccessSettingsPage /> },
-                    { path: "settings/email", element: <EmailSettingsPage /> },
-                    { path: "settings/storage", element: <StorageSettingsPage /> },
-                    { path: "settings/ark-private-assets", element: <ArkPrivateAssetsSettingsPage /> },
-                    { path: "settings/response-interception", element: <ResponseInterceptionSettingsPage /> },
-                    { path: "settings/third-party", element: <ThirdPartySettingsPage /> },
-                    { path: "settings/system-update", element: <SystemUpdatePage /> },
-                    { path: "settings/system-performance", element: <SystemPerformancePage /> },
+                    { path: "settings/runtime-policy", element: adminRoute("admin.storage.runtime_policy", <RuntimePolicySettingsPage />) },
+                    { path: "settings/features", element: adminRoute("admin.settings.features", <FeatureAvailabilityPage />) },
+                    { path: "settings/access", element: adminRoute("admin.settings.access", <AccessSettingsPage />) },
+                    { path: "settings/email", element: adminRoute("admin.settings.email", <EmailSettingsPage />) },
+                    { path: "settings/storage", element: adminRoute("admin.storage.service", <StorageSettingsPage />) },
+                    { path: "settings/ark-private-assets", element: adminRoute("admin.settings.ark_private_assets", <ArkPrivateAssetsSettingsPage />) },
+                    { path: "settings/response-interception", element: adminRoute("admin.settings.response_interception", <ResponseInterceptionSettingsPage />) },
+                    { path: "settings/third-party", element: adminRoute("admin.settings.third_party", <ThirdPartySettingsPage />) },
+                    { path: "settings/system-update", element: adminRoute("admin.settings.system_update", <SystemUpdatePage />) },
+                    { path: "settings/system-performance", element: adminRoute("admin.settings.system_performance", <SystemPerformancePage />) },
                     { path: "settings/libtv", element: <Navigate to="/admin/settings/third-party" replace /> },
                 ],
             },

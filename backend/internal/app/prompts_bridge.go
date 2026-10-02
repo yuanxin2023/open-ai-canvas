@@ -38,7 +38,7 @@ func (g promptAdminGate) RequireAdmin(user *model.User) error {
 	if g.svc == nil {
 		return nil
 	}
-	return g.svc.RequireAdmin(user)
+	return g.svc.RequireAdminPermission(user, model.AdminPermissionPromptTemplates)
 }
 
 func (g promptAdminGate) AppendAudit(actor *model.User, action, targetType, targetID, summary string, metadata any) error {
