@@ -147,18 +147,23 @@ func TestTopupProductCardFieldsAreValidatedAndStored(t *testing.T) {
 		Name: "创作套餐", AmountFen: 9900, CreditsMicrocredits: CreditScale * 100,
 		RibbonText: "限时加赠", BadgeText: "热门", CompareAmountFen: 12900,
 		PriceCaption: "购买后到账", QuotaCaption: "到账积分", QuotaDetail: "用于创作",
-		ActionText: "立即开通", Featured: true,
+		ActionText: "立即开通", AccentColor: "#d8ff4f", Featured: true,
 	}
 	product, err := topupProductFromRequest("product", "admin", request)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if product.RibbonText != request.RibbonText || product.BadgeText != request.BadgeText || product.CompareAmountFen != request.CompareAmountFen || product.ActionText != request.ActionText || !product.Featured {
+	if product.RibbonText != request.RibbonText || product.BadgeText != request.BadgeText || product.CompareAmountFen != request.CompareAmountFen || product.ActionText != request.ActionText || product.AccentColor != "#D8FF4F" || !product.Featured {
 		t.Fatalf("card fields were not preserved: %+v", product)
 	}
 	request.CompareAmountFen = request.AmountFen
 	if _, err := topupProductFromRequest("product", "admin", request); err == nil {
 		t.Fatal("compare price must exceed payable price")
+	}
+	request.CompareAmountFen = 12900
+	request.AccentColor = "red; color: transparent"
+	if _, err := topupProductFromRequest("product", "admin", request); err == nil {
+		t.Fatal("unsafe accent color must be rejected")
 	}
 }
 

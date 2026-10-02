@@ -255,7 +255,7 @@ Skills 的 `tool_completed` / `tool_failed` 事件附带 `skillId`、`skillName`
 
 ## 充值套餐商品
 
-`GET /api/payments/products` 返回已上架商品；`GET /api/admin/payments/products` 及 `POST/PUT /api/admin/payments/products` 仅允许管理员访问。商品包含真实交易字段 `amountFen`、`creditsMicrocredits`，以及卡片展示字段 `name`、`description`、`benefits`、`ribbonText`、`badgeText`、`compareAmountFen`、`priceCaption`、`quotaCaption`、`quotaDetail`、`actionText`、`featured`。`benefits` 按换行分为权益项；未配置 `priceCaption` 时卡片根据真实售价和积分显示每 100 积分价格，其他可选展示字段为空时不显示。`compareAmountFen` 为可选划线价，非零时必须高于真实售价，不能用于创建订单金额。`featured` 控制卡片突出样式，后台预览与用户端共用卡片组件。
+`GET /api/payments/products` 返回已上架商品；`GET /api/admin/payments/products` 及 `POST/PUT /api/admin/payments/products` 仅允许管理员访问。商品包含真实交易字段 `amountFen`、`creditsMicrocredits`，以及卡片展示字段 `name`、`description`、`benefits`、`ribbonText`、`badgeText`、`compareAmountFen`、`priceCaption`、`quotaCaption`、`quotaDetail`、`actionText`、`accentColor`、`featured`。`benefits` 按换行分为权益项；未配置 `priceCaption` 时卡片根据真实售价和积分显示每 100 积分价格，其他可选展示字段为空时不显示。`compareAmountFen` 为可选划线价，非零时必须高于真实售价，不能用于创建订单金额。`accentColor` 必须是 `#RRGGBB`，驱动卡片横幅、边框、角标与购买按钮；缺失时使用默认亮绿色。`featured` 控制推荐套餐的突出边框、底色以及默认“推荐套餐”横幅，后台预览与用户端共用卡片组件。
 
 ## 用户支付订单
 

@@ -22,16 +22,16 @@ func TestCurrentSchemaVersionMatchesMigrationPlan(t *testing.T) {
 			}
 		}
 		latest := plan[len(plan)-1]
-		if CurrentSchemaVersion != latest.version || latest.name != "topup_product_card_fields" {
-			t.Fatalf("%s latest migration = %d/%q, want %d/topup_product_card_fields", name, latest.version, latest.name, CurrentSchemaVersion)
+		if CurrentSchemaVersion != latest.version || latest.name != "topup_product_accent_color" {
+			t.Fatalf("%s latest migration = %d/%q, want %d/topup_product_accent_color", name, latest.version, latest.name, CurrentSchemaVersion)
 		}
 	}
 }
 
-func TestTopupProductCardFieldsMigrationIsSharedTail(t *testing.T) {
+func TestTopupProductAccentColorMigrationIsSharedTail(t *testing.T) {
 	for name, plan := range map[string][]migration{"local": schemaMigrations, "upstream": upstreamFirstMigrationPlan()} {
 		last := plan[len(plan)-1]
-		if last.version != 43 || last.name != "topup_product_card_fields" {
+		if last.version != 44 || last.name != "topup_product_accent_color" {
 			t.Fatalf("%s latest migration = %d/%s", name, last.version, last.name)
 		}
 	}
@@ -45,13 +45,29 @@ func TestTopupProductCardFieldsMigrationAddsColumns(t *testing.T) {
 	if err := db.Exec("CREATE TABLE topup_products (id text PRIMARY KEY, name text, amount_fen integer, credits_microcredits integer)").Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := schemaMigrations[len(schemaMigrations)-1].apply(db); err != nil {
+	if err := schemaMigrations[42].apply(db); err != nil {
 		t.Fatal(err)
 	}
 	for _, column := range []string{"RibbonText", "BadgeText", "CompareAmountFen", "PriceCaption", "QuotaCaption", "QuotaDetail", "ActionText", "Featured"} {
 		if !db.Migrator().HasColumn(&model.TopupProduct{}, column) {
 			t.Fatalf("migration v43 did not add %s", column)
 		}
+	}
+}
+
+func TestTopupProductAccentColorMigrationAddsColumn(t *testing.T) {
+	db, err := Open(Config{Driver: "sqlite", DSN: "file:migration-topup-accent-v44?mode=memory&cache=shared"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec("CREATE TABLE topup_products (id text PRIMARY KEY, name text, amount_fen integer, credits_microcredits integer)").Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := schemaMigrations[len(schemaMigrations)-1].apply(db); err != nil {
+		t.Fatal(err)
+	}
+	if !db.Migrator().HasColumn(&model.TopupProduct{}, "AccentColor") {
+		t.Fatal("migration v44 did not add AccentColor")
 	}
 }
 
@@ -79,8 +95,8 @@ func TestMigrateSchemaSupportsLocalAndUpstreamPost23Lineages(t *testing.T) {
 		expectedV24Name  string
 		expectedTailName string
 	}{
-		{name: "local", plan: schemaMigrations, appliedThrough: 27, expectedV24Name: "topup_product_benefits", expectedTailName: "topup_product_card_fields"},
-		{name: "upstream", plan: upstreamFirstMigrationPlan(), appliedThrough: 32, expectedV24Name: "channel_model_label", expectedTailName: "topup_product_card_fields"},
+		{name: "local", plan: schemaMigrations, appliedThrough: 27, expectedV24Name: "topup_product_benefits", expectedTailName: "topup_product_accent_color"},
+		{name: "upstream", plan: upstreamFirstMigrationPlan(), appliedThrough: 32, expectedV24Name: "channel_model_label", expectedTailName: "topup_product_accent_color"},
 	} {
 		t.Run(scenario.name, func(t *testing.T) {
 			db, err := Open(Config{Driver: "sqlite", DSN: "file:" + t.Name() + "?mode=memory&cache=shared"})
@@ -171,6 +187,9 @@ func TestMigrateSchemaRecordsAndValidatesVersion(t *testing.T) {
 	}
 	if !db.Migrator().HasColumn(&model.TopupProduct{}, "Benefits") {
 		t.Fatal("schema migration v24 did not create top-up product benefits")
+	}
+	if !db.Migrator().HasColumn(&model.TopupProduct{}, "AccentColor") {
+		t.Fatal("schema migration v44 did not create top-up product accent color")
 	}
 	if !db.Migrator().HasTable(&model.Inspiration{}) || !db.Migrator().HasTable(&model.InspirationCoverDraft{}) {
 		t.Fatal("schema migration v25 did not create inspiration tables")

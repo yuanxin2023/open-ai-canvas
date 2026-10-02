@@ -29,6 +29,7 @@ type ProductFormValues = {
     quotaCaption?: string;
     quotaDetail?: string;
     actionText?: string;
+    accentColor: string;
     featured: boolean;
     amountYuan: number;
     credits: number;
@@ -59,6 +60,7 @@ export default function ProductOperationsPage() {
             quotaCaption: watchedProduct?.quotaCaption,
             quotaDetail: watchedProduct?.quotaDetail,
             actionText: watchedProduct?.actionText,
+            accentColor: watchedProduct?.accentColor,
             featured: watchedProduct?.featured,
             amountFen: Math.max(0, Math.round(amountYuan * 100)),
             creditsMicrocredits: Math.max(0, Math.round(credits * 1_000_000)),
@@ -97,13 +99,14 @@ export default function ProductOperationsPage() {
                       quotaCaption: product.quotaCaption,
                       quotaDetail: product.quotaDetail,
                       actionText: product.actionText,
+                      accentColor: product.accentColor || "#D8FF4F",
                       featured: product.featured,
                       amountYuan: product.amountFen / 100,
                       credits: product.creditsMicrocredits / 1_000_000,
                       enabled: product.enabled,
                       sortOrder: product.sortOrder,
                   }
-                : { enabled: true, featured: false, sortOrder: products.length * 10, amountYuan: 10, credits: 10, quotaCaption: "到账积分", actionText: "立即购买" },
+                : { enabled: true, featured: false, accentColor: "#D8FF4F", sortOrder: products.length * 10, amountYuan: 10, credits: 10, quotaCaption: "到账积分", actionText: "立即购买" },
         );
         setProductDrawer(product || null);
     };
@@ -122,6 +125,7 @@ export default function ProductOperationsPage() {
             quotaCaption: values.quotaCaption?.trim() || "",
             quotaDetail: values.quotaDetail?.trim() || "",
             actionText: values.actionText?.trim() || "",
+            accentColor: values.accentColor.toUpperCase(),
             featured: values.featured || false,
             amountFen: Math.round(values.amountYuan * 100),
             creditsMicrocredits: Math.round(values.credits * 1_000_000),
@@ -237,7 +241,12 @@ export default function ProductOperationsPage() {
                                 <Form.Item name="ribbonText" label="顶部横幅" rules={[{ max: 120 }]}><Input placeholder="例如：限时加赠" /></Form.Item>
                                 <Form.Item name="badgeText" label="标题角标" rules={[{ max: 80 }]}><Input placeholder="例如：热门选择" /></Form.Item>
                             </div>
-                            <Form.Item name="featured" label="突出展示" valuePropName="checked"><Switch /></Form.Item>
+                            <div className="grid grid-cols-2 gap-3">
+                                <Form.Item name="featured" label="推荐套餐" valuePropName="checked" extra="开启后使用主题色突出边框与底色；未填写顶部横幅时显示“推荐套餐”。"><Switch /></Form.Item>
+                                <Form.Item name="accentColor" label="套餐主题色" rules={[{ required: true }, { pattern: /^#[0-9a-fA-F]{6}$/, message: "请选择 6 位十六进制颜色" }]} extra="用于横幅、边框、角标和购买按钮。">
+                                    <Input type="color" className="admin-payment-product-color-input" />
+                                </Form.Item>
+                            </div>
                             <div className="grid grid-cols-2 gap-3">
                                 <Form.Item name="compareAmountYuan" label="划线对比价（元）" rules={[{ type: "number", min: 0, max: 1_000_000 }, { validator: (_, value) => !value || value > Number(productForm.getFieldValue("amountYuan")) ? Promise.resolve() : Promise.reject(new Error("对比价须高于售价")) }]}><InputNumber min={0} max={1_000_000} precision={2} className="w-full" /></Form.Item>
                                 <Form.Item name="priceCaption" label="价格补充说明" rules={[{ max: 240 }]} extra="留空时按售价与到账积分显示每 100 积分的价格。"><Input placeholder="例如：一次购买，积分即时到账" /></Form.Item>

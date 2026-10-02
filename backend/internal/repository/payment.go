@@ -55,7 +55,7 @@ func (r *Repository) UpdateTopupProduct(product *model.TopupProduct) error {
 		"name": product.Name, "description": product.Description, "benefits": product.Benefits, "amount_fen": product.AmountFen,
 		"ribbon_text": product.RibbonText, "badge_text": product.BadgeText, "compare_amount_fen": product.CompareAmountFen,
 		"price_caption": product.PriceCaption, "quota_caption": product.QuotaCaption, "quota_detail": product.QuotaDetail,
-		"action_text": product.ActionText, "featured": product.Featured,
+		"action_text": product.ActionText, "accent_color": product.AccentColor, "featured": product.Featured,
 		"credits_microcredits": product.CreditsMicrocredits, "enabled": product.Enabled,
 		"sort_order": product.SortOrder, "updated_by": product.UpdatedBy, "updated_at": time.Now(),
 	}).Error

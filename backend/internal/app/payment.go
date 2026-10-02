@@ -69,6 +69,7 @@ type TopupProductRequest struct {
 	QuotaCaption        string `json:"quotaCaption"`
 	QuotaDetail         string `json:"quotaDetail"`
 	ActionText          string `json:"actionText"`
+	AccentColor         string `json:"accentColor"`
 	Featured            bool   `json:"featured"`
 	AmountFen           int64  `json:"amountFen"`
 	CreditsMicrocredits int64  `json:"creditsMicrocredits"`
@@ -536,11 +537,20 @@ func topupProductFromRequest(id, actorID string, request TopupProductRequest) (*
 			return nil, BadAuthRequest("套餐卡片文案超过长度限制")
 		}
 	}
+	accentColor := strings.ToUpper(strings.TrimSpace(request.AccentColor))
+	if accentColor == "" {
+		accentColor = "#D8FF4F"
+	}
+	if len(accentColor) != 7 || accentColor[0] != '#' || strings.IndexFunc(accentColor[1:], func(value rune) bool {
+		return !((value >= '0' && value <= '9') || (value >= 'A' && value <= 'F'))
+	}) >= 0 {
+		return nil, BadAuthRequest("套餐主题颜色必须为 6 位十六进制颜色")
+	}
 	return &model.TopupProduct{
 		ID: id, Name: name, Description: truncateRunes(strings.TrimSpace(request.Description), 500), Benefits: truncateRunes(strings.TrimSpace(request.Benefits), 1000),
 		RibbonText: strings.TrimSpace(request.RibbonText), BadgeText: strings.TrimSpace(request.BadgeText), CompareAmountFen: request.CompareAmountFen,
 		PriceCaption: strings.TrimSpace(request.PriceCaption), QuotaCaption: strings.TrimSpace(request.QuotaCaption), QuotaDetail: strings.TrimSpace(request.QuotaDetail),
-		ActionText: strings.TrimSpace(request.ActionText), Featured: request.Featured,
+		ActionText: strings.TrimSpace(request.ActionText), AccentColor: accentColor, Featured: request.Featured,
 		AmountFen: request.AmountFen, CreditsMicrocredits: request.CreditsMicrocredits,
 		Enabled: request.Enabled, SortOrder: request.SortOrder, CreatedBy: actorID, UpdatedBy: actorID,
 	}, nil

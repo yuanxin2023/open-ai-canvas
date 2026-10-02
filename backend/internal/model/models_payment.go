@@ -46,6 +46,7 @@ type TopupProduct struct {
 	QuotaCaption        string    `json:"quotaCaption" gorm:"size:120"`
 	QuotaDetail         string    `json:"quotaDetail" gorm:"size:240"`
 	ActionText          string    `json:"actionText" gorm:"size:80"`
+	AccentColor         string    `json:"accentColor" gorm:"size:7"`
 	Featured            bool      `json:"featured"`
 	AmountFen           int64     `json:"amountFen" gorm:"index"`
 	CreditsMicrocredits int64     `json:"creditsMicrocredits"`
