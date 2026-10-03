@@ -469,14 +469,60 @@ func validatePaymentPublicBaseURL(value string) error {
 	return nil
 }
 
-func (s *Service) TopupProducts(actor *model.User) ([]model.TopupProduct, error) {
+type PaymentCatalog struct {
+	Products   []model.TopupProduct   `json:"products"`
+	Promotion  PublicPaymentPromotion `json:"promotion"`
+	ServerTime time.Time              `json:"serverTime"`
+}
+
+func (s *Service) TopupProducts(actor *model.User) (*PaymentCatalog, error) {
 	if actor == nil {
 		return nil, Unauthorized("请先登录")
 	}
 	if err := s.RequireFeature(FeatureCredits); err != nil {
 		return nil, err
 	}
-	return s.repo.TopupProducts(false)
+	products, err := s.repo.TopupProducts(false)
+	if err != nil {
+		return nil, err
+	}
+	setting, promotion, err := s.readPaymentPromotion()
+	if err != nil {
+		return nil, err
+	}
+	now := time.Now()
+	publicPromotion := s.publicPaymentPromotion(setting, promotion, now)
+	active := publicPromotion.Visible && paymentPromotionActive(promotion, now)
+	for index := range products {
+		products[index] = publicTopupProduct(products[index], active)
+	}
+	return &PaymentCatalog{Products: products, Promotion: publicPromotion, ServerTime: now}, nil
+}
+
+func publicTopupProduct(product model.TopupProduct, promotionActive bool) model.TopupProduct {
+	if product.CompareAmountFen <= 0 {
+		return product
+	}
+	if promotionActive {
+		return product
+	}
+	product.AmountFen = product.CompareAmountFen
+	product.CompareAmountFen = 0
+	return product
+}
+
+func (s *Service) effectiveTopupProductAmount(product model.TopupProduct, now time.Time) (int64, error) {
+	_, promotion, err := s.readPaymentPromotion()
+	if err != nil {
+		return 0, err
+	}
+	active := paymentPromotionActive(promotion, now)
+	if active {
+		if _, imageErr := s.paymentPromotionImageResource(promotion.ImageResourceID); imageErr != nil {
+			active = false
+		}
+	}
+	return publicTopupProduct(product, active).AmountFen, nil
 }
 
 func (s *Service) AdminTopupProducts(actor *model.User) ([]model.TopupProduct, error) {
@@ -615,11 +661,15 @@ func (s *Service) CreatePaymentOrder(ctx context.Context, actor *model.User, req
 		return nil, NewAppError(http.StatusConflict, "未支付订单过多，请先完成或关闭已有订单")
 	}
 	now := time.Now()
+	effectiveAmountFen, err := s.effectiveTopupProductAmount(*product, now)
+	if err != nil {
+		return nil, err
+	}
 	order := &model.PaymentOrder{
 		ID: newID(), UserID: actor.ID, IdempotencyKey: idempotencyKey, MerchantOrderNo: newID(),
 		ProductID: product.ID, ProductName: product.Name, ProviderID: provider.Descriptor().ID,
 		PluginID: provider.Descriptor().PluginID, PluginVersion: provider.Descriptor().PluginVersion, ProviderConfigID: config.ID, ProviderConfigVersion: config.Version,
-		AmountFen: product.AmountFen, Currency: "CNY", CreditsMicrocredits: product.CreditsMicrocredits,
+		AmountFen: effectiveAmountFen, Currency: "CNY", CreditsMicrocredits: product.CreditsMicrocredits,
 		Status: model.PaymentOrderCreated, CheckoutMode: provider.Descriptor().CheckoutMode,
 		ExpiresAt: now.Add(time.Duration(config.CloseAfterMinutes) * time.Minute),
 	}

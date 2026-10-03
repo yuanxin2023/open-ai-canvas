@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { CreditProductCard } from "@/components/payments/credit-product-card";
+import { PaymentPromotionBanner, promotionClockOffset } from "@/components/payments/payment-promotion-banner";
 import { AppModal } from "@/components/ui/product/app-modal";
 import { formatCredits } from "@/constant/credits";
 import { useWalletBalance } from "@/hooks/use-wallet-balance";
@@ -38,13 +39,15 @@ export function WorkspaceCreditPopover({ userId }: { userId: string }) {
         queryKey: ["payment-catalog", userId],
         queryFn: async () => {
             const [productsResult, providersResult] = await Promise.all([listTopupProducts(), listPaymentProviders()]);
-            return { products: productsResult.products, providers: providersResult.providers };
+            return { products: productsResult.products, promotion: productsResult.promotion, serverTime: productsResult.serverTime, providers: providersResult.providers };
         },
         staleTime: PAYMENT_CATALOG_STALE_TIME_MS,
         refetchOnWindowFocus: false,
     });
     const products = useMemo(() => paymentCatalogQuery.data?.products ?? [], [paymentCatalogQuery.data?.products]);
     const providers = useMemo(() => paymentCatalogQuery.data?.providers ?? [], [paymentCatalogQuery.data?.providers]);
+    const promotion = paymentCatalogQuery.data?.promotion;
+    const catalogServerTime = paymentCatalogQuery.data?.serverTime || new Date().toISOString();
     const maxProductCredits = useMemo(() => products.reduce((maximum, product) => Math.max(maximum, product.creditsMicrocredits), 0), [products]);
     const productsLoading = paymentCatalogQuery.isPending;
     const productsError = !paymentCatalogQuery.data && paymentCatalogQuery.error
@@ -56,6 +59,31 @@ export function WorkspaceCreditPopover({ userId }: { userId: string }) {
         if (!productsOpen) return;
         void paymentCatalogQuery.refetch({ cancelRefetch: false });
     }, [productsOpen, paymentCatalogQuery.refetch]);
+
+    useEffect(() => {
+        if (!productsOpen || !promotion) return;
+        const boundary = promotion.phase === "scheduled" ? promotion.startsAt : promotion.phase === "active" ? promotion.endsAt : undefined;
+        if (!boundary) return;
+        const offset = promotionClockOffset(catalogServerTime);
+        const remaining = Date.parse(boundary) - (Date.now() + offset);
+        const timer = window.setTimeout(() => void paymentCatalogQuery.refetch({ cancelRefetch: false }), Math.max(250, Math.min(remaining + 150, 2_147_000_000)));
+        return () => window.clearTimeout(timer);
+    }, [catalogServerTime, paymentCatalogQuery.refetch, productsOpen, promotion]);
+
+    useEffect(() => {
+        if (!productsOpen) return;
+        const refreshWhenVisible = () => {
+            if (document.visibilityState === "visible") void paymentCatalogQuery.refetch({ cancelRefetch: false });
+        };
+        document.addEventListener("visibilitychange", refreshWhenVisible);
+        return () => document.removeEventListener("visibilitychange", refreshWhenVisible);
+    }, [paymentCatalogQuery.refetch, productsOpen]);
+
+    useEffect(() => {
+        if (!selectedProduct) return;
+        const refreshed = products.find((product) => product.id === selectedProduct.id);
+        if (refreshed) setSelectedProduct(refreshed);
+    }, [products, selectedProduct?.id]);
 
     useEffect(() => {
         const openProducts = () => {
@@ -288,6 +316,7 @@ export function WorkspaceCreditPopover({ userId }: { userId: string }) {
                 onCancel={() => setProductsOpen(false)}
             >
                 <section className="workspace-credit-products-shell">
+                    {promotion ? <PaymentPromotionBanner promotion={promotion} serverTime={catalogServerTime} onBoundary={() => void paymentCatalogQuery.refetch({ cancelRefetch: false })} /> : null}
                     <header className="workspace-credit-products-header">
                         <h2>选择您的套餐</h2>
                         <p>选择适合你的积分套餐，购买成功后积分将自动到账</p>

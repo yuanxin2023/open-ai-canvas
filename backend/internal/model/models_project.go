@@ -85,6 +85,14 @@ type InspirationCoverDraft struct {
 	CreatedAt  time.Time `json:"createdAt" gorm:"index"`
 }
 
+// PaymentPromotionImageDraft marks an uploaded banner as temporary until the
+// singleton payment promotion setting consumes it.
+type PaymentPromotionImageDraft struct {
+	ResourceID string    `json:"resourceId" gorm:"primaryKey;size:36"`
+	UserID     string    `json:"userId" gorm:"index;size:36"`
+	CreatedAt  time.Time `json:"createdAt" gorm:"index"`
+}
+
 type Asset struct {
 	ID               string             `json:"id" gorm:"primaryKey;size:80"`
 	UserID           string             `json:"userId" gorm:"index;size:36;index:idx_assets_user_updated,priority:1"`

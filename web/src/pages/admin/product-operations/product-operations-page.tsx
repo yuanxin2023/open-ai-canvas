@@ -17,6 +17,7 @@ import {
 } from "@/services/api/payments";
 
 import "./product-operations-page.css";
+import { PaymentPromotionPanel } from "./payment-promotion-panel";
 
 type ProductFormValues = {
     name: string;
@@ -43,6 +44,8 @@ export default function ProductOperationsPage() {
     const [loading, setLoading] = useState(true);
     const [productDrawer, setProductDrawer] = useState<TopupProduct | null | undefined>();
     const [productSaving, setProductSaving] = useState(false);
+    const [activeTab, setActiveTab] = useState("products");
+    const [promotionReloadKey, setPromotionReloadKey] = useState(0);
     const [productForm] = Form.useForm<ProductFormValues>();
     const watchedProduct = Form.useWatch([], productForm) as ProductFormValues | undefined;
     const productPreview = useMemo<CreditProductCardData>(() => {
@@ -157,7 +160,7 @@ export default function ProductOperationsPage() {
                 </div>
             ),
         },
-        { title: "售价", dataIndex: "amountFen", width: 130, align: "right", render: (value) => <span className="font-medium tabular-nums">¥ {(value / 100).toFixed(2)}</span> },
+        { title: "售价 / 活动价", dataIndex: "amountFen", width: 150, align: "right", render: (value, product) => <div className="text-right"><div className="font-medium tabular-nums">¥ {(value / 100).toFixed(2)}</div>{product.compareAmountFen > 0 ? <div className="mt-0.5 text-xs text-foreground/45 tabular-nums">常规 ¥ {(product.compareAmountFen / 100).toFixed(2)}</div> : null}</div> },
         { title: "到账积分", dataIndex: "creditsMicrocredits", width: 150, align: "right", render: (value) => <span className="tabular-nums">{formatCredits(value)}</span> },
         { title: "排序", dataIndex: "sortOrder", width: 90, align: "center" },
         { title: "状态", dataIndex: "enabled", width: 100, align: "center", render: (value) => <AdminStatusBadge label={value ? "销售中" : "已停用"} tone={value ? "success" : "neutral"} /> },
@@ -179,14 +182,15 @@ export default function ProductOperationsPage() {
             title="商品管理"
             description="管理面向用户销售的充值套餐"
             actions={
-                <Button icon={<RefreshCw className="size-4" />} loading={loading} onClick={() => void loadProducts()}>
+                <Button icon={<RefreshCw className="size-4" />} loading={activeTab === "products" && loading} onClick={() => activeTab === "products" ? void loadProducts() : setPromotionReloadKey((value) => value + 1)}>
                     刷新
                 </Button>
             }
             scroll
         >
             <Tabs
-                activeKey="products"
+                activeKey={activeTab}
+                onChange={setActiveTab}
                 items={[
                     {
                         key: "products",
@@ -203,6 +207,11 @@ export default function ProductOperationsPage() {
                                 empty={<AdminTableEmpty title="还没有充值商品" />}
                             />
                         ),
+                    },
+                    {
+                        key: "promotion",
+                        label: "促销优惠",
+                        children: <PaymentPromotionPanel reloadKey={promotionReloadKey} />,
                     },
                 ]}
             />
@@ -248,14 +257,14 @@ export default function ProductOperationsPage() {
                                 </Form.Item>
                             </div>
                             <div className="grid grid-cols-2 gap-3">
-                                <Form.Item name="compareAmountYuan" label="划线对比价（元）" rules={[{ type: "number", min: 0, max: 1_000_000 }, { validator: (_, value) => !value || value > Number(productForm.getFieldValue("amountYuan")) ? Promise.resolve() : Promise.reject(new Error("对比价须高于售价")) }]}><InputNumber min={0} max={1_000_000} precision={2} className="w-full" /></Form.Item>
+                                <Form.Item name="compareAmountYuan" label="划线对比价 / 常规价（元）" extra="配置后，限时活动外将按此价格成交；活动期间按售价成交。" rules={[{ type: "number", min: 0, max: 1_000_000 }, { validator: (_, value) => !value || value > Number(productForm.getFieldValue("amountYuan")) ? Promise.resolve() : Promise.reject(new Error("对比价须高于售价")) }]}><InputNumber min={0} max={1_000_000} precision={2} className="w-full" /></Form.Item>
                                 <Form.Item name="priceCaption" label="价格补充说明" rules={[{ max: 240 }]} extra="留空时按售价与到账积分显示每 100 积分的价格。"><Input placeholder="例如：一次购买，积分即时到账" /></Form.Item>
                             </div>
                             <Form.Item name="benefits" label="套餐权益（每行一项）" rules={[{ max: 1000 }]} extra="用户端商品卡片会将每一行显示为一条勾选说明；留空则不显示权益区域。">
                                 <Input.TextArea rows={4} placeholder={'例如：\n支持图片与文本生成\n支付成功后积分自动到账'} />
                             </Form.Item>
                             <div className="grid grid-cols-2 gap-3">
-                                <Form.Item name="amountYuan" label="售价（元）" rules={[{ required: true }, { type: "number", min: 0.01, max: 1_000_000 }]}>
+                                <Form.Item name="amountYuan" label="售价 / 活动价（元）" extra="未配置划线对比价时始终按此价格成交。" rules={[{ required: true }, { type: "number", min: 0.01, max: 1_000_000 }]}>
                                     <InputNumber min={0.01} max={1_000_000} precision={2} className="w-full" />
                                 </Form.Item>
                                 <Form.Item
@@ -302,7 +311,7 @@ export default function ProductOperationsPage() {
                                     preview
                                 />
                             </div>
-                            <p>横幅、角标、对比价和权益可留空；售价与到账积分会用于实际订单。</p>
+                            <p>横幅、角标和权益可留空；配置对比价后，它将作为非活动期实际成交价。</p>
                         </aside>
                     </div>
                 </Form>

@@ -265,7 +265,13 @@ Skills 的 `tool_completed` / `tool_failed` 事件附带 `skillId`、`skillName`
 
 ## 充值套餐商品
 
-`GET /api/payments/products` 返回已上架商品；`GET /api/admin/payments/products` 及 `POST/PUT /api/admin/payments/products` 仅允许管理员访问。商品包含真实交易字段 `amountFen`、`creditsMicrocredits`，以及卡片展示字段 `name`、`description`、`benefits`、`ribbonText`、`badgeText`、`compareAmountFen`、`priceCaption`、`quotaCaption`、`quotaDetail`、`actionText`、`accentColor`、`featured`。`benefits` 按换行分为权益项；未配置 `priceCaption` 时卡片根据真实售价和积分显示每 100 积分价格，其他可选展示字段为空时不显示。`compareAmountFen` 为可选划线价，非零时必须高于真实售价，不能用于创建订单金额。`accentColor` 必须是 `#RRGGBB`，驱动推荐套餐的外置顶栏和描边，以及卡片角标与购买按钮；缺失时使用默认亮绿色。`featured` 控制推荐套餐的突出边框、底色以及默认“推荐套餐”顶栏，后台预览与用户端共用卡片组件。
+`GET /api/payments/products` 返回 `{ products, promotion, serverTime }`。商品包含交易字段 `amountFen`、`creditsMicrocredits`，以及卡片展示字段 `name`、`description`、`benefits`、`ribbonText`、`badgeText`、`compareAmountFen`、`priceCaption`、`quotaCaption`、`quotaDetail`、`actionText`、`accentColor`、`featured`。`benefits` 按换行分为权益项；未配置 `priceCaption` 时卡片根据当前成交价和积分显示每 100 积分价格。`accentColor` 必须是 `#RRGGBB`，驱动推荐套餐的外置顶栏、描边、角标和购买按钮。
+
+商品记录中的 `amountFen` 是售价/活动价，`compareAmountFen` 非零时同时作为非活动期常规成交价，且必须高于活动价。全局促销活动进行中，公共商品响应返回活动价和划线常规价；其他时间把常规价投影为 `amountFen` 并把公开 `compareAmountFen` 置零。未配置常规价的商品始终使用原售价。创建订单只提交商品 ID，服务端按自己的当前时间再次计算成交价并写入订单快照；已创建订单及同一幂等键重试不随活动边界改价。
+
+`promotion` 提供 `visible`、`phase=inactive|scheduled|active|expired`、背景图 URL、活动/日常两套文案、`startsAt`、`endsAt` 和缓存修订号；不返回资源 ID。`serverTime` 用于前端校正倒计时，不能取代后端下单校验。`GET /api/payments/promotion/image` 仅向登录且积分功能可用的用户流式返回当前启用背景图。
+
+`GET/POST/PUT /api/admin/payments/products` 继续管理商品。`GET/PUT /api/admin/payments/promotion` 管理单个全局促销配置，字段为 `cardEnabled`、`imageResourceId`、`activityEnabled`、活动主/副标题、RFC 3339 `startsAt`、`durationDays`（1–365）、`inactiveCopyEnabled` 和日常主/副标题。卡片总开关关闭时横幅和活动价格同时停用；活动开关关闭时可保留日常横幅。`POST /api/admin/payments/promotion/image` 上传 JPEG/PNG/WebP 草稿（最大 10MB），`DELETE /api/admin/payments/promotion/image/:id` 丢弃当前管理员未提交草稿，`GET /api/admin/payments/promotion/image` 读取已保存图片。所有管理接口要求 `admin.commerce.products`。
 
 ## 用户支付订单
 

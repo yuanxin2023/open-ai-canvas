@@ -73,6 +73,7 @@ func Models() []any {
 		&model.ResourceDeletionJob{},
 		&model.AnnouncementImageDraft{},
 		&model.InspirationCoverDraft{},
+		&model.PaymentPromotionImageDraft{},
 		&model.Asset{},
 		&model.AssetFolder{},
 		&model.ProjectAssetLink{},

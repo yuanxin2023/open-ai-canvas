@@ -331,6 +331,10 @@ type (
 	TimelineRenderCreateRequest            = app.TimelineRenderCreateRequest
 	TimelineTranscriptionCreateRequest     = app.TimelineTranscriptionCreateRequest
 	TopupProductRequest                    = app.TopupProductRequest
+	PaymentPromotionSetting                = app.PaymentPromotionSetting
+	PublicPaymentPromotion                 = app.PublicPaymentPromotion
+	AdminPaymentPromotion                  = app.AdminPaymentPromotion
+	PaymentCatalog                         = app.PaymentCatalog
 	UpdateAnnouncementRequest              = app.UpdateAnnouncementRequest
 	UpdateBannerAnnouncementRequest        = app.UpdateBannerAnnouncementRequest
 	UpdateAssetFolderRequest               = app.UpdateAssetFolderRequest

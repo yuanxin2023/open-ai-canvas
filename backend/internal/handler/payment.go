@@ -38,12 +38,37 @@ func RegisterPaymentRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
-		products, err := svc.TopupProducts(user)
+		catalog, err := svc.TopupProducts(user)
 		if err != nil {
 			failService(c, err)
 			return
 		}
-		ok(c, gin.H{"products": products})
+		ok(c, catalog)
+	})
+	r.GET("/payments/promotion/image", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		stream, err := svc.OpenPaymentPromotionImage(user, c.GetHeader("Range"))
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		defer stream.Body.Close()
+		mimeType := stream.Resource.MimeType
+		if mimeType == "" {
+			mimeType = "application/octet-stream"
+		}
+		c.Header("Cache-Control", "private, max-age=3600")
+		c.Header("Referrer-Policy", "no-referrer")
+		c.Header("Accept-Ranges", stream.AcceptRanges)
+		c.Header("X-Content-Type-Options", "nosniff")
+		if stream.ContentRange != "" {
+			c.Header("Content-Range", stream.ContentRange)
+		}
+		c.DataFromReader(stream.StatusCode, stream.ContentLength, mimeType, stream.Body, nil)
 	})
 	r.POST("/payments/orders", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
@@ -285,6 +310,97 @@ func RegisterPaymentRoutes(r *gin.RouterGroup, svc *service.Service) {
 			return
 		}
 		ok(c, gin.H{"product": product})
+	})
+	admin.GET("/promotion", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		promotion, err := svc.AdminPaymentPromotion(user)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"promotion": promotion})
+	})
+	admin.GET("/promotion/image", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		stream, err := svc.OpenAdminPaymentPromotionImage(user, c.GetHeader("Range"))
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		defer stream.Body.Close()
+		mimeType := stream.Resource.MimeType
+		if mimeType == "" {
+			mimeType = "application/octet-stream"
+		}
+		c.Header("Cache-Control", "private, max-age=3600")
+		c.Header("Referrer-Policy", "no-referrer")
+		c.Header("Accept-Ranges", stream.AcceptRanges)
+		c.Header("X-Content-Type-Options", "nosniff")
+		if stream.ContentRange != "" {
+			c.Header("Content-Range", stream.ContentRange)
+		}
+		c.DataFromReader(stream.StatusCode, stream.ContentLength, mimeType, stream.Body, nil)
+	})
+	admin.PUT("/promotion", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		var request service.PaymentPromotionSetting
+		if err := c.ShouldBindJSON(&request); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		promotion, err := svc.UpdatePaymentPromotion(user, request)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"promotion": promotion})
+	})
+	admin.POST("/promotion/image", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		policy, available := loadRuntimePolicy(c, svc)
+		if !available || !enforceRateLimit(c, "admin-payment-promotion-upload:"+user.ID, policy.Request.ResourceUploadPerMinute, time.Minute) {
+			return
+		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, service.PaymentPromotionImageMaxBytes+(1<<20))
+		file, err := c.FormFile("file")
+		if err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		resource, err := svc.UploadPaymentPromotionImage(user, file)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"resource": resource})
+	})
+	admin.DELETE("/promotion/image/:id", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		if err := svc.DiscardPaymentPromotionImage(user, c.Param("id")); err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"ok": true})
 	})
 	admin.GET("/orders", func(c *gin.Context) {
 		user, err := currentUser(c, svc)

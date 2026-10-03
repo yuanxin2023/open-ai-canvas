@@ -19,6 +19,7 @@ func (s *Service) startResourceDeletionWorker(ctx context.Context) {
 		s.drainResourceDeletionJobs(32)
 		s.cleanupStaleAnnouncementImageDrafts()
 		s.cleanupStaleInspirationCoverDrafts()
+		s.cleanupStalePaymentPromotionImageDrafts()
 		s.cleanupExpiredArchivedAssets()
 		s.cleanupDetachedResources()
 		s.cleanupExpiredUserLoginEvents()
@@ -34,6 +35,7 @@ func (s *Service) startResourceDeletionWorker(ctx context.Context) {
 				if time.Since(lastPeriodicCleanup) >= time.Hour {
 					s.cleanupStaleAnnouncementImageDrafts()
 					s.cleanupStaleInspirationCoverDrafts()
+					s.cleanupStalePaymentPromotionImageDrafts()
 					s.cleanupExpiredArchivedAssets()
 					s.cleanupDetachedResources()
 					s.cleanupExpiredUserLoginEvents()
@@ -91,6 +93,9 @@ func (s *Service) cleanupDetachedUserResources(userID string, candidates []model
 		referenced[resourceID] = struct{}{}
 	}
 	for resourceID := range s.customerServiceResourceReferences(resourceIDs) {
+		referenced[resourceID] = struct{}{}
+	}
+	for resourceID := range s.paymentPromotionResourceReferences(resourceIDs) {
 		referenced[resourceID] = struct{}{}
 	}
 	for _, reference := range snapshot.Direct {

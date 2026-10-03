@@ -52,6 +52,7 @@ const (
 	PaymentPluginWeChatNative          = app.PaymentPluginWeChatNative
 	PaymentProviderAlipay              = app.PaymentProviderAlipay
 	PaymentProviderWeChat              = app.PaymentProviderWeChat
+	PaymentPromotionImageMaxBytes      = app.PaymentPromotionImageMaxBytes
 	PluginAIArtCritique                = app.PluginAIArtCritique
 	PluginConfigurationNone            = app.PluginConfigurationNone
 	PluginConfigurationSystem          = app.PluginConfigurationSystem

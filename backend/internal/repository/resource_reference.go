@@ -379,6 +379,20 @@ func (r *Repository) ResourceReferenceSnapshot(userID string, excludingAssetID s
 	for _, draft := range inspirationDrafts {
 		snapshot.Direct = append(snapshot.Direct, ResourceDirectReference{Kind: "精选灵感草稿", ID: draft.ResourceID, ResourceID: draft.ResourceID})
 	}
+
+	var promotionSetting model.SystemSetting
+	if err := r.db.First(&promotionSetting, "key = ?", "payment_promotion").Error; err == nil {
+		snapshot.Documents = append(snapshot.Documents, ResourceReferenceDocument{Kind: "促销优惠", ID: promotionSetting.Key, Title: "充值套餐促销", PrimaryJSON: promotionSetting.ValueJSON})
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return snapshot, err
+	}
+	var promotionDrafts []model.PaymentPromotionImageDraft
+	if err := r.db.Where("user_id = ? AND resource_id IN ?", userID, resourceIDs).Find(&promotionDrafts).Error; err != nil {
+		return snapshot, err
+	}
+	for _, draft := range promotionDrafts {
+		snapshot.Direct = append(snapshot.Direct, ResourceDirectReference{Kind: "促销优惠草稿", ID: draft.ResourceID, ResourceID: draft.ResourceID})
+	}
 	return snapshot, nil
 }
 

@@ -121,3 +121,124 @@
         max-width: none;
     }
 }
+
+.admin-payment-promotion-panel {
+    display: grid;
+    grid-template-columns: minmax(360px, 0.8fr) minmax(520px, 1.2fr);
+    align-items: start;
+    gap: 28px;
+    padding: 20px 0 8px;
+}
+
+.admin-payment-promotion-form,
+.admin-payment-promotion-preview {
+    min-width: 0;
+    border: 1px solid var(--admin-divider);
+    border-radius: var(--admin-radius-lg);
+    padding: 22px;
+    background: var(--admin-surface);
+}
+
+.admin-payment-promotion-section-heading,
+.admin-payment-promotion-image-row,
+.admin-payment-promotion-preview > header,
+.admin-payment-promotion-actions {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.admin-payment-promotion-section-heading {
+    margin-bottom: 20px;
+}
+
+.admin-payment-promotion-section-heading > div,
+.admin-payment-promotion-image-copy,
+.admin-payment-promotion-preview > header > div {
+    display: grid;
+    gap: 4px;
+}
+
+.admin-payment-promotion-section-heading strong,
+.admin-payment-promotion-image-copy strong,
+.admin-payment-promotion-preview > header strong {
+    color: var(--admin-text);
+    font-size: 14px;
+    font-weight: 650;
+}
+
+.admin-payment-promotion-section-heading span,
+.admin-payment-promotion-image-copy span,
+.admin-payment-promotion-preview > header span {
+    color: var(--admin-text-muted);
+    font-size: 12px;
+    line-height: 1.55;
+}
+
+.admin-payment-promotion-divider {
+    height: 1px;
+    margin: 24px 0;
+    background: var(--admin-divider);
+}
+
+.admin-payment-promotion-actions {
+    justify-content: flex-end;
+    margin-top: 26px;
+}
+
+.admin-payment-promotion-preview {
+    position: sticky;
+    top: 0;
+}
+
+.admin-payment-promotion-preview > header {
+    align-items: center;
+    margin-bottom: 18px;
+}
+
+.admin-payment-promotion-preview .workspace-payment-promotion {
+    min-height: 210px;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 18px;
+    margin-bottom: 0;
+    border-radius: 20px;
+    padding: 24px;
+}
+
+.admin-payment-promotion-preview .workspace-payment-promotion-countdown {
+    min-width: 0;
+}
+
+.admin-payment-promotion-empty {
+    display: grid;
+    min-height: 260px;
+    place-items: center;
+    border: 1px dashed var(--admin-border-strong);
+    border-radius: var(--admin-radius-lg);
+    color: var(--admin-text-muted);
+    font-size: 13px;
+}
+
+@media (max-width: 1100px) {
+    .admin-payment-promotion-panel {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .admin-payment-promotion-preview {
+        position: static;
+    }
+}
+
+@media (max-width: 600px) {
+    .admin-payment-promotion-form,
+    .admin-payment-promotion-preview {
+        padding: 16px;
+    }
+
+    .admin-payment-promotion-image-row,
+    .admin-payment-promotion-preview > header {
+        align-items: stretch;
+        flex-direction: column;
+    }
+}

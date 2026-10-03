@@ -1,4 +1,5 @@
-import { ApiError, compactApiParams, http } from "@/services/api/request";
+import { ApiError, apiBaseURL, compactApiParams, http } from "@/services/api/request";
+import type { RemoteResource } from "@/services/api/resources";
 
 export type PaymentProvider = {
     id: "wechat-native" | "alipay-page-pay" | string;
@@ -36,6 +37,48 @@ export type TopupProduct = {
     updatedBy: string;
     createdAt: string;
     updatedAt: string;
+};
+
+export type PaymentPromotionPhase = "inactive" | "scheduled" | "active" | "expired";
+
+export type PublicPaymentPromotion = {
+    visible: boolean;
+    phase: PaymentPromotionPhase;
+    imageUrl?: string;
+    activeTitle?: string;
+    activeSubtitle?: string;
+    inactiveCopyEnabled: boolean;
+    inactiveTitle?: string;
+    inactiveSubtitle?: string;
+    startsAt?: string;
+    endsAt?: string;
+    revision?: string;
+};
+
+export type PaymentCatalog = {
+    products: TopupProduct[];
+    promotion: PublicPaymentPromotion;
+    serverTime: string;
+};
+
+export type AdminPaymentPromotion = {
+    schemaVersion: number;
+    cardEnabled: boolean;
+    imageResourceId: string;
+    activityEnabled: boolean;
+    activeTitle: string;
+    activeSubtitle: string;
+    startsAt?: string;
+    durationDays: number;
+    inactiveCopyEnabled: boolean;
+    inactiveTitle: string;
+    inactiveSubtitle: string;
+    public: PublicPaymentPromotion;
+    imageUrl?: string;
+    configured: boolean;
+    updatedBy?: string;
+    createdAt?: string;
+    updatedAt?: string;
 };
 
 export type PaymentOrderStatus = "created" | "pending" | "closing" | "closed" | "credited" | "create_failed";
@@ -92,7 +135,15 @@ export function listPaymentProviders() {
 }
 
 export function listTopupProducts() {
-    return http.get<{ products: TopupProduct[] }>("/payments/products");
+    return http.get<PaymentCatalog>("/payments/products");
+}
+
+export function paymentPromotionImageUrl(promotion: Pick<PublicPaymentPromotion, "imageUrl" | "revision">) {
+    const imageUrl = promotion.imageUrl || "";
+    if (!imageUrl) return "";
+    const base = String(apiBaseURL).replace(/\/+$/, "");
+    const resolved = imageUrl.startsWith("/api/") && base !== "/api" ? `${base}${imageUrl.slice("/api".length)}` : imageUrl;
+    return promotion.revision ? `${resolved}${resolved.includes("?") ? "&" : "?"}v=${encodeURIComponent(promotion.revision)}` : resolved;
 }
 
 export function createPaymentOrder(input: { productId: string; providerId: string; idempotencyKey: string }) {
@@ -141,6 +192,26 @@ export function createAdminTopupProduct(input: TopupProductInput) {
 
 export function updateAdminTopupProduct(id: string, input: TopupProductInput) {
     return http.put<{ product: TopupProduct }>(`/admin/payments/products/${encodeURIComponent(id)}`, input);
+}
+
+export type PaymentPromotionInput = Pick<AdminPaymentPromotion, "cardEnabled" | "imageResourceId" | "activityEnabled" | "activeTitle" | "activeSubtitle" | "startsAt" | "durationDays" | "inactiveCopyEnabled" | "inactiveTitle" | "inactiveSubtitle">;
+
+export function getAdminPaymentPromotion(signal?: AbortSignal) {
+    return http.get<{ promotion: AdminPaymentPromotion }>("/admin/payments/promotion", { signal });
+}
+
+export function updateAdminPaymentPromotion(input: PaymentPromotionInput) {
+    return http.put<{ promotion: AdminPaymentPromotion }>("/admin/payments/promotion", input);
+}
+
+export function uploadAdminPaymentPromotionImage(file: File) {
+    const formData = new FormData();
+    formData.append("file", file, file.name);
+    return http.post<{ resource: RemoteResource }>("/admin/payments/promotion/image", formData);
+}
+
+export function discardAdminPaymentPromotionImage(id: string) {
+    return http.delete<{ ok: boolean }>(`/admin/payments/promotion/image/${encodeURIComponent(id)}`);
 }
 
 export type AdminPaymentOrder = PaymentOrder & {
