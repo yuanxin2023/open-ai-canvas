@@ -13,7 +13,7 @@ import {
     type LocalUser,
 } from "@/services/api/auth";
 import type { AdminLevel, AdminPermission } from "@/lib/admin-permissions";
-import { AdminAccessFields } from "./users-drawer";
+import { AdminAccessFields } from "./admin-user-editor-fields";
 
 type AccessValues = {
     adminLevel: AdminLevel;

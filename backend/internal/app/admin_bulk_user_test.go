@@ -392,6 +392,97 @@ func TestOrdinaryUserWriteRejectsAdministratorTarget(t *testing.T) {
 	}
 }
 
+func TestUpdateAdministratorSupportsIndependentPartialMutations(t *testing.T) {
+	db := newBulkUserTestDB(t)
+	oldHash, err := hashPassword("old-password")
+	if err != nil {
+		t.Fatal(err)
+	}
+	actor := model.User{ID: "admin-1", Username: "root-admin", Role: model.UserRoleAdmin, AdminLevel: model.AdminLevelFull, Status: model.UserStatusActive}
+	target := model.User{
+		ID: "admin-2", Username: "module-admin", Email: "old@example.com", AdminRemark: "原备注", PasswordHash: oldHash,
+		Role: model.UserRoleAdmin, AdminLevel: model.AdminLevelScoped, Status: model.UserStatusActive,
+	}
+	if err := db.Create(&[]model.User{actor, target}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&model.AdminPermissionGrant{UserID: target.ID, Permission: model.AdminPermissionUsers, GrantedByUserID: actor.ID}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&model.AuthSession{ID: "profile-session", UserID: target.ID}).Error; err != nil {
+		t.Fatal(err)
+	}
+	svc := &Service{repo: repository.New(db)}
+
+	remark := "新备注"
+	profile, err := svc.UpdateAdministrator(&actor, target.ID, UpdateAdministratorRequest{Email: "new@example.com", Remark: &remark})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if profile.Email != "new@example.com" || profile.Remark != remark || profile.Status != model.UserStatusActive {
+		t.Fatalf("profile update = %+v", profile)
+	}
+	if profile.AdminAccess == nil || profile.AdminAccess.Level != model.AdminLevelScoped || len(profile.AdminAccess.Permissions) != 1 || profile.AdminAccess.Permissions[0] != model.AdminPermissionUsers {
+		t.Fatalf("profile update changed access = %+v", profile.AdminAccess)
+	}
+	assertAdminSessionCount(t, db, target.ID, 1)
+
+	access, err := svc.UpdateAdministrator(&actor, target.ID, UpdateAdministratorRequest{
+		AdminAccess: &AdminAccessInput{Level: model.AdminLevelScoped, Permissions: []model.AdminPermission{model.AdminPermissionCredits}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if access.Email != "new@example.com" || access.Remark != remark || access.Status != model.UserStatusActive {
+		t.Fatalf("access update changed profile or status = %+v", access)
+	}
+	if access.AdminAccess == nil || len(access.AdminAccess.Permissions) != 1 || access.AdminAccess.Permissions[0] != model.AdminPermissionCredits {
+		t.Fatalf("access update = %+v", access.AdminAccess)
+	}
+	assertAdminSessionCount(t, db, target.ID, 0)
+
+	if err := db.Create(&model.AuthSession{ID: "password-session", UserID: target.ID}).Error; err != nil {
+		t.Fatal(err)
+	}
+	password, err := svc.UpdateAdministrator(&actor, target.ID, UpdateAdministratorRequest{Password: "new-password"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if password.Email != "new@example.com" || password.Remark != remark || password.Status != model.UserStatusActive {
+		t.Fatalf("password update changed other fields = %+v", password)
+	}
+	if bcrypt.CompareHashAndPassword([]byte(password.PasswordHash), []byte("new-password")) != nil {
+		t.Fatal("password update did not persist the new password")
+	}
+	assertAdminSessionCount(t, db, target.ID, 0)
+
+	if err := db.Create(&model.AuthSession{ID: "status-session", UserID: target.ID}).Error; err != nil {
+		t.Fatal(err)
+	}
+	status, err := svc.UpdateAdministrator(&actor, target.ID, UpdateAdministratorRequest{Status: model.UserStatusDisabled})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status.Status != model.UserStatusDisabled || status.Email != "new@example.com" || status.Remark != remark {
+		t.Fatalf("status update changed profile = %+v", status)
+	}
+	if status.AdminAccess == nil || len(status.AdminAccess.Permissions) != 1 || status.AdminAccess.Permissions[0] != model.AdminPermissionCredits {
+		t.Fatalf("status update changed access = %+v", status.AdminAccess)
+	}
+	assertAdminSessionCount(t, db, target.ID, 0)
+}
+
+func assertAdminSessionCount(t *testing.T, db *gorm.DB, userID string, want int64) {
+	t.Helper()
+	var count int64
+	if err := db.Model(&model.AuthSession{}).Where("user_id = ?", userID).Count(&count).Error; err != nil {
+		t.Fatal(err)
+	}
+	if count != want {
+		t.Fatalf("session count for %s = %d, want %d", userID, count, want)
+	}
+}
+
 func newBulkUserTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})

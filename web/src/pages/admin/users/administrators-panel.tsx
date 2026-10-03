@@ -19,8 +19,8 @@ import { AdminDataTable, AdminTableEmpty } from "../components/admin-ui";
 import { AdminUserDetailModal } from "../components/admin-user-detail-drawer";
 import { useTableUrlState } from "../lib/use-table-url-state";
 import { AdministratorCreateDrawer } from "./administrator-create-drawer";
+import { AdministratorEditModal } from "./administrator-edit-modal";
 import { administratorColumnOptions, createAdministratorColumns, type AdministratorColumnKey } from "./administrators-columns";
-import { AdminUserEditModal } from "./users-drawer";
 
 const columnStorageKey = "admin-administrators-visible-columns-v1";
 const allColumnKeys = administratorColumnOptions.map((item) => item.key);
@@ -51,6 +51,7 @@ export default function AdministratorsPanel({ onUserChanged, onUserDeleted }: { 
         }
     });
     const requestSequence = useRef(0);
+    const editReturnFocusRef = useRef<HTMLElement | null>(null);
     const pendingFilterUrlRef = useRef<string | null>(null);
     const skipFilterUrlCommitRef = useRef(false);
     const hasFilters = Boolean(filterDraft || state.status !== "all");
@@ -107,6 +108,7 @@ export default function AdministratorsPanel({ onUserChanged, onUserDeleted }: { 
 
     const replaceUser = useCallback((nextUser: LocalUser | AdminManagedUser) => {
         setUsers((items) => items.map((item) => item.id === nextUser.id ? { ...item, ...nextUser } : item));
+        setEditingUser((current) => current?.id === nextUser.id ? { ...current, ...nextUser } : current);
         onUserChanged?.(nextUser);
     }, [onUserChanged]);
 
@@ -125,7 +127,10 @@ export default function AdministratorsPanel({ onUserChanged, onUserDeleted }: { 
         actorId: actor?.id,
         visibleColumns,
         onView: (user) => setDetailUserId(user.id),
-        onEdit: (user) => setEditingUser(user),
+        onEdit: (user) => {
+            editReturnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+            setEditingUser(user);
+        },
         onDemote: async (user) => {
             try {
                 const result = await demoteAdministrator(user.id);
@@ -224,7 +229,18 @@ export default function AdministratorsPanel({ onUserChanged, onUserDeleted }: { 
                     setRetry((value) => value + 1);
                 }}
             />
-            <AdminUserEditModal user={editingUser} actorId={actor?.id} accountKind="administrator" onClose={() => setEditingUser(null)} onSaved={replaceUser} onCreditsAdjusted={replaceCreditAccount} />
+            <AdministratorEditModal
+                user={editingUser}
+                actorId={actor?.id}
+                onClose={() => {
+                    setEditingUser(null);
+                    window.setTimeout(() => {
+                        if (editReturnFocusRef.current?.isConnected) editReturnFocusRef.current.focus();
+                    });
+                }}
+                onSaved={replaceUser}
+                onCreditsAdjusted={replaceCreditAccount}
+            />
         </>
     );
 }

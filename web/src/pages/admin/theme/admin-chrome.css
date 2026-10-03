@@ -1146,6 +1146,253 @@
     font-weight: 650;
 }
 
+.admin-administrator-editor-modal .ant-modal-body {
+    overflow: hidden;
+    padding: 0;
+}
+
+.admin-administrator-editor {
+    min-width: 0;
+}
+
+.admin-administrator-editor-summary {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--admin-divider);
+    background: var(--admin-surface-2);
+}
+
+.admin-administrator-editor-icon {
+    display: grid;
+    width: 36px;
+    height: 36px;
+    flex: 0 0 auto;
+    place-items: center;
+    border: 1px solid var(--admin-border);
+    border-radius: var(--admin-radius-lg);
+    background: var(--admin-surface);
+    color: var(--admin-text-secondary);
+}
+
+.admin-administrator-editor-icon svg {
+    width: 17px;
+    height: 17px;
+}
+
+.admin-administrator-editor-identity {
+    min-width: 0;
+    flex: 1;
+}
+
+.admin-administrator-editor-identity strong,
+.admin-administrator-editor-identity span {
+    display: block;
+}
+
+.admin-administrator-editor-identity strong {
+    overflow: hidden;
+    color: var(--admin-text);
+    font-size: 14px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.admin-administrator-editor-identity span {
+    margin-top: 2px;
+    color: var(--admin-text-muted);
+    font-size: 12px;
+}
+
+.admin-administrator-editor-badges {
+    display: flex;
+    flex: 0 0 auto;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 6px;
+}
+
+.admin-administrator-editor .ant-tabs-nav {
+    margin: 0;
+    padding: 0 20px;
+}
+
+.admin-administrator-editor .ant-tabs-content-holder {
+    min-width: 0;
+}
+
+.admin-administrator-editor-pane {
+    min-height: 360px;
+    max-height: min(58vh, 620px);
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding: 20px;
+}
+
+.admin-administrator-tab-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.admin-administrator-tab-dirty {
+    width: 6px;
+    height: 6px;
+    border-radius: 999px;
+    background: var(--admin-status-warning);
+}
+
+.admin-administrator-editor-intro {
+    margin-bottom: 18px;
+    padding: 12px 14px;
+    border: 1px solid var(--admin-border);
+    border-left: 3px solid var(--admin-status-info);
+    border-radius: var(--admin-radius);
+    background: var(--admin-surface-2);
+}
+
+.admin-administrator-editor-intro.is-warning {
+    border-left-color: var(--admin-status-warning);
+}
+
+.admin-administrator-editor-intro strong,
+.admin-administrator-editor-intro p {
+    display: block;
+    margin: 0;
+}
+
+.admin-administrator-editor-intro strong {
+    color: var(--admin-text);
+    font-size: 13px;
+}
+
+.admin-administrator-editor-intro p {
+    margin-top: 3px;
+    color: var(--admin-text-secondary);
+    font-size: 12px;
+}
+
+.admin-administrator-security-grid {
+    display: grid;
+    align-content: start;
+    gap: 16px;
+}
+
+.admin-administrator-operation-card,
+.admin-administrator-readonly-access {
+    padding: 16px;
+    border: 1px solid var(--admin-border);
+    border-radius: var(--admin-radius-lg);
+    background: var(--admin-surface);
+}
+
+.admin-administrator-operation-heading {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 16px;
+}
+
+.admin-administrator-operation-heading > span {
+    display: grid;
+    width: 30px;
+    height: 30px;
+    flex: 0 0 auto;
+    place-items: center;
+    border-radius: var(--admin-radius);
+    background: var(--admin-surface-2);
+    color: var(--admin-text-secondary);
+}
+
+.admin-administrator-operation-heading svg {
+    width: 15px;
+    height: 15px;
+}
+
+.admin-administrator-operation-heading h3,
+.admin-administrator-operation-heading p {
+    margin: 0;
+}
+
+.admin-administrator-operation-heading h3 {
+    color: var(--admin-text);
+    font-size: 13px;
+    font-weight: 650;
+}
+
+.admin-administrator-operation-heading p {
+    margin-top: 3px;
+    color: var(--admin-text-muted);
+    font-size: 12px;
+}
+
+.admin-administrator-status-action {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.admin-administrator-status-action > div {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.admin-administrator-status-action > div > span,
+.admin-administrator-readonly-access > div > span {
+    color: var(--admin-text-muted);
+    font-size: 12px;
+}
+
+.admin-administrator-readonly-access {
+    display: grid;
+    gap: 14px;
+}
+
+.admin-administrator-readonly-access > div {
+    display: grid;
+    gap: 5px;
+}
+
+.admin-administrator-readonly-access strong,
+.admin-administrator-readonly-access p {
+    margin: 0;
+    color: var(--admin-text-secondary);
+}
+
+.admin-administrator-self-note {
+    margin: 12px 0 0;
+    color: var(--admin-status-warning);
+    font-size: 12px;
+}
+
+@media (max-width: 640px) {
+    .admin-administrator-editor-summary {
+        align-items: flex-start;
+        padding: 12px 16px;
+    }
+
+    .admin-administrator-editor-badges {
+        display: none;
+    }
+
+    .admin-administrator-editor .ant-tabs-nav {
+        padding: 0 16px;
+    }
+
+    .admin-administrator-editor-pane {
+        padding: 16px;
+    }
+
+    .admin-administrator-status-action {
+        align-items: stretch;
+        flex-direction: column;
+    }
+}
+
 @media (prefers-reduced-motion: reduce) {
     [data-admin-root] *,
     body.admin-overlays * {

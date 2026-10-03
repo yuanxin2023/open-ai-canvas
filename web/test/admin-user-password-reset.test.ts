@@ -15,15 +15,21 @@ describe("admin user password reset", () => {
     });
 
     test("exposes custom input, copy, generation and optional update behavior in the edit drawer", async () => {
-        const drawer = await Bun.file(new URL("../src/pages/admin/users/users-drawer.tsx", import.meta.url)).text();
+        const [drawer, fields, administratorEditor] = await Promise.all([
+            Bun.file(new URL("../src/pages/admin/users/users-drawer.tsx", import.meta.url)).text(),
+            Bun.file(new URL("../src/pages/admin/users/admin-user-editor-fields.tsx", import.meta.url)).text(),
+            Bun.file(new URL("../src/pages/admin/users/administrator-edit-modal.tsx", import.meta.url)).text(),
+        ]);
         const api = await Bun.file(new URL("../src/services/api/auth.ts", import.meta.url)).text();
 
         expect(drawer).toContain('label="修改密码"');
-        expect(drawer).toContain('aria-label="复制密码"');
-        expect(drawer).toContain('aria-label="随机生成 16 位密码"');
+        expect(fields).toContain('aria-label="复制密码"');
+        expect(fields).toContain('aria-label="随机生成 16 位密码"');
         expect(drawer).toContain("generateAdminPassword(16)");
-        expect(drawer).toContain('...(password ? { password } : {})');
+        expect(drawer).toContain("...(password ? { password } : {})");
         expect(drawer).toContain("修改后会清除该用户当前的全部登录状态");
-        expect(api).toContain('& { password?: string }');
+        expect(administratorEditor).toContain("updateAdministrator(currentUser.id, { password: values.password })");
+        expect(administratorEditor).toContain("管理员密码已重置，目标账号的现有登录态已撤销");
+        expect(api).toContain("password?: string");
     });
 });
