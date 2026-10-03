@@ -9,7 +9,7 @@ import { AdminDataTable, AdminEmpty, AdminStatusBadge, AdminTableEmpty, Paginati
 import { getAdminUserDetail, listAdminUserAuditEvents, listAdminUserLedger, listAdminUserLoginEvents, listAdminUserTasks, type AdminAuditEvent, type AdminUserDetail, type AdminUserLedgerFilter, type AdminUserLoginEvent, type AdminUserTask } from "@/services/api/auth";
 import type { CreditLedgerEntry } from "@/services/api/wallet";
 
-export function AdminUserDetailModal({ userId, onClose, previousUserId, nextUserId, onNavigate }: { userId: string | null; onClose: () => void; previousUserId?: string; nextUserId?: string; onNavigate?: (userId: string) => void }) {
+export function AdminUserDetailModal({ userId, onClose, previousUserId, nextUserId, onNavigate, accountKind = "user" }: { userId: string | null; onClose: () => void; previousUserId?: string; nextUserId?: string; onNavigate?: (userId: string) => void; accountKind?: "user" | "administrator" }) {
     const { message } = App.useApp();
     const [detail, setDetail] = useState<AdminUserDetail | null>(null);
     const [ledger, setLedger] = useState<CreditLedgerEntry[]>([]);
@@ -121,11 +121,11 @@ export function AdminUserDetailModal({ userId, onClose, previousUserId, nextUser
         <AdminModal
             title={(
                 <div className="flex items-center justify-between gap-4">
-                    <span className="min-w-0 truncate">{detail ? `${detail.user.username} · 用户详情` : "用户详情"}</span>
+                    <span className="min-w-0 truncate">{detail ? `${detail.user.username} · ${accountKind === "administrator" ? "管理员详情" : "用户详情"}` : (accountKind === "administrator" ? "管理员详情" : "用户详情")}</span>
                     {onNavigate ? (
                         <div className="flex shrink-0 items-center gap-1">
-                            <IconButton size="sm" variant="ghost" aria-label="上一条用户" disabled={!previousUserId} icon={ChevronLeft} onClick={() => previousUserId && onNavigate(previousUserId)} />
-                            <IconButton size="sm" variant="ghost" aria-label="下一条用户" disabled={!nextUserId} icon={ChevronRight} onClick={() => nextUserId && onNavigate(nextUserId)} />
+                            <IconButton size="sm" variant="ghost" aria-label={`上一条${accountKind === "administrator" ? "管理员" : "用户"}`} disabled={!previousUserId} icon={ChevronLeft} onClick={() => previousUserId && onNavigate(previousUserId)} />
+                            <IconButton size="sm" variant="ghost" aria-label={`下一条${accountKind === "administrator" ? "管理员" : "用户"}`} disabled={!nextUserId} icon={ChevronRight} onClick={() => nextUserId && onNavigate(nextUserId)} />
                         </div>
                     ) : null}
                 </div>

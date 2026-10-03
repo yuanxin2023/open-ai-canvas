@@ -7,7 +7,7 @@ import { useEffect, useState, type ChangeEvent } from "react";
 import { useCopyText } from "@/hooks/use-copy-text";
 import { normalizeUsername, usernameValidationMessage } from "@/lib/username";
 import { formatCredits } from "@/constant/credits";
-import { createAdminUser, updateAdminUser, type AdminManagedUser, type AdminUser, type LocalUser } from "@/services/api/auth";
+import { createAdminUser, updateAdministrator, updateAdminUser, type AdminManagedUser, type AdminUser, type LocalUser } from "@/services/api/auth";
 import { adjustAdminUserCredits, type CreditAccount } from "@/services/api/wallet";
 import { generateAdminPassword } from "./admin-password";
 import { ADMIN_PERMISSION_GROUPS, hasAdminPermission, type AdminLevel, type AdminPermission } from "@/lib/admin-permissions";
@@ -22,12 +22,14 @@ export function AdminUserEditModal({
     onClose,
     onSaved,
     onCreditsAdjusted,
+    accountKind = "user",
 }: {
     user: AdminUser | null;
     actorId?: string;
     onClose: () => void;
     onSaved: (user: AdminManagedUser) => void;
     onCreditsAdjusted: (account: CreditAccount) => void;
+    accountKind?: "user" | "administrator";
 }) {
     const { message, modal } = App.useApp();
     const [saving, setSaving] = useState(false);
@@ -42,8 +44,8 @@ export function AdminUserEditModal({
     const actorIsFull = actorAccess?.level === "full";
     const canAdjustCredits = hasAdminPermission(actorAccess, "admin.finance.credits");
     const editingSelf = user?.id === actorId;
-    const selectedRole = Form.useWatch("role", form);
     const selectedAdminLevel = Form.useWatch("adminLevel", form);
+    const isAdministrator = accountKind === "administrator";
 
     useEffect(() => {
         if (!user) return;
@@ -70,8 +72,8 @@ export function AdminUserEditModal({
             return;
         }
         modal.confirm({
-            title: "放弃用户修改？",
-            content: "尚未保存的账号、备注、密码、角色、状态或积分调整内容将丢失。",
+            title: `放弃${isAdministrator ? "管理员" : "用户"}修改？`,
+            content: `尚未保存的账号、备注、密码、状态${isAdministrator ? "、权限" : ""}或积分调整内容将丢失。`,
             okText: "放弃修改",
             cancelText: "继续编辑",
             okButtonProps: { danger: true },
@@ -90,18 +92,22 @@ export function AdminUserEditModal({
         const password = values.password || "";
         setSaving(true);
         try {
-            const result = await updateAdminUser(user.id, {
+            const input = {
                 email: values.email?.trim() || "",
                 remark: values.remark?.trim() || "",
-                role: values.role,
                 status: values.status,
-                ...(values.role === "admin" && !editingSelf ? { adminAccess: { level: values.adminLevel || "scoped", permissions: values.adminLevel === "full" ? [] : (values.permissions || []) } } : {}),
                 ...(password ? { password } : {}),
-            });
+            };
+            const result = isAdministrator
+                ? await updateAdministrator(user.id, {
+                    ...input,
+                    ...(!editingSelf ? { adminAccess: { level: values.adminLevel || "scoped", permissions: values.adminLevel === "full" ? [] : (values.permissions || []) } } : {}),
+                })
+                : await updateAdminUser(user.id, input);
             onSaved(result.user);
             form.resetFields();
             onClose();
-            message.success(password ? "用户信息已保存，密码已重置" : "用户信息已保存");
+            message.success(password ? `${isAdministrator ? "管理员" : "用户"}信息已保存，密码已重置` : `${isAdministrator ? "管理员" : "用户"}信息已保存`);
         } catch (error) {
             message.error(error instanceof Error ? error.message : "保存用户失败");
         } finally {
@@ -154,7 +160,7 @@ export function AdminUserEditModal({
     return (
         <>
         <AdminModal
-            title={user ? `编辑用户 · ${user.username}` : "编辑用户"}
+            title={user ? `编辑${isAdministrator ? "管理员" : "用户"} · ${user.username}` : `编辑${isAdministrator ? "管理员" : "用户"}`}
             open={Boolean(user)}
             centered
             width="min(620px, calc(100vw - 32px))"
@@ -202,13 +208,10 @@ export function AdminUserEditModal({
                         onGenerate={() => form.setFields([{ name: "password", value: generateAdminPassword(16), touched: true, errors: [] }])}
                     />
                 </Form.Item>
-                <Form.Item name="role" label="角色" extra={editingSelf ? "不能在此修改当前管理员自己的角色。" : "角色变更会立即影响后台访问权限。"}>
-                    <Select disabled={editingSelf || !actorIsFull} options={[{ label: "管理员", value: "admin" }, { label: "普通用户", value: "user" }]} />
-                </Form.Item>
                 <Form.Item name="status" label="账号状态" extra={editingSelf ? "不能停用当前登录账号。" : "停用后会清除登录态，但保留身份、任务和积分流水。"}>
-                    <Select disabled={editingSelf || (user?.role === "admin" && !actorIsFull)} options={[{ label: "已启用", value: "active" }, { label: "已停用", value: "disabled" }]} />
+                    <Select disabled={editingSelf || (isAdministrator && !actorIsFull)} options={[{ label: "已启用", value: "active" }, { label: "已停用", value: "disabled" }]} />
                 </Form.Item>
-                {actorIsFull && selectedRole === "admin" && !editingSelf ? <AdminAccessFields level={selectedAdminLevel} /> : null}
+                {isAdministrator && actorIsFull && !editingSelf ? <AdminAccessFields level={selectedAdminLevel} /> : null}
             </Form>
 
             {canAdjustCredits ? <section className="mt-2 border-t border-border/60 pt-5" aria-labelledby="admin-user-credit-adjustment-heading">
@@ -307,7 +310,7 @@ function toMicrocredits(value: number) {
     return result;
 }
 
-function AdminAccessFields({ level }: { level?: AdminLevel }) {
+export function AdminAccessFields({ level }: { level?: AdminLevel }) {
 	const form = Form.useFormInstance();
 	const selectedPermissions = (Form.useWatch("permissions", form) || []) as AdminPermission[];
 	const updateGroup = (permissions: AdminPermission[], select: boolean) => {
@@ -402,10 +405,7 @@ type CreateUserFormValues = {
     email?: string;
     remark?: string;
     password: string;
-    role: LocalUser["role"];
     status: LocalUser["status"];
-    adminLevel?: AdminLevel;
-    permissions?: AdminPermission[];
 };
 
 export function AdminUserCreateDrawer({
@@ -420,15 +420,11 @@ export function AdminUserCreateDrawer({
     const { message, modal } = App.useApp();
     const [saving, setSaving] = useState(false);
     const [form] = Form.useForm<CreateUserFormValues>();
-    const actorAccess = useUserStore((state) => state.user?.adminAccess);
-    const actorIsFull = actorAccess?.level === "full";
-    const selectedRole = Form.useWatch("role", form);
-    const selectedAdminLevel = Form.useWatch("adminLevel", form);
 
     useEffect(() => {
         if (!open) return;
         form.resetFields();
-        form.setFieldsValue({ role: "user", status: "active" });
+        form.setFieldsValue({ status: "active" });
     }, [form, open]);
 
     const close = () => {
@@ -456,9 +452,7 @@ export function AdminUserCreateDrawer({
                 email: values.email?.trim() || "",
                 remark: values.remark?.trim() || "",
                 password: values.password,
-                role: values.role,
                 status: values.status,
-                ...(values.role === "admin" ? { adminAccess: { level: values.adminLevel || "scoped", permissions: values.adminLevel === "full" ? [] : (values.permissions || []) } } : {}),
             });
             onCreated(result.user);
             form.resetFields();
@@ -494,10 +488,6 @@ export function AdminUserCreateDrawer({
                 <Form.Item name="password" label={"\u521d\u59cb\u5bc6\u7801"} rules={[{ required: true, message: "\u8bf7\u8bbe\u7f6e\u521d\u59cb\u5bc6\u7801" }]}>
                     <Input.Password placeholder={"\u81f3\u5c11 8 \u4f4d"} />
                 </Form.Item>
-                <Form.Item name="role" label={"\u89d2\u8272"}>
-                    <Select options={actorIsFull ? [{ label: "\u7ba1\u7406\u5458", value: "admin" }, { label: "\u666e\u901a\u7528\u6237", value: "user" }] : [{ label: "\u666e\u901a\u7528\u6237", value: "user" }]} />
-                </Form.Item>
-                {actorIsFull && selectedRole === "admin" ? <AdminAccessFields level={selectedAdminLevel} /> : null}
                 <Form.Item name="status" label={"\u8d26\u53f7\u72b6\u6001"}>
                     <Select options={[{ label: "\u5df2\u542f\u7528", value: "active" }, { label: "\u5df2\u505c\u7528", value: "disabled" }]} />
                 </Form.Item>

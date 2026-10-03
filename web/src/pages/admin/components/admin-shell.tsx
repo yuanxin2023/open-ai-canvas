@@ -40,6 +40,7 @@ import {
     Sun,
     TicketCheck,
     ToggleLeft,
+    UserCog,
     UsersRound,
 } from "lucide-react";
 import { Suspense, useEffect, useState, type ReactNode } from "react";
@@ -67,6 +68,7 @@ type AdminNavigationItem = {
     description: string;
     icon: ReactNode;
     requireFeature?: "frontendModelsEnabled";
+    fullAdminOnly?: boolean;
 };
 
 type AdminNavigationGroupBase = {
@@ -103,7 +105,8 @@ const adminNavigation: AdminNavigationGroup[] = [
         label: "用户与服务",
         collapsible: true,
         items: [
-            { path: "/admin/users", label: "用户管理", description: "账号、角色与状态", icon: <UsersRound className="size-4" /> },
+            { path: "/admin/users", label: "用户管理", description: "普通用户账号与状态", icon: <UsersRound className="size-4" /> },
+            { path: "/admin/administrators", label: "管理员配置", description: "管理员账号与模块权限", icon: <UserCog className="size-4" />, fullAdminOnly: true },
             { path: "/admin/customer-service", label: "客服配置", description: "客服入口、样式与移动", icon: <Headphones className="size-4" /> },
             { path: "/admin/agent-lessons", label: "Agent 记忆", description: "按用户查看个人记忆", icon: <Sparkles className="size-4" /> },
         ],
@@ -173,6 +176,7 @@ for (const group of ADMIN_PERMISSION_GROUPS) {
 }
 
 function canAccessAdminItem(item: AdminNavigationItem, access: AdminAccess | undefined) {
+    if (item.fullAdminOnly) return access?.level === "full";
     const permission = permissionByAdminPath.get(item.path);
     return Boolean(permission && hasAdminPermission(access, permission));
 }

@@ -25,3 +25,18 @@ export function RequireAdminPermission({ permission, children }: { permission: A
         </main>
     );
 }
+
+export function RequireFullAdmin({ children }: { children: ReactNode }) {
+    const user = useUserStore((state) => state.user);
+    if (user?.role === "admin" && user.adminAccess?.level === "full") return children;
+    const target = firstAdminPath(user?.adminAccess);
+    return (
+        <main data-admin-root className="admin-unauthorized">
+            <div className="admin-unauthorized-card">
+                <h1>无权限</h1>
+                <p>管理员配置仅允许全权限管理员访问。</p>
+                <Link to={target}>前往可用模块</Link>
+            </div>
+        </main>
+    );
+}

@@ -47,7 +47,7 @@ export default function UsersPanel({ onUserChanged, onUserDeleted }: { onUserCha
     const requestSequence = useRef(0);
     const pendingFilterUrlRef = useRef<string | null>(null);
     const skipFilterUrlCommitRef = useRef(false);
-    const hasFilters = Boolean(filterDraft || state.role !== "all" || state.status !== "all");
+    const hasFilters = Boolean(filterDraft || state.status !== "all");
     const detailIndex = detailUserId ? users.findIndex((user) => user.id === detailUserId) : -1;
     const previousUserId = detailIndex > 0 ? users[detailIndex - 1]?.id : undefined;
     const nextUserId = detailIndex >= 0 && detailIndex < users.length - 1 ? users[detailIndex + 1]?.id : undefined;
@@ -84,7 +84,6 @@ export default function UsersPanel({ onUserChanged, onUserDeleted }: { onUserCha
         setTotal(0);
         void listAdminUsers({
             keyword: state.filter || undefined,
-            role: state.role === "all" ? undefined : state.role,
             status: state.status === "all" ? undefined : state.status,
             page: state.page,
             pageSize: state.pageSize,
@@ -105,7 +104,7 @@ export default function UsersPanel({ onUserChanged, onUserDeleted }: { onUserCha
             .finally(() => {
                 if (sequence === requestSequence.current) setLoading(false);
             });
-    }, [message, retry, state.filter, state.page, state.pageSize, state.role, state.status, update]);
+    }, [message, retry, state.filter, state.page, state.pageSize, state.status, update]);
 
     const replaceUser = useCallback((nextUser: LocalUser | AdminManagedUser) => {
         setUsers((items) => items.map((item) => item.id === nextUser.id ? { ...item, ...nextUser } : item));
@@ -150,7 +149,7 @@ export default function UsersPanel({ onUserChanged, onUserDeleted }: { onUserCha
 
     const resetFilters = () => {
         setFilterDraft("");
-        update({ filter: "", role: "all", status: "all", page: 1 });
+        update({ filter: "", status: "all", page: 1 });
     };
 
     const bulkDisable = () => {
@@ -202,13 +201,6 @@ export default function UsersPanel({ onUserChanged, onUserDeleted }: { onUserCha
                 onReset={resetFilters}
                 toolbarFilters={
                     <>
-                        <Select
-                            aria-label="筛选用户角色"
-                            className="w-32"
-                            value={state.role}
-                            options={[{ value: "all", label: "全部角色" }, { value: "admin", label: "管理员" }, { value: "user", label: "普通用户" }]}
-                            onChange={(role) => update({ role, page: 1 })}
-                        />
                         <Select
                             aria-label="筛选用户状态"
                             className="w-32"

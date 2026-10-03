@@ -24,6 +24,43 @@ type CreateAdminUserRequest struct {
 	Status      model.UserStatus  `json:"status"`
 	AdminAccess *AdminAccessInput `json:"adminAccess"`
 }
+
+type CreateOrdinaryUserRequest struct {
+	Username string           `json:"username"`
+	Email    string           `json:"email"`
+	Remark   string           `json:"remark"`
+	Password string           `json:"password"`
+	Status   model.UserStatus `json:"status"`
+}
+
+type CreateAdministratorRequest struct {
+	Username    string            `json:"username"`
+	Email       string            `json:"email"`
+	Remark      string            `json:"remark"`
+	Password    string            `json:"password"`
+	Status      model.UserStatus  `json:"status"`
+	AdminAccess *AdminAccessInput `json:"adminAccess"`
+}
+
+type PromoteAdministratorRequest struct {
+	UserID      string            `json:"userId"`
+	AdminAccess *AdminAccessInput `json:"adminAccess"`
+}
+
+type UpdateOrdinaryUserRequest struct {
+	Email    string           `json:"email"`
+	Remark   *string          `json:"remark"`
+	Password string           `json:"password"`
+	Status   model.UserStatus `json:"status"`
+}
+
+type UpdateAdministratorRequest struct {
+	Email       string            `json:"email"`
+	Remark      *string           `json:"remark"`
+	Password    string            `json:"password"`
+	Status      model.UserStatus  `json:"status"`
+	AdminAccess *AdminAccessInput `json:"adminAccess"`
+}
 type UpdateUserRequest struct {
 	DisplayName string            `json:"displayName"`
 	Email       string            `json:"email"`
@@ -191,6 +228,20 @@ func (s *Service) RequireOrdinaryUserTarget(actor *model.User, userID string) (*
 	return user, nil
 }
 
+func (s *Service) requireTargetRole(userID string, role model.UserRole) (*model.User, error) {
+	user, err := s.repo.User(strings.TrimSpace(userID))
+	if err != nil {
+		return nil, err
+	}
+	if user.Role != role {
+		if role == model.UserRoleAdmin {
+			return nil, BadAuthRequest("目标账号不是管理员")
+		}
+		return nil, BadAuthRequest("目标账号不是普通用户")
+	}
+	return user, nil
+}
+
 func (s *Service) RequireAdminPermission(user *model.User, permission model.AdminPermission) error {
 	if err := s.RequireAdmin(user); err != nil {
 		return err
@@ -268,9 +319,19 @@ func (s *Service) AdminUsers(actor *model.User, query AdminListQuery) (*AdminUse
 	if err := s.RequireAdminPermission(actor, model.AdminPermissionUsers); err != nil {
 		return nil, err
 	}
-	if actor.AdminLevel == model.AdminLevelScoped {
-		query.Type = string(model.UserRoleUser)
+	query.Type = string(model.UserRoleUser)
+	return s.adminUserPage(query, false)
+}
+
+func (s *Service) Administrators(actor *model.User, query AdminListQuery) (*AdminUserPage, error) {
+	if err := s.RequireFullAdmin(actor); err != nil {
+		return nil, err
 	}
+	query.Type = string(model.UserRoleAdmin)
+	return s.adminUserPage(query, true)
+}
+
+func (s *Service) adminUserPage(query AdminListQuery, hydrateAdminAccess bool) (*AdminUserPage, error) {
 	page, limit := normalizeAdminPage(query.Page, query.Limit)
 	users, total, err := s.repo.AdminUsers(query.Keyword, model.UserRole(query.Type), model.UserStatus(query.Status), limit, (page-1)*limit)
 	if err != nil {
@@ -290,7 +351,7 @@ func (s *Service) AdminUsers(actor *model.User, query AdminListQuery) (*AdminUse
 	}
 	result := make([]AdminUser, 0, len(users))
 	for _, user := range users {
-		if actor.AdminLevel == model.AdminLevelFull || actor.AdminLevel == "" {
+		if hydrateAdminAccess {
 			if err := s.repo.HydrateAdminAccess(&user); err != nil {
 				return nil, err
 			}
@@ -299,6 +360,34 @@ func (s *Service) AdminUsers(actor *model.User, query AdminListQuery) (*AdminUse
 		result = append(result, AdminUser{User: user, Remark: user.AdminRemark, AvailableMicrocredits: account.AvailableMicrocredits, ReservedMicrocredits: account.ReservedMicrocredits, AdminAccess: adminAccessView(&user)})
 	}
 	return &AdminUserPage{Users: result, Total: total, Page: page, Limit: limit}, nil
+}
+
+func (s *Service) CreateOrdinaryUser(actor *model.User, req CreateOrdinaryUserRequest) (*AdminUser, error) {
+	return s.CreateAdminUser(actor, CreateAdminUserRequest{
+		Username: req.Username, Email: req.Email, Remark: req.Remark, Password: req.Password,
+		Role: model.UserRoleUser, Status: req.Status,
+	})
+}
+
+func (s *Service) CreateAdministrator(actor *model.User, req CreateAdministratorRequest) (*AdminUser, error) {
+	if err := s.RequireFullAdmin(actor); err != nil {
+		return nil, err
+	}
+	return s.CreateAdminUser(actor, CreateAdminUserRequest{
+		Username: req.Username, Email: req.Email, Remark: req.Remark, Password: req.Password,
+		Role: model.UserRoleAdmin, Status: req.Status, AdminAccess: req.AdminAccess,
+	})
+}
+
+func (s *Service) PromoteAdministrator(actor *model.User, req PromoteAdministratorRequest) (*AdminManagedUser, error) {
+	if err := s.RequireFullAdmin(actor); err != nil {
+		return nil, err
+	}
+	user, err := s.requireTargetRole(req.UserID, model.UserRoleUser)
+	if err != nil {
+		return nil, err
+	}
+	return s.UpdateUser(actor, user.ID, UpdateUserRequest{Role: model.UserRoleAdmin, AdminAccess: req.AdminAccess})
 }
 
 func (s *Service) AdminReferences(actor *model.User) (*AdminReferenceData, error) {
@@ -617,6 +706,44 @@ func (s *Service) UpdateUser(actor *model.User, userID string, req UpdateUserReq
 	return &AdminManagedUser{User: *user, Remark: user.AdminRemark, AdminAccess: adminAccessView(user)}, nil
 }
 
+func (s *Service) UpdateOrdinaryUser(actor *model.User, userID string, req UpdateOrdinaryUserRequest) (*AdminManagedUser, error) {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionUsers); err != nil {
+		return nil, err
+	}
+	user, err := s.requireTargetRole(userID, model.UserRoleUser)
+	if err != nil {
+		return nil, err
+	}
+	return s.UpdateUser(actor, user.ID, UpdateUserRequest{
+		Email: req.Email, Remark: req.Remark, Password: req.Password, Role: model.UserRoleUser, Status: req.Status,
+	})
+}
+
+func (s *Service) UpdateAdministrator(actor *model.User, userID string, req UpdateAdministratorRequest) (*AdminManagedUser, error) {
+	if err := s.RequireFullAdmin(actor); err != nil {
+		return nil, err
+	}
+	user, err := s.requireTargetRole(userID, model.UserRoleAdmin)
+	if err != nil {
+		return nil, err
+	}
+	return s.UpdateUser(actor, user.ID, UpdateUserRequest{
+		Email: req.Email, Remark: req.Remark, Password: req.Password, Role: model.UserRoleAdmin,
+		Status: req.Status, AdminAccess: req.AdminAccess,
+	})
+}
+
+func (s *Service) DemoteAdministrator(actor *model.User, userID string) (*AdminManagedUser, error) {
+	if err := s.RequireFullAdmin(actor); err != nil {
+		return nil, err
+	}
+	user, err := s.requireTargetRole(userID, model.UserRoleAdmin)
+	if err != nil {
+		return nil, err
+	}
+	return s.UpdateUser(actor, user.ID, UpdateUserRequest{Role: model.UserRoleUser})
+}
+
 func adminPermissionsEqual(left, right []model.AdminPermission) bool {
 	if len(left) != len(right) {
 		return false
@@ -687,6 +814,16 @@ func (s *Service) DeleteUser(actor *model.User, userID string) error {
 		return err
 	}
 	return s.appendAdminAudit(actor, "user.disable", "user", user.ID, "停用用户并清除登录态", nil)
+}
+
+func (s *Service) DeleteOrdinaryUser(actor *model.User, userID string) error {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionUsers); err != nil {
+		return err
+	}
+	if _, err := s.requireTargetRole(userID, model.UserRoleUser); err != nil {
+		return err
+	}
+	return s.DeleteUser(actor, userID)
 }
 
 func (s *Service) PurgeUser(actor *model.User, userID string) error {
@@ -768,6 +905,26 @@ func (s *Service) PurgeUser(actor *model.User, userID string) error {
 	return nil
 }
 
+func (s *Service) PurgeOrdinaryUser(actor *model.User, userID string) error {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionUsers); err != nil {
+		return err
+	}
+	if _, err := s.requireTargetRole(userID, model.UserRoleUser); err != nil {
+		return err
+	}
+	return s.PurgeUser(actor, userID)
+}
+
+func (s *Service) PurgeAdministrator(actor *model.User, userID string) error {
+	if err := s.RequireFullAdmin(actor); err != nil {
+		return err
+	}
+	if _, err := s.requireTargetRole(userID, model.UserRoleAdmin); err != nil {
+		return err
+	}
+	return s.PurgeUser(actor, userID)
+}
+
 func (s *Service) BulkDisableUsers(actor *model.User, req BulkDisableUsersRequest) (*BulkDisableUsersResult, error) {
 	if err := s.RequireAdminPermission(actor, model.AdminPermissionUsers); err != nil {
 		return nil, err
@@ -797,18 +954,7 @@ func (s *Service) BulkDisableUsers(actor *model.User, req BulkDisableUsersReques
 			return nil, userErr
 		}
 		if user.Role == model.UserRoleAdmin {
-			if err := s.RequireFullAdmin(actor); err != nil {
-				return nil, err
-			}
-			if user.AdminLevel == model.AdminLevelFull || user.AdminLevel == "" {
-				remaining, countErr := s.repo.ActiveFullAdminCountExcluding(user.ID)
-				if countErr != nil {
-					return nil, countErr
-				}
-				if remaining == 0 {
-					return nil, BadAuthRequest("批量操作后至少需要保留一个可用的全权限管理员")
-				}
-			}
+			return nil, BadAuthRequest("批量停用只支持普通用户")
 		}
 	}
 	metadata, err := json.Marshal(map[string]any{"userIds": userIDs, "count": len(userIDs)})

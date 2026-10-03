@@ -297,13 +297,108 @@ func TestBulkDisableUsersRejectsCurrentAdmin(t *testing.T) {
 	}
 }
 
+func TestAdminUsersAndAdministratorsAreSeparated(t *testing.T) {
+	db := newBulkUserTestDB(t)
+	actor := model.User{ID: "admin-1", Username: "root-admin", Role: model.UserRoleAdmin, AdminLevel: model.AdminLevelFull, Status: model.UserStatusActive}
+	ordinary := model.User{ID: "user-1", Username: "ordinary", Role: model.UserRoleUser, Status: model.UserStatusActive}
+	administrator := model.User{ID: "admin-2", Username: "module-admin", Role: model.UserRoleAdmin, AdminLevel: model.AdminLevelScoped, Status: model.UserStatusActive}
+	if err := db.Create(&[]model.User{actor, ordinary, administrator}).Error; err != nil {
+		t.Fatal(err)
+	}
+	svc := &Service{repo: repository.New(db)}
+
+	users, err := svc.AdminUsers(&actor, AdminListQuery{Type: string(model.UserRoleAdmin), Page: 1, Limit: 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if users.Total != 1 || len(users.Users) != 1 || users.Users[0].ID != ordinary.ID {
+		t.Fatalf("ordinary users page = %+v", users)
+	}
+
+	administrators, err := svc.Administrators(&actor, AdminListQuery{Type: string(model.UserRoleUser), Page: 1, Limit: 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if administrators.Total != 2 || len(administrators.Users) != 2 {
+		t.Fatalf("administrators page = %+v", administrators)
+	}
+	for _, user := range administrators.Users {
+		if user.Role != model.UserRoleAdmin || user.AdminAccess == nil {
+			t.Fatalf("administrator = %+v", user)
+		}
+	}
+}
+
+func TestAdministratorsRequireFullAdmin(t *testing.T) {
+	svc := &Service{}
+	scoped := &model.User{Role: model.UserRoleAdmin, AdminLevel: model.AdminLevelScoped, AdminPermissions: []model.AdminPermission{model.AdminPermissionUsers}}
+	if _, err := svc.Administrators(scoped, AdminListQuery{}); err == nil {
+		t.Fatal("Administrators(scoped) error = nil")
+	}
+	ordinary := &model.User{Role: model.UserRoleUser}
+	if _, err := svc.Administrators(ordinary, AdminListQuery{}); err == nil {
+		t.Fatal("Administrators(ordinary) error = nil")
+	}
+}
+
+func TestPromoteAndDemoteAdministratorPreservesAccountAndRevokesSession(t *testing.T) {
+	db := newBulkUserTestDB(t)
+	actor := model.User{ID: "admin-1", Username: "root-admin", Role: model.UserRoleAdmin, AdminLevel: model.AdminLevelFull, Status: model.UserStatusActive}
+	target := model.User{ID: "user-1", Username: "ordinary", Role: model.UserRoleUser, Status: model.UserStatusActive}
+	if err := db.Create(&[]model.User{actor, target}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&model.AuthSession{ID: "target-session", UserID: target.ID}).Error; err != nil {
+		t.Fatal(err)
+	}
+	svc := &Service{repo: repository.New(db)}
+
+	promoted, err := svc.PromoteAdministrator(&actor, PromoteAdministratorRequest{
+		UserID:      target.ID,
+		AdminAccess: &AdminAccessInput{Level: model.AdminLevelScoped, Permissions: []model.AdminPermission{model.AdminPermissionUsers}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if promoted.Role != model.UserRoleAdmin || promoted.AdminAccess == nil || promoted.AdminAccess.Level != model.AdminLevelScoped {
+		t.Fatalf("promoted user = %+v", promoted)
+	}
+	var sessions int64
+	if err := db.Model(&model.AuthSession{}).Where("user_id = ?", target.ID).Count(&sessions).Error; err != nil {
+		t.Fatal(err)
+	}
+	if sessions != 0 {
+		t.Fatalf("target sessions = %d, want 0", sessions)
+	}
+
+	demoted, err := svc.DemoteAdministrator(&actor, target.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if demoted.Role != model.UserRoleUser || demoted.AdminAccess != nil {
+		t.Fatalf("demoted user = %+v", demoted)
+	}
+}
+
+func TestOrdinaryUserWriteRejectsAdministratorTarget(t *testing.T) {
+	db := newBulkUserTestDB(t)
+	actor := model.User{ID: "admin-1", Username: "root-admin", Role: model.UserRoleAdmin, AdminLevel: model.AdminLevelFull, Status: model.UserStatusActive}
+	target := model.User{ID: "admin-2", Username: "module-admin", Role: model.UserRoleAdmin, AdminLevel: model.AdminLevelScoped, Status: model.UserStatusActive}
+	if err := db.Create(&[]model.User{actor, target}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := (&Service{repo: repository.New(db)}).UpdateOrdinaryUser(&actor, target.ID, UpdateOrdinaryUserRequest{Status: model.UserStatusDisabled}); err == nil {
+		t.Fatal("UpdateOrdinaryUser(admin target) error = nil")
+	}
+}
+
 func newBulkUserTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&model.User{}, &model.AuthSession{}, &model.AdminAuditEvent{}, &model.CreditAccount{}, &model.CreditLedgerEntry{}, &model.SystemSetting{}, &model.TaskTextDelta{}); err != nil {
+	if err := db.AutoMigrate(&model.User{}, &model.AdminPermissionGrant{}, &model.AuthSession{}, &model.AdminAuditEvent{}, &model.CreditAccount{}, &model.CreditLedgerEntry{}, &model.SystemSetting{}, &model.TaskTextDelta{}); err != nil {
 		t.Fatal(err)
 	}
 	return db

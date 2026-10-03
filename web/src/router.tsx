@@ -2,7 +2,7 @@ import { lazy, Suspense, type ReactNode } from "react";
 import { createBrowserRouter, Navigate, Outlet, useLocation } from "react-router";
 
 import { RequireAuth } from "@/components/auth/require-auth";
-import { AdminLanding, RequireAdminPermission } from "@/components/auth/require-admin-permission";
+import { AdminLanding, RequireAdminPermission, RequireFullAdmin } from "@/components/auth/require-admin-permission";
 import type { AdminPermission } from "@/lib/admin-permissions";
 import { CustomerServiceWidget } from "@/components/customer-service/customer-service-widget";
 import { FullScreenLoader, WorkspaceRouteLoader } from "@/components/ui/aceternity/full-screen-loader";
@@ -42,6 +42,7 @@ const SystemUpdatePage = lazy(() => import("@/pages/admin/settings/system-update
 const SystemPerformancePage = lazy(() => import("@/pages/admin/settings/system-performance-page"));
 const StoryboardPromptsPage = lazy(() => import("@/pages/admin/storyboard-prompts/storyboard-prompts-page"));
 const UsersPage = lazy(() => import("@/pages/admin/users/users-page"));
+const AdministratorsPage = lazy(() => import("@/pages/admin/users/administrators-page"));
 const AssetsPage = lazy(loadAssetsPage);
 const PromptsPage = lazy(() => import("@/pages/prompts"));
 const LoginPage = lazy(() => import("@/pages/auth/login"));
@@ -208,6 +209,7 @@ export const router = createBrowserRouter([
                 children: [
                     { index: true, element: <AdminLanding>{adminRoute("admin.analytics.overview", <AnalyticsPage />)}</AdminLanding> },
                     { path: "users", element: adminRoute("admin.users.accounts", <UsersPage />) },
+                    { path: "administrators", element: <RequireFullAdmin><AdministratorsPage /></RequireFullAdmin> },
                     { path: "channels", element: adminRoute("admin.platform.channels", <ChannelsPage />) },
                     { path: "models", element: adminRoute("admin.platform.logical_models", <RequireFeature feature="frontendModelsEnabled"><LogicalModelsPage /></RequireFeature>) },
                     { path: "plugins", element: adminRoute("admin.platform.plugins", <AdminPluginsPage />) },

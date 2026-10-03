@@ -281,7 +281,7 @@ func RegisterAdminRoutes(r *gin.RouterGroup, svc *service.Service) {
 			fail(c, http.StatusBadRequest, err)
 			return
 		}
-		users, err := svc.AdminUsers(user, service.AdminListQuery{Keyword: c.Query("keyword"), Type: c.Query("role"), Status: c.Query("status"), Page: page, Limit: limit})
+		users, err := svc.AdminUsers(user, service.AdminListQuery{Keyword: c.Query("keyword"), Status: c.Query("status"), Page: page, Limit: limit})
 		if err != nil {
 			failService(c, err)
 			return
@@ -295,17 +295,116 @@ func RegisterAdminRoutes(r *gin.RouterGroup, svc *service.Service) {
 			return
 		}
 		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 64<<10)
-		var req service.CreateAdminUserRequest
+		var req service.CreateOrdinaryUserRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
 			fail(c, http.StatusBadRequest, err)
 			return
 		}
-		created, err := svc.CreateAdminUser(user, req)
+		created, err := svc.CreateOrdinaryUser(user, req)
 		if err != nil {
 			failService(c, err)
 			return
 		}
 		ok(c, gin.H{"user": created})
+	})
+	r.GET("/admin/administrators", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		page, limit, err := parsePaginationQuery(c, 20)
+		if err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		users, err := svc.Administrators(user, service.AdminListQuery{Keyword: c.Query("keyword"), Status: c.Query("status"), Page: page, Limit: limit})
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, users)
+	})
+	r.POST("/admin/administrators", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 64<<10)
+		var req service.CreateAdministratorRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		created, err := svc.CreateAdministrator(user, req)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"user": created})
+	})
+	r.POST("/admin/administrators/promote", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 16<<10)
+		var req service.PromoteAdministratorRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		updated, err := svc.PromoteAdministrator(user, req)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"user": updated})
+	})
+	r.PATCH("/admin/administrators/:id", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		var req service.UpdateAdministratorRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		updated, err := svc.UpdateAdministrator(user, c.Param("id"), req)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"user": updated})
+	})
+	r.POST("/admin/administrators/:id/demote", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		updated, err := svc.DemoteAdministrator(user, c.Param("id"))
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"user": updated})
+	})
+	r.DELETE("/admin/administrators/:id/purge", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		if err := svc.PurgeAdministrator(user, c.Param("id")); err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"ok": true})
 	})
 	r.GET("/admin/references", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
@@ -448,12 +547,12 @@ func RegisterAdminRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
-		var req service.UpdateUserRequest
+		var req service.UpdateOrdinaryUserRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
 			fail(c, http.StatusBadRequest, err)
 			return
 		}
-		updated, err := svc.UpdateUser(user, c.Param("id"), req)
+		updated, err := svc.UpdateOrdinaryUser(user, c.Param("id"), req)
 		if err != nil {
 			failService(c, err)
 			return
@@ -466,7 +565,7 @@ func RegisterAdminRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
-		if err := svc.DeleteUser(user, c.Param("id")); err != nil {
+		if err := svc.DeleteOrdinaryUser(user, c.Param("id")); err != nil {
 			failService(c, err)
 			return
 		}
@@ -478,7 +577,7 @@ func RegisterAdminRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
-		if err := svc.PurgeUser(user, c.Param("id")); err != nil {
+		if err := svc.PurgeOrdinaryUser(user, c.Param("id")); err != nil {
 			failService(c, err)
 			return
 		}

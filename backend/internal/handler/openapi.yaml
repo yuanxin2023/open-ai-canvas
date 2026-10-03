@@ -27,6 +27,139 @@ tags:
   - name: admin
   - name: inspirations
 paths:
+  /admin/users:
+    get:
+      tags: [admin]
+      summary: 分页查询普通用户
+      description: 需要 admin.users.accounts；结果固定排除管理员账号。
+      parameters:
+        - {in: query, name: keyword, schema: {type: string}}
+        - {in: query, name: status, schema: {type: string, enum: [active, disabled]}}
+        - {in: query, name: page, schema: {type: integer, minimum: 1}}
+        - {in: query, name: pageSize, schema: {type: integer, minimum: 1, maximum: 100}}
+      responses:
+        "200": {description: 标准信封 data 包含 users、total、page、pageSize}
+        "403": {$ref: "#/components/responses/Error"}
+    post:
+      tags: [admin]
+      summary: 创建普通用户
+      description: role 固定为 user，不接受管理员权限配置。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password, status]
+              properties:
+                username: {type: string}
+                email: {type: string, format: email}
+                remark: {type: string, maxLength: 500}
+                password: {type: string, minLength: 8}
+                status: {type: string, enum: [active, disabled]}
+      responses:
+        "200": {description: 标准信封 data.user 为新建普通用户}
+        "400": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+  /admin/administrators:
+    get:
+      tags: [admin]
+      summary: 分页查询管理员
+      description: 仅全权限管理员可调用。
+      parameters:
+        - {in: query, name: keyword, schema: {type: string}}
+        - {in: query, name: status, schema: {type: string, enum: [active, disabled]}}
+        - {in: query, name: page, schema: {type: integer, minimum: 1}}
+        - {in: query, name: pageSize, schema: {type: integer, minimum: 1, maximum: 100}}
+      responses:
+        "200": {description: 标准信封 data 包含带 adminAccess 的管理员列表}
+        "403": {$ref: "#/components/responses/Error"}
+    post:
+      tags: [admin]
+      summary: 创建管理员
+      description: 仅全权限管理员可调用。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password, status, adminAccess]
+              properties:
+                username: {type: string}
+                email: {type: string, format: email}
+                remark: {type: string, maxLength: 500}
+                password: {type: string, minLength: 8}
+                status: {type: string, enum: [active, disabled]}
+                adminAccess: {$ref: "#/components/schemas/AdminAccessInput"}
+      responses:
+        "200": {description: 标准信封 data.user 为新建管理员}
+        "400": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+  /admin/administrators/promote:
+    post:
+      tags: [admin]
+      summary: 将普通用户晋升为管理员
+      description: 保留账号数据并撤销目标账号全部登录态；仅全权限管理员可调用。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userId, adminAccess]
+              properties:
+                userId: {type: string}
+                adminAccess: {$ref: "#/components/schemas/AdminAccessInput"}
+      responses:
+        "200": {description: 标准信封 data.user 为晋升后的管理员}
+        "400": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+  /admin/administrators/{id}:
+    patch:
+      tags: [admin]
+      summary: 更新管理员账号、状态和权限
+      description: 当前登录管理员不能修改自己的级别、权限或状态；仅全权限管理员可调用。
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: string}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email: {type: string, format: email}
+                remark: {type: string, maxLength: 500}
+                password: {type: string, minLength: 8}
+                status: {type: string, enum: [active, disabled]}
+                adminAccess: {$ref: "#/components/schemas/AdminAccessInput"}
+      responses:
+        "200": {description: 标准信封 data.user 为更新后的管理员}
+        "400": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+  /admin/administrators/{id}/demote:
+    post:
+      tags: [admin]
+      summary: 将管理员降为普通用户
+      description: 撤销目标登录态并保护最后一个启用的全权限管理员。
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: string}}
+      responses:
+        "200": {description: 标准信封 data.user 为降级后的普通用户}
+        "400": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+  /admin/administrators/{id}/purge:
+    delete:
+      tags: [admin]
+      summary: 永久注销管理员账号
+      description: 仅全权限管理员可调用；拒绝当前账号并保护最后一个启用的全权限管理员。
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: string}}
+      responses:
+        "200": {description: 标准信封 data.ok 为 true}
+        "400": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
   /admin/skills:
     get:
       tags: [admin]
@@ -1611,6 +1744,16 @@ components:
       in: cookie
       name: open_ai_canvas_session
   schemas:
+    AdminAccessInput:
+      type: object
+      additionalProperties: false
+      required: [level, permissions]
+      properties:
+        level: {type: string, enum: [full, scoped]}
+        permissions:
+          type: array
+          uniqueItems: true
+          items: {type: string, pattern: '^admin\.'}
     InspirationInput:
       type: object
       additionalProperties: false

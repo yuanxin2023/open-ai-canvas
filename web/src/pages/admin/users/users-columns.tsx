@@ -6,14 +6,13 @@ import { IdentityProviderBadge } from "@/components/layout/identity-provider-bad
 import { AdminRowActions, AdminStatusBadge } from "../components/admin-ui";
 import type { AdminUser } from "@/services/api/auth";
 
-export type UserColumnKey = "user" | "remark" | "email" | "credits" | "role" | "status" | "createdAt" | "actions";
+export type UserColumnKey = "user" | "remark" | "email" | "credits" | "status" | "createdAt" | "actions";
 
 export const userColumnOptions: Array<{ key: UserColumnKey; label: string; locked?: boolean }> = [
     { key: "user", label: "用户", locked: true },
     { key: "remark", label: "备注", locked: true },
     { key: "email", label: "邮箱" },
     { key: "credits", label: "当前积分" },
-    { key: "role", label: "角色" },
     { key: "status", label: "状态" },
     { key: "createdAt", label: "注册时间" },
     { key: "actions", label: "操作", locked: true },
@@ -61,7 +60,6 @@ export function createUserColumns({
             align: "center",
             render: (value, user) => <span className="tabular-nums" title={`冻结积分：${formatCredits(user.reservedMicrocredits)}`}>{formatCredits(value)}</span>,
         },
-        { key: "role", title: "角色", dataIndex: "role", width: 130, align: "center", render: (role, user) => <AdminStatusBadge label={role === "admin" ? (user.adminAccess?.level === "full" ? "全权限管理员" : "模块管理员") : "普通用户"} tone={role === "admin" ? "info" : "neutral"} /> },
         { key: "status", title: "状态", dataIndex: "status", width: 110, align: "center", render: (status) => <AdminStatusBadge label={status === "active" ? "已启用" : "已停用"} tone={status === "active" ? "success" : "neutral"} /> },
         { key: "createdAt", title: "注册时间", dataIndex: "createdAt", width: 112, align: "center", render: (value) => <span className="tabular-nums" title={formatTime(value)}>{formatCompactTime(value)}</span> },
         {

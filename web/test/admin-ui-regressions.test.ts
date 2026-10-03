@@ -242,12 +242,37 @@ test("business analytics keeps overview and request details while user tools sta
     const usersGroup = sourceSection(source, 'id: "users"', 'id: "commerce"');
     expect(usersGroup).toContain('label: "用户与服务"');
     expect(usersGroup).toContain('{ path: "/admin/users", label: "用户管理"');
+    expect(usersGroup).toContain('{ path: "/admin/administrators", label: "管理员配置"');
+    expect(usersGroup).toContain("fullAdminOnly: true");
     expect(usersGroup).toContain('{ path: "/admin/customer-service", label: "客服配置"');
     expect(usersGroup).toContain('{ path: "/admin/agent-lessons", label: "Agent 记忆"');
     expect(analyticsGroup).not.toContain('path: "/admin/users"');
     expect(platformGroup).not.toContain('path: "/admin/users"');
     expect(source).not.toContain('id: "overview"');
     expect(source).not.toContain('label: "概览"');
+});
+
+test("ordinary users and administrators use separate guarded management flows", async () => {
+    const [router, guard, api, usersPanel, administratorsPanel, createDrawer] = await Promise.all([
+        Bun.file(new URL("../src/router.tsx", import.meta.url)).text(),
+        Bun.file(new URL("../src/components/auth/require-admin-permission.tsx", import.meta.url)).text(),
+        Bun.file(new URL("../src/services/api/auth.ts", import.meta.url)).text(),
+        Bun.file(new URL("../src/pages/admin/users/users-panel.tsx", import.meta.url)).text(),
+        Bun.file(new URL("../src/pages/admin/users/administrators-panel.tsx", import.meta.url)).text(),
+        Bun.file(new URL("../src/pages/admin/users/administrator-create-drawer.tsx", import.meta.url)).text(),
+    ]);
+
+    expect(router).toContain('path: "administrators"');
+    expect(router).toContain("<RequireFullAdmin><AdministratorsPage /></RequireFullAdmin>");
+    expect(guard).toContain('user.adminAccess?.level === "full"');
+    expect(api).toContain('http.get<{ users: AdminUser[]; total: number; page: number; pageSize: number }>("/admin/administrators"');
+    expect(api).toContain('http.post<{ user: AdminManagedUser }>("/admin/administrators/promote"');
+    expect(usersPanel).not.toContain('role: state.role');
+    expect(usersPanel).not.toContain('label: "全部角色"');
+    expect(administratorsPanel).toContain("listAdministrators");
+    expect(administratorsPanel).toContain('accountKind="administrator"');
+    expect(createDrawer).toContain('label: "创建新账号"');
+    expect(createDrawer).toContain('label: "晋升现有用户"');
 });
 
 test("featured inspiration operations stay connected from admin to the creation workspace", async () => {

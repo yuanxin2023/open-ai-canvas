@@ -491,12 +491,36 @@ function normalizeUserAvatar(user: LocalUser | null) {
 export type AdminListParams = { keyword?: string; status?: string; role?: string; page?: number; pageSize?: number };
 export type AdminUserLedgerFilter = "all" | "increase" | "consume" | "admin";
 
-export function listAdminUsers(params: AdminListParams = {}) {
+export function listAdminUsers(params: Omit<AdminListParams, "role"> = {}) {
     return http.get<{ users: AdminUser[]; total: number; page: number; pageSize: number }>("/admin/users", { params });
 }
 
-export function createAdminUser(input: { username: string; email?: string; remark?: string; password: string; role: LocalUser["role"]; status: LocalUser["status"]; adminAccess?: AdminAccess }) {
+export function createAdminUser(input: { username: string; email?: string; remark?: string; password: string; status: LocalUser["status"] }) {
     return http.post<{ user: AdminUser }>("/admin/users", input);
+}
+
+export function listAdministrators(params: Omit<AdminListParams, "role"> = {}) {
+    return http.get<{ users: AdminUser[]; total: number; page: number; pageSize: number }>("/admin/administrators", { params });
+}
+
+export function createAdministrator(input: { username: string; email?: string; remark?: string; password: string; status: LocalUser["status"]; adminAccess: AdminAccess }) {
+    return http.post<{ user: AdminUser }>("/admin/administrators", input);
+}
+
+export function promoteAdministrator(input: { userId: string; adminAccess: AdminAccess }) {
+    return http.post<{ user: AdminManagedUser }>("/admin/administrators/promote", input);
+}
+
+export function updateAdministrator(id: string, input: Partial<Pick<LocalUser, "email" | "status" | "adminAccess">> & { remark?: string; password?: string }) {
+    return http.patch<{ user: AdminManagedUser }>(`/admin/administrators/${encodeURIComponent(id)}`, input);
+}
+
+export function demoteAdministrator(id: string) {
+    return http.post<{ user: AdminManagedUser }>(`/admin/administrators/${encodeURIComponent(id)}/demote`);
+}
+
+export function purgeAdministrator(id: string) {
+    return http.delete<{ ok: boolean }>(`/admin/administrators/${encodeURIComponent(id)}/purge`);
 }
 
 export function getAdminReferences() {
@@ -527,7 +551,7 @@ export function listAdminUserAuditEvents(id: string, params: { page?: number; pa
     return http.get<{ events: AdminAuditEvent[]; total: number; page: number; pageSize: number }>(`/admin/users/${encodeURIComponent(id)}/audit-events`, { params });
 }
 
-export function updateAdminUser(id: string, input: Partial<Pick<LocalUser, "email" | "role" | "status" | "adminAccess">> & { remark?: string; password?: string }) {
+export function updateAdminUser(id: string, input: Partial<Pick<LocalUser, "email" | "status">> & { remark?: string; password?: string }) {
     return http.patch<{ user: AdminManagedUser }>(`/admin/users/${encodeURIComponent(id)}`, input);
 }
 

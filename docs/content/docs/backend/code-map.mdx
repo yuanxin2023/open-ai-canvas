@@ -33,7 +33,7 @@ description: 从产品功能快速定位主要代码入口
 | 画布列表 | `web/src/pages/canvas/index.tsx` | `stores/canvas/use-canvas-store.ts` |
 | 画布编辑器 | `web/src/pages/canvas/project.tsx` | `pages/canvas/canvas-project-*`、`pages/canvas/use-canvas-*`、`components/canvas/`、`lib/canvas/`、`stores/canvas/` |
 | 公开分享 | `web/src/pages/canvas/shared.tsx` | `components/canvas/infinite-canvas.tsx`、`services/api/canvas-share.ts` |
-| 管理后台 | `web/src/pages/admin/`、`router.tsx` | `lib/admin-permissions.ts` 定义逐子项权限目录，`components/auth/require-admin-permission.tsx` 与 `admin-shell.tsx` 分别守卫路由和导航；后端 `model/admin_permissions.go`、`app/admin.go` 和各业务 service 执行同键鉴权，`admin_permission_grants` 持久化模块授权 |
+| 管理后台 | `web/src/pages/admin/`、`router.tsx` | `lib/admin-permissions.ts` 定义逐子项权限目录，`components/auth/require-admin-permission.tsx` 与 `admin-shell.tsx` 分别守卫路由和导航；`pages/admin/users/` 分离普通用户管理与仅全权限管理员可见的管理员配置；后端 `model/admin_permissions.go`、`app/admin.go` 和各业务 service 执行同键鉴权，`admin_permission_grants` 持久化模块授权 |
 | 支付 CSV 导出 | `web/src/pages/admin/payments/payments-page.tsx` | `services/api/payments.ts`、`AdminExportButton`；后端 `handler/payment_export.go`、`app/payment_export.go`、`repository/payment_export.go`（共享筛选、只读快照） |
 
 ## 画布核心

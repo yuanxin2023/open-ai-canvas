@@ -37,6 +37,8 @@ type (
 	AdminChannelReference                  = app.AdminChannelReference
 	AdminCreditAdjustmentRequest           = app.AdminCreditAdjustmentRequest
 	AdminListQuery                         = app.AdminListQuery
+	CreateAdministratorRequest             = app.CreateAdministratorRequest
+	CreateOrdinaryUserRequest              = app.CreateOrdinaryUserRequest
 	AdminLogicalModel                      = app.AdminLogicalModel
 	AdminLogicalRoute                      = app.AdminLogicalRoute
 	AdminPaymentOrderPage                  = app.AdminPaymentOrderPage
@@ -339,6 +341,9 @@ type (
 	UpdateProjectRequest                   = app.UpdateProjectRequest
 	UpdateProjectUnitRequest               = app.UpdateProjectUnitRequest
 	UpdateUserRequest                      = app.UpdateUserRequest
+	UpdateAdministratorRequest             = app.UpdateAdministratorRequest
+	UpdateOrdinaryUserRequest              = app.UpdateOrdinaryUserRequest
+	PromoteAdministratorRequest            = app.PromoteAdministratorRequest
 	UpdateWorkflowStepRequest              = app.UpdateWorkflowStepRequest
 	UserAnnouncementFeed                   = app.UserAnnouncementFeed
 	UserAssetPage                          = app.UserAssetPage
