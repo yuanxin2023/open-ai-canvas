@@ -19,6 +19,8 @@ export type CreditLedgerEntry = {
     reservedAfterMicrocredits: number;
     billingOrderId?: string;
     paymentOrderId?: string;
+    redeemCodeId?: string;
+    redeemBatchId?: string;
     model?: string;
     channelId?: string;
     scene?: string;
@@ -183,6 +185,9 @@ export type RedeemBatch = {
     count: number;
     note?: string;
     createdBy: string;
+    creatorUsername?: string;
+    fundingSource: "platform" | "module_admin";
+    totalMicrocredits: number;
     expiresAt?: string;
     createdAt: string;
     availableCount: number;
@@ -351,38 +356,40 @@ export function repriceAdminChannelModels(channelId: string, models: ChannelMode
     return http.post<{ updated: number }>(`/admin/channels/${encodeURIComponent(channelId)}/models/batch-reprice`, { models });
 }
 
-export type AdminFinanceListParams = { keyword?: string; status?: string; validity?: string; page?: number; pageSize?: number };
+export type RedeemFundingSource = RedeemBatch["fundingSource"];
+
+export type AdminFinanceListParams = { keyword?: string; status?: string; validity?: string; fundingSource?: RedeemFundingSource; creatorId?: string; page?: number; pageSize?: number };
 
 export function listAdminRedeemBatches(params: AdminFinanceListParams = {}) {
-    return http.get<{ batches: RedeemBatch[]; total: number; page: number; pageSize: number }>("/admin/redeem-batches", { params });
+    return http.get<{ batches: RedeemBatch[]; fundingSource: RedeemFundingSource; total: number; page: number; pageSize: number }>("/admin/redeem-batches", { params });
 }
 
 export function searchAdminRedeemBatches(params: AdminFinanceListParams) {
-    return http.post<{ batches: RedeemBatch[]; total: number; page: number; pageSize: number }>("/admin/redeem-batches/search", params);
+    return http.post<{ batches: RedeemBatch[]; fundingSource: RedeemFundingSource; total: number; page: number; pageSize: number }>("/admin/redeem-batches/search", params);
 }
 
 export function createAdminRedeemBatch(input: { amountMicrocredits: number; count: number; note?: string; expiresAt?: string }) {
-    return http.post<{ batch: RedeemBatch; codes: string[] }>("/admin/redeem-batches", input, { timeout: 30_000 });
+    return http.post<{ batch: RedeemBatch; codes: string[]; account?: CreditAccount }>("/admin/redeem-batches", input, { timeout: 30_000 });
 }
 
-export function listAdminRedeemBatchCodes(batchId: string, params: { status?: string; page?: number; pageSize?: number } = {}) {
-    return http.get<AdminRedeemCodePage>(`/admin/redeem-batches/${encodeURIComponent(batchId)}/codes`, { params });
+export function listAdminRedeemBatchCodes(batchId: string, fundingSource: RedeemFundingSource, params: { status?: string; page?: number; pageSize?: number } = {}) {
+    return http.get<AdminRedeemCodePage>(`/admin/redeem-batches/${encodeURIComponent(batchId)}/codes`, { params: { ...params, fundingSource } });
 }
 
-export function lookupAdminRedeemCode(code: string) {
-    return http.post<AdminRedeemCodeLookupResult>("/admin/redeem-codes/lookup", { code });
+export function lookupAdminRedeemCode(code: string, fundingSource: RedeemFundingSource, creatorId?: string) {
+    return http.post<AdminRedeemCodeLookupResult>("/admin/redeem-codes/lookup", { code, fundingSource, creatorId });
 }
 
-export function searchAdminRedeemCodes(query: string) {
-    return http.post<AdminRedeemCodeSearchResult>("/admin/redeem-codes/search", { query });
+export function searchAdminRedeemCodes(query: string, fundingSource: RedeemFundingSource, creatorId?: string) {
+    return http.post<AdminRedeemCodeSearchResult>("/admin/redeem-codes/search", { query, fundingSource, creatorId });
 }
 
-export function disableAdminRedeemBatch(batchId: string) {
-    return http.post<{ disabledCount: number }>(`/admin/redeem-batches/${encodeURIComponent(batchId)}/disable`);
+export function disableAdminRedeemBatch(batchId: string, fundingSource: RedeemFundingSource) {
+    return http.post<{ disabledCount: number; refundedMicrocredits: number }>(`/admin/redeem-batches/${encodeURIComponent(batchId)}/disable`, undefined, { params: { fundingSource } });
 }
 
-export function disableAdminRedeemCode(batchId: string, codeId: string) {
-    return http.post<{ ok: boolean }>(`/admin/redeem-batches/${encodeURIComponent(batchId)}/codes/${encodeURIComponent(codeId)}/disable`);
+export function disableAdminRedeemCode(batchId: string, codeId: string, fundingSource: RedeemFundingSource) {
+    return http.post<{ disabledCount: number; refundedMicrocredits: number }>(`/admin/redeem-batches/${encodeURIComponent(batchId)}/codes/${encodeURIComponent(codeId)}/disable`, undefined, { params: { fundingSource } });
 }
 
 export function adjustAdminUserCredits(userId: string, input: { amountMicrocredits: number; note: string }) {

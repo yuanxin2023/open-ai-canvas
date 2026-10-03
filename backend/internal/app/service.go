@@ -144,6 +144,7 @@ func (s *Service) StartWorker() {
 	s.startResourceDeletionWorker(ctx)
 	s.startSkillSyncWorker(ctx)
 	s.startPaymentWorker(ctx)
+	s.startRedeemExpirationWorker(ctx)
 }
 
 func (s *Service) BeginDrain() { s.backgroundWorkers().BeginDrain() }

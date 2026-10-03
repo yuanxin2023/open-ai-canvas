@@ -45,10 +45,11 @@ type WalletSummary struct {
 }
 
 type RedeemBatchPage struct {
-	Batches []model.RedeemBatch `json:"batches"`
-	Total   int64               `json:"total"`
-	Page    int                 `json:"page"`
-	Limit   int                 `json:"pageSize"`
+	Batches       []model.RedeemBatch            `json:"batches"`
+	FundingSource model.RedeemBatchFundingSource `json:"fundingSource"`
+	Total         int64                          `json:"total"`
+	Page          int                            `json:"page"`
+	Limit         int                            `json:"pageSize"`
 }
 
 type AdminRedeemCodeDetail struct {
@@ -75,7 +76,9 @@ type AdminRedeemCodePage struct {
 }
 
 type AdminRedeemCodeLookupRequest struct {
-	Code string `json:"code"`
+	Code          string `json:"code"`
+	FundingSource string `json:"fundingSource"`
+	CreatorID     string `json:"creatorId"`
 }
 
 type AdminRedeemCodeLookupResult struct {
@@ -84,7 +87,9 @@ type AdminRedeemCodeLookupResult struct {
 }
 
 type AdminRedeemCodeSearchRequest struct {
-	Query string `json:"query"`
+	Query         string `json:"query"`
+	FundingSource string `json:"fundingSource"`
+	CreatorID     string `json:"creatorId"`
 }
 
 type AdminRedeemCodeSearchResult struct {
@@ -108,8 +113,14 @@ type CreateRedeemBatchRequest struct {
 }
 
 type CreateRedeemBatchResult struct {
-	Batch model.RedeemBatch `json:"batch"`
-	Codes []string          `json:"codes"`
+	Batch   model.RedeemBatch    `json:"batch"`
+	Codes   []string             `json:"codes"`
+	Account *model.CreditAccount `json:"account,omitempty"`
+}
+
+type RedeemDisableResult struct {
+	DisabledCount        int64 `json:"disabledCount"`
+	RefundedMicrocredits int64 `json:"refundedMicrocredits"`
 }
 
 type AdminCreditAdjustmentRequest struct {
@@ -158,6 +169,9 @@ func (s *Service) Wallet(user *model.User, entryType string, page int, limit int
 	if limit <= 0 || limit > 100 {
 		limit = 30
 	}
+	if err := s.settleExpiredRedeemCodesForScope(user.ID); err != nil {
+		return nil, err
+	}
 	account, err := s.repo.CreditAccount(user.ID)
 	if err != nil {
 		return nil, err
@@ -204,10 +218,21 @@ func (s *Service) AdminCreateRedeemBatch(actor *model.User, req CreateRedeemBatc
 	if req.Count <= 0 || req.Count > 5000 {
 		return nil, BadAuthRequest("单批兑换码数量需为 1-5000")
 	}
+	if int64(req.Count) > (1<<63-1)/req.AmountMicrocredits {
+		return nil, BadAuthRequest("兑换码批次总积分超出可处理范围")
+	}
 	if req.ExpiresAt != nil && !req.ExpiresAt.After(time.Now()) {
 		return nil, BadAuthRequest("兑换码过期时间必须晚于当前时间")
 	}
-	batch := model.RedeemBatch{ID: newID(), AmountMicrocredits: req.AmountMicrocredits, Count: req.Count, Note: truncateRunes(strings.TrimSpace(req.Note), 500), CreatedBy: actor.ID, ExpiresAt: req.ExpiresAt}
+	fundingSource := model.RedeemBatchFundingPlatform
+	if actor.AdminLevel == model.AdminLevelScoped {
+		fundingSource = model.RedeemBatchFundingModuleAdmin
+		if err := s.settleExpiredRedeemCodesForScope(actor.ID); err != nil {
+			return nil, err
+		}
+	}
+	totalMicrocredits := req.AmountMicrocredits * int64(req.Count)
+	batch := model.RedeemBatch{ID: newID(), AmountMicrocredits: req.AmountMicrocredits, Count: req.Count, Note: truncateRunes(strings.TrimSpace(req.Note), 500), CreatedBy: actor.ID, FundingSource: fundingSource, ExpiresAt: req.ExpiresAt, TotalMicrocredits: totalMicrocredits}
 	codes := make([]string, 0, req.Count)
 	items := make([]model.RedeemCode, 0, req.Count)
 	for range req.Count {
@@ -232,20 +257,35 @@ func (s *Service) AdminCreateRedeemBatch(actor *model.User, req CreateRedeemBatc
 	// SQLite 只有一个写入器；批次生成串行进入短事务，避免并发生成占满连接池拖住全站读取。
 	s.redeemBatchMu.Lock()
 	defer s.redeemBatchMu.Unlock()
-	if err := s.repo.CreateRedeemBatch(&batch, items); err != nil {
+	audit, err := newAdminAuditEvent(actor, "redeem_batch.create", "redeem_batch", batch.ID, "创建兑换码批次", map[string]any{"count": batch.Count, "amountMicrocredits": batch.AmountMicrocredits, "totalMicrocredits": totalMicrocredits, "fundingSource": batch.FundingSource})
+	if err != nil {
 		return nil, err
 	}
-	if err := s.appendAdminAudit(actor, "redeem_batch.create", "redeem_batch", batch.ID, "创建兑换码批次", map[string]any{"count": batch.Count, "amountMicrocredits": batch.AmountMicrocredits}); err != nil {
+	account, err := s.repo.CreateRedeemBatch(&batch, items, totalMicrocredits, audit)
+	if errors.Is(err, repository.ErrInsufficientCredits) {
+		return nil, BadAuthRequest("可用积分不足，无法生成该兑换码批次")
+	}
+	if err != nil {
 		return nil, err
 	}
-	return &CreateRedeemBatchResult{Batch: batch, Codes: codes}, nil
+	return &CreateRedeemBatchResult{Batch: batch, Codes: codes, Account: account}, nil
 }
 
-func (s *Service) AdminRedeemCodePage(actor *model.User, batchID string, status string, page int, limit int) (*AdminRedeemCodePage, error) {
+func (s *Service) AdminRedeemCodePage(actor *model.User, batchID string, fundingSource string, status string, page int, limit int) (*AdminRedeemCodePage, error) {
 	if err := s.RequireAdminPermission(actor, model.AdminPermissionRedeemCodes); err != nil {
 		return nil, err
 	}
-	batch, err := s.repo.RedeemBatch(strings.TrimSpace(batchID))
+	scope, err := redeemAdminScopeFor(actor, fundingSource, "")
+	if err != nil {
+		return nil, err
+	}
+	if err := s.settleExpiredRedeemCodesForScope(scope.creatorID); err != nil {
+		return nil, err
+	}
+	batch, err := s.repo.RedeemBatch(strings.TrimSpace(batchID), scope.fundingSource, scope.creatorID)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, NotFound("兑换码批次不存在")
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -275,18 +315,28 @@ func (s *Service) AdminLookupRedeemCode(actor *model.User, req AdminRedeemCodeLo
 	if err := s.RequireAdminPermission(actor, model.AdminPermissionRedeemCodes); err != nil {
 		return nil, err
 	}
+	scope, err := redeemAdminScopeFor(actor, req.FundingSource, req.CreatorID)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.settleExpiredRedeemCodesForScope(scope.creatorID); err != nil {
+		return nil, err
+	}
 	code := strings.ToLower(strings.TrimSpace(req.Code))
 	if len(code) != 32 {
 		return nil, BadAuthRequest("请输入完整的 32 位兑换码")
 	}
-	row, err := s.repo.AdminRedeemCodeByHash(hashRedeemCode(code))
+	row, err := s.repo.AdminRedeemCodeByHash(hashRedeemCode(code), scope.fundingSource, scope.creatorID)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, NotFound("未找到该兑换码")
 	}
 	if err != nil {
 		return nil, err
 	}
-	batch, err := s.repo.RedeemBatch(row.BatchID)
+	batch, err := s.repo.RedeemBatch(row.BatchID, scope.fundingSource, scope.creatorID)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, NotFound("未找到该兑换码")
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -301,12 +351,19 @@ func (s *Service) AdminSearchRedeemCodes(actor *model.User, req AdminRedeemCodeS
 	if err := s.RequireAdminPermission(actor, model.AdminPermissionRedeemCodes); err != nil {
 		return nil, err
 	}
+	scope, err := redeemAdminScopeFor(actor, req.FundingSource, req.CreatorID)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.settleExpiredRedeemCodesForScope(scope.creatorID); err != nil {
+		return nil, err
+	}
 	query := strings.ToLower(strings.TrimSpace(req.Query))
 	if len(query) < 1 || len(query) > 32 {
 		return nil, BadAuthRequest("请输入兑换码中的任意 1-32 位字符")
 	}
 	if len(query) == 32 {
-		result, err := s.AdminLookupRedeemCode(actor, AdminRedeemCodeLookupRequest{Code: query})
+		result, err := s.AdminLookupRedeemCode(actor, AdminRedeemCodeLookupRequest{Code: query, FundingSource: string(scope.fundingSource), CreatorID: scope.creatorID})
 		if err == nil {
 			return &AdminRedeemCodeSearchResult{Matches: []AdminRedeemCodeLookupResult{*result}, Total: 1}, nil
 		}
@@ -316,7 +373,7 @@ func (s *Service) AdminSearchRedeemCodes(actor *model.User, req AdminRedeemCodeS
 		}
 	}
 
-	batches, err := s.repo.AdminRedeemBatchesWithCodeSecrets()
+	batches, err := s.repo.AdminRedeemBatchesWithCodeSecrets(scope.fundingSource, scope.creatorID)
 	if err != nil {
 		return nil, err
 	}
@@ -350,7 +407,7 @@ func (s *Service) AdminSearchRedeemCodes(actor *model.User, req AdminRedeemCodeS
 	for _, item := range candidates {
 		hashes = append(hashes, item.hash)
 	}
-	rows, err := s.repo.AdminRedeemCodesByHashes(hashes)
+	rows, err := s.repo.AdminRedeemCodesByHashes(hashes, scope.fundingSource, scope.creatorID)
 	if err != nil {
 		return nil, err
 	}
@@ -398,16 +455,61 @@ func (s *Service) redeemBatchPlainCodes(ciphertext string) ([]string, error) {
 	return codes, nil
 }
 
+type redeemAdminScope struct {
+	fundingSource model.RedeemBatchFundingSource
+	creatorID     string
+}
+
+func (s *Service) settleExpiredRedeemCodesForScope(creatorID string) error {
+	for {
+		expired, _, err := s.repo.SettleExpiredRedeemCodes(time.Now(), creatorID, 100)
+		if err != nil {
+			return err
+		}
+		if expired == 0 || creatorID == "" {
+			return nil
+		}
+	}
+}
+
+func redeemAdminScopeFor(actor *model.User, requestedSource string, requestedCreatorID string) (redeemAdminScope, error) {
+	source := model.RedeemBatchFundingSource(strings.TrimSpace(requestedSource))
+	if actor.AdminLevel == model.AdminLevelScoped {
+		if source != "" && source != model.RedeemBatchFundingModuleAdmin {
+			return redeemAdminScope{}, adminPermissionDenied("模块管理员只能访问自己生成的兑换码")
+		}
+		return redeemAdminScope{fundingSource: model.RedeemBatchFundingModuleAdmin, creatorID: actor.ID}, nil
+	}
+	if source == "" {
+		source = model.RedeemBatchFundingPlatform
+	}
+	if source != model.RedeemBatchFundingPlatform && source != model.RedeemBatchFundingModuleAdmin {
+		return redeemAdminScope{}, BadAuthRequest("兑换码资金来源无效")
+	}
+	creatorID := ""
+	if source == model.RedeemBatchFundingModuleAdmin {
+		creatorID = strings.TrimSpace(requestedCreatorID)
+	}
+	return redeemAdminScope{fundingSource: source, creatorID: creatorID}, nil
+}
+
 func (s *Service) AdminRedeemBatchPage(actor *model.User, query AdminListQuery) (*RedeemBatchPage, error) {
 	if err := s.RequireAdminPermission(actor, model.AdminPermissionRedeemCodes); err != nil {
 		return nil, err
 	}
-	page, limit := normalizeAdminPage(query.Page, query.Limit)
-	items, total, err := s.repo.AdminRedeemBatches(query.Keyword, query.Status, limit, (page-1)*limit)
+	scope, err := redeemAdminScopeFor(actor, query.FundingSource, query.CreatorID)
 	if err != nil {
 		return nil, err
 	}
-	return &RedeemBatchPage{Batches: items, Total: total, Page: page, Limit: limit}, nil
+	if err := s.settleExpiredRedeemCodesForScope(scope.creatorID); err != nil {
+		return nil, err
+	}
+	page, limit := normalizeAdminPage(query.Page, query.Limit)
+	items, total, err := s.repo.AdminRedeemBatches(query.Keyword, query.Status, scope.fundingSource, scope.creatorID, limit, (page-1)*limit)
+	if err != nil {
+		return nil, err
+	}
+	return &RedeemBatchPage{Batches: items, FundingSource: scope.fundingSource, Total: total, Page: page, Limit: limit}, nil
 }
 
 func (s *Service) AdminAdjustCredits(actor *model.User, userID string, req AdminCreditAdjustmentRequest) (*model.CreditAccount, error) {
@@ -537,38 +639,64 @@ func (s *Service) resolveBillingOrder(actor *model.User, id string, action strin
 	return s.repo.BillingOrder(id)
 }
 
-func (s *Service) AdminDisableRedeemBatch(actor *model.User, batchID string) (int64, error) {
+func (s *Service) AdminDisableRedeemBatch(actor *model.User, batchID string, fundingSource string) (*RedeemDisableResult, error) {
 	if err := s.RequireAdminPermission(actor, model.AdminPermissionRedeemCodes); err != nil {
-		return 0, err
+		return nil, err
 	}
-	if _, err := s.repo.RedeemBatch(strings.TrimSpace(batchID)); err != nil {
-		return 0, err
-	}
-	count, err := s.repo.DisableRedeemBatch(batchID, time.Now())
+	scope, err := redeemAdminScopeFor(actor, fundingSource, "")
 	if err != nil {
-		return 0, err
+		return nil, err
+	}
+	if err := s.settleExpiredRedeemCodesForScope(scope.creatorID); err != nil {
+		return nil, err
+	}
+	batchID = strings.TrimSpace(batchID)
+	if _, err := s.repo.RedeemBatch(batchID, scope.fundingSource, scope.creatorID); errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, NotFound("兑换码批次不存在")
+	} else if err != nil {
+		return nil, err
+	}
+	count, refunded, err := s.repo.DisableRedeemBatch(batchID, time.Now())
+	if err != nil {
+		return nil, err
 	}
 	if count == 0 {
-		return 0, BadAuthRequest("该批次没有可禁用的兑换码")
+		return nil, BadAuthRequest("该批次没有可禁用的兑换码")
 	}
-	if err := s.appendAdminAudit(actor, "redeem_batch.disable", "redeem_batch", batchID, "禁用批次内全部未使用兑换码", map[string]any{"disabledCount": count}); err != nil {
-		return 0, err
+	if err := s.appendAdminAudit(actor, "redeem_batch.disable", "redeem_batch", batchID, "禁用批次内全部未使用兑换码", map[string]any{"disabledCount": count, "refundedMicrocredits": refunded}); err != nil {
+		return nil, err
 	}
-	return count, nil
+	return &RedeemDisableResult{DisabledCount: count, RefundedMicrocredits: refunded}, nil
 }
 
-func (s *Service) AdminDisableRedeemCode(actor *model.User, batchID string, codeID string) error {
+func (s *Service) AdminDisableRedeemCode(actor *model.User, batchID string, codeID string, fundingSource string) (*RedeemDisableResult, error) {
 	if err := s.RequireAdminPermission(actor, model.AdminPermissionRedeemCodes); err != nil {
-		return err
+		return nil, err
 	}
-	disabled, err := s.repo.DisableRedeemCode(batchID, codeID, time.Now())
+	scope, err := redeemAdminScopeFor(actor, fundingSource, "")
 	if err != nil {
-		return err
+		return nil, err
+	}
+	if err := s.settleExpiredRedeemCodesForScope(scope.creatorID); err != nil {
+		return nil, err
+	}
+	batchID = strings.TrimSpace(batchID)
+	if _, err := s.repo.RedeemBatch(batchID, scope.fundingSource, scope.creatorID); errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, NotFound("兑换码批次不存在")
+	} else if err != nil {
+		return nil, err
+	}
+	disabled, refunded, err := s.repo.DisableRedeemCode(batchID, codeID, time.Now())
+	if err != nil {
+		return nil, err
 	}
 	if !disabled {
-		return BadAuthRequest("兑换码不存在、已使用、已禁用或已过期")
+		return nil, BadAuthRequest("兑换码不存在、已使用、已禁用或已过期")
 	}
-	return s.appendAdminAudit(actor, "redeem_code.disable", "redeem_code", codeID, "禁用单个兑换码", map[string]any{"batchId": batchID})
+	if err := s.appendAdminAudit(actor, "redeem_code.disable", "redeem_code", codeID, "禁用单个兑换码", map[string]any{"batchId": batchID, "refundedMicrocredits": refunded}); err != nil {
+		return nil, err
+	}
+	return &RedeemDisableResult{DisabledCount: 1, RefundedMicrocredits: refunded}, nil
 }
 
 func (s *Service) taskBillingOrder(userID string, task *model.Task, input map[string]any) (*model.BillingOrder, error) {

@@ -36,7 +36,14 @@ const sceneLabels: Record<string, string> = {
     video: "视频生成",
     audio: "音频生成",
     storyboard: "分镜生成",
+    redeem_code: "兑换码",
 };
+
+function ledgerTitle(entry: CreditLedgerEntry) {
+    if (entry.scene === "redeem_code" && entry.type === "consume") return "兑换码发放";
+    if (entry.scene === "redeem_code" && entry.type === "refund") return "兑换码退回";
+    return ledgerTypeMeta[entry.type].label;
+}
 
 export function CreditLedgerPane() {
     const config = useEffectiveConfig();
@@ -94,7 +101,7 @@ export function CreditLedgerPane() {
             width: 400,
             ellipsis: true,
             render: (_, entry) => {
-                const title = entry.model ? modelDisplayName(config, entry.model) : ledgerTypeMeta[entry.type].label;
+                const title = entry.model ? modelDisplayName(config, entry.model) : ledgerTitle(entry);
                 const description = [entry.scene ? sceneLabels[entry.scene] || "其他场景" : "", entry.note].filter(Boolean).join(" · ") || "积分账户变动";
                 return (
                     <div className="min-w-0 max-w-full overflow-hidden" title={`${title}\n${description}`}>

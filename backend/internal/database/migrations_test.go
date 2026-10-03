@@ -22,15 +22,19 @@ func TestCurrentSchemaVersionMatchesMigrationPlan(t *testing.T) {
 			}
 		}
 		latest := plan[len(plan)-1]
-		if CurrentSchemaVersion != latest.version || latest.name != "payment_promotion_image_drafts" {
-			t.Fatalf("%s latest migration = %d/%q, want %d/payment_promotion_image_drafts", name, latest.version, latest.name, CurrentSchemaVersion)
+		if CurrentSchemaVersion != latest.version || latest.name != "scoped_redeem_funding" {
+			t.Fatalf("%s latest migration = %d/%q, want %d/scoped_redeem_funding", name, latest.version, latest.name, CurrentSchemaVersion)
 		}
 	}
 }
 
 func TestTopupProductAccentColorMigrationIsSharedTail(t *testing.T) {
 	for name, plan := range map[string][]migration{"local": schemaMigrations, "upstream": upstreamFirstMigrationPlan()} {
-		item := plan[len(plan)-3]
+		firstShared := plan[len(plan)-11]
+		if firstShared.version != 37 || firstShared.name != "user_profiles" {
+			t.Fatalf("%s shared migration tail starts at %d/%s, want 37/user_profiles", name, firstShared.version, firstShared.name)
+		}
+		item := plan[len(plan)-4]
 		if item.version != 44 || item.name != "topup_product_accent_color" {
 			t.Fatalf("%s migration 44 = %d/%s", name, item.version, item.name)
 		}
@@ -47,6 +51,32 @@ func TestPaymentPromotionImageDraftMigrationAddsTable(t *testing.T) {
 	}
 	if !db.Migrator().HasTable(&model.PaymentPromotionImageDraft{}) {
 		t.Fatal("migration v46 did not add payment promotion image drafts")
+	}
+}
+
+func TestScopedRedeemFundingMigrationBackfillsPlatformSource(t *testing.T) {
+	db, err := Open(Config{Driver: "sqlite", DSN: "file:migration-redeem-funding-v47?mode=memory&cache=shared"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec(`CREATE TABLE redeem_batches (id text PRIMARY KEY, amount_microcredits integer, count integer, note text, created_by text, codes_cipher text, expires_at datetime, created_at datetime)`).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec(`INSERT INTO redeem_batches (id, amount_microcredits, count, created_by) VALUES ('legacy', 1000000, 1, 'admin')`).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := schemaMigrations[46].apply(db); err != nil {
+		t.Fatal(err)
+	}
+	var batch model.RedeemBatch
+	if err := db.First(&batch, "id = ?", "legacy").Error; err != nil {
+		t.Fatal(err)
+	}
+	if batch.FundingSource != model.RedeemBatchFundingPlatform {
+		t.Fatalf("legacy funding source = %q", batch.FundingSource)
+	}
+	if !db.Migrator().HasColumn(&model.CreditLedgerEntry{}, "RedeemBatchID") {
+		t.Fatal("migration v47 did not add redeem batch ledger reference")
 	}
 }
 
@@ -135,8 +165,8 @@ func TestMigrateSchemaSupportsLocalAndUpstreamPost23Lineages(t *testing.T) {
 		expectedV24Name  string
 		expectedTailName string
 	}{
-		{name: "local", plan: schemaMigrations, appliedThrough: 27, expectedV24Name: "topup_product_benefits", expectedTailName: "payment_promotion_image_drafts"},
-		{name: "upstream", plan: upstreamFirstMigrationPlan(), appliedThrough: 32, expectedV24Name: "channel_model_label", expectedTailName: "payment_promotion_image_drafts"},
+		{name: "local", plan: schemaMigrations, appliedThrough: 27, expectedV24Name: "topup_product_benefits", expectedTailName: "scoped_redeem_funding"},
+		{name: "upstream", plan: upstreamFirstMigrationPlan(), appliedThrough: 32, expectedV24Name: "channel_model_label", expectedTailName: "scoped_redeem_funding"},
 	} {
 		t.Run(scenario.name, func(t *testing.T) {
 			db, err := Open(Config{Driver: "sqlite", DSN: "file:" + t.Name() + "?mode=memory&cache=shared"})

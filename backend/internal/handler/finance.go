@@ -361,7 +361,7 @@ func RegisterFinanceRoutes(r *gin.RouterGroup, svc *service.Service) {
 			fail(c, http.StatusBadRequest, err)
 			return
 		}
-		items, err := svc.AdminRedeemBatchPage(user, service.AdminListQuery{Keyword: c.Query("keyword"), Status: c.Query("validity"), Page: page, Limit: limit})
+		items, err := svc.AdminRedeemBatchPage(user, service.AdminListQuery{Keyword: c.Query("keyword"), Status: c.Query("validity"), FundingSource: c.Query("fundingSource"), CreatorID: c.Query("creatorId"), Page: page, Limit: limit})
 		if err != nil {
 			failService(c, err)
 			return
@@ -376,16 +376,18 @@ func RegisterFinanceRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 8<<10)
 		var req struct {
-			Keyword  string `json:"keyword"`
-			Validity string `json:"validity"`
-			Page     int    `json:"page"`
-			PageSize int    `json:"pageSize"`
+			Keyword       string `json:"keyword"`
+			Validity      string `json:"validity"`
+			FundingSource string `json:"fundingSource"`
+			CreatorID     string `json:"creatorId"`
+			Page          int    `json:"page"`
+			PageSize      int    `json:"pageSize"`
 		}
 		if err := c.ShouldBindJSON(&req); err != nil {
 			fail(c, http.StatusBadRequest, err)
 			return
 		}
-		items, err := svc.AdminRedeemBatchPage(user, service.AdminListQuery{Keyword: req.Keyword, Status: req.Validity, Page: req.Page, Limit: req.PageSize})
+		items, err := svc.AdminRedeemBatchPage(user, service.AdminListQuery{Keyword: req.Keyword, Status: req.Validity, FundingSource: req.FundingSource, CreatorID: req.CreatorID, Page: req.Page, Limit: req.PageSize})
 		if err != nil {
 			failService(c, err)
 			return
@@ -427,7 +429,7 @@ func RegisterFinanceRoutes(r *gin.RouterGroup, svc *service.Service) {
 			fail(c, http.StatusBadRequest, err)
 			return
 		}
-		result, err := svc.AdminRedeemCodePage(user, c.Param("id"), c.Query("status"), page, limit)
+		result, err := svc.AdminRedeemCodePage(user, c.Param("id"), c.Query("fundingSource"), c.Query("status"), page, limit)
 		if err != nil {
 			failService(c, err)
 			return
@@ -481,12 +483,12 @@ func RegisterFinanceRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
-		count, err := svc.AdminDisableRedeemBatch(user, c.Param("id"))
+		result, err := svc.AdminDisableRedeemBatch(user, c.Param("id"), c.Query("fundingSource"))
 		if err != nil {
 			failService(c, err)
 			return
 		}
-		ok(c, gin.H{"disabledCount": count})
+		ok(c, result)
 	})
 	r.POST("/admin/redeem-batches/:id/codes/:codeId/disable", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
@@ -494,11 +496,12 @@ func RegisterFinanceRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
-		if err := svc.AdminDisableRedeemCode(user, c.Param("id"), c.Param("codeId")); err != nil {
+		result, err := svc.AdminDisableRedeemCode(user, c.Param("id"), c.Param("codeId"), c.Query("fundingSource"))
+		if err != nil {
 			failService(c, err)
 			return
 		}
-		ok(c, gin.H{"ok": true})
+		ok(c, result)
 	})
 	r.POST("/admin/users/:id/credits/adjust", func(c *gin.Context) {
 		user, err := currentUser(c, svc)

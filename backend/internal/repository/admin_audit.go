@@ -174,18 +174,49 @@ func (r *Repository) AdminUserTasks(userID string, limit int, offset int) ([]mod
 	return tasks, total, err
 }
 
-func (r *Repository) DisableRedeemBatch(batchID string, now time.Time) (int64, error) {
-	result := r.db.Model(&model.RedeemCode{}).
-		Where("batch_id = ? AND status = ? AND (expires_at IS NULL OR expires_at > ?)", batchID, model.RedeemCodeUnused, now).
-		Updates(map[string]any{"status": model.RedeemCodeDisabled, "updated_at": now})
-	return result.RowsAffected, result.Error
+func (r *Repository) DisableRedeemBatch(batchID string, now time.Time) (int64, int64, error) {
+	var disabled int64
+	var refunded int64
+	err := r.db.Transaction(func(tx *gorm.DB) error {
+		var batch model.RedeemBatch
+		if err := tx.First(&batch, "id = ?", batchID).Error; err != nil {
+			return err
+		}
+		var codeIDs []string
+		if err := tx.Model(&model.RedeemCode{}).
+			Where("batch_id = ? AND status = ? AND (expires_at IS NULL OR expires_at > ?)", batchID, model.RedeemCodeUnused, now).
+			Pluck("id", &codeIDs).Error; err != nil {
+			return err
+		}
+		var err error
+		disabled, refunded, err = settleRedeemCodes(tx, &batch, codeIDs, model.RedeemCodeDisabled, now)
+		return err
+	})
+	return disabled, refunded, err
 }
 
-func (r *Repository) DisableRedeemCode(batchID string, codeID string, now time.Time) (bool, error) {
-	result := r.db.Model(&model.RedeemCode{}).
-		Where("id = ? AND batch_id = ? AND status = ? AND (expires_at IS NULL OR expires_at > ?)", codeID, batchID, model.RedeemCodeUnused, now).
-		Updates(map[string]any{"status": model.RedeemCodeDisabled, "updated_at": now})
-	return result.RowsAffected == 1, result.Error
+func (r *Repository) DisableRedeemCode(batchID string, codeID string, now time.Time) (bool, int64, error) {
+	var disabled int64
+	var refunded int64
+	err := r.db.Transaction(func(tx *gorm.DB) error {
+		var batch model.RedeemBatch
+		if err := tx.First(&batch, "id = ?", batchID).Error; err != nil {
+			return err
+		}
+		var eligible int64
+		if err := tx.Model(&model.RedeemCode{}).
+			Where("id = ? AND batch_id = ? AND status = ? AND (expires_at IS NULL OR expires_at > ?)", codeID, batchID, model.RedeemCodeUnused, now).
+			Count(&eligible).Error; err != nil {
+			return err
+		}
+		if eligible == 0 {
+			return nil
+		}
+		var err error
+		disabled, refunded, err = settleRedeemCodes(tx, &batch, []string{codeID}, model.RedeemCodeDisabled, now)
+		return err
+	})
+	return disabled == 1, refunded, err
 }
 
 func (r *Repository) APICallLog(id string) (*model.ApiCallLog, error) {

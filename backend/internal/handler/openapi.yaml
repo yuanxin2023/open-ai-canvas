@@ -281,6 +281,43 @@ paths:
         "400": {$ref: "#/components/responses/Error"}
         "401": {$ref: "#/components/responses/Error"}
         "403": {$ref: "#/components/responses/Error"}
+  /admin/redeem-batches:
+    get:
+      tags: [admin]
+      summary: 按资金来源列出兑换码批次
+      description: 全权限管理员省略 fundingSource 时默认 platform；模块管理员始终只返回自己创建的 module_admin 批次。
+      parameters:
+        - {in: query, name: keyword, schema: {type: string}}
+        - {in: query, name: validity, schema: {type: string, enum: [active, expired]}}
+        - {in: query, name: fundingSource, schema: {type: string, enum: [platform, module_admin]}}
+        - {in: query, name: creatorId, schema: {type: string}, description: 仅全权限管理员查询 module_admin 来源时可用}
+        - {in: query, name: page, schema: {type: integer, minimum: 1}}
+        - {in: query, name: pageSize, schema: {type: integer, minimum: 1, maximum: 100}}
+      responses:
+        "200": {description: 标准信封 data 包含 batches、fundingSource、total、page 和 pageSize}
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+    post:
+      tags: [admin]
+      summary: 生成兑换码批次
+      description: 资金来源由服务端决定。平台批次不扣管理员积分；模块管理员批次在创建事务中冻结总面值。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amountMicrocredits, count]
+              properties:
+                amountMicrocredits: {type: integer, format: int64, minimum: 1}
+                count: {type: integer, minimum: 1, maximum: 5000}
+                note: {type: string, maxLength: 500}
+                expiresAt: {type: string, format: date-time}
+      responses:
+        "200": {description: 标准信封 data 包含 batch、codes；个人出资批次还包含更新后的 account}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
   /admin/redeem-batches/search:
     post:
       tags: [admin]
@@ -295,10 +332,12 @@ paths:
               properties:
                 keyword: {type: string}
                 validity: {type: string, enum: [active, expired]}
+                fundingSource: {type: string, enum: [platform, module_admin]}
+                creatorId: {type: string}
                 page: {type: integer, minimum: 1}
                 pageSize: {type: integer, minimum: 1, maximum: 100}
       responses:
-        "200": {description: 标准信封 data 包含 batches、total、page 和 pageSize}
+        "200": {description: 标准信封 data 包含 batches、fundingSource、total、page 和 pageSize}
         "400": {$ref: "#/components/responses/Error"}
         "401": {$ref: "#/components/responses/Error"}
         "403": {$ref: "#/components/responses/Error"}
@@ -319,6 +358,8 @@ paths:
                   type: string
                   minLength: 32
                   maxLength: 32
+                fundingSource: {type: string, enum: [platform, module_admin]}
+                creatorId: {type: string}
       responses:
         "200": {description: 标准信封 data 包含 batch 批次摘要与 code 单码状态、核销用户、核销时间和 IP}
         "400": {$ref: "#/components/responses/Error"}
@@ -339,11 +380,55 @@ paths:
               required: [query]
               properties:
                 query: {type: string, minLength: 1, maxLength: 32}
+                fundingSource: {type: string, enum: [platform, module_admin]}
+                creatorId: {type: string}
       responses:
         "200": {description: 标准信封 data 包含 matches、total 和 truncated；每个匹配项包含 batch 与 code}
         "400": {$ref: "#/components/responses/Error"}
         "401": {$ref: "#/components/responses/Error"}
         "403": {$ref: "#/components/responses/Error"}
+  /admin/redeem-batches/{id}/codes:
+    get:
+      tags: [admin]
+      summary: 查看批次中的兑换码明细
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: string}}
+        - {in: query, name: fundingSource, schema: {type: string, enum: [platform, module_admin]}}
+        - {in: query, name: status, schema: {type: string, enum: [available, redeemed, disabled, expired]}}
+        - {in: query, name: page, schema: {type: integer, minimum: 1}}
+        - {in: query, name: pageSize, schema: {type: integer, minimum: 1, maximum: 100}}
+      responses:
+        "200": {description: 标准信封 data 包含当前归属范围内的 batch 和 codes}
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+        "404": {$ref: "#/components/responses/Error"}
+  /admin/redeem-batches/{id}/disable:
+    post:
+      tags: [admin]
+      summary: 禁用批次中全部未使用兑换码
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: string}}
+        - {in: query, name: fundingSource, schema: {type: string, enum: [platform, module_admin]}}
+      responses:
+        "200": {description: 标准信封 data 包含 disabledCount 和 refundedMicrocredits}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+        "404": {$ref: "#/components/responses/Error"}
+  /admin/redeem-batches/{id}/codes/{codeId}/disable:
+    post:
+      tags: [admin]
+      summary: 禁用单个未使用兑换码
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: string}}
+        - {in: path, name: codeId, required: true, schema: {type: string}}
+        - {in: query, name: fundingSource, schema: {type: string, enum: [platform, module_admin]}}
+      responses:
+        "200": {description: 标准信封 data 包含 disabledCount 和 refundedMicrocredits}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+        "404": {$ref: "#/components/responses/Error"}
   /admin/settings/appearance/live2d:
     post:
       tags: [admin]

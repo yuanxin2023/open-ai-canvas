@@ -16,6 +16,7 @@ type ResourceDeletionStatus string
 type BillingStatus string
 type CreditLedgerType string
 type RedeemCodeStatus string
+type RedeemBatchFundingSource string
 type AnnouncementStatus string
 type AnnouncementLevel string
 type InspirationMode string
@@ -134,6 +135,10 @@ const (
 	RedeemCodeUnused   RedeemCodeStatus = "unused"
 	RedeemCodeRedeemed RedeemCodeStatus = "redeemed"
 	RedeemCodeDisabled RedeemCodeStatus = "disabled"
+	RedeemCodeExpired  RedeemCodeStatus = "expired"
+
+	RedeemBatchFundingPlatform    RedeemBatchFundingSource = "platform"
+	RedeemBatchFundingModuleAdmin RedeemBatchFundingSource = "module_admin"
 
 	AnnouncementStatusActive AnnouncementStatus = "active"
 	AnnouncementStatusClosed AnnouncementStatus = "closed"

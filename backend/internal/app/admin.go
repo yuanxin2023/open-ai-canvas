@@ -91,11 +91,13 @@ type BulkDisableUsersResult struct {
 }
 
 type AdminListQuery struct {
-	Keyword string
-	Status  string
-	Type    string
-	Page    int
-	Limit   int
+	Keyword       string
+	Status        string
+	Type          string
+	FundingSource string
+	CreatorID     string
+	Page          int
+	Limit         int
 }
 
 type AdminUserPage struct {
@@ -849,6 +851,14 @@ func (s *Service) PurgeUser(actor *model.User, userID string) error {
 		if count == 0 {
 			return BadAuthRequest("至少需要保留一个可用的全权限管理员")
 		}
+	}
+	if err := s.settleExpiredRedeemCodesForScope(user.ID); err != nil {
+		return err
+	}
+	if active, err := s.repo.HasActiveFundedRedeemCodes(user.ID, time.Now()); err != nil {
+		return err
+	} else if active {
+		return BadAuthRequest("该管理员仍有未使用的个人出资兑换码，请先禁用或等待过期结算后再注销")
 	}
 
 	s.storageMu.Lock()
