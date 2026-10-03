@@ -2426,8 +2426,7 @@
     border: 1px solid color-mix(in srgb, #ffffff 14%, transparent);
     border-radius: 18px;
     padding: 20px 16px 16px;
-    background: color-mix(in srgb, #03101a 70%, transparent);
-    backdrop-filter: blur(8px);
+    background: transparent;
     }
 
     .workspace-payment-promotion-countdown > div {
