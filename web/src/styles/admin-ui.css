@@ -1675,6 +1675,11 @@
         color 140ms ease !important;
 }
 
+.admin-row-action-icon-only.ant-btn {
+    width: 30px;
+    padding-inline: 0;
+}
+
 .admin-row-action.ant-btn .ant-btn-icon {
     display: grid;
     margin-inline-end: 0;

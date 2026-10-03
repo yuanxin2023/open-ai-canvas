@@ -49,7 +49,16 @@ export function createAdministratorColumns({
             ),
         },
         { key: "remark", title: "备注", dataIndex: "remark", width: 180, ellipsis: true, render: (remark) => remark || <span className="text-foreground/40">未备注</span> },
-        { key: "email", title: "邮箱", dataIndex: "email", align: "center", render: (email) => email || <span className="text-foreground/40">未填写</span> },
+        {
+            key: "email",
+            title: "邮箱",
+            dataIndex: "email",
+            width: 210,
+            align: "center",
+            render: (email) => email
+                ? <span className="block max-w-full truncate whitespace-nowrap" title={email}>{email}</span>
+                : <span className="text-foreground/40">未填写</span>,
+        },
         {
             key: "level",
             title: "管理员级别",
@@ -79,13 +88,13 @@ export function createAdministratorColumns({
             align: "center",
             render: (_, user) => (
                 <AdminRowActions
-                    primary={{ label: "详情", icon: <Eye className="size-3.5" />, onClick: () => onView(user) }}
+                    primary={{ label: "详情", icon: <Eye className="size-3.5" />, iconOnly: true, onClick: () => onView(user) }}
                     visibleActionCount={2}
                     actions={[
-                        { key: "manage", label: "管理", icon: <SlidersHorizontal className="size-3.5" />, onClick: () => onEdit(user) },
+                        { key: "manage", label: "管理", icon: <SlidersHorizontal className="size-3.5" />, iconOnly: true, onClick: () => onEdit(user) },
                         {
                             key: "demote",
-                            label: "降为普通用户",
+                            label: "降级",
                             icon: <ShieldMinus className="size-3.5" />,
                             disabled: user.id === actorId,
                             confirm: {
