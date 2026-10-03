@@ -4,7 +4,7 @@ import type { GenerationTask, TaskStatus } from "@/services/api/task-center";
 import type { CanvasDrawingEngineSetting } from "@/lib/canvas/canvas-drawing-engine";
 import type { FeatureAvailability } from "@/stores/use-user-store";
 import type { UsernameChangePolicy } from "@/stores/use-user-store";
-import { http, apiBaseURL } from "@/services/api/request";
+import { compactApiParams, http, apiBaseURL } from "@/services/api/request";
 import type { PublicLogicalModel } from "@/services/api/logical-models";
 import type { OSSConnectionTestInput, OSSConnectionTestResult, OSSProvider, S3Preset } from "@/lib/oss-settings";
 import { resourceFileUrl } from "@/services/api/resources";
@@ -162,6 +162,15 @@ export type AdminUserLoginEvent = {
     os?: string;
     osVersion?: string;
     createdAt: string;
+};
+
+export type AdminUserLoginEventQuery = {
+    page?: number;
+    pageSize?: number;
+    startAt?: string;
+    endAt?: string;
+    loginMethod?: string;
+    ip?: string;
 };
 
 export type AdminUserTask = {
@@ -543,8 +552,8 @@ export function listAdminUserTasks(id: string, params: { page?: number; pageSize
     return http.get<{ tasks: AdminUserTask[]; total: number; page: number; pageSize: number }>(`/admin/users/${encodeURIComponent(id)}/tasks`, { params });
 }
 
-export function listAdminUserLoginEvents(id: string, params: { page?: number; pageSize?: number } = {}) {
-    return http.get<{ events: AdminUserLoginEvent[]; total: number; page: number; pageSize: number }>(`/admin/users/${encodeURIComponent(id)}/login-events`, { params });
+export function listAdminUserLoginEvents(id: string, params: AdminUserLoginEventQuery = {}, signal?: AbortSignal) {
+    return http.get<{ events: AdminUserLoginEvent[]; total: number; page: number; pageSize: number }>(`/admin/users/${encodeURIComponent(id)}/login-events`, { params: compactApiParams(params), signal });
 }
 
 export function listAdminUserAuditEvents(id: string, params: { page?: number; pageSize?: number } = {}) {

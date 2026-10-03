@@ -27,6 +27,15 @@ type AdminLoginEventPage struct {
 	Limit  int                    `json:"pageSize"`
 }
 
+type AdminUserLoginEventQuery struct {
+	Page        int
+	Limit       int
+	StartAt     string
+	EndAt       string
+	LoginMethod string
+	IP          string
+}
+
 type AdminTaskPage struct {
 	Tasks []model.Task `json:"tasks"`
 	Total int64        `json:"total"`
@@ -121,7 +130,7 @@ func (s *Service) AdminUserDetail(actor *model.User, userID string) (*AdminUserD
 	}, nil
 }
 
-func (s *Service) AdminUserLoginEvents(actor *model.User, userID string, page int, limit int) (*AdminLoginEventPage, error) {
+func (s *Service) AdminUserLoginEvents(actor *model.User, userID string, query AdminUserLoginEventQuery) (*AdminLoginEventPage, error) {
 	if err := s.RequireAdminPermission(actor, model.AdminPermissionUsers); err != nil {
 		return nil, err
 	}
@@ -129,9 +138,40 @@ func (s *Service) AdminUserLoginEvents(actor *model.User, userID string, page in
 	if _, err := s.manageableAdminUser(actor, userID); err != nil {
 		return nil, err
 	}
-	page, limit = normalizeAdminPage(page, limit)
-	events, total, err := s.repo.AdminUserLoginEvents(userID, limit, (page-1)*limit)
+	filter, err := normalizeAdminUserLoginEventFilter(query)
+	if err != nil {
+		return nil, err
+	}
+	page, limit := normalizeAdminPage(query.Page, query.Limit)
+	events, total, err := s.repo.AdminUserLoginEvents(userID, filter, limit, (page-1)*limit)
 	return &AdminLoginEventPage{Events: events, Total: total, Page: page, Limit: limit}, err
+}
+
+func normalizeAdminUserLoginEventFilter(query AdminUserLoginEventQuery) (repository.AdminUserLoginEventFilter, error) {
+	filter := repository.AdminUserLoginEventFilter{
+		LoginMethod: strings.TrimSpace(query.LoginMethod),
+		IP:          strings.TrimSpace(query.IP),
+	}
+	if value := strings.TrimSpace(query.StartAt); value != "" {
+		parsed, err := time.Parse(time.RFC3339Nano, value)
+		if err != nil {
+			return repository.AdminUserLoginEventFilter{}, BadAuthRequest("startAt 必须是 RFC3339 时间")
+		}
+		parsed = parsed.UTC()
+		filter.StartAt = &parsed
+	}
+	if value := strings.TrimSpace(query.EndAt); value != "" {
+		parsed, err := time.Parse(time.RFC3339Nano, value)
+		if err != nil {
+			return repository.AdminUserLoginEventFilter{}, BadAuthRequest("endAt 必须是 RFC3339 时间")
+		}
+		parsed = parsed.UTC()
+		filter.EndAt = &parsed
+	}
+	if filter.StartAt != nil && filter.EndAt != nil && filter.StartAt.After(*filter.EndAt) {
+		return repository.AdminUserLoginEventFilter{}, BadAuthRequest("startAt 不能晚于 endAt")
+	}
+	return filter, nil
 }
 
 func (s *Service) AdminUserLedger(actor *model.User, userID string, entryType string, page int, limit int) (*WalletSummary, error) {

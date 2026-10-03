@@ -307,7 +307,7 @@ CSV 使用中文表头、UTF-8 BOM、CRLF；金额按整数分精确转换为两
 
 ## 管理员重置用户密码
 
-`GET /api/admin/users/:id/detail` 的管理员投影包含永久用户 ID 和首次注册 IP；升级前的历史账号没有可靠来源时返回空值。`GET /api/admin/users/:id/login-events` 使用 `page`、`pageSize` 分页返回成功注册/登录时间、登录方式、IP、设备类型、浏览器、操作系统和截断后的 User-Agent。两个接口都只允许管理员访问；环境信息可能被客户端伪造，仅用于安全审计与故障排查。
+`GET /api/admin/users/:id/detail` 的管理员投影包含永久用户 ID 和首次注册 IP；升级前的历史账号没有可靠来源时返回空值。`GET /api/admin/users/:id/login-events` 使用 `page`、`pageSize` 分页返回成功注册/登录时间、登录方式、IP、设备类型、浏览器、操作系统和截断后的 User-Agent；可选通过 RFC 3339 格式的 `startAt`、`endAt` 按闭区间筛选登录时间，通过 `loginMethod` 精确筛选登录方式，并通过 `ip` 匹配 IP 地址片段。非法时间或开始时间晚于结束时间返回 400，`total` 始终是全部已应用筛选条件下的记录数。两个接口都只允许管理员访问；环境信息可能被客户端伪造，仅用于安全审计与故障排查。
 
 `GET /api/admin/users` 的 `keyword` 同时搜索普通用户的用户名、邮箱和管理员备注；管理员列表使用 `/api/admin/administrators` 的同名参数。列表与详情中的 `remark` 仅对管理员接口投影，不进入普通用户会话响应。
 

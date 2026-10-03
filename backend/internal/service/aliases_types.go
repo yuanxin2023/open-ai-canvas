@@ -69,6 +69,7 @@ type (
 	AdminManagedUser                       = app.AdminManagedUser
 	AdminUser                              = app.AdminUser
 	AdminUserDetail                        = app.AdminUserDetail
+	AdminUserLoginEventQuery               = app.AdminUserLoginEventQuery
 	AdminUserPage                          = app.AdminUserPage
 	AdminUserReference                     = app.AdminUserReference
 	AnalyticsFailureRow                    = app.AnalyticsFailureRow

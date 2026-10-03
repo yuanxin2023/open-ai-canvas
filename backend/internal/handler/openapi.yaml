@@ -61,6 +61,23 @@ paths:
         "200": {description: 标准信封 data.user 为新建普通用户}
         "400": {$ref: "#/components/responses/Error"}
         "403": {$ref: "#/components/responses/Error"}
+  /admin/users/{id}/login-events:
+    get:
+      tags: [admin]
+      summary: 分页查询单个用户的登录环境记录
+      description: 需要 admin.users.accounts；时间范围为闭区间，total 是全部已应用筛选条件下的记录数。
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: string}}
+        - {in: query, name: page, schema: {type: integer, minimum: 1}}
+        - {in: query, name: pageSize, schema: {type: integer, minimum: 1, maximum: 100}}
+        - {in: query, name: startAt, description: 登录时间下限（含）, schema: {type: string, format: date-time}}
+        - {in: query, name: endAt, description: 登录时间上限（含）, schema: {type: string, format: date-time}}
+        - {in: query, name: loginMethod, description: 登录方式精确值, schema: {type: string}}
+        - {in: query, name: ip, description: IP 地址片段, schema: {type: string}}
+      responses:
+        "200": {description: 标准信封 data 包含 events、total、page、pageSize}
+        "400": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
   /admin/administrators:
     get:
       tags: [admin]

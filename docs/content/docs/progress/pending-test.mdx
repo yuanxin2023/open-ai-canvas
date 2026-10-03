@@ -68,9 +68,11 @@ description: 当前项目已实现功能的手工验证清单与未确认边界
 
 - [x] 邮箱注册、密码登录和 Linux.do 登录成功后由后端记录 IP、设备类型、操作系统、浏览器与 User-Agent，不要求前端权限弹窗；注册 IP 只在创建账号时写入。
 - [x] 登录记录独立于可撤销会话，按用户保留最近 90 天且最多 200 条；永久注销用户时同步删除，不保存 Cookie、Token 或完整请求头。
-- [x] 管理员用户详情展示用户 ID、注册 IP，并提供分页“登录环境”页签；历史用户的未知注册 IP 显示“未记录”。
+- [x] 管理员用户详情展示用户 ID、注册 IP；“登录环境”使用紧凑表格与单行详情，可按闭区间时间、登录方式和 IP 片段筛选，并支持 20、50、100 条分页；历史用户的未知注册 IP 显示“未记录”。
+- [x] 前端 TypeScript 检查和生产构建通过；后端相关包完成编译，筛选、分页、时间校验与权限测试已补充。
+- [ ] 当前 Windows 环境为 `CGO_ENABLED=0`，需在启用 CGO 的标准环境补跑登录记录 SQLite 专项与后端完整测试。
 - [ ] 在仓库 Nginx、外部 CDN/负载均衡和直连开发三种部署下核对真实客户端 IP；外部代理不在默认私网范围时显式配置 `CANVAS_TRUSTED_PROXIES`。
-- [ ] 分别使用 Windows/macOS/iOS/Android 的 Chrome、Edge、Safari、Firefox 完成登录，检查明暗主题、窄屏键值信息表、未知 Client Hints 降级和 Linux.do 回调记录。
+- [ ] 分别使用 Windows/macOS/iOS/Android 的 Chrome、Edge、Safari、Firefox 完成登录，检查时间、方式与 IP 筛选、重置、分页、单行详情、明暗主题、窄屏横向滚动、未知 Client Hints 降级和 Linux.do 回调记录。
 
 ## 积分运营待核对请求详情
 

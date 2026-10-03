@@ -480,7 +480,11 @@ func RegisterAdminRoutes(r *gin.RouterGroup, svc *service.Service) {
 			fail(c, http.StatusBadRequest, err)
 			return
 		}
-		result, err := svc.AdminUserLoginEvents(user, c.Param("id"), page, limit)
+		result, err := svc.AdminUserLoginEvents(user, c.Param("id"), service.AdminUserLoginEventQuery{
+			Page: page, Limit: limit,
+			StartAt: c.Query("startAt"), EndAt: c.Query("endAt"),
+			LoginMethod: c.Query("loginMethod"), IP: c.Query("ip"),
+		})
 		if err != nil {
 			failService(c, err)
 			return

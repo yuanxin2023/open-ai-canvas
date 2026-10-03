@@ -1,13 +1,16 @@
 import { useEffect, useState } from "react";
-import { App, Button, Descriptions, Progress, Select, Skeleton, Tabs } from "antd";
+import { App, Button, DatePicker, Descriptions, Input, Progress, Select, Skeleton, Tabs } from "antd";
 import { AdminModal } from "@/pages/admin/ui/overlays";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Search } from "lucide-react";
+import type { Dayjs } from "dayjs";
 
 import { formatCredits } from "@/constant/credits";
 import { IconButton } from "@/pages/admin/ui/controls";
 import { AdminDataTable, AdminEmpty, AdminStatusBadge, AdminTableEmpty, PaginationBar, type AdminStatusTone } from "./admin-ui";
-import { getAdminUserDetail, listAdminUserAuditEvents, listAdminUserLedger, listAdminUserLoginEvents, listAdminUserTasks, type AdminAuditEvent, type AdminUserDetail, type AdminUserLedgerFilter, type AdminUserLoginEvent, type AdminUserTask } from "@/services/api/auth";
+import { getAdminUserDetail, listAdminUserAuditEvents, listAdminUserLedger, listAdminUserLoginEvents, listAdminUserTasks, type AdminAuditEvent, type AdminUserDetail, type AdminUserLedgerFilter, type AdminUserLoginEvent, type AdminUserLoginEventQuery, type AdminUserTask } from "@/services/api/auth";
 import type { CreditLedgerEntry } from "@/services/api/wallet";
+
+type LoginEventFilters = Pick<AdminUserLoginEventQuery, "startAt" | "endAt" | "loginMethod" | "ip">;
 
 export function AdminUserDetailModal({ userId, onClose, previousUserId, nextUserId, onNavigate, accountKind = "user" }: { userId: string | null; onClose: () => void; previousUserId?: string; nextUserId?: string; onNavigate?: (userId: string) => void; accountKind?: "user" | "administrator" }) {
     const { message } = App.useApp();
@@ -18,6 +21,7 @@ export function AdminUserDetailModal({ userId, onClose, previousUserId, nextUser
     const [loginEvents, setLoginEvents] = useState<AdminUserLoginEvent[]>([]);
     const [loading, setLoading] = useState(false);
     const [ledgerLoading, setLedgerLoading] = useState(false);
+    const [loginLoading, setLoginLoading] = useState(false);
     const [ledgerFilter, setLedgerFilter] = useState<AdminUserLedgerFilter>("all");
     const [ledgerPage, setLedgerPage] = useState(1);
     const [ledgerTotal, setLedgerTotal] = useState(0);
@@ -26,7 +30,13 @@ export function AdminUserDetailModal({ userId, onClose, previousUserId, nextUser
     const [auditPage, setAuditPage] = useState(1);
     const [auditTotal, setAuditTotal] = useState(0);
     const [loginPage, setLoginPage] = useState(1);
+    const [loginPageSize, setLoginPageSize] = useState(20);
     const [loginTotal, setLoginTotal] = useState(0);
+    const [loginDateRange, setLoginDateRange] = useState<[Dayjs | null, Dayjs | null] | null>(null);
+    const [loginMethod, setLoginMethod] = useState("all");
+    const [loginIP, setLoginIP] = useState("");
+    const [loginFilters, setLoginFilters] = useState<LoginEventFilters>({});
+    const [expandedLoginEventId, setExpandedLoginEventId] = useState("");
 
     useEffect(() => {
         if (!userId) return;
@@ -38,6 +48,12 @@ export function AdminUserDetailModal({ userId, onClose, previousUserId, nextUser
         setTaskPage(1);
         setAuditPage(1);
         setLoginPage(1);
+        setLoginPageSize(20);
+        setLoginDateRange(null);
+        setLoginMethod("all");
+        setLoginIP("");
+        setLoginFilters({});
+        setExpandedLoginEventId("");
         void getAdminUserDetail(userId)
             .then((nextDetail) => {
                 if (active) setDetail(nextDetail);
@@ -88,19 +104,26 @@ export function AdminUserDetailModal({ userId, onClose, previousUserId, nextUser
     }, [message, taskPage, userId]);
     useEffect(() => {
         if (!userId) return;
-        let active = true;
-        void listAdminUserLoginEvents(userId, { page: loginPage, pageSize: 20 })
+        const controller = new AbortController();
+        setLoginLoading(true);
+        void listAdminUserLoginEvents(userId, { page: loginPage, pageSize: loginPageSize, ...loginFilters }, controller.signal)
             .then((result) => {
-                if (active) {
-                    setLoginEvents(result.events);
-                    setLoginTotal(result.total);
-                }
+                if (controller.signal.aborted) return;
+                setLoginEvents(result.events);
+                setLoginTotal(result.total);
+                if (result.total > 0 && result.events.length === 0 && loginPage > 1) setLoginPage(1);
             })
-            .catch((error) => active && message.error(error instanceof Error ? error.message : "读取登录环境失败"));
-        return () => {
-            active = false;
-        };
-    }, [loginPage, message, userId]);
+            .catch((error) => {
+                if (error instanceof DOMException && error.name === "AbortError") return;
+                setLoginEvents([]);
+                setLoginTotal(0);
+                message.error(error instanceof Error ? error.message : "读取登录环境失败");
+            })
+            .finally(() => {
+                if (!controller.signal.aborted) setLoginLoading(false);
+            });
+        return () => controller.abort();
+    }, [loginFilters, loginPage, loginPageSize, message, userId]);
     useEffect(() => {
         if (!userId) return;
         let active = true;
@@ -116,6 +139,25 @@ export function AdminUserDetailModal({ userId, onClose, previousUserId, nextUser
             active = false;
         };
     }, [auditPage, message, userId]);
+
+    const draftLoginFilters = loginEventFilters(loginDateRange, loginMethod, loginIP);
+    const loginFiltersActive = hasLoginEventFilters(loginFilters);
+    const loginFiltersDirty = !sameLoginEventFilters(draftLoginFilters, loginFilters);
+
+    const applyLoginFilters = () => {
+        setLoginFilters(draftLoginFilters);
+        setLoginPage(1);
+        setExpandedLoginEventId("");
+    };
+
+    const resetLoginFilters = () => {
+        setLoginDateRange(null);
+        setLoginMethod("all");
+        setLoginIP("");
+        setLoginFilters({});
+        setLoginPage(1);
+        setExpandedLoginEventId("");
+    };
 
     return (
         <AdminModal
@@ -259,26 +301,97 @@ export function AdminUserDetailModal({ userId, onClose, previousUserId, nextUser
                             key: "login-environment",
                             label: `登录环境 ${detail.counts.loginEvents}`,
                             children: (
-                                <div className="space-y-3">
-                                    {loginEvents.length > 0 ? loginEvents.map((event) => (
-                                        <Descriptions
-                                            key={event.id}
-                                            bordered
-                                            size="small"
-                                            column={{ xs: 1, sm: 2 }}
-                                            items={[
-                                                { key: "createdAt", label: "登录时间", children: formatTime(event.createdAt) },
-                                                { key: "loginMethod", label: "登录方式", children: loginMethodLabel(event.loginMethod) },
-                                                { key: "ipAddress", label: "IP 地址", children: <span className="font-mono text-xs">{fallbackText(event.ipAddress)}</span> },
-                                                { key: "deviceType", label: "设备", children: fallbackText(event.deviceType) },
-                                                { key: "os", label: "操作系统", children: environmentName(event.os, event.osVersion) },
-                                                { key: "browser", label: "浏览器", children: environmentName(event.browser, event.browserVersion) },
-                                                { key: "userAgent", label: "User-Agent", span: 2, children: <span className="break-all font-mono text-xs">{fallbackText(event.userAgent)}</span> },
-                                            ]}
+                                <AdminDataTable
+                                    toolbar={(
+                                        <Input
+                                            allowClear
+                                            className="app-list-search"
+                                            prefix={<Search className="size-4 text-foreground/40" />}
+                                            value={loginIP}
+                                            placeholder="搜索 IP 地址"
+                                            onChange={(event) => setLoginIP(event.target.value)}
+                                            onPressEnter={applyLoginFilters}
                                         />
-                                    )) : <AdminEmpty size="compact" title="暂无登录环境记录" />}
-                                    <PaginationBar alwaysShow current={loginPage} pageSize={20} total={loginTotal} onChange={(page) => setLoginPage(page)} pageSizeOptions={[20]} />
-                                </div>
+                                    )}
+                                    toolbarActive={loginFiltersActive}
+                                    toolbarFilters={(
+                                        <>
+                                            <Select
+                                                aria-label="登录方式"
+                                                className="w-36"
+                                                value={loginMethod}
+                                                options={[
+                                                    { label: "全部登录方式", value: "all" },
+                                                    { label: "邮箱注册", value: "email_register" },
+                                                    { label: "密码登录", value: "password" },
+                                                    { label: "Linux.do", value: "linuxdo" },
+                                                ]}
+                                                onChange={setLoginMethod}
+                                            />
+                                            <DatePicker.RangePicker
+                                                showTime
+                                                value={loginDateRange}
+                                                format="YYYY-MM-DD HH:mm:ss"
+                                                placeholder={["开始时间", "结束时间"]}
+                                                onChange={setLoginDateRange}
+                                            />
+                                        </>
+                                    )}
+                                    trailing={(
+                                        <div className="flex items-center gap-2">
+                                            {loginFiltersDirty ? <span className="text-xs text-foreground/45">请先查询以应用筛选条件</span> : null}
+                                            <Button type="text" disabled={!loginFiltersActive && !loginFiltersDirty} onClick={resetLoginFilters}>重置</Button>
+                                            <Button loading={loginLoading} onClick={applyLoginFilters}>查询</Button>
+                                        </div>
+                                    )}
+                                    table={{
+                                        rowKey: "id",
+                                        size: "small",
+                                        loading: loginLoading,
+                                        dataSource: loginEvents,
+                                        pagination: false,
+                                        tableLayout: "fixed",
+                                        columns: [
+                                            { title: "登录时间", dataIndex: "createdAt", width: 170, render: formatTime },
+                                            { title: "登录方式", dataIndex: "loginMethod", width: 105, render: loginMethodLabel },
+                                            { title: "IP 地址", dataIndex: "ipAddress", width: 145, ellipsis: true, render: (value) => <span className="font-mono text-xs" title={fallbackText(value)}>{fallbackText(value)}</span> },
+                                            { title: "设备", dataIndex: "deviceType", width: 85, render: fallbackText },
+                                            { title: "操作系统", width: 145, ellipsis: true, render: (_, event) => environmentName(event.os, event.osVersion) },
+                                            { title: "浏览器", width: 150, ellipsis: true, render: (_, event) => environmentName(event.browser, event.browserVersion) },
+                                            {
+                                                title: "操作",
+                                                width: 100,
+                                                fixed: "right",
+                                                render: (_, event) => (
+                                                    <Button type="link" size="small" onClick={() => setExpandedLoginEventId((current) => current === event.id ? "" : event.id)}>
+                                                        {expandedLoginEventId === event.id ? "收起" : "查看详情"}
+                                                    </Button>
+                                                ),
+                                            },
+                                        ],
+                                        expandable: {
+                                            showExpandColumn: false,
+                                            expandedRowKeys: expandedLoginEventId ? [expandedLoginEventId] : [],
+                                            expandedRowRender: (event) => <LoginEventDetails event={event} />,
+                                            onExpand: (expanded, event) => setExpandedLoginEventId(expanded ? event.id : ""),
+                                        },
+                                        scroll: { x: 900 },
+                                    }}
+                                    empty={<AdminTableEmpty filtered={loginFiltersActive} title="没有登录环境记录" />}
+                                    footer={(
+                                        <PaginationBar
+                                            alwaysShow
+                                            current={loginPage}
+                                            pageSize={loginPageSize}
+                                            total={loginTotal}
+                                            onChange={(page, pageSize) => {
+                                                setLoginPage(pageSize !== loginPageSize ? 1 : page);
+                                                setLoginPageSize(pageSize);
+                                                setExpandedLoginEventId("");
+                                            }}
+                                        />
+                                    )}
+                                />
                             ),
                         },
                         {
@@ -311,6 +424,42 @@ export function AdminUserDetailModal({ userId, onClose, previousUserId, nextUser
             )}
         </AdminModal>
     );
+}
+
+function LoginEventDetails({ event }: { event: AdminUserLoginEvent }) {
+    return (
+        <Descriptions
+            bordered
+            size="small"
+            column={{ xs: 1, sm: 2 }}
+            items={[
+                { key: "createdAt", label: "登录时间", children: formatTime(event.createdAt) },
+                { key: "loginMethod", label: "登录方式", children: loginMethodLabel(event.loginMethod) },
+                { key: "ipAddress", label: "IP 地址", children: <span className="font-mono text-xs">{fallbackText(event.ipAddress)}</span> },
+                { key: "deviceType", label: "设备", children: fallbackText(event.deviceType) },
+                { key: "os", label: "操作系统", children: environmentName(event.os, event.osVersion) },
+                { key: "browser", label: "浏览器", children: environmentName(event.browser, event.browserVersion) },
+                { key: "userAgent", label: "User-Agent", span: 2, children: <span className="break-all font-mono text-xs">{fallbackText(event.userAgent)}</span> },
+            ]}
+        />
+    );
+}
+
+function loginEventFilters(dateRange: [Dayjs | null, Dayjs | null] | null, method: string, ip: string): LoginEventFilters {
+    return {
+        startAt: dateRange?.[0]?.toISOString(),
+        endAt: dateRange?.[1]?.toISOString(),
+        loginMethod: method === "all" ? undefined : method,
+        ip: ip.trim() || undefined,
+    };
+}
+
+function hasLoginEventFilters(filters: LoginEventFilters) {
+    return Boolean(filters.startAt || filters.endAt || filters.loginMethod || filters.ip);
+}
+
+function sameLoginEventFilters(left: LoginEventFilters, right: LoginEventFilters) {
+    return left.startAt === right.startAt && left.endAt === right.endAt && left.loginMethod === right.loginMethod && left.ip === right.ip;
 }
 
 function formatTime(value?: string) {

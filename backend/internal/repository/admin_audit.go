@@ -25,6 +25,13 @@ type AdminUserCounts struct {
 	LoginEvents   int64 `json:"loginEvents"`
 }
 
+type AdminUserLoginEventFilter struct {
+	StartAt     *time.Time
+	EndAt       *time.Time
+	LoginMethod string
+	IP          string
+}
+
 func (r *Repository) AppendAdminAudit(event *model.AdminAuditEvent) error {
 	return r.db.Create(event).Error
 }
@@ -132,8 +139,20 @@ func (r *Repository) AdminUserCounts(userID string) (AdminUserCounts, error) {
 	return counts, nil
 }
 
-func (r *Repository) AdminUserLoginEvents(userID string, limit int, offset int) ([]model.UserLoginEvent, int64, error) {
+func (r *Repository) AdminUserLoginEvents(userID string, filter AdminUserLoginEventFilter, limit int, offset int) ([]model.UserLoginEvent, int64, error) {
 	query := r.db.Model(&model.UserLoginEvent{}).Where("user_id = ?", userID)
+	if filter.StartAt != nil {
+		query = query.Where("created_at >= ?", *filter.StartAt)
+	}
+	if filter.EndAt != nil {
+		query = query.Where("created_at <= ?", *filter.EndAt)
+	}
+	if filter.LoginMethod != "" {
+		query = query.Where("login_method = ?", filter.LoginMethod)
+	}
+	if filter.IP != "" {
+		query = query.Where("ip_address LIKE ?", "%"+filter.IP+"%")
+	}
 	var total int64
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
