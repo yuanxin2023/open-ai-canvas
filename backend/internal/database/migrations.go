@@ -14,7 +14,7 @@ import (
 	"gorm.io/gorm"
 )
 
-const CurrentSchemaVersion int64 = 47
+const CurrentSchemaVersion int64 = 48
 
 //go:embed seed/inspirations.json
 var inspirationSeedJSON []byte
@@ -145,6 +145,25 @@ var schemaMigrations = []migration{
 		return tx.AutoMigrate(&model.PaymentPromotionImageDraft{})
 	}},
 	{version: 47, name: "scoped_redeem_funding", checksum: "sha256:scoped-redeem-funding-v47-20261003", apply: migrateScopedRedeemFunding},
+	{version: 48, name: "redeem_batch_lifecycle", checksum: "sha256:redeem-batch-lifecycle-v48-20261005", apply: migrateRedeemBatchLifecycle},
+}
+
+func migrateRedeemBatchLifecycle(tx *gorm.DB) error {
+	if err := tx.AutoMigrate(&model.RedeemBatch{}); err != nil {
+		return err
+	}
+	return tx.Exec(`UPDATE redeem_batches
+		SET terminal_at = (
+			SELECT MAX(redeem_codes.updated_at)
+			FROM redeem_codes
+			WHERE redeem_codes.batch_id = redeem_batches.id
+		)
+		WHERE terminal_at IS NULL
+			AND EXISTS (SELECT 1 FROM redeem_codes WHERE redeem_codes.batch_id = redeem_batches.id)
+			AND NOT EXISTS (
+				SELECT 1 FROM redeem_codes
+				WHERE redeem_codes.batch_id = redeem_batches.id AND redeem_codes.status = ?
+			)`, model.RedeemCodeUnused).Error
 }
 
 func migrateScopedRedeemFunding(tx *gorm.DB) error {
@@ -447,7 +466,7 @@ func migrationsForDatabase(db *gorm.DB) ([]migration, error) {
 func upstreamFirstMigrationPlan() []migration {
 	const sharedCount = 23
 	const localCount = 4
-	const commonTailCount = 11
+	const commonTailCount = 12
 	plan := append([]migration(nil), schemaMigrations[:sharedCount]...)
 	middleEnd := len(schemaMigrations) - commonTailCount
 	for index, item := range schemaMigrations[sharedCount+localCount : middleEnd] {

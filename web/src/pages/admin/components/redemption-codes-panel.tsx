@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { App, Button, Form, Input, InputNumber, Modal, Popconfirm, Select, Space } from "antd";
+import { App, Button, Form, Input, InputNumber, Modal, Popconfirm, Segmented, Select, Space } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { Ban, Copy, Eye, KeyRound, RefreshCw, Search, TicketCheck } from "lucide-react";
 
@@ -20,6 +20,7 @@ import {
     type AdminRedeemCode,
     type AdminRedeemCodeSearchResult,
     type RedeemBatch,
+    type RedeemBatchLifecycle,
     type RedeemFundingSummary,
     type RedeemFundingSource,
 } from "@/services/api/wallet";
@@ -47,7 +48,19 @@ const DETAIL_STATUS_LABELS: Record<DetailStatus, string> = {
     disabled: "已禁用",
 };
 
-export default function RedemptionCodesPanel({ fundingSource, isFullAdmin, createOpen, onCreateOpenChange, onCreateBlockedChange }: { fundingSource: RedeemFundingSource; isFullAdmin: boolean; createOpen: boolean; onCreateOpenChange: (open: boolean) => void; onCreateBlockedChange: (blocked: boolean) => void }) {
+export default function RedemptionCodesPanel({
+    fundingSource,
+    isFullAdmin,
+    createOpen,
+    onCreateOpenChange,
+    onCreateBlockedChange,
+}: {
+    fundingSource: RedeemFundingSource;
+    isFullAdmin: boolean;
+    createOpen: boolean;
+    onCreateOpenChange: (open: boolean) => void;
+    onCreateBlockedChange: (blocked: boolean) => void;
+}) {
     const { message } = App.useApp();
     const [batches, setBatches] = useState<RedeemBatch[]>([]);
     const [generatedCodes, setGeneratedCodes] = useState<string[]>([]);
@@ -65,6 +78,7 @@ export default function RedemptionCodesPanel({ fundingSource, isFullAdmin, creat
     const [keyword, setKeyword] = useState("");
     const debouncedKeyword = useDebouncedValue(keyword);
     const [validity, setValidity] = useState<BatchValidity>("all");
+    const [lifecycle, setLifecycle] = useState<Exclude<RedeemBatchLifecycle, "all">>("ongoing");
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(20);
     const [total, setTotal] = useState(0);
@@ -97,12 +111,13 @@ export default function RedemptionCodesPanel({ fundingSource, isFullAdmin, creat
         return Array.from(options, ([value, label]) => ({ value, label }));
     }, [administratorOptions, batches]);
 
-    const reload = async (targetPage = page, targetPageSize = pageSize, queryOverride?: { keyword?: string; validity?: BatchValidity }) => {
+    const reload = async (targetPage = page, targetPageSize = pageSize, queryOverride?: { keyword?: string; validity?: BatchValidity; lifecycle?: Exclude<RedeemBatchLifecycle, "all"> }) => {
         const requestId = ++listRequestRef.current;
         const rawQueryKeyword = (queryOverride?.keyword ?? debouncedKeyword).trim();
         // 非空搜索统一使用 POST，避免兑换码或片段进入批次列表 URL。
         const queryKeyword = rawQueryKeyword;
         const queryValidity = queryOverride?.validity ?? validity;
+        const queryLifecycle = queryOverride?.lifecycle ?? lifecycle;
         setLoading(true);
         setListError("");
         setLookupNotFound(false);
@@ -112,6 +127,7 @@ export default function RedemptionCodesPanel({ fundingSource, isFullAdmin, creat
             const params = {
                 keyword: queryKeyword || undefined,
                 validity: queryValidity === "all" ? undefined : queryValidity,
+                lifecycle: queryLifecycle,
                 fundingSource,
                 creatorId: fundingSource === "module_admin" && isFullAdmin ? creatorId || undefined : undefined,
                 page: targetPage,
@@ -174,6 +190,7 @@ export default function RedemptionCodesPanel({ fundingSource, isFullAdmin, creat
     useEffect(() => {
         setKeyword("");
         setValidity("all");
+        setLifecycle("ongoing");
         setCreatorId("");
         setPage(1);
         setSelectedBatch(null);
@@ -196,7 +213,7 @@ export default function RedemptionCodesPanel({ fundingSource, isFullAdmin, creat
         setLookupResult(null);
         setLookupNotFound(false);
         void reload(page, pageSize);
-    }, [debouncedKeyword, validity, creatorId, fundingSource, page, pageSize]);
+    }, [debouncedKeyword, validity, lifecycle, creatorId, fundingSource, page, pageSize]);
 
     const closeCreateDrawer = () => {
         if (creating || pendingCreate) return;
@@ -246,8 +263,9 @@ export default function RedemptionCodesPanel({ fundingSource, isFullAdmin, creat
             setGeneratedCodes(result.codes);
             setGeneratedBatchId(result.batch.id);
             if (result.account) window.dispatchEvent(new CustomEvent("wallet:updated"));
+            setLifecycle("ongoing");
             setPage(1);
-            await reload(1, pageSize);
+            await reload(1, pageSize, { lifecycle: "ongoing" });
             message.success(`已生成 ${result.codes.length} 个兑换码`);
         } catch (error) {
             const detail = error instanceof Error ? error.message : "生成兑换码失败";
@@ -259,9 +277,10 @@ export default function RedemptionCodesPanel({ fundingSource, isFullAdmin, creat
                 setPage(1);
                 setKeyword("");
                 setValidity("all");
-                const refreshed = await reload(1, pageSize, { keyword: "", validity: "all" });
-                setUncertainCreateNotice(`上一次生成请求的结果暂时无法确认：${detail}。${refreshed ? "已切换到未筛选的完整列表，请核对最新批次。" : "完整列表刷新失败，请在网络恢复后再次刷新。"} 核对完成前，生成入口已暂停。`);
-                message.warning({ content: "生成结果待核对，系统没有自动重试。请检查完整批次列表后再继续。", duration: 7 });
+                setLifecycle("ongoing");
+                const refreshed = await reload(1, pageSize, { keyword: "", validity: "all", lifecycle: "ongoing" });
+                setUncertainCreateNotice(`上一次生成请求的结果暂时无法确认：${detail}。${refreshed ? "已切换到未筛选的进行中列表，请核对最新批次。" : "进行中列表刷新失败，请在网络恢复后再次刷新。"} 核对完成前，生成入口已暂停。`);
+                message.warning({ content: "生成结果待核对，系统没有自动重试。请检查进行中批次列表后再继续。", duration: 7 });
             } else {
                 setPendingCreate(null);
                 message.error(detail);
@@ -306,7 +325,7 @@ export default function RedemptionCodesPanel({ fundingSource, isFullAdmin, creat
                 </div>
             ),
         },
-        ...(isFullAdmin && fundingSource === "module_admin" ? [{ title: "创建管理员", dataIndex: "creatorUsername", width: 140, render: (value: string | undefined, batch: RedeemBatch) => value ? `@${value}` : batch.createdBy || "已注销" }] : []),
+        ...(isFullAdmin && fundingSource === "module_admin" ? [{ title: "创建管理员", dataIndex: "creatorUsername", width: 140, render: (value: string | undefined, batch: RedeemBatch) => (value ? `@${value}` : batch.createdBy || "已注销") }] : []),
         { title: "单码积分", dataIndex: "amountMicrocredits", width: 120, align: "center", render: (value) => <span className="font-medium tabular-nums">{formatCredits(value)}</span> },
         { title: "总数", dataIndex: "count", width: 80, align: "center", render: (value) => <span className="tabular-nums">{value}</span> },
         { title: "状态分布", width: 300, align: "center", render: (_, batch) => <BatchStatusDistribution batch={batch} /> },
@@ -362,11 +381,11 @@ export default function RedemptionCodesPanel({ fundingSource, isFullAdmin, creat
                                 if (!refreshed) return;
                                 setUncertainCreateNotice("");
                                 onCreateBlockedChange(false);
-                                message.success("完整批次列表已刷新，请确认没有重复批次后再生成");
+                                message.success("进行中批次列表已刷新，请确认没有重复批次后再生成");
                             })();
                         }}
                     >
-                        刷新完整列表
+                        刷新进行中列表
                     </Button>
                 </div>
             ) : null}
@@ -389,35 +408,47 @@ export default function RedemptionCodesPanel({ fundingSource, isFullAdmin, creat
                     toolbarActive={hasFilters}
                     toolbarFilters={
                         <>
-                        <Select<BatchValidity>
-                            aria-label="按批次到期状态筛选"
-                            className="w-44"
-                            disabled={codeQuery}
-                            value={validity}
-                            onChange={(value) => {
-                                setValidity(value);
-                                setPage(1);
-                            }}
-                            options={[
-                                { label: "全部到期状态", value: "all" },
-                                { label: "批次未到期", value: "active" },
-                                { label: "批次已到期", value: "expired" },
-                            ]}
-                        />
-                        {isFullAdmin && fundingSource === "module_admin" ? (
-                            <Select
-                                allowClear
-                                aria-label="按创建管理员筛选"
-                                className="w-52"
-                                value={creatorId || undefined}
-                                placeholder="全部模块管理员"
+                            <Segmented
+                                aria-label="按兑换码批次生命周期筛选"
+                                value={lifecycle}
+                                options={[
+                                    { label: "进行中", value: "ongoing" },
+                                    { label: "已结束", value: "completed" },
+                                ]}
                                 onChange={(value) => {
-                                    setCreatorId(value || "");
+                                    setLifecycle(value as Exclude<RedeemBatchLifecycle, "all">);
                                     setPage(1);
                                 }}
-                                options={creatorOptions}
                             />
-                        ) : null}
+                            <Select<BatchValidity>
+                                aria-label="按批次到期状态筛选"
+                                className="w-44"
+                                disabled={codeQuery}
+                                value={validity}
+                                onChange={(value) => {
+                                    setValidity(value);
+                                    setPage(1);
+                                }}
+                                options={[
+                                    { label: "全部到期状态", value: "all" },
+                                    { label: "批次未到期", value: "active" },
+                                    { label: "批次已到期", value: "expired" },
+                                ]}
+                            />
+                            {isFullAdmin && fundingSource === "module_admin" ? (
+                                <Select
+                                    allowClear
+                                    aria-label="按创建管理员筛选"
+                                    className="w-52"
+                                    value={creatorId || undefined}
+                                    placeholder="全部模块管理员"
+                                    onChange={(value) => {
+                                        setCreatorId(value || "");
+                                        setPage(1);
+                                    }}
+                                    options={creatorOptions}
+                                />
+                            ) : null}
                         </>
                     }
                     onReset={() => {
@@ -455,7 +486,9 @@ export default function RedemptionCodesPanel({ fundingSource, isFullAdmin, creat
                                       : codeQuery && lookupResult
                                         ? "未找到匹配的兑换码"
                                         : !hasFilters
-                                          ? "暂无兑换码批次"
+                                          ? lifecycle === "ongoing"
+                                              ? "暂无进行中的兑换码批次"
+                                              : "暂无已结束的兑换码批次"
                                           : undefined
                             }
                             description={
@@ -463,9 +496,11 @@ export default function RedemptionCodesPanel({ fundingSource, isFullAdmin, creat
                                 (codeQuery && lookupResult?.matches.length
                                     ? "可重新打开查询结果，查看状态和核销信息。"
                                     : codeQuery && lookupResult
-                                      ? "批次列表仍按相同关键词筛选；可输入更多兑换码字符后重试。"
+                                      ? "批次列表仍按相同关键词筛选；已结束满 30 天的历史兑换码仅支持输入完整 32 位进行精确核验。"
                                       : !hasFilters
-                                        ? "生成后的批次会在这里集中展示和追踪。"
+                                        ? lifecycle === "ongoing"
+                                            ? "生成后的批次会在这里集中展示；全部核销、禁用或过期后会自动进入“已结束”。"
+                                            : "全部核销、禁用或过期的批次会保留在这里供历史核对。"
                                         : undefined)
                             }
                             action={
@@ -473,7 +508,7 @@ export default function RedemptionCodesPanel({ fundingSource, isFullAdmin, creat
                                     <Button icon={<Eye className="size-4" />} onClick={() => setLookupOpen(true)}>
                                         查看查询结果
                                     </Button>
-                                ) : !listError && !hasFilters && !uncertainCreateNotice && (!isFullAdmin || fundingSource === "platform") ? (
+                                ) : !listError && lifecycle === "ongoing" && !hasFilters && !uncertainCreateNotice && (!isFullAdmin || fundingSource === "platform") ? (
                                     <Button type="primary" icon={<TicketCheck className="size-4" />} onClick={() => onCreateOpenChange(true)}>
                                         生成首个批次
                                     </Button>
@@ -528,7 +563,14 @@ export default function RedemptionCodesPanel({ fundingSource, isFullAdmin, creat
                     await Promise.all([lookupCode(keyword), reload(page, pageSize)]);
                 }}
             />
-            <RedeemBatchCodesModal key={selectedBatch?.id || "closed"} batch={selectedBatch} onClose={() => setSelectedBatch(null)} onBatchChanged={async () => { await reload(page, pageSize); }} />
+            <RedeemBatchCodesModal
+                key={selectedBatch?.id || "closed"}
+                batch={selectedBatch}
+                onClose={() => setSelectedBatch(null)}
+                onBatchChanged={async () => {
+                    await reload(page, pageSize);
+                }}
+            />
         </div>
     );
 }
@@ -1134,7 +1176,13 @@ function RedeemBatchCodesModal({ batch, onClose, onBatchChanged }: { batch: Rede
             width={1080}
             rootClassName="admin-modal-root"
         >
-            {!plaintextAvailable ? <div className="admin-redemption-sensitive-notice is-warning">该批次创建于加密回看功能上线前，系统当时只保存了哈希，无法恢复完整明文；核销状态和审计信息仍可查看。</div> : null}
+            {!plaintextAvailable ? (
+                <div className="admin-redemption-sensitive-notice is-warning">
+                    {batchSummary?.codeSecretsClearedAt
+                        ? `该批次结束已满 30 天，完整兑换码已于 ${formatTime(batchSummary.codeSecretsClearedAt)} 自动清除；尾号、核销状态和审计信息仍可查看，输入完整 32 位兑换码仍可精确核验。`
+                        : "该批次没有可恢复的完整兑换码；尾号、核销状态和审计信息仍可查看，输入完整 32 位兑换码仍可精确核验。"}
+                </div>
+            ) : null}
             <div className="admin-redemption-detail-summary">
                 <BatchStatusDistribution batch={batchSummary || batch || emptyBatchSummary} />
                 <span>单码 {formatCredits(batchSummary?.amountMicrocredits ?? batch?.amountMicrocredits ?? 0)} 积分</span>

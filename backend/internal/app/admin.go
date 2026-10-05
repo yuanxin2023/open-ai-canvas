@@ -94,6 +94,7 @@ type AdminListQuery struct {
 	Keyword       string
 	Status        string
 	Type          string
+	Lifecycle     string
 	FundingSource string
 	CreatorID     string
 	Page          int

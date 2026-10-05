@@ -256,6 +256,9 @@ func TestScopedRedeemExpirationRefundsExactlyOnce(t *testing.T) {
 	if err := db.Model(&model.RedeemCode{}).Where("batch_id = ?", created.Batch.ID).Update("expires_at", past).Error; err != nil {
 		t.Fatal(err)
 	}
+	if err := db.Model(&model.RedeemBatch{}).Where("id = ?", created.Batch.ID).Update("expires_at", past).Error; err != nil {
+		t.Fatal(err)
+	}
 	for range 2 {
 		page, err := svc.AdminRedeemBatchPage(module, AdminListQuery{FundingSource: string(model.RedeemBatchFundingModuleAdmin), Page: 1, Limit: 20})
 		if err != nil {
@@ -278,6 +281,13 @@ func TestScopedRedeemExpirationRefundsExactlyOnce(t *testing.T) {
 	}
 	if refunds != 1 {
 		t.Fatalf("refund ledger count = %d", refunds)
+	}
+	var settledBatch model.RedeemBatch
+	if err := db.First(&settledBatch, "id = ?", created.Batch.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if settledBatch.TerminalAt == nil || settledBatch.TerminalAt.Sub(past).Abs() > time.Second {
+		t.Fatalf("expired batch terminal_at = %v, want %v", settledBatch.TerminalAt, past)
 	}
 }
 
@@ -307,6 +317,92 @@ func TestScopedRedeemFundingSummaryRejectsAccountMismatch(t *testing.T) {
 	svc := &Service{repo: repository.New(db), dataDir: t.TempDir()}
 	if _, err := svc.AdminRedeemBatchPage(module, AdminListQuery{FundingSource: string(model.RedeemBatchFundingModuleAdmin), Page: 1, Limit: 20}); err == nil || !strings.Contains(err.Error(), "冻结积分不一致") {
 		t.Fatalf("funding mismatch error = %v", err)
+	}
+}
+
+func TestRedeemBatchLifecycleAndSecretRetention(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AutoMigrate(&model.SystemSetting{}, &model.User{}, &model.CreditAccount{}, &model.CreditLedgerEntry{}, &model.RedeemBatch{}, &model.RedeemCode{}, &model.AdminAuditEvent{}); err != nil {
+		t.Fatal(err)
+	}
+	admin := &model.User{ID: "admin-lifecycle", Username: "adminlifecycle", Role: model.UserRoleAdmin, Status: model.UserStatusActive}
+	user := &model.User{ID: "user-lifecycle", Username: "userlifecycle", Role: model.UserRoleUser, Status: model.UserStatusActive}
+	if err := db.Create([]*model.User{admin, user}).Error; err != nil {
+		t.Fatal(err)
+	}
+	repo := repository.New(db)
+	svc := &Service{repo: repo, dataDir: t.TempDir()}
+	created, err := svc.AdminCreateRedeemBatch(admin, CreateRedeemBatchRequest{AmountMicrocredits: CreditScale, Count: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ongoing, err := svc.AdminRedeemBatchPage(admin, AdminListQuery{Lifecycle: "ongoing", Page: 1, Limit: 20})
+	if err != nil || len(ongoing.Batches) != 1 || ongoing.Batches[0].ID != created.Batch.ID {
+		t.Fatalf("initial ongoing page = %#v, %v", ongoing, err)
+	}
+	if _, err := svc.RedeemCredits(user, created.Codes[0], "203.0.113.20"); err != nil {
+		t.Fatal(err)
+	}
+	var batch model.RedeemBatch
+	if err := db.First(&batch, "id = ?", created.Batch.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if batch.TerminalAt != nil {
+		t.Fatalf("partially settled batch terminal_at = %v", batch.TerminalAt)
+	}
+	page, err := svc.AdminRedeemCodePage(admin, created.Batch.ID, "", "available", 1, 20)
+	if err != nil || len(page.Codes) != 1 {
+		t.Fatalf("available code page = %#v, %v", page, err)
+	}
+	if _, err := svc.AdminDisableRedeemCode(admin, created.Batch.ID, page.Codes[0].ID, ""); err != nil {
+		t.Fatal(err)
+	}
+	completed, err := svc.AdminRedeemBatchPage(admin, AdminListQuery{Lifecycle: "completed", Page: 1, Limit: 20})
+	if err != nil || len(completed.Batches) != 1 || completed.Batches[0].TerminalAt == nil {
+		t.Fatalf("completed page = %#v, %v", completed, err)
+	}
+	ongoing, err = svc.AdminRedeemBatchPage(admin, AdminListQuery{Lifecycle: "ongoing", Page: 1, Limit: 20})
+	if err != nil || len(ongoing.Batches) != 0 {
+		t.Fatalf("settled ongoing page = %#v, %v", ongoing, err)
+	}
+
+	terminalAt := time.Now().Add(-29 * 24 * time.Hour)
+	if err := db.Model(&model.RedeemBatch{}).Where("id = ?", created.Batch.ID).Update("terminal_at", terminalAt).Error; err != nil {
+		t.Fatal(err)
+	}
+	if cleared, err := repo.ClearTerminalRedeemBatchSecrets(time.Now().Add(-30*24*time.Hour), time.Now(), 100); err != nil || cleared != 0 {
+		t.Fatalf("early cleanup = %d, %v", cleared, err)
+	}
+	terminalAt = time.Now().Add(-31 * 24 * time.Hour)
+	if err := db.Model(&model.RedeemBatch{}).Where("id = ?", created.Batch.ID).Update("terminal_at", terminalAt).Error; err != nil {
+		t.Fatal(err)
+	}
+	if cleared, err := repo.ClearTerminalRedeemBatchSecrets(time.Now().Add(-30*24*time.Hour), time.Now(), 100); err != nil || cleared != 1 {
+		t.Fatalf("retained cleanup = %d, %v", cleared, err)
+	}
+	if cleared, err := repo.ClearTerminalRedeemBatchSecrets(time.Now().Add(-30*24*time.Hour), time.Now(), 100); err != nil || cleared != 0 {
+		t.Fatalf("repeated cleanup = %d, %v", cleared, err)
+	}
+	if err := db.First(&batch, "id = ?", created.Batch.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if batch.CodesCipher != "" || batch.CodeSecretsClearedAt == nil {
+		t.Fatalf("cleaned batch = %#v", batch)
+	}
+	details, err := svc.AdminRedeemCodePage(admin, created.Batch.ID, "", "", 1, 20)
+	if err != nil || details.PlaintextAvailable || len(details.Codes) != 2 {
+		t.Fatalf("cleaned details = %#v, %v", details, err)
+	}
+	lookup, err := svc.AdminLookupRedeemCode(admin, AdminRedeemCodeLookupRequest{Code: created.Codes[0]})
+	if err != nil || lookup.Code.Status != string(model.RedeemCodeRedeemed) {
+		t.Fatalf("exact lookup after cleanup = %#v, %v", lookup, err)
+	}
+	partial, err := svc.AdminSearchRedeemCodes(admin, AdminRedeemCodeSearchRequest{Query: created.Codes[0][:12]})
+	if err != nil || partial.Total != 0 || len(partial.Matches) != 0 {
+		t.Fatalf("partial lookup after cleanup = %#v, %v", partial, err)
 	}
 }
 

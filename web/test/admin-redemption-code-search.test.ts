@@ -4,7 +4,7 @@ test("admin redemption search keeps plaintext codes out of URLs and exposes audi
     const [panelSource, apiSource] = await Promise.all([Bun.file(new URL("../src/pages/admin/components/redemption-codes-panel.tsx", import.meta.url)).text(), Bun.file(new URL("../src/services/api/wallet.ts", import.meta.url)).text()]);
 
     expect(apiSource).toContain('http.post<AdminRedeemCodeSearchResult>("/admin/redeem-codes/search", { query, fundingSource, creatorId })');
-    expect(apiSource).toContain('fundingSource: RedeemFundingSource');
+    expect(apiSource).toContain("fundingSource: RedeemFundingSource");
     expect(panelSource).toContain("const result = queryKeyword ? await searchAdminRedeemBatches(params) : await listAdminRedeemBatches(params);");
     expect(panelSource).toContain("normalized.length >= 1 && normalized.length <= 32");
     expect(panelSource).toContain('placeholder="搜索兑换码片段、批次备注、积分或数量"');
@@ -13,6 +13,10 @@ test("admin redemption search keeps plaintext codes out of URLs and exposes audi
     expect(panelSource).toContain('label="核销 IP"');
     expect(panelSource).toContain('item?.status === "unused"');
     expect(panelSource).toContain("disableAdminRedeemCode(batch.id, item.id, batch.fundingSource)");
+    expect(panelSource).toContain('value: "ongoing"');
+    expect(panelSource).toContain('value: "completed"');
+    expect(panelSource).toContain("完整兑换码已于");
+    expect(apiSource).toContain('export type RedeemBatchLifecycle = "ongoing" | "completed" | "all"');
 });
 
 test("redemption management separates platform and module-admin ownership", async () => {

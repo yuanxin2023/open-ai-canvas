@@ -92,21 +92,23 @@ type BillingOrder struct {
 }
 
 type RedeemBatch struct {
-	ID                 string                   `json:"id" gorm:"primaryKey;size:36"`
-	AmountMicrocredits int64                    `json:"amountMicrocredits"`
-	Count              int                      `json:"count"`
-	Note               string                   `json:"note" gorm:"size:500"`
-	CreatedBy          string                   `json:"createdBy" gorm:"index;size:36;index:idx_redeem_batches_funding_creator_created,priority:2"`
-	FundingSource      RedeemBatchFundingSource `json:"fundingSource" gorm:"size:24;not null;default:platform;index:idx_redeem_batches_funding_creator_created,priority:1"`
-	CodesCipher        string                   `json:"-" gorm:"type:text"`
-	ExpiresAt          *time.Time               `json:"expiresAt" gorm:"index"`
-	CreatedAt          time.Time                `json:"createdAt" gorm:"index;index:idx_redeem_batches_funding_creator_created,priority:3,sort:desc"`
-	CreatorUsername    string                   `json:"creatorUsername,omitempty" gorm:"->;-:migration"`
-	TotalMicrocredits  int64                    `json:"totalMicrocredits" gorm:"->;-:migration"`
-	AvailableCount     int64                    `json:"availableCount" gorm:"->;-:migration"`
-	RedeemedCount      int64                    `json:"redeemedCount" gorm:"->;-:migration"`
-	DisabledCount      int64                    `json:"disabledCount" gorm:"->;-:migration"`
-	ExpiredCount       int64                    `json:"expiredCount" gorm:"->;-:migration"`
+	ID                   string                   `json:"id" gorm:"primaryKey;size:36"`
+	AmountMicrocredits   int64                    `json:"amountMicrocredits"`
+	Count                int                      `json:"count"`
+	Note                 string                   `json:"note" gorm:"size:500"`
+	CreatedBy            string                   `json:"createdBy" gorm:"index;size:36;index:idx_redeem_batches_funding_creator_created,priority:2"`
+	FundingSource        RedeemBatchFundingSource `json:"fundingSource" gorm:"size:24;not null;default:platform;index:idx_redeem_batches_funding_creator_created,priority:1;index:idx_redeem_batches_funding_terminal_created,priority:1"`
+	CodesCipher          string                   `json:"-" gorm:"type:text"`
+	ExpiresAt            *time.Time               `json:"expiresAt" gorm:"index"`
+	TerminalAt           *time.Time               `json:"terminalAt" gorm:"index;index:idx_redeem_batches_funding_terminal_created,priority:2"`
+	CodeSecretsClearedAt *time.Time               `json:"codeSecretsClearedAt"`
+	CreatedAt            time.Time                `json:"createdAt" gorm:"index;index:idx_redeem_batches_funding_creator_created,priority:3,sort:desc;index:idx_redeem_batches_funding_terminal_created,priority:3,sort:desc"`
+	CreatorUsername      string                   `json:"creatorUsername,omitempty" gorm:"->;-:migration"`
+	TotalMicrocredits    int64                    `json:"totalMicrocredits" gorm:"->;-:migration"`
+	AvailableCount       int64                    `json:"availableCount" gorm:"->;-:migration"`
+	RedeemedCount        int64                    `json:"redeemedCount" gorm:"->;-:migration"`
+	DisabledCount        int64                    `json:"disabledCount" gorm:"->;-:migration"`
+	ExpiredCount         int64                    `json:"expiredCount" gorm:"->;-:migration"`
 }
 
 type RedeemCode struct {

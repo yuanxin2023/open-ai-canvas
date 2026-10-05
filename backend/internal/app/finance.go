@@ -512,8 +512,12 @@ func (s *Service) AdminRedeemBatchPage(actor *model.User, query AdminListQuery) 
 	if err := s.settleExpiredRedeemCodesForScope(scope.creatorID); err != nil {
 		return nil, err
 	}
+	lifecycle := strings.TrimSpace(query.Lifecycle)
+	if lifecycle != "" && lifecycle != "ongoing" && lifecycle != "completed" && lifecycle != "all" {
+		return nil, BadAuthRequest("兑换码批次生命周期筛选无效")
+	}
 	page, limit := normalizeAdminPage(query.Page, query.Limit)
-	items, total, err := s.repo.AdminRedeemBatches(query.Keyword, query.Status, scope.fundingSource, scope.creatorID, limit, (page-1)*limit)
+	items, total, err := s.repo.AdminRedeemBatches(query.Keyword, query.Status, lifecycle, scope.fundingSource, scope.creatorID, limit, (page-1)*limit)
 	if err != nil {
 		return nil, err
 	}

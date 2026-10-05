@@ -22,22 +22,58 @@ func TestCurrentSchemaVersionMatchesMigrationPlan(t *testing.T) {
 			}
 		}
 		latest := plan[len(plan)-1]
-		if CurrentSchemaVersion != latest.version || latest.name != "scoped_redeem_funding" {
-			t.Fatalf("%s latest migration = %d/%q, want %d/scoped_redeem_funding", name, latest.version, latest.name, CurrentSchemaVersion)
+		if CurrentSchemaVersion != latest.version || latest.name != "redeem_batch_lifecycle" {
+			t.Fatalf("%s latest migration = %d/%q, want %d/redeem_batch_lifecycle", name, latest.version, latest.name, CurrentSchemaVersion)
 		}
 	}
 }
 
 func TestTopupProductAccentColorMigrationIsSharedTail(t *testing.T) {
 	for name, plan := range map[string][]migration{"local": schemaMigrations, "upstream": upstreamFirstMigrationPlan()} {
-		firstShared := plan[len(plan)-11]
+		firstShared := plan[len(plan)-12]
 		if firstShared.version != 37 || firstShared.name != "user_profiles" {
 			t.Fatalf("%s shared migration tail starts at %d/%s, want 37/user_profiles", name, firstShared.version, firstShared.name)
 		}
-		item := plan[len(plan)-4]
+		item := plan[len(plan)-5]
 		if item.version != 44 || item.name != "topup_product_accent_color" {
 			t.Fatalf("%s migration 44 = %d/%s", name, item.version, item.name)
 		}
+	}
+}
+
+func TestRedeemBatchLifecycleMigrationBackfillsTerminalBatches(t *testing.T) {
+	db, err := Open(Config{Driver: "sqlite", DSN: "file:migration-redeem-lifecycle-v48?mode=memory&cache=shared"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec(`CREATE TABLE redeem_batches (id text PRIMARY KEY, amount_microcredits integer, count integer, note text, created_by text, funding_source text, codes_cipher text, expires_at datetime, created_at datetime)`).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec(`CREATE TABLE redeem_codes (id text PRIMARY KEY, batch_id text, status text, updated_at datetime)`).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec(`INSERT INTO redeem_batches (id, count, funding_source, created_at) VALUES ('completed', 1, 'platform', '2026-01-01'), ('ongoing', 1, 'platform', '2026-01-01')`).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec(`INSERT INTO redeem_codes (id, batch_id, status, updated_at) VALUES ('completed-code', 'completed', 'redeemed', '2026-02-01'), ('ongoing-code', 'ongoing', 'unused', '2026-02-01')`).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := schemaMigrations[47].apply(db); err != nil {
+		t.Fatal(err)
+	}
+	var completed model.RedeemBatch
+	if err := db.First(&completed, "id = ?", "completed").Error; err != nil {
+		t.Fatal(err)
+	}
+	if completed.TerminalAt == nil {
+		t.Fatal("completed batch terminal_at was not backfilled")
+	}
+	var ongoing model.RedeemBatch
+	if err := db.First(&ongoing, "id = ?", "ongoing").Error; err != nil {
+		t.Fatal(err)
+	}
+	if ongoing.TerminalAt != nil {
+		t.Fatalf("ongoing batch terminal_at = %v", ongoing.TerminalAt)
 	}
 }
 
@@ -165,8 +201,8 @@ func TestMigrateSchemaSupportsLocalAndUpstreamPost23Lineages(t *testing.T) {
 		expectedV24Name  string
 		expectedTailName string
 	}{
-		{name: "local", plan: schemaMigrations, appliedThrough: 27, expectedV24Name: "topup_product_benefits", expectedTailName: "scoped_redeem_funding"},
-		{name: "upstream", plan: upstreamFirstMigrationPlan(), appliedThrough: 32, expectedV24Name: "channel_model_label", expectedTailName: "scoped_redeem_funding"},
+		{name: "local", plan: schemaMigrations, appliedThrough: 27, expectedV24Name: "topup_product_benefits", expectedTailName: "redeem_batch_lifecycle"},
+		{name: "upstream", plan: upstreamFirstMigrationPlan(), appliedThrough: 32, expectedV24Name: "channel_model_label", expectedTailName: "redeem_batch_lifecycle"},
 	} {
 		t.Run(scenario.name, func(t *testing.T) {
 			db, err := Open(Config{Driver: "sqlite", DSN: "file:" + t.Name() + "?mode=memory&cache=shared"})

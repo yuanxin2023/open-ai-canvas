@@ -189,6 +189,8 @@ export type RedeemBatch = {
     fundingSource: "platform" | "module_admin";
     totalMicrocredits: number;
     expiresAt?: string;
+    terminalAt?: string;
+    codeSecretsClearedAt?: string;
     createdAt: string;
     availableCount: number;
     redeemedCount: number;
@@ -373,8 +375,9 @@ export function repriceAdminChannelModels(channelId: string, models: ChannelMode
 }
 
 export type RedeemFundingSource = RedeemBatch["fundingSource"];
+export type RedeemBatchLifecycle = "ongoing" | "completed" | "all";
 
-export type AdminFinanceListParams = { keyword?: string; status?: string; validity?: string; fundingSource?: RedeemFundingSource; creatorId?: string; page?: number; pageSize?: number };
+export type AdminFinanceListParams = { keyword?: string; status?: string; validity?: string; lifecycle?: RedeemBatchLifecycle; fundingSource?: RedeemFundingSource; creatorId?: string; page?: number; pageSize?: number };
 
 export function listAdminRedeemBatches(params: AdminFinanceListParams = {}) {
     return http.get<AdminRedeemBatchPage>("/admin/redeem-batches", { params });

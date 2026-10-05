@@ -179,7 +179,7 @@ func (r *Repository) DisableRedeemBatch(batchID string, now time.Time) (int64, i
 	var refunded int64
 	err := r.db.Transaction(func(tx *gorm.DB) error {
 		var batch model.RedeemBatch
-		if err := tx.First(&batch, "id = ?", batchID).Error; err != nil {
+		if err := redeemBatchForUpdate(tx, &batch, batchID); err != nil {
 			return err
 		}
 		var codeIDs []string
@@ -200,7 +200,7 @@ func (r *Repository) DisableRedeemCode(batchID string, codeID string, now time.T
 	var refunded int64
 	err := r.db.Transaction(func(tx *gorm.DB) error {
 		var batch model.RedeemBatch
-		if err := tx.First(&batch, "id = ?", batchID).Error; err != nil {
+		if err := redeemBatchForUpdate(tx, &batch, batchID); err != nil {
 			return err
 		}
 		var eligible int64

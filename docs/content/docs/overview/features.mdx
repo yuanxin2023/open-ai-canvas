@@ -26,10 +26,12 @@ description: 当前项目已实现的核心工作台能力与使用入口
 
 停用、降级或取消权限不会让已发放兑换码失效；升级为全权限管理员也不会把历史个人出资批次改为平台批次。存在尚未结算的个人出资码时禁止永久注销创建人账号。
 
+批次最后一个未使用码核销、禁用或过期后自动进入“已结束”，管理页默认只展示仍在进行中的批次，历史记录继续分页保留。终态满 30 天后后台分批清除可恢复完整码的加密密文，但长期保留哈希、尾号、核销状态、用户、时间、IP、积分流水和审计；因此完整 32 位码仍可精确核验，片段搜索不再覆盖已清理批次。
+
 ### 相关实现
 
 - `backend/internal/app/finance.go`、`backend/internal/repository/finance.go`：资金来源判定、归属隔离、冻结、核销和退款事务。
-- `backend/internal/app/redeem_expiration_worker.go`：每分钟执行的幂等过期结算。
+- `backend/internal/app/redeem_expiration_worker.go`：每分钟执行的幂等过期结算和终态批次密文保留期清理。
 - `web/src/pages/admin/redemption-codes/`、`web/src/pages/admin/components/redemption-codes-panel.tsx`：全权限分区、创建人筛选与模块管理员个人积分确认。
 
 ## 管理员登录环境排查

@@ -361,7 +361,7 @@ func RegisterFinanceRoutes(r *gin.RouterGroup, svc *service.Service) {
 			fail(c, http.StatusBadRequest, err)
 			return
 		}
-		items, err := svc.AdminRedeemBatchPage(user, service.AdminListQuery{Keyword: c.Query("keyword"), Status: c.Query("validity"), FundingSource: c.Query("fundingSource"), CreatorID: c.Query("creatorId"), Page: page, Limit: limit})
+		items, err := svc.AdminRedeemBatchPage(user, service.AdminListQuery{Keyword: c.Query("keyword"), Status: c.Query("validity"), Lifecycle: c.Query("lifecycle"), FundingSource: c.Query("fundingSource"), CreatorID: c.Query("creatorId"), Page: page, Limit: limit})
 		if err != nil {
 			failService(c, err)
 			return
@@ -378,6 +378,7 @@ func RegisterFinanceRoutes(r *gin.RouterGroup, svc *service.Service) {
 		var req struct {
 			Keyword       string `json:"keyword"`
 			Validity      string `json:"validity"`
+			Lifecycle     string `json:"lifecycle"`
 			FundingSource string `json:"fundingSource"`
 			CreatorID     string `json:"creatorId"`
 			Page          int    `json:"page"`
@@ -387,7 +388,7 @@ func RegisterFinanceRoutes(r *gin.RouterGroup, svc *service.Service) {
 			fail(c, http.StatusBadRequest, err)
 			return
 		}
-		items, err := svc.AdminRedeemBatchPage(user, service.AdminListQuery{Keyword: req.Keyword, Status: req.Validity, FundingSource: req.FundingSource, CreatorID: req.CreatorID, Page: req.Page, Limit: req.PageSize})
+		items, err := svc.AdminRedeemBatchPage(user, service.AdminListQuery{Keyword: req.Keyword, Status: req.Validity, Lifecycle: req.Lifecycle, FundingSource: req.FundingSource, CreatorID: req.CreatorID, Page: req.Page, Limit: req.PageSize})
 		if err != nil {
 			failService(c, err)
 			return

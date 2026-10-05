@@ -289,6 +289,7 @@ paths:
       parameters:
         - {in: query, name: keyword, schema: {type: string}}
         - {in: query, name: validity, schema: {type: string, enum: [active, expired]}}
+        - {in: query, name: lifecycle, schema: {type: string, enum: [ongoing, completed, all]}, description: ongoing 表示仍有未结算兑换码，completed 表示全部兑换码已核销、禁用或过期；省略时返回全部}
         - {in: query, name: fundingSource, schema: {type: string, enum: [platform, module_admin]}}
         - {in: query, name: creatorId, schema: {type: string}, description: 仅全权限管理员查询 module_admin 来源时可用}
         - {in: query, name: page, schema: {type: integer, minimum: 1}}
@@ -332,6 +333,7 @@ paths:
               properties:
                 keyword: {type: string}
                 validity: {type: string, enum: [active, expired]}
+                lifecycle: {type: string, enum: [ongoing, completed, all]}
                 fundingSource: {type: string, enum: [platform, module_admin]}
                 creatorId: {type: string}
                 page: {type: integer, minimum: 1}
@@ -370,7 +372,7 @@ paths:
     post:
       tags: [admin]
       summary: 使用兑换码片段搜索状态和核销审计信息
-      description: 仅管理员可调用。接收任意连续 1-32 位兑换码片段；最多返回 50 条，并通过 total/truncated 标记更多匹配。完整 32 位优先按哈希精确查询，片段查询仅覆盖保留了加密明文的批次。
+      description: 仅管理员可调用。接收任意连续 1-32 位兑换码片段；最多返回 50 条，并通过 total/truncated 标记更多匹配。完整 32 位优先按哈希精确查询；片段查询仅覆盖进行中及结束未满 30 天、仍保留加密明文的批次。
       requestBody:
         required: true
         content:
@@ -398,7 +400,7 @@ paths:
         - {in: query, name: page, schema: {type: integer, minimum: 1}}
         - {in: query, name: pageSize, schema: {type: integer, minimum: 1, maximum: 100}}
       responses:
-        "200": {description: 标准信封 data 包含当前归属范围内的 batch 和 codes}
+        "200": {description: 标准信封 data 包含当前归属范围内的 batch 和 codes；批次结束满 30 天后 plaintextAvailable 为 false，完整码不再返回}
         "401": {$ref: "#/components/responses/Error"}
         "403": {$ref: "#/components/responses/Error"}
         "404": {$ref: "#/components/responses/Error"}

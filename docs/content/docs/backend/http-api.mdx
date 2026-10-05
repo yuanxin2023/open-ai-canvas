@@ -35,7 +35,7 @@ description: 信封、错误码与 OpenAPI
 
 ## 管理员兑换码查询
 
-`GET /admin/redeem-batches`、`POST /admin/redeem-batches/search` 和兑换码详情/操作接口共用 `fundingSource=platform|module_admin` 范围。全权限管理员省略时默认 `platform`，切换为 `module_admin` 时可选传 `creatorId` 按创建人筛选；模块管理员只能省略来源或传 `module_admin`，服务端会强制把创建人收窄为当前用户，忽略客户端传入的其他 `creatorId`。批次响应包含 `fundingSource`、`createdBy`、`creatorUsername` 和 `totalMicrocredits`。模块管理员的列表响应还包含 `fundingSummary`：`availableMicrocredits` 是当前可分配余额，`redeemReservedMicrocredits` 是本人全部未核销且未过期兑换码的冻结面值，`totalReservedMicrocredits` 是账户总冻结，`otherReservedMicrocredits` 是总冻结扣除兑换码冻结后的任务预扣等其他占用；该摘要不受关键词、有效期筛选和分页影响。全权限管理员响应不返回个人资金摘要。
+`GET /admin/redeem-batches`、`POST /admin/redeem-batches/search` 和兑换码详情/操作接口共用 `fundingSource=platform|module_admin` 范围。全权限管理员省略时默认 `platform`，切换为 `module_admin` 时可选传 `creatorId` 按创建人筛选；模块管理员只能省略来源或传 `module_admin`，服务端会强制把创建人收窄为当前用户，忽略客户端传入的其他 `creatorId`。列表新增 `lifecycle=ongoing|completed|all`：`ongoing` 表示仍有 `unused` 单码，`completed` 表示全部单码已核销、禁用或过期，省略或传 `all` 返回全部。管理页面默认请求 `ongoing`，历史从“已结束”视图分页查看。批次响应增加 `terminalAt`、`codeSecretsClearedAt`，并继续包含 `fundingSource`、`createdBy`、`creatorUsername` 和 `totalMicrocredits`。模块管理员的列表响应还包含不受筛选和分页影响的 `fundingSummary`；全权限管理员响应不返回个人资金摘要。
 
 `POST /admin/redeem-batches` 的请求仍只接收面值、数量、备注和过期时间，不接收资金来源或创建人。服务端按当前管理员级别决定来源：全权限管理员生成平台批次，模块管理员在同一事务中冻结总面值后生成个人出资批次。个人积分不足时返回 400 且不会产生批次、兑换码或流水；成功响应对模块管理员额外返回更新后的 `account`。
 
@@ -43,7 +43,7 @@ description: 信封、错误码与 OpenAPI
 
 未使用且未过期的查询结果可继续调用 `POST /admin/redeem-batches/:id/codes/:codeId/disable` 禁用。服务端以批次 ID、单码 ID、`unused` 状态及有效期做原子条件更新；已核销、已禁用、已过期或不存在的记录一律拒绝，不依赖前端按钮状态。
 
-`POST /admin/redeem-codes/search` 接收 `{ "query": "兑换码片段", "fundingSource": "platform|module_admin", "creatorId": "可选用户 ID" }`，支持任意连续 1–32 位字符。完整 32 位优先走哈希精确查询；较短片段在服务端解密当前来源与创建人范围内仍保留加密明文的批次后匹配，因此旧的仅哈希批次只能使用完整兑换码查询。接口最多返回 50 条 `matches`，并用 `total` 和 `truncated` 表示是否还有更多匹配；查询片段同样只放在 POST 请求体中。
+`POST /admin/redeem-codes/search` 接收 `{ "query": "兑换码片段", "fundingSource": "platform|module_admin", "creatorId": "可选用户 ID" }`，支持任意连续 1–32 位字符。完整 32 位优先走哈希精确查询；较短片段仅匹配仍保留加密明文的进行中批次和结束未满 30 天的批次。终态满 30 天后 Worker 不可逆清除完整码密文，但保留哈希、尾号、状态、核销信息及财务审计，因此历史批次仍可用完整 32 位码精确核验。接口最多返回 50 条 `matches`，并用 `total` 和 `truncated` 表示是否还有更多匹配；查询片段同样只放在 POST 请求体中。
 
 页面存在非空搜索词时，批次备注、积分和数量筛选改用 `POST /admin/redeem-batches/search`，请求字段与原 `GET /admin/redeem-batches` 一致。这样组合搜索兑换码片段和批次时，任何输入内容都不会进入 URL；空搜索仍使用原 GET 列表。`POST /admin/redeem-batches/:id/disable` 和 `POST /admin/redeem-batches/:id/codes/:codeId/disable` 返回 `disabledCount` 与 `refundedMicrocredits`；全权限管理员禁用个人出资码时，积分仍退回该批次的原创建人。
 
