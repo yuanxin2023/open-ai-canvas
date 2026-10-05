@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { groupModelsForPicker, modelChannelLabel } from "../src/lib/model-picker-groups";
+import { groupModelsForPicker, modelChannelLabel, modelPickerGroupHasSubmenu } from "../src/lib/model-picker-groups";
 import { groupModelsByDisplayName, modelCompatibilityError, modelGroupReferenceLimits, resolveCompatibleModel } from "../src/lib/model-selection";
 import { modelQuoteRequest, priceTiersForCurrentSelection, priceTierSummaryLabel } from "../src/lib/model-pricing";
 import { systemChannelModelChannels } from "../src/lib/user-session";
@@ -38,6 +38,22 @@ test("same model display name groups all channels and preserves their prices", (
         ["Seedance 2.0", "product", [["正常渠道", ["a::seedance-2.0"]], ["优惠渠道-993", ["b::seedance-2.0"]], ["特惠渠道-730", ["c::seedance-2.0"]]]],
     ]);
     expect(config.channels.map((channel) => priceTierSummaryLabel(priceTiersForCurrentSelection(channel.modelCosts![0].logicalPriceTiers!, "video", config)))).toEqual(["0.3 积分/秒", "0.3 积分/秒", "0.2 积分/秒"]);
+    expect(modelPickerGroupHasSubmenu(groups[0])).toBe(true);
+});
+
+test("only a single-channel platform product bypasses the submenu", () => {
+    const config = fixture();
+    const singleProduct = groupModelsForPicker({ ...config, channels: [config.channels[0]] }, ["a::seedance-2.0"])[0];
+    expect(singleProduct.kind).toBe("product");
+    expect(singleProduct.models).toHaveLength(1);
+    expect(modelPickerGroupHasSubmenu(singleProduct)).toBe(false);
+
+    const personalChannel = { ...config.channels[0], id: "personal", name: "个人渠道", scope: "user" as const };
+    const personalValue = "personal::seedance-2.0";
+    const personalGroup = groupModelsForPicker({ ...config, channels: [personalChannel] }, [personalValue])[0];
+    expect(personalGroup.kind).toBe("channel");
+    expect(personalGroup.models).toHaveLength(1);
+    expect(modelPickerGroupHasSubmenu(personalGroup)).toBe(true);
 });
 
 test("grouping uses display name even when model keys differ, without merging channel options", () => {

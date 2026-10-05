@@ -10,6 +10,10 @@ export type ModelPickerGroup = {
     models: DisplayModelGroup[];
 };
 
+export function modelPickerGroupHasSubmenu(group: ModelPickerGroup) {
+    return group.kind === "channel" || group.models.length > 1;
+}
+
 export { isDirectSystemModel } from "@/lib/model-selection";
 
 export function modelChannelLabel(config: AiConfig, value: string) {

@@ -7,11 +7,17 @@ function source(path: string) {
 }
 
 describe("official model picker flow", () => {
-    test("uses the shared two-level model and channel layout", () => {
+    test("uses direct selection only for single-channel products and preserves the shared two-level layout", () => {
         const picker = source("../src/components/model-picker.tsx");
 
         expect(picker).not.toContain("directList");
         expect(picker).not.toContain("is-direct-list");
+        expect(picker).toContain("modelPickerGroupHasSubmenu(group)");
+        expect(picker).toContain("directGroupModel(group)");
+        expect(picker).toContain("onChange(model)");
+        expect(picker).toContain("setOpen(false)");
+        expect(picker).toContain("triggerRef.current?.focus()");
+        expect(picker).toContain("hasSubmenu ? <ChevronDown");
         expect(picker).toContain('activeGroupKey === null ? "is-brand-list" : "is-model-list"');
         expect(picker).toContain('className="canvas-model-picker-brands"');
         expect(picker).toContain('className="canvas-model-picker-two-pane"');

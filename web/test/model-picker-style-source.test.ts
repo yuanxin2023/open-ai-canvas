@@ -30,11 +30,22 @@ test("模型行只保留选中高亮，价格使用独立的彩色标签", async
     expect(styles).toContain("width: min(800px, calc(100vw - 24px))");
 });
 
-test("每次打开菜单都展开当前选中模型所属目录，无有效选中时显示一级目录", async () => {
+test("每次打开菜单仅展开具有二级菜单的当前选中目录", async () => {
     const component = await Bun.file(new URL("../src/components/model-picker.tsx", import.meta.url)).text();
     const opening = component.match(/const setPickerOpen = \(nextOpen: boolean\) => \{([\s\S]*?)\n    \};/)?.[1] || "";
-    expect(opening).toContain("setActiveGroupKey(optionGroups.find((group) => group.models.some((item) => item.models.includes(current)))?.key ?? null)");
-    expect(opening).not.toContain("setActiveGroupKey(null)");
+    expect(opening).toContain("const currentGroup = optionGroups.find((group) => group.models.some((item) => item.models.includes(current)))");
+    expect(opening).toContain("currentGroup && modelPickerGroupHasSubmenu(currentGroup) ? currentGroup.key : null");
+});
+
+test("单渠道平台模型从一级目录直接选择并关闭菜单", async () => {
+    const component = await Bun.file(new URL("../src/components/model-picker.tsx", import.meta.url)).text();
+    const directSelection = component.match(/const selectGroup = useCallback\(\(group: ModelPickerGroup\) => \{([\s\S]*?)\n    \}, \[directGroupModel, onChange\]\);/)?.[1] || "";
+    expect(directSelection).toContain("if (modelPickerGroupHasSubmenu(group))");
+    expect(directSelection).toContain("onChange(model)");
+    expect(directSelection).toContain("setOpen(false)");
+    expect(directSelection).toContain("triggerRef.current?.focus()");
+    expect(component).toContain("hasSubmenu ? <ChevronDown");
+    expect(component).toContain("disabledReason={directGroupDisabledReason(group)}");
 });
 
 test("选择模型保留菜单及行内焦点，仍可通过 Escape 和外部点击关闭", async () => {
