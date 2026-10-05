@@ -45,11 +45,19 @@ type WalletSummary struct {
 }
 
 type RedeemBatchPage struct {
-	Batches       []model.RedeemBatch            `json:"batches"`
-	FundingSource model.RedeemBatchFundingSource `json:"fundingSource"`
-	Total         int64                          `json:"total"`
-	Page          int                            `json:"page"`
-	Limit         int                            `json:"pageSize"`
+	Batches        []model.RedeemBatch            `json:"batches"`
+	FundingSource  model.RedeemBatchFundingSource `json:"fundingSource"`
+	FundingSummary *RedeemFundingSummary          `json:"fundingSummary,omitempty"`
+	Total          int64                          `json:"total"`
+	Page           int                            `json:"page"`
+	Limit          int                            `json:"pageSize"`
+}
+
+type RedeemFundingSummary struct {
+	AvailableMicrocredits      int64 `json:"availableMicrocredits"`
+	RedeemReservedMicrocredits int64 `json:"redeemReservedMicrocredits"`
+	OtherReservedMicrocredits  int64 `json:"otherReservedMicrocredits"`
+	TotalReservedMicrocredits  int64 `json:"totalReservedMicrocredits"`
 }
 
 type AdminRedeemCodeDetail struct {
@@ -509,7 +517,23 @@ func (s *Service) AdminRedeemBatchPage(actor *model.User, query AdminListQuery) 
 	if err != nil {
 		return nil, err
 	}
-	return &RedeemBatchPage{Batches: items, FundingSource: scope.fundingSource, Total: total, Page: page, Limit: limit}, nil
+	var fundingSummary *RedeemFundingSummary
+	if actor.AdminLevel == model.AdminLevelScoped {
+		snapshot, err := s.repo.RedeemFundingSnapshot(actor.ID, time.Now())
+		if err != nil {
+			return nil, err
+		}
+		if snapshot.RedeemReservedMicrocredits > snapshot.TotalReservedMicrocredits {
+			return nil, errors.New("兑换码冻结积分与账户冻结积分不一致")
+		}
+		fundingSummary = &RedeemFundingSummary{
+			AvailableMicrocredits:      snapshot.AvailableMicrocredits,
+			RedeemReservedMicrocredits: snapshot.RedeemReservedMicrocredits,
+			OtherReservedMicrocredits:  snapshot.TotalReservedMicrocredits - snapshot.RedeemReservedMicrocredits,
+			TotalReservedMicrocredits:  snapshot.TotalReservedMicrocredits,
+		}
+	}
+	return &RedeemBatchPage{Batches: items, FundingSource: scope.fundingSource, FundingSummary: fundingSummary, Total: total, Page: page, Limit: limit}, nil
 }
 
 func (s *Service) AdminAdjustCredits(actor *model.User, userID string, req AdminCreditAdjustmentRequest) (*model.CreditAccount, error) {

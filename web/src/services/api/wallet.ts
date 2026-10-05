@@ -196,6 +196,22 @@ export type RedeemBatch = {
     expiredCount: number;
 };
 
+export type RedeemFundingSummary = {
+    availableMicrocredits: number;
+    redeemReservedMicrocredits: number;
+    otherReservedMicrocredits: number;
+    totalReservedMicrocredits: number;
+};
+
+export type AdminRedeemBatchPage = {
+    batches: RedeemBatch[];
+    fundingSource: RedeemFundingSource;
+    fundingSummary?: RedeemFundingSummary;
+    total: number;
+    page: number;
+    pageSize: number;
+};
+
 export type AdminRedeemCode = {
     id: string;
     code?: string;
@@ -361,11 +377,11 @@ export type RedeemFundingSource = RedeemBatch["fundingSource"];
 export type AdminFinanceListParams = { keyword?: string; status?: string; validity?: string; fundingSource?: RedeemFundingSource; creatorId?: string; page?: number; pageSize?: number };
 
 export function listAdminRedeemBatches(params: AdminFinanceListParams = {}) {
-    return http.get<{ batches: RedeemBatch[]; fundingSource: RedeemFundingSource; total: number; page: number; pageSize: number }>("/admin/redeem-batches", { params });
+    return http.get<AdminRedeemBatchPage>("/admin/redeem-batches", { params });
 }
 
 export function searchAdminRedeemBatches(params: AdminFinanceListParams) {
-    return http.post<{ batches: RedeemBatch[]; fundingSource: RedeemFundingSource; total: number; page: number; pageSize: number }>("/admin/redeem-batches/search", params);
+    return http.post<AdminRedeemBatchPage>("/admin/redeem-batches/search", params);
 }
 
 export function createAdminRedeemBatch(input: { amountMicrocredits: number; count: number; note?: string; expiresAt?: string }) {

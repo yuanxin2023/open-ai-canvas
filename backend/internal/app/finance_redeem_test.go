@@ -120,7 +120,7 @@ func TestScopedRedeemBatchesAreFundedAndIsolatedByCreator(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := db.Create([]model.CreditAccount{
-		{UserID: moduleA.ID, AvailableMicrocredits: 10 * CreditScale},
+		{UserID: moduleA.ID, AvailableMicrocredits: 10 * CreditScale, ReservedMicrocredits: 4 * CreditScale},
 		{UserID: moduleB.ID, AvailableMicrocredits: 20 * CreditScale},
 	}).Error; err != nil {
 		t.Fatal(err)
@@ -135,7 +135,7 @@ func TestScopedRedeemBatchesAreFundedAndIsolatedByCreator(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if batchA.Batch.FundingSource != model.RedeemBatchFundingModuleAdmin || batchA.Account == nil || batchA.Account.AvailableMicrocredits != 8*CreditScale || batchA.Account.ReservedMicrocredits != 2*CreditScale {
+	if batchA.Batch.FundingSource != model.RedeemBatchFundingModuleAdmin || batchA.Account == nil || batchA.Account.AvailableMicrocredits != 8*CreditScale || batchA.Account.ReservedMicrocredits != 6*CreditScale {
 		t.Fatalf("module A creation = %#v", batchA)
 	}
 	if _, err := svc.AdminCreateRedeemBatch(moduleA, CreateRedeemBatchRequest{AmountMicrocredits: CreditScale, Count: 9}); err == nil {
@@ -149,7 +149,7 @@ func TestScopedRedeemBatchesAreFundedAndIsolatedByCreator(t *testing.T) {
 	if err := db.Model(&model.RedeemBatch{}).Where("created_by = ?", moduleA.ID).Count(&moduleABatchCount).Error; err != nil {
 		t.Fatal(err)
 	}
-	if accountAfterRejectedCreate.AvailableMicrocredits != 8*CreditScale || accountAfterRejectedCreate.ReservedMicrocredits != 2*CreditScale || moduleABatchCount != 1 {
+	if accountAfterRejectedCreate.AvailableMicrocredits != 8*CreditScale || accountAfterRejectedCreate.ReservedMicrocredits != 6*CreditScale || moduleABatchCount != 1 {
 		t.Fatalf("underfunded creation changed state: account=%#v batches=%d", accountAfterRejectedCreate, moduleABatchCount)
 	}
 
@@ -157,12 +157,22 @@ func TestScopedRedeemBatchesAreFundedAndIsolatedByCreator(t *testing.T) {
 	if err != nil || len(pageA.Batches) != 1 || pageA.Batches[0].ID != batchA.Batch.ID {
 		t.Fatalf("module A page = %#v, %v", pageA, err)
 	}
+	if pageA.FundingSummary == nil || pageA.FundingSummary.AvailableMicrocredits != 8*CreditScale || pageA.FundingSummary.RedeemReservedMicrocredits != 2*CreditScale || pageA.FundingSummary.OtherReservedMicrocredits != 4*CreditScale || pageA.FundingSummary.TotalReservedMicrocredits != 6*CreditScale {
+		t.Fatalf("module A funding summary = %#v", pageA.FundingSummary)
+	}
+	filteredPageA, err := svc.AdminRedeemBatchPage(moduleA, AdminListQuery{Keyword: "no-such-batch", Status: "expired", FundingSource: string(model.RedeemBatchFundingModuleAdmin), Page: 1, Limit: 1})
+	if err != nil || len(filteredPageA.Batches) != 0 || filteredPageA.FundingSummary == nil || *filteredPageA.FundingSummary != *pageA.FundingSummary {
+		t.Fatalf("filtered module A page = %#v, %v", filteredPageA, err)
+	}
 	pageB, err := svc.AdminRedeemBatchPage(moduleB, AdminListQuery{FundingSource: string(model.RedeemBatchFundingModuleAdmin), Page: 1, Limit: 20})
 	if err != nil || len(pageB.Batches) != 1 || pageB.Batches[0].ID != batchB.Batch.ID {
 		t.Fatalf("module B page = %#v, %v", pageB, err)
 	}
+	if pageB.FundingSummary == nil || pageB.FundingSummary.AvailableMicrocredits != 17*CreditScale || pageB.FundingSummary.RedeemReservedMicrocredits != 3*CreditScale || pageB.FundingSummary.OtherReservedMicrocredits != 0 {
+		t.Fatalf("module B funding summary = %#v", pageB.FundingSummary)
+	}
 	allModules, err := svc.AdminRedeemBatchPage(full, AdminListQuery{FundingSource: string(model.RedeemBatchFundingModuleAdmin), Page: 1, Limit: 20})
-	if err != nil || len(allModules.Batches) != 2 {
+	if err != nil || len(allModules.Batches) != 2 || allModules.FundingSummary != nil {
 		t.Fatalf("full module page = %#v, %v", allModules, err)
 	}
 	filteredModules, err := svc.AdminRedeemBatchPage(full, AdminListQuery{FundingSource: string(model.RedeemBatchFundingModuleAdmin), CreatorID: moduleA.ID, Page: 1, Limit: 20})
@@ -186,8 +196,12 @@ func TestScopedRedeemBatchesAreFundedAndIsolatedByCreator(t *testing.T) {
 	if err := db.First(&accountA, "user_id = ?", moduleA.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if accountA.AvailableMicrocredits != 8*CreditScale || accountA.ReservedMicrocredits != CreditScale {
+	if accountA.AvailableMicrocredits != 8*CreditScale || accountA.ReservedMicrocredits != 5*CreditScale {
 		t.Fatalf("module A after redeem = %#v", accountA)
+	}
+	pageA, err = svc.AdminRedeemBatchPage(moduleA, AdminListQuery{FundingSource: string(model.RedeemBatchFundingModuleAdmin), Page: 1, Limit: 20})
+	if err != nil || pageA.FundingSummary == nil || pageA.FundingSummary.RedeemReservedMicrocredits != CreditScale || pageA.FundingSummary.OtherReservedMicrocredits != 4*CreditScale || pageA.FundingSummary.TotalReservedMicrocredits != 5*CreditScale {
+		t.Fatalf("module A funding summary after redeem = %#v, %v", pageA.FundingSummary, err)
 	}
 	disabled, err := svc.AdminDisableRedeemBatch(full, batchA.Batch.ID, string(model.RedeemBatchFundingModuleAdmin))
 	if err != nil || disabled.DisabledCount != 1 || disabled.RefundedMicrocredits != CreditScale {
@@ -200,13 +214,21 @@ func TestScopedRedeemBatchesAreFundedAndIsolatedByCreator(t *testing.T) {
 	if err := db.First(&accountB, "user_id = ?", moduleB.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if accountA.AvailableMicrocredits != 9*CreditScale || accountA.ReservedMicrocredits != 0 || accountB.AvailableMicrocredits != 17*CreditScale || accountB.ReservedMicrocredits != 3*CreditScale {
+	if accountA.AvailableMicrocredits != 9*CreditScale || accountA.ReservedMicrocredits != 4*CreditScale || accountB.AvailableMicrocredits != 17*CreditScale || accountB.ReservedMicrocredits != 3*CreditScale {
 		t.Fatalf("isolated balances: A=%#v B=%#v", accountA, accountB)
+	}
+	pageA, err = svc.AdminRedeemBatchPage(moduleA, AdminListQuery{FundingSource: string(model.RedeemBatchFundingModuleAdmin), Page: 1, Limit: 20})
+	if err != nil || pageA.FundingSummary == nil || pageA.FundingSummary.AvailableMicrocredits != 9*CreditScale || pageA.FundingSummary.RedeemReservedMicrocredits != 0 || pageA.FundingSummary.OtherReservedMicrocredits != 4*CreditScale {
+		t.Fatalf("module A funding summary after disable = %#v, %v", pageA.FundingSummary, err)
 	}
 
 	platform, err := svc.AdminCreateRedeemBatch(full, CreateRedeemBatchRequest{AmountMicrocredits: CreditScale, Count: 1})
 	if err != nil || platform.Batch.FundingSource != model.RedeemBatchFundingPlatform || platform.Account != nil {
 		t.Fatalf("platform creation = %#v, %v", platform, err)
+	}
+	platformPage, err := svc.AdminRedeemBatchPage(full, AdminListQuery{FundingSource: string(model.RedeemBatchFundingPlatform), Page: 1, Limit: 20})
+	if err != nil || platformPage.FundingSummary != nil {
+		t.Fatalf("platform funding summary = %#v, %v", platformPage.FundingSummary, err)
 	}
 }
 
@@ -235,8 +257,12 @@ func TestScopedRedeemExpirationRefundsExactlyOnce(t *testing.T) {
 		t.Fatal(err)
 	}
 	for range 2 {
-		if _, _, err := svc.repo.SettleExpiredRedeemCodes(time.Now(), module.ID, 100); err != nil {
+		page, err := svc.AdminRedeemBatchPage(module, AdminListQuery{FundingSource: string(model.RedeemBatchFundingModuleAdmin), Page: 1, Limit: 20})
+		if err != nil {
 			t.Fatal(err)
+		}
+		if page.FundingSummary == nil || page.FundingSummary.AvailableMicrocredits != 5*CreditScale || page.FundingSummary.RedeemReservedMicrocredits != 0 || page.FundingSummary.TotalReservedMicrocredits != 0 {
+			t.Fatalf("expired funding summary = %#v", page.FundingSummary)
 		}
 	}
 	var account model.CreditAccount
@@ -252,6 +278,35 @@ func TestScopedRedeemExpirationRefundsExactlyOnce(t *testing.T) {
 	}
 	if refunds != 1 {
 		t.Fatalf("refund ledger count = %d", refunds)
+	}
+}
+
+func TestScopedRedeemFundingSummaryRejectsAccountMismatch(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AutoMigrate(&model.User{}, &model.CreditAccount{}, &model.RedeemBatch{}, &model.RedeemCode{}); err != nil {
+		t.Fatal(err)
+	}
+	module := &model.User{ID: "module", Username: "module", Role: model.UserRoleAdmin, AdminLevel: model.AdminLevelScoped, AdminPermissions: []model.AdminPermission{model.AdminPermissionRedeemCodes}, Status: model.UserStatusActive}
+	batch := &model.RedeemBatch{ID: "batch", AmountMicrocredits: CreditScale, Count: 1, CreatedBy: module.ID, FundingSource: model.RedeemBatchFundingModuleAdmin}
+	code := &model.RedeemCode{ID: "code", BatchID: batch.ID, AmountMicrocredits: CreditScale, Status: model.RedeemCodeUnused}
+	if err := db.Create(module).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&model.CreditAccount{UserID: module.ID, AvailableMicrocredits: CreditScale}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(batch).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(code).Error; err != nil {
+		t.Fatal(err)
+	}
+	svc := &Service{repo: repository.New(db), dataDir: t.TempDir()}
+	if _, err := svc.AdminRedeemBatchPage(module, AdminListQuery{FundingSource: string(model.RedeemBatchFundingModuleAdmin), Page: 1, Limit: 20}); err == nil || !strings.Contains(err.Error(), "冻结积分不一致") {
+		t.Fatalf("funding mismatch error = %v", err)
 	}
 }
 

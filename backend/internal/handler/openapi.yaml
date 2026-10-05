@@ -285,7 +285,7 @@ paths:
     get:
       tags: [admin]
       summary: 按资金来源列出兑换码批次
-      description: 全权限管理员省略 fundingSource 时默认 platform；模块管理员始终只返回自己创建的 module_admin 批次。
+      description: 全权限管理员省略 fundingSource 时默认 platform；模块管理员始终只返回自己创建的 module_admin 批次，并额外返回不受列表筛选和分页影响的 fundingSummary 个人资金摘要。
       parameters:
         - {in: query, name: keyword, schema: {type: string}}
         - {in: query, name: validity, schema: {type: string, enum: [active, expired]}}
@@ -294,7 +294,7 @@ paths:
         - {in: query, name: page, schema: {type: integer, minimum: 1}}
         - {in: query, name: pageSize, schema: {type: integer, minimum: 1, maximum: 100}}
       responses:
-        "200": {description: 标准信封 data 包含 batches、fundingSource、total、page 和 pageSize}
+        "200": {description: 标准信封 data 包含 batches、fundingSource、total、page 和 pageSize；模块管理员还包含 fundingSummary，其中拆分可分配、兑换码冻结、其他冻结和账户总冻结积分}
         "401": {$ref: "#/components/responses/Error"}
         "403": {$ref: "#/components/responses/Error"}
     post:
@@ -337,7 +337,7 @@ paths:
                 page: {type: integer, minimum: 1}
                 pageSize: {type: integer, minimum: 1, maximum: 100}
       responses:
-        "200": {description: 标准信封 data 包含 batches、fundingSource、total、page 和 pageSize}
+        "200": {description: 标准信封 data 包含 batches、fundingSource、total、page 和 pageSize；模块管理员还包含与筛选无关的 fundingSummary}
         "400": {$ref: "#/components/responses/Error"}
         "401": {$ref: "#/components/responses/Error"}
         "403": {$ref: "#/components/responses/Error"}

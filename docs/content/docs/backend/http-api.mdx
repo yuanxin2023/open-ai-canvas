@@ -35,7 +35,7 @@ description: 信封、错误码与 OpenAPI
 
 ## 管理员兑换码查询
 
-`GET /admin/redeem-batches`、`POST /admin/redeem-batches/search` 和兑换码详情/操作接口共用 `fundingSource=platform|module_admin` 范围。全权限管理员省略时默认 `platform`，切换为 `module_admin` 时可选传 `creatorId` 按创建人筛选；模块管理员只能省略来源或传 `module_admin`，服务端会强制把创建人收窄为当前用户，忽略客户端传入的其他 `creatorId`。批次响应包含 `fundingSource`、`createdBy`、`creatorUsername` 和 `totalMicrocredits`。
+`GET /admin/redeem-batches`、`POST /admin/redeem-batches/search` 和兑换码详情/操作接口共用 `fundingSource=platform|module_admin` 范围。全权限管理员省略时默认 `platform`，切换为 `module_admin` 时可选传 `creatorId` 按创建人筛选；模块管理员只能省略来源或传 `module_admin`，服务端会强制把创建人收窄为当前用户，忽略客户端传入的其他 `creatorId`。批次响应包含 `fundingSource`、`createdBy`、`creatorUsername` 和 `totalMicrocredits`。模块管理员的列表响应还包含 `fundingSummary`：`availableMicrocredits` 是当前可分配余额，`redeemReservedMicrocredits` 是本人全部未核销且未过期兑换码的冻结面值，`totalReservedMicrocredits` 是账户总冻结，`otherReservedMicrocredits` 是总冻结扣除兑换码冻结后的任务预扣等其他占用；该摘要不受关键词、有效期筛选和分页影响。全权限管理员响应不返回个人资金摘要。
 
 `POST /admin/redeem-batches` 的请求仍只接收面值、数量、备注和过期时间，不接收资金来源或创建人。服务端按当前管理员级别决定来源：全权限管理员生成平台批次，模块管理员在同一事务中冻结总面值后生成个人出资批次。个人积分不足时返回 400 且不会产生批次、兑换码或流水；成功响应对模块管理员额外返回更新后的 `account`。
 

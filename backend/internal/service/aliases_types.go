@@ -257,6 +257,7 @@ type (
 	PublicRuntimeLimits                    = app.PublicRuntimeLimits
 	PublicRuntimePolicySetting             = app.PublicRuntimePolicySetting
 	RedeemBatchPage                        = app.RedeemBatchPage
+	RedeemFundingSummary                   = app.RedeemFundingSummary
 	RegisterRequest                        = app.RegisterRequest
 	UpdateProfileRequest                   = app.UpdateProfileRequest
 	ChangePasswordRequest                  = app.ChangePasswordRequest

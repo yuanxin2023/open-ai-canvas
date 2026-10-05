@@ -6606,6 +6606,97 @@
     min-width: 1140px;
 }
 
+.admin-redemption-funding-overview {
+    flex: 0 0 auto;
+    margin: 8px 0 2px;
+    overflow: hidden;
+    border: 1px solid var(--admin-card-border);
+    border-radius: 10px;
+    background: var(--admin-layer-1);
+    box-shadow: var(--admin-card-shadow);
+}
+
+.admin-redemption-funding-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    border-bottom: 1px solid var(--admin-divider);
+    padding: 10px 14px;
+}
+
+.admin-redemption-funding-heading strong {
+    color: var(--admin-text-primary);
+    font-size: 12px;
+    font-weight: 650;
+}
+
+.admin-redemption-funding-heading p,
+.admin-redemption-funding-heading > span {
+    color: var(--admin-text-muted);
+    font-size: 11px;
+    line-height: 1.5;
+}
+
+.admin-redemption-funding-heading p {
+    margin-top: 2px;
+}
+
+.admin-redemption-funding-heading > span {
+    flex: 0 0 auto;
+}
+
+.admin-redemption-funding-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.admin-redemption-funding-grid > div {
+    min-width: 0;
+    padding: 12px 14px;
+}
+
+.admin-redemption-funding-grid > div + div {
+    border-left: 1px solid var(--admin-divider);
+}
+
+.admin-redemption-funding-grid dt,
+.admin-redemption-funding-grid small {
+    color: var(--admin-text-muted);
+    font-size: 11px;
+    line-height: 1.4;
+}
+
+.admin-redemption-funding-grid dd {
+    margin: 4px 0 2px;
+    color: var(--admin-text-primary);
+    font-size: 17px;
+    font-weight: 680;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.35;
+}
+
+.admin-redemption-funding-grid > div:first-child dd {
+    color: var(--admin-status-success);
+}
+
+@media (max-width: 600px) {
+    .admin-redemption-funding-heading {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    .admin-redemption-funding-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .admin-redemption-funding-grid > div + div {
+        border-top: 1px solid var(--admin-divider);
+        border-left: 0;
+    }
+}
+
 .admin-redemption-status-distribution {
     display: flex;
     min-width: 0;

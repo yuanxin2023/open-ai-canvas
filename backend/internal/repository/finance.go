@@ -70,6 +70,12 @@ type AdminRedeemCodeRow struct {
 	RedeemedDisplayName string `json:"redeemedDisplayName" gorm:"column:redeemed_display_name"`
 }
 
+type RedeemFundingSnapshot struct {
+	AvailableMicrocredits      int64 `gorm:"column:available_microcredits"`
+	TotalReservedMicrocredits  int64 `gorm:"column:total_reserved_microcredits"`
+	RedeemReservedMicrocredits int64 `gorm:"column:redeem_reserved_microcredits"`
+}
+
 func (r *Repository) ChannelModels(channelID string, includeDisabled bool) ([]model.ChannelModel, error) {
 	var items []model.ChannelModel
 	query := r.db.Where("channel_id = ?", channelID).Order("sort_order asc, created_at asc, id asc")
@@ -390,6 +396,31 @@ func (r *Repository) CreditAccounts(userIDs []string) ([]model.CreditAccount, er
 	var accounts []model.CreditAccount
 	err := r.db.Where("user_id IN ?", userIDs).Find(&accounts).Error
 	return accounts, err
+}
+
+func (r *Repository) RedeemFundingSnapshot(userID string, now time.Time) (*RedeemFundingSnapshot, error) {
+	if _, err := r.CreditAccount(userID); err != nil {
+		return nil, err
+	}
+	var snapshot RedeemFundingSnapshot
+	err := r.db.Raw(`SELECT
+		accounts.available_microcredits AS available_microcredits,
+		accounts.reserved_microcredits AS total_reserved_microcredits,
+		COALESCE((
+			SELECT SUM(codes.amount_microcredits)
+			FROM redeem_codes AS codes
+			JOIN redeem_batches AS batches ON batches.id = codes.batch_id
+			WHERE batches.funding_source = ?
+				AND batches.created_by = ?
+				AND codes.status = ?
+				AND (codes.expires_at IS NULL OR codes.expires_at > ?)
+		), 0) AS redeem_reserved_microcredits
+	FROM credit_accounts AS accounts
+	WHERE accounts.user_id = ?`, model.RedeemBatchFundingModuleAdmin, userID, model.RedeemCodeUnused, now, userID).Scan(&snapshot).Error
+	if err != nil {
+		return nil, err
+	}
+	return &snapshot, nil
 }
 
 func (r *Repository) CreditLedger(userID string, entryType string, limit int, offset int) ([]model.CreditLedgerEntry, int64, error) {

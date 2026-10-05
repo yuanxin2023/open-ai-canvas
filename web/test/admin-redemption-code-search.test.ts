@@ -29,7 +29,15 @@ test("redemption management separates platform and module-admin ownership", asyn
     expect(panelSource).toContain('title: "创建管理员"');
     expect(panelSource).toContain("当前可用积分");
     expect(panelSource).toContain("本批冻结积分");
+    expect(panelSource).toContain("可分配积分");
+    expect(panelSource).toContain("兑换码冻结");
+    expect(panelSource).toContain("其他冻结");
+    expect(panelSource).toContain("result.fundingSummary ?? null");
+    expect(panelSource).not.toContain("getWallet");
     expect(apiSource).toContain('fundingSource: "platform" | "module_admin"');
+    expect(apiSource).toContain("fundingSummary?: RedeemFundingSummary");
+    expect(apiSource).toContain("redeemReservedMicrocredits: number");
+    expect(apiSource).toContain("otherReservedMicrocredits: number");
     expect(apiSource).toContain("refundedMicrocredits");
 });
 
