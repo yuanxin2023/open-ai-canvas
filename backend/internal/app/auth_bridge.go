@@ -50,6 +50,14 @@ type authHost struct {
 	svc *Service
 }
 
+func (h authHost) ReferralEnabled() (bool, error) {
+	if h.svc == nil {
+		return false, nil
+	}
+	policy, err := h.svc.referralPolicy()
+	return policy.Enabled, err
+}
+
 func (h authHost) RequireAdminPermission(user *model.User, permission model.AdminPermission) error {
 	if h.svc == nil {
 		return nil

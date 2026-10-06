@@ -43,6 +43,8 @@ func Models() []any {
 		&model.ModelPricing{},
 		&model.CreditAccount{},
 		&model.CreditLedgerEntry{},
+		&model.ReferralProfile{},
+		&model.ReferralReward{},
 		&model.BillingOrder{},
 		&model.TopupProduct{},
 		&model.PaymentProviderConfig{},

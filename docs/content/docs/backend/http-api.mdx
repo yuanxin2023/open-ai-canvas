@@ -11,7 +11,13 @@ description: 信封、错误码与 OpenAPI
 
 ## 邮箱优先注册
 
-本地注册使用同一路由内的两步流程。前端先向 `POST /auth/email-code` 提交 `{ "email": "user@example.com" }`，再向 `POST /auth/register` 提交 `{ "email": "user@example.com", "password": "...", "emailCode": "123456" }`。确认密码只在前端校验，不属于后端合同；邀请码和优惠码目前只是界面预留，不校验、不持久化，也绝不发送到服务端。`GET /auth/settings` 返回 `emailFirstRegistration: true` 作为能力标记；新前端连接到尚未支持该合同的旧后端时会停止注册并提示先升级或重启后端，避免再次显示误导性的用户名校验错误。
+本地注册使用同一路由内的两步流程。前端先向 `POST /auth/email-code` 提交 `{ "email": "user@example.com" }`，再向 `POST /auth/register` 提交 `{ "email": "user@example.com", "password": "...", "emailCode": "123456", "referralCode": "可选推广码" }`。确认密码只在前端校验；推广码仅在邀请返利启用时接受，并在注册事务中一次性绑定，错误码拒绝注册。优惠码仍是界面预留，不发送到服务端。`GET /auth/settings` 返回 `emailFirstRegistration: true` 和 `referralEnabled`；新前端连接到尚未支持邮箱注册合同的旧后端时会停止注册并提示先升级或重启后端。
+
+## 邀请返利
+
+`GET /referrals/me` 返回本人推广码、有效返利比例、被邀请用户总数、最多 100 位被邀请用户的脱敏邮箱和最近 100 条返利记录。分享链接为 `/register?ref=<推广码>`。关闭返利后仍可查看历史记录，页面不展示分享入口。
+
+管理员接口要求 `admin.finance.referrals`：`GET/PUT /admin/referrals/policy` 读取或更新 `{ enabled, globalRateBps, creditsPerYuanMicro, perInviteeCapMicrocredits }`。比例单位为基点（10000 = 100%），返利金额按订单实付分换算，最终截断到 0.01 积分；累计上限为 0 表示不限。`GET /admin/referrals/users/:id` 读取用户推广档案；`PUT /admin/referrals/users/:id/rate` 提交 `{ "rateBps": 500 }` 设置专属 5%，提交 `null` 恢复全局比例。`GET /admin/referrals/rewards?status=pending&page=1&pageSize=30` 分页读取审核记录；`POST /admin/referrals/rewards/:id/approve|reject` 提交 `{ "note": "..." }`，拒绝时原因必填。批准后立即向邀请人的积分钱包入账，同一记录不能重复审核。
 
 空数据库中的首个用户是初始化例外：仍必须提交合法邮箱和至少 8 位密码，但不要求 `emailCode`，创建后自动成为管理员，便于未配置 SMTP 的新部署完成初始化。后续用户必须同时满足普通注册已开启、邮箱域名白名单和一次性验证码要求。
 

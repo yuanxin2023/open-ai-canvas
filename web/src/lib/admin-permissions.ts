@@ -26,6 +26,7 @@ export const ADMIN_PERMISSION_GROUPS = [
         { permission: "admin.finance.payment_orders", label: "支付订单", path: "/admin/payment-orders" },
         { permission: "admin.finance.reconciliation", label: "支付对账", path: "/admin/payment-reconciliation" },
         { permission: "admin.finance.credits", label: "积分运营", path: "/admin/credit-operations" },
+        { permission: "admin.finance.referrals", label: "邀请返利", path: "/admin/referrals" },
     ] },
     { label: "内容与通知", items: [
         { permission: "admin.content.inspirations", label: "提示词运营", path: "/admin/inspirations" },

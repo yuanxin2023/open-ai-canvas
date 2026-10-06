@@ -404,7 +404,7 @@ func (s *Service) AdminReferences(actor *model.User) (*AdminReferenceData, error
 	if actor.AdminLevel == model.AdminLevelFull || actor.AdminLevel == "" ||
 		actor.HasAdminPermission(model.AdminPermissionAnalyticsOverview) || actor.HasAdminPermission(model.AdminPermissionAPILogs) ||
 		actor.HasAdminPermission(model.AdminPermissionUsers) || actor.HasAdminPermission(model.AdminPermissionAgentLessons) ||
-		actor.HasAdminPermission(model.AdminPermissionCredits) || actor.HasAdminPermission(model.AdminPermissionStorageResources) {
+		actor.HasAdminPermission(model.AdminPermissionCredits) || actor.HasAdminPermission(model.AdminPermissionReferrals) || actor.HasAdminPermission(model.AdminPermissionStorageResources) {
 		users, err := s.repo.AdminUserReferences("", actor.AdminLevel == model.AdminLevelFull || actor.AdminLevel == "", 100)
 		if err != nil {
 			return nil, err
@@ -441,7 +441,7 @@ func (s *Service) AdminReferences(actor *model.User) (*AdminReferenceData, error
 
 func (s *Service) SearchAdminUserReferences(actor *model.User, keyword string, limit int) ([]AdminUserReference, error) {
 	if err := s.RequireAnyAdminPermission(actor, model.AdminPermissionUsers, model.AdminPermissionAnalyticsOverview, model.AdminPermissionAPILogs,
-		model.AdminPermissionAgentLessons, model.AdminPermissionCredits, model.AdminPermissionStorageResources); err != nil {
+		model.AdminPermissionAgentLessons, model.AdminPermissionCredits, model.AdminPermissionReferrals, model.AdminPermissionStorageResources); err != nil {
 		return nil, err
 	}
 	if limit <= 0 {
@@ -840,6 +840,11 @@ func (s *Service) PurgeUser(actor *model.User, userID string) error {
 	if err != nil {
 		return err
 	}
+	if pending, err := s.repo.HasPendingReferralReward(userID); err != nil {
+		return err
+	} else if pending {
+		return BadAuthRequest("该用户仍有待审核邀请返利，请先处理后再注销")
+	}
 	protectLastFull := user.Role == model.UserRoleAdmin && (user.AdminLevel == model.AdminLevelFull || user.AdminLevel == "") && user.Status == model.UserStatusActive
 	if user.Role == model.UserRoleAdmin {
 		if err := s.RequireFullAdmin(actor); err != nil {
@@ -902,6 +907,9 @@ func (s *Service) PurgeUser(actor *model.User, userID string) error {
 		Summary: "注销用户并清理全部用户数据", MetadataJSON: string(metadata), CreatedAt: time.Now(),
 	}
 	if err := s.repo.PurgeUserData(user.ID, resourceIDs, deletionJobs, audit, protectLastFull); err != nil {
+		if errors.Is(err, repository.ErrUserPurgePendingReferral) {
+			return BadAuthRequest("该用户仍有待审核邀请返利，请先处理后再注销")
+		}
 		if errors.Is(err, repository.ErrUserPurgeChanged) {
 			return BadAuthRequest("用户数据正在变化，请稍后重试注销")
 		}

@@ -129,6 +129,7 @@ const adminNavigation: AdminNavigationGroup[] = [
             { path: "/admin/payment-orders", label: "支付订单", description: "订单查询与状态同步", icon: <ReceiptText className="size-4" /> },
             { path: "/admin/payment-reconciliation", label: "支付对账", description: "账单执行与异常核对", icon: <ClipboardCheck className="size-4" /> },
             { path: "/admin/credit-operations", label: "积分运营", description: "人工调账与异常计费", icon: <Coins className="size-4" /> },
+            { path: "/admin/referrals", label: "邀请返利", description: "推广规则与逐笔审核", icon: <KeyRound className="size-4" /> },
         ],
     },
     {

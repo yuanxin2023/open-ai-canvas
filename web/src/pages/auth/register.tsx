@@ -20,7 +20,7 @@ export default function RegisterPage() {
     const [emailCode, setEmailCode] = useState("");
     const [password, setPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
-    const [invitationCode, setInvitationCode] = useState("");
+    const [invitationCode, setInvitationCode] = useState(() => params.get("ref")?.trim().toUpperCase() || "");
     const [promoCode, setPromoCode] = useState("");
     const [codeEmail, setCodeEmail] = useState("");
     const [submitting, setSubmitting] = useState(false);
@@ -106,7 +106,7 @@ export default function RegisterPage() {
         registering.current = true;
         setSubmitting(true);
         try {
-            await register({ email: normalizedEmail, password, emailCode: code });
+            await register({ email: normalizedEmail, password, emailCode: code, referralCode: settings?.referralEnabled && !firstUser ? invitationCode.trim() || undefined : undefined });
             const { applyUserSession } = await import("@/lib/user-session");
             await applyUserSession(await getAuthSession());
             if (!firstUser) window.sessionStorage.setItem("infinite-canvas:model-setup-guide", "1");
@@ -235,14 +235,14 @@ export default function RegisterPage() {
 
                     {!firstUser ? (
                         <>
-                            <AuthField label="邀请码（可选）">
-                                <Input size="large" prefix={<KeyRound className="size-4 text-white/35" />} value={invitationCode} onChange={(event) => setInvitationCode(event.target.value)} placeholder="请输入邀请码" autoComplete="off" disabled={formDisabled} />
-                            </AuthField>
+                            {settings?.referralEnabled ? <AuthField label="推广码（可选）">
+                                <Input size="large" prefix={<KeyRound className="size-4 text-white/35" />} value={invitationCode} onChange={(event) => setInvitationCode(event.target.value.toUpperCase())} placeholder="请输入好友推广码" autoComplete="off" disabled={formDisabled} />
+                            </AuthField> : null}
                             <AuthField label="优惠码（可选）">
                                 <Input size="large" prefix={<Gift className="size-4 text-white/35" />} value={promoCode} onChange={(event) => setPromoCode(event.target.value)} placeholder="请输入优惠码" autoComplete="off" disabled={formDisabled} />
                             </AuthField>
                             <Notice icon={<Info className="size-3.5" />} tone="blue">
-                                邀请码和优惠码为后续功能预留，当前不会校验、提交或发放权益。
+                                {settings?.referralEnabled ? "推广码仅在注册时绑定邀请关系；优惠码仍为后续功能预留。" : "优惠码为后续功能预留，当前不会提交或发放权益。"}
                             </Notice>
                         </>
                     ) : null}

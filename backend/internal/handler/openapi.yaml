@@ -27,6 +27,95 @@ tags:
   - name: admin
   - name: inspirations
 paths:
+  /referrals/me:
+    get:
+      tags: [auth]
+      summary: 查询当前用户的推广码、邀请列表和返利记录
+      responses:
+        "200": {description: 标准信封 data 包含 enabled、code、effectiveRateBps、inviteeCount、invitees、rewards}
+        "401": {$ref: "#/components/responses/Error"}
+  /admin/referrals/policy:
+    get:
+      tags: [admin]
+      summary: 查询邀请返利规则
+      description: 需要 admin.finance.referrals。
+      responses:
+        "200": {description: 标准信封 data 为返利规则}
+        "403": {$ref: "#/components/responses/Error"}
+    put:
+      tags: [admin]
+      summary: 更新邀请返利开关及规则
+      description: 需要 admin.finance.referrals；比例单位为基点，金额与积分使用整数。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [enabled, globalRateBps, creditsPerYuanMicro, perInviteeCapMicrocredits]
+              properties:
+                enabled: {type: boolean}
+                globalRateBps: {type: integer, minimum: 0, maximum: 10000}
+                creditsPerYuanMicro: {type: integer, minimum: 1}
+                perInviteeCapMicrocredits: {type: integer, minimum: 0}
+      responses:
+        "200": {description: 标准信封 data 为已保存规则}
+        "403": {$ref: "#/components/responses/Error"}
+  /admin/referrals/users/{id}:
+    get:
+      tags: [admin]
+      summary: 查询用户推广档案与专属返利比例
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: string}}
+      responses:
+        "200": {description: 标准信封 data 为用户推广档案}
+        "403": {$ref: "#/components/responses/Error"}
+  /admin/referrals/users/{id}/rate:
+    put:
+      tags: [admin]
+      summary: 设置或清空用户专属返利比例
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: string}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                rateBps: {type: integer, nullable: true, minimum: 0, maximum: 10000}
+      responses:
+        "200": {description: 标准信封 data 为用户推广档案}
+        "403": {$ref: "#/components/responses/Error"}
+  /admin/referrals/rewards:
+    get:
+      tags: [admin]
+      summary: 分页查询待审核及历史返利
+      parameters:
+        - {in: query, name: status, schema: {type: string, enum: [all, pending, approved, rejected]}}
+        - {in: query, name: page, schema: {type: integer, minimum: 1}}
+        - {in: query, name: pageSize, schema: {type: integer, minimum: 1, maximum: 100}}
+      responses:
+        "200": {description: 标准信封 data 包含 rewards、total、page、pageSize}
+        "403": {$ref: "#/components/responses/Error"}
+  /admin/referrals/rewards/{id}/approve:
+    post:
+      tags: [admin]
+      summary: 批准返利并将积分发放到邀请人钱包
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: string}}
+      responses:
+        "200": {description: 标准信封 data 为已批准返利}
+        "403": {$ref: "#/components/responses/Error"}
+  /admin/referrals/rewards/{id}/reject:
+    post:
+      tags: [admin]
+      summary: 拒绝返利并记录原因
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: string}}
+      responses:
+        "200": {description: 标准信封 data 为已拒绝返利}
+        "403": {$ref: "#/components/responses/Error"}
   /admin/users:
     get:
       tags: [admin]
@@ -1416,7 +1505,7 @@ paths:
       tags: [auth]
       security: []
       summary: 使用邮箱和密码注册并设置会话 Cookie
-      description: 首个用户免邮箱验证码并成为管理员；后续用户必须提交通过 /auth/email-code 获取的验证码。服务端从邮箱前缀生成可直接登录的唯一短用户名；不接收邀请码或优惠码。
+      description: 首个用户免邮箱验证码并成为管理员；后续用户必须提交通过 /auth/email-code 获取的验证码。服务端从邮箱前缀生成可直接登录的唯一短用户名；邀请返利启用时可提交 referralCode，一次绑定邀请人；不接收优惠码。
       requestBody:
         required: true
         content:
@@ -1428,6 +1517,7 @@ paths:
                 email: { type: string, format: email }
                 password: { type: string, minLength: 8 }
                 emailCode: { type: string, pattern: "^[0-9]{6}$" }
+                referralCode: { type: string, maxLength: 16 }
       responses:
         "200":
           $ref: "#/components/responses/Envelope"

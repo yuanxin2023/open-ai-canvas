@@ -31,6 +31,7 @@ const ProductOperationsPage = lazy(() => import("@/pages/admin/product-operation
 const CustomerServicePage = lazy(() => import("@/pages/admin/customer-service/customer-service-page"));
 const LogsPage = lazy(() => import("@/pages/admin/logs/logs-page"));
 const RedemptionCodesPage = lazy(() => import("@/pages/admin/redemption-codes/redemption-codes-page"));
+const ReferralsAdminPage = lazy(() => import("@/pages/admin/referrals/referrals-page"));
 const RuntimePolicySettingsPage = lazy(() => import("@/pages/admin/settings/runtime-policy-settings-page"));
 const AppearanceSettingsPage = lazy(() => import("@/pages/admin/settings/appearance-settings-page"));
 const DrawingEngineSettingsPage = lazy(() => import("@/pages/admin/settings/drawing-engine-settings-page"));
@@ -227,6 +228,7 @@ export const router = createBrowserRouter([
                     { path: "agent-lessons", element: adminRoute("admin.users.agent_lessons", <AgentLessonsPage />) },
                     { path: "resources", element: adminRoute("admin.storage.resources", <StorageResourcesPage />) },
                     { path: "credit-operations", element: adminRoute("admin.finance.credits", <CreditOperationsPage />) },
+                    { path: "referrals", element: adminRoute("admin.finance.referrals", <ReferralsAdminPage />) },
                     { path: "redemption-codes", element: adminRoute("admin.commerce.redeem_codes", <RedemptionCodesPage />) },
                     { path: "logs", element: adminRoute("admin.analytics.api_logs", <LogsPage />) },
                     { path: "settings", element: <Navigate to="runtime-policy" replace /> },

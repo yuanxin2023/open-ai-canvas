@@ -454,7 +454,7 @@ func (r *Repository) DeleteEmailVerificationCode(id string) error {
 	return r.db.Delete(&model.EmailVerificationCode{}, "id = ?", id).Error
 }
 
-func (r *Repository) CreateUserWithEmailVerification(user *model.User, verificationCodeID string, usedAt time.Time) error {
+func (r *Repository) CreateUserWithEmailVerification(user *model.User, verificationCodeID string, usedAt time.Time, referralCode ...string) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		result := tx.Model(&model.EmailVerificationCode{}).Where("id = ? AND used_at IS NULL AND expires_at > ?", verificationCodeID, usedAt).Update("used_at", usedAt)
 		if result.Error != nil {
@@ -463,7 +463,13 @@ func (r *Repository) CreateUserWithEmailVerification(user *model.User, verificat
 		if result.RowsAffected != 1 {
 			return errors.New("email verification code is no longer valid")
 		}
-		return tx.Create(user).Error
+		if err := tx.Create(user).Error; err != nil {
+			return err
+		}
+		if len(referralCode) > 0 {
+			return bindReferralTx(tx, user.ID, referralCode[0])
+		}
+		return nil
 	})
 }
 

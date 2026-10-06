@@ -3,6 +3,9 @@ package service
 import "infinite-canvas/backend/internal/app"
 
 type (
+	ReferralPolicy                         = app.ReferralPolicy
+	ReferralDashboard                      = app.ReferralDashboard
+	ReferralRewardPage                     = app.ReferralRewardPage
 	PaymentOrderQuery                      = app.PaymentOrderQuery
 	PaymentReconciliationQuery             = app.PaymentReconciliationQuery
 	CloudAgentRequest                      = app.CloudAgentRequest

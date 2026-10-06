@@ -210,7 +210,7 @@ func (r *Repository) RetryPaymentNotification(id, message string, next time.Time
 
 // CompletePaymentOrder atomically records provider success and grants credits.
 // The unique ledger reference is the final guard against callback/query races.
-func (r *Repository) CompletePaymentOrder(providerID, merchantOrderNo string, evidence PaymentEvidence) (*model.PaymentOrder, bool, error) {
+func (r *Repository) CompletePaymentOrder(providerID, merchantOrderNo string, evidence PaymentEvidence, referral ...*model.ReferralReward) (*model.PaymentOrder, bool, error) {
 	var order model.PaymentOrder
 	granted := false
 	err := r.db.Transaction(func(tx *gorm.DB) error {
@@ -294,6 +294,11 @@ func (r *Repository) CompletePaymentOrder(providerID, merchantOrderNo string, ev
 		}
 		if updated.RowsAffected != 1 {
 			return ErrPaymentOrderStateConflict
+		}
+		if len(referral) > 0 && referral[0] != nil {
+			if err := createReferralRewardTx(tx, &order, referral[0]); err != nil {
+				return err
+			}
 		}
 		granted = true
 		return tx.First(&order, "id = ?", order.ID).Error

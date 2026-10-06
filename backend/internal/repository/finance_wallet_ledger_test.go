@@ -74,7 +74,7 @@ func TestWalletCreditLedgerKeepsWholeOrderRefund(t *testing.T) {
 	}
 }
 
-func TestWalletCreditLedgerIncomeIncludesPaymentTopup(t *testing.T) {
+func TestWalletCreditLedgerIncomeIncludesPaymentTopupAndReferral(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open("file:wallet-ledger-income?mode=memory&cache=shared"), &gorm.Config{})
 	if err != nil {
 		t.Fatal(err)
@@ -84,6 +84,7 @@ func TestWalletCreditLedgerIncomeIncludesPaymentTopup(t *testing.T) {
 	}
 	entries := []model.CreditLedgerEntry{
 		{ID: "topup", UserID: "user-1", Type: model.CreditLedgerPaymentTopup, AmountMicrocredits: 10_000_000, CreatedAt: time.Now()},
+		{ID: "referral", UserID: "user-1", Type: model.CreditLedgerReferral, AmountMicrocredits: 100_000, CreatedAt: time.Now()},
 		{ID: "consume", UserID: "user-1", Type: model.CreditLedgerConsume, AmountMicrocredits: -1_000_000, CreatedAt: time.Now()},
 	}
 	if err := db.Create(&entries).Error; err != nil {
@@ -94,7 +95,7 @@ func TestWalletCreditLedgerIncomeIncludesPaymentTopup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if total != 1 || len(items) != 1 || items[0].ID != "topup" {
+	if total != 2 || len(items) != 2 {
 		t.Fatalf("income wallet ledger = %#v, total = %d", items, total)
 	}
 }

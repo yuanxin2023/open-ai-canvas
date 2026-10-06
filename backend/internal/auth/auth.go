@@ -31,9 +31,10 @@ const usernameChangeWindow = 30 * 24 * time.Hour
 type AuthError = kernel.AppError
 
 type RegisterRequest struct {
-	Email     string `json:"email"`
-	EmailCode string `json:"emailCode"`
-	Password  string `json:"password"`
+	Email        string `json:"email"`
+	EmailCode    string `json:"emailCode"`
+	Password     string `json:"password"`
+	ReferralCode string `json:"referralCode"`
 }
 
 type LoginRequest struct {
@@ -68,6 +69,7 @@ type PublicAuthSettings struct {
 	EmailEnabled           bool `json:"emailEnabled"`
 	EmailCodeRequired      bool `json:"emailCodeRequired"`
 	EmailFirstRegistration bool `json:"emailFirstRegistration"`
+	ReferralEnabled        bool `json:"referralEnabled"`
 }
 
 type AuthSessionResult struct {
@@ -109,6 +111,14 @@ func (s *Service) PublicAuthSettings() (*PublicAuthSettings, error) {
 	if count == 0 {
 		return &PublicAuthSettings{FirstUser: true, RegistrationEnabled: true, LinuxDOEnabled: false, EmailFirstRegistration: true}, nil
 	}
+	referralEnabled := false
+	if checker, ok := s.host.(interface{ ReferralEnabled() (bool, error) }); ok {
+		var err error
+		referralEnabled, err = checker.ReferralEnabled()
+		if err != nil {
+			return nil, err
+		}
+	}
 	registrationEnabled, err := s.RegistrationEnabled()
 	if err != nil {
 		return nil, err
@@ -117,7 +127,7 @@ func (s *Service) PublicAuthSettings() (*PublicAuthSettings, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &PublicAuthSettings{FirstUser: false, RegistrationEnabled: registrationEnabled, LinuxDOEnabled: s.LinuxDOEnabled(), EmailEnabled: emailEnabled, EmailCodeRequired: true, EmailFirstRegistration: true}, nil
+	return &PublicAuthSettings{FirstUser: false, RegistrationEnabled: registrationEnabled, LinuxDOEnabled: s.LinuxDOEnabled(), EmailEnabled: emailEnabled, EmailCodeRequired: true, EmailFirstRegistration: true, ReferralEnabled: referralEnabled}, nil
 }
 
 func (s *Service) Register(req RegisterRequest) (*AuthSessionResult, error) {
@@ -159,6 +169,19 @@ func (s *Service) RegisterWithEnvironment(req RegisterRequest, environment Login
 			return nil, err
 		}
 	}
+	if strings.TrimSpace(req.ReferralCode) != "" {
+		checker, ok := s.host.(interface{ ReferralEnabled() (bool, error) })
+		if !ok || count == 0 {
+			return nil, kernel.BadAuthRequest("当前无法使用推广码")
+		}
+		enabled, err := checker.ReferralEnabled()
+		if err != nil {
+			return nil, err
+		}
+		if !enabled {
+			return nil, kernel.BadAuthRequest("邀请返利尚未开启")
+		}
+	}
 	if _, err := s.repo.UserByEmail(email); err == nil {
 		return nil, kernel.BadAuthRequest("邮箱已被注册")
 	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
@@ -190,13 +213,16 @@ func (s *Service) RegisterWithEnvironment(req RegisterRequest, environment Login
 		user.DisplayName = user.Username
 		user.ProfileName = user.Username
 		if verifiedCode != nil {
-			err = s.repo.CreateUserWithEmailVerification(&user, verifiedCode.ID, time.Now())
+			err = s.repo.CreateUserWithEmailVerification(&user, verifiedCode.ID, time.Now(), req.ReferralCode)
 		} else {
 			err = s.repo.Create(&user)
 		}
 		if err == nil {
 			created = true
 			break
+		}
+		if errors.Is(err, repository.ErrReferralCodeInvalid) {
+			return nil, kernel.BadAuthRequest("推广码无效或已失效")
 		}
 		if !isUsernameUniqueViolation(err) {
 			return nil, err

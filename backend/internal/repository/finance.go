@@ -445,9 +445,9 @@ func (r *Repository) creditLedger(userID string, entryType string, limit int, of
 	}
 	switch entryType {
 	case "income":
-		query = query.Where("type IN ?", []model.CreditLedgerType{model.CreditLedgerRedeem, model.CreditLedgerPaymentTopup, model.CreditLedgerAdminGrant, model.CreditLedgerAdminAdjust, model.CreditLedgerSignupBonus, model.CreditLedgerCheckinBonus})
+		query = query.Where("type IN ?", []model.CreditLedgerType{model.CreditLedgerRedeem, model.CreditLedgerPaymentTopup, model.CreditLedgerAdminGrant, model.CreditLedgerAdminAdjust, model.CreditLedgerSignupBonus, model.CreditLedgerCheckinBonus, model.CreditLedgerReferral})
 	case "increase":
-		query = query.Where("type IN ?", []model.CreditLedgerType{model.CreditLedgerRedeem, model.CreditLedgerPaymentTopup, model.CreditLedgerRefund, model.CreditLedgerSignupBonus, model.CreditLedgerCheckinBonus})
+		query = query.Where("type IN ?", []model.CreditLedgerType{model.CreditLedgerRedeem, model.CreditLedgerPaymentTopup, model.CreditLedgerRefund, model.CreditLedgerSignupBonus, model.CreditLedgerCheckinBonus, model.CreditLedgerReferral})
 	case "consume":
 		query = query.Where("type = ?", model.CreditLedgerConsume)
 	case "refund":

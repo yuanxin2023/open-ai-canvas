@@ -411,7 +411,7 @@ export type RuntimePolicySetting = {
 };
 
 export function getAuthSettings() {
-    return http.get<{ firstUser: boolean; registrationEnabled: boolean; linuxdoEnabled: boolean; emailEnabled: boolean; emailCodeRequired: boolean; emailFirstRegistration?: boolean }>("/auth/settings");
+    return http.get<{ firstUser: boolean; registrationEnabled: boolean; linuxdoEnabled: boolean; emailEnabled: boolean; emailCodeRequired: boolean; emailFirstRegistration?: boolean; referralEnabled?: boolean }>("/auth/settings");
 }
 
 export function linuxDOLoginURL(next: string) {
@@ -470,7 +470,7 @@ export function resetPassword(input: { email: string; emailCode: string; passwor
     return http.post<{ reset: boolean }>("/auth/password-reset", input);
 }
 
-export async function register(input: { email: string; emailCode?: string; password: string }) {
+export async function register(input: { email: string; emailCode?: string; password: string; referralCode?: string }) {
     const result = await http.post<{ user: LocalUser }>("/auth/register", input);
     invalidateAuthSessionCache();
     return { ...result, user: normalizeUserAvatar(result.user)! };

@@ -10,6 +10,7 @@ import (
 )
 
 func RegisterFinanceRoutes(r *gin.RouterGroup, svc *service.Service) {
+	registerReferralRoutes(r, svc)
 	r.GET("/wallet", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {

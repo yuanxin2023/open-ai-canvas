@@ -28,6 +28,7 @@ const ledgerTypeMeta: Record<CreditLedgerEntry["type"], { label: string; tone: "
     admin_adjustment: { label: "管理员调账", tone: "neutral" },
     signup_bonus: { label: "注册奖励", tone: "success" },
     checkin_bonus: { label: "签到奖励", tone: "success" },
+    referral: { label: "邀请返利", tone: "success" },
 };
 
 const sceneLabels: Record<string, string> = {

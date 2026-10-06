@@ -25,6 +25,7 @@ const (
 	AdminPermissionPaymentOrders         AdminPermission = "admin.finance.payment_orders"
 	AdminPermissionPaymentReconciliation AdminPermission = "admin.finance.reconciliation"
 	AdminPermissionCredits               AdminPermission = "admin.finance.credits"
+	AdminPermissionReferrals             AdminPermission = "admin.finance.referrals"
 	AdminPermissionInspirations          AdminPermission = "admin.content.inspirations"
 	AdminPermissionAnnouncements         AdminPermission = "admin.content.announcements"
 	AdminPermissionBannerAnnouncements   AdminPermission = "admin.content.banner_announcements"
@@ -48,7 +49,7 @@ var AllAdminPermissions = []AdminPermission{
 	AdminPermissionChannels, AdminPermissionLogicalModels, AdminPermissionPlugins, AdminPermissionSkills, AdminPermissionPromptTemplates,
 	AdminPermissionUsers, AdminPermissionCustomerService, AdminPermissionAgentLessons,
 	AdminPermissionProducts, AdminPermissionRedeemCodes,
-	AdminPermissionPaymentProviders, AdminPermissionPaymentOrders, AdminPermissionPaymentReconciliation, AdminPermissionCredits,
+	AdminPermissionPaymentProviders, AdminPermissionPaymentOrders, AdminPermissionPaymentReconciliation, AdminPermissionCredits, AdminPermissionReferrals,
 	AdminPermissionInspirations, AdminPermissionAnnouncements, AdminPermissionBannerAnnouncements,
 	AdminPermissionAppearance, AdminPermissionFeatures, AdminPermissionDrawingEngine, AdminPermissionSystemPerformance,
 	AdminPermissionAccess, AdminPermissionEmail, AdminPermissionArkPrivateAssets, AdminPermissionResponseInterception,

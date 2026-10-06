@@ -1,6 +1,6 @@
 import { App, Button, InputNumber } from "antd";
 import { SettingsRow } from "@/components/ui/product/settings-row";
-import { ArrowLeft, Boxes, Brain, Bug, CircleDollarSign, Cloud, MessageSquareText, RadioTower, ReceiptText, SlidersHorizontal, Workflow } from "lucide-react";
+import { ArrowLeft, Boxes, Brain, Bug, CircleDollarSign, Cloud, Gift, MessageSquareText, RadioTower, ReceiptText, SlidersHorizontal, Workflow } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 
@@ -19,12 +19,14 @@ import { usePluginStore } from "@/stores/use-plugin-store";
 import { PaymentOrdersPane } from "./payment-orders-pane";
 import { openWorkspaceWallet } from "@/lib/workspace-wallet";
 import { CreditLedgerPane } from "./credit-ledger-pane";
+import { ReferralsPane } from "./referrals-pane";
 
-type ConfigSectionKey = "orders" | "wallet" | "channels" | "models" | "runninghub" | "preferences" | "prompts" | "agent-memory" | "storage" | "diagnostics";
+type ConfigSectionKey = "orders" | "wallet" | "referrals" | "channels" | "models" | "runninghub" | "preferences" | "prompts" | "agent-memory" | "storage" | "diagnostics";
 
 const configSections: Array<{ key: ConfigSectionKey; label: string; icon: ReactNode }> = [
     { key: "orders", label: "我的订单", icon: <ReceiptText className="size-4" /> },
     { key: "wallet", label: "积分流水", icon: <CircleDollarSign className="size-4" /> },
+    { key: "referrals", label: "邀请返利", icon: <Gift className="size-4" /> },
     { key: "channels", label: "个人渠道", icon: <RadioTower className="size-4" /> },
     { key: "runninghub", label: "RunningHub 工作流", icon: <Workflow className="size-4" /> },
     { key: "models", label: "模型选择", icon: <Boxes className="size-4" /> },
@@ -50,7 +52,7 @@ export default function SettingsPage() {
     const runningHubPluginEnabled = runtimeStatuses[RUNNINGHUB_PLUGIN_ID] === "enabled";
     const visibleConfigSections = useMemo(() => (customChannelsEnabled ? configSections : configSections.filter((section) => section.key !== "channels"))
         .filter((section) => section.key !== "runninghub" || runningHubPluginEnabled)
-        .filter((section) => !["wallet", "orders"].includes(section.key) || creditsEnabled), [creditsEnabled, customChannelsEnabled, runningHubPluginEnabled]);
+        .filter((section) => !["wallet", "orders", "referrals"].includes(section.key) || creditsEnabled), [creditsEnabled, customChannelsEnabled, runningHubPluginEnabled]);
     const isVisibleConfigSection = (value: string | null): value is ConfigSectionKey => isConfigSection(value) && visibleConfigSections.some((section) => section.key === value);
     const firstVisibleSection = visibleConfigSections[0]?.key || "models";
     const [activeTab, setActiveTab] = useState<ConfigSectionKey>(isVisibleConfigSection(requestedSection) ? requestedSection : firstVisibleSection);
@@ -109,6 +111,7 @@ export default function SettingsPage() {
     const panes: Record<ConfigSectionKey, ReactNode> = {
         orders: <SettingsPane><PaymentOrdersPane onOpenWallet={() => openWorkspaceWallet()} /></SettingsPane>,
         wallet: <SettingsPane><CreditLedgerPane /></SettingsPane>,
+        referrals: <SettingsPane><ReferralsPane /></SettingsPane>,
         channels: <SettingsPane><ChannelSettingsPane onOpenModels={() => selectSection("models")} onOpenRunningHub={runningHubPluginEnabled ? () => selectSection("runninghub") : undefined} /></SettingsPane>,
         models: (
             <SettingsPane>

@@ -10,6 +10,7 @@ import (
 )
 
 var ErrUserPurgeChanged = errors.New("user purge data changed")
+var ErrUserPurgePendingReferral = errors.New("user has pending referral reward")
 
 type UserPurgeSnapshot struct {
 	Resources []model.Resource
@@ -40,6 +41,13 @@ func (r *Repository) PurgeUserData(userID string, expectedResourceIDs []string, 
 		}
 		if err := query.First(&user).Error; err != nil {
 			return err
+		}
+		var pendingReferralCount int64
+		if err := tx.Model(&model.ReferralReward{}).Where("status = ? AND (inviter_id = ? OR invitee_id = ?)", model.ReferralRewardPending, userID, userID).Count(&pendingReferralCount).Error; err != nil {
+			return err
+		}
+		if pendingReferralCount > 0 {
+			return ErrUserPurgePendingReferral
 		}
 		if protectLastFull {
 			var fullAdminIDs []string
@@ -378,6 +386,15 @@ func (r *Repository) PurgeUserData(userID string, expectedResourceIDs []string, 
 			return err
 		}
 		if err := deleteWhereIn(tx, &model.PaymentReconciliationItem{}, "payment_order_id", paymentOrderIDs, false); err != nil {
+			return err
+		}
+		if err := tx.Model(&model.ReferralProfile{}).Where("inviter_id = ?", userID).Update("inviter_id", "").Error; err != nil {
+			return err
+		}
+		if err := tx.Where("inviter_id = ? OR invitee_id = ?", userID, userID).Delete(&model.ReferralReward{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Delete(&model.ReferralProfile{}, "user_id = ?", userID).Error; err != nil {
 			return err
 		}
 		if err := tx.Where("user_id = ?", userID).Delete(&model.PaymentOrder{}).Error; err != nil {
