@@ -1517,7 +1517,7 @@ paths:
                 email: { type: string, format: email }
                 password: { type: string, minLength: 8 }
                 emailCode: { type: string, pattern: "^[0-9]{6}$" }
-                referralCode: { type: string, maxLength: 16 }
+                referralCode: { type: string, minLength: 6, maxLength: 6, pattern: '^[A-HJ-NP-Z2-9]{6}$' }
       responses:
         "200":
           $ref: "#/components/responses/Envelope"

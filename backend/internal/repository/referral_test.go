@@ -7,9 +7,54 @@ import (
 	"time"
 
 	"infinite-canvas/backend/internal/model"
+	"infinite-canvas/backend/internal/referralcode"
 
 	"gorm.io/gorm"
 )
+
+func TestReferralCodeRegistrationRejectsOldCodeWithoutConsumingVerification(t *testing.T) {
+	db := openPaymentTestDB(t)
+	if err := db.AutoMigrate(&model.User{}, &model.EmailVerificationCode{}, &model.ReferralProfile{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&model.User{ID: "inviter", Username: "inviter", Status: model.UserStatusActive}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&model.ReferralProfile{UserID: "inviter", Code: "ABC234"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	verification := model.EmailVerificationCode{ID: "verification", Email: "invitee@example.com", ExpiresAt: time.Now().Add(time.Hour)}
+	if err := db.Create(&verification).Error; err != nil {
+		t.Fatal(err)
+	}
+	repo := New(db)
+	invitee := model.User{ID: "invitee", Username: "invitee", Email: verification.Email, Status: model.UserStatusActive}
+	if err := repo.CreateUserWithEmailVerification(&invitee, verification.ID, time.Now(), "INVITERCODE1"); !errors.Is(err, ErrReferralCodeInvalid) {
+		t.Fatalf("old code error = %v", err)
+	}
+	var count int64
+	if err := db.Model(&model.User{}).Where("id = ?", invitee.ID).Count(&count).Error; err != nil || count != 0 {
+		t.Fatalf("invalid code created user: count=%d err=%v", count, err)
+	}
+	if err := db.First(&verification, "id = ?", verification.ID).Error; err != nil || verification.UsedAt != nil {
+		t.Fatalf("invalid code consumed verification: %#v err=%v", verification, err)
+	}
+	if err := repo.CreateUserWithEmailVerification(&invitee, verification.ID, time.Now(), "abc234"); err != nil {
+		t.Fatal(err)
+	}
+	profile, err := repo.ReferralProfile(invitee.ID)
+	if err != nil || profile == nil || profile.InviterID != "inviter" || !referralcode.Valid(profile.Code) {
+		t.Fatalf("invitee profile = %#v err=%v", profile, err)
+	}
+	again, err := repo.ReferralProfile(invitee.ID)
+	if err != nil || again == nil || again.Code != profile.Code {
+		t.Fatalf("referral code changed: %#v err=%v", again, err)
+	}
+	duplicate := model.ReferralProfile{UserID: "another", Code: "ABC234"}
+	if err := db.Create(&duplicate).Error; err == nil {
+		t.Fatal("duplicate referral code was accepted")
+	}
+}
 
 func TestReferralRewardPaymentCapAndApprovalAreAtomic(t *testing.T) {
 	db := openPaymentTestDB(t)

@@ -15,7 +15,7 @@ description: 信封、错误码与 OpenAPI
 
 ## 邀请返利
 
-`GET /referrals/me` 返回本人推广码、有效返利比例、被邀请用户总数、最多 100 位被邀请用户的脱敏邮箱和最近 100 条返利记录。分享链接为 `/register?ref=<推广码>`。关闭返利后仍可查看历史记录，页面不展示分享入口。
+`GET /referrals/me` 返回本人六位推广码、有效返利比例、被邀请用户总数、最多 100 位被邀请用户的脱敏邮箱和最近 100 条返利记录。分享链接为 `/register?ref=<推广码>`。注册接口仅接受当前六位字符集中的推广码；旧十二位码及其链接失效。关闭返利后仍可查看历史记录，页面不展示分享入口。
 
 管理员接口要求 `admin.finance.referrals`：`GET/PUT /admin/referrals/policy` 读取或更新 `{ enabled, globalRateBps, creditsPerYuanMicro, perInviteeCapMicrocredits }`。比例单位为基点（10000 = 100%），返利金额按订单实付分换算，最终截断到 0.01 积分；累计上限为 0 表示不限。`GET /admin/referrals/users/:id` 读取用户推广档案；`PUT /admin/referrals/users/:id/rate` 提交 `{ "rateBps": 500 }` 设置专属 5%，提交 `null` 恢复全局比例。`GET /admin/referrals/rewards?status=pending&page=1&pageSize=30` 分页读取审核记录；`POST /admin/referrals/rewards/:id/approve|reject` 提交 `{ "note": "..." }`，拒绝时原因必填。批准后立即向邀请人的积分钱包入账，同一记录不能重复审核。
 

@@ -1,12 +1,12 @@
 package repository
 
 import (
-	"crypto/rand"
 	"errors"
 	"strings"
 	"time"
 
 	"infinite-canvas/backend/internal/model"
+	"infinite-canvas/backend/internal/referralcode"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -54,18 +54,6 @@ func createReferralRewardTx(tx *gorm.DB, order *model.PaymentOrder, draft *model
 	return tx.Create(draft).Error
 }
 
-func newReferralCode() (string, error) {
-	const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
-	bytes := make([]byte, 12)
-	if _, err := rand.Read(bytes); err != nil {
-		return "", err
-	}
-	for i := range bytes {
-		bytes[i] = alphabet[int(bytes[i])%len(alphabet)]
-	}
-	return string(bytes), nil
-}
-
 func ensureReferralProfileTx(tx *gorm.DB, userID string) (*model.ReferralProfile, error) {
 	var profile model.ReferralProfile
 	err := tx.First(&profile, "user_id = ?", userID).Error
@@ -76,7 +64,7 @@ func ensureReferralProfileTx(tx *gorm.DB, userID string) (*model.ReferralProfile
 		return nil, err
 	}
 	for attempt := 0; attempt < 5; attempt++ {
-		code, err := newReferralCode()
+		code, err := referralcode.New()
 		if err != nil {
 			return nil, err
 		}
@@ -123,6 +111,9 @@ func bindReferralTx(tx *gorm.DB, userID, code string) error {
 	code = strings.ToUpper(strings.TrimSpace(code))
 	if code == "" {
 		return nil
+	}
+	if !referralcode.Valid(code) {
+		return ErrReferralCodeInvalid
 	}
 	var inviter model.ReferralProfile
 	if err := tx.First(&inviter, "code = ?", code).Error; err != nil {

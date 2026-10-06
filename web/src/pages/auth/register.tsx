@@ -235,8 +235,8 @@ export default function RegisterPage() {
 
                     {!firstUser ? (
                         <>
-                            {settings?.referralEnabled ? <AuthField label="推广码（可选）">
-                                <Input size="large" prefix={<KeyRound className="size-4 text-white/35" />} value={invitationCode} onChange={(event) => setInvitationCode(event.target.value.toUpperCase())} placeholder="请输入好友推广码" autoComplete="off" disabled={formDisabled} />
+                            {settings?.referralEnabled ? <AuthField label="6 位推广码（可选）">
+                                <Input size="large" prefix={<KeyRound className="size-4 text-white/35" />} value={invitationCode} onChange={(event) => setInvitationCode(event.target.value.toUpperCase())} placeholder="请输入好友的 6 位推广码" maxLength={6} autoComplete="off" disabled={formDisabled} />
                             </AuthField> : null}
                             <AuthField label="优惠码（可选）">
                                 <Input size="large" prefix={<Gift className="size-4 text-white/35" />} value={promoCode} onChange={(event) => setPromoCode(event.target.value)} placeholder="请输入优惠码" autoComplete="off" disabled={formDisabled} />

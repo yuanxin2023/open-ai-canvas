@@ -10,11 +10,12 @@ import (
 
 	"infinite-canvas/backend/internal/kernel"
 	"infinite-canvas/backend/internal/model"
+	"infinite-canvas/backend/internal/referralcode"
 
 	"gorm.io/gorm"
 )
 
-const CurrentSchemaVersion int64 = 49
+const CurrentSchemaVersion int64 = 50
 
 //go:embed seed/inspirations.json
 var inspirationSeedJSON []byte
@@ -149,6 +150,46 @@ var schemaMigrations = []migration{
 	{version: 49, name: "referral_rewards", checksum: "sha256:referral-rewards-v49-20261006", apply: func(tx *gorm.DB) error {
 		return tx.AutoMigrate(&model.ReferralProfile{}, &model.ReferralReward{}, &model.CreditLedgerEntry{})
 	}},
+	{version: 50, name: "six_character_referral_codes", checksum: "sha256:six-character-referral-codes-v50-20261006", apply: migrateSixCharacterReferralCodes},
+}
+
+func migrateSixCharacterReferralCodes(tx *gorm.DB) error {
+	var profiles []model.ReferralProfile
+	if err := tx.Select("user_id", "code").Find(&profiles).Error; err != nil {
+		return err
+	}
+	reserved := make(map[string]struct{}, len(profiles)*2)
+	for _, profile := range profiles {
+		reserved[profile.Code] = struct{}{}
+	}
+	for _, profile := range profiles {
+		if referralcode.Valid(profile.Code) {
+			continue
+		}
+		var code string
+		for attempt := 0; attempt < 20; attempt++ {
+			candidate, err := referralcode.New()
+			if err != nil {
+				return err
+			}
+			if _, exists := reserved[candidate]; !exists {
+				code = candidate
+				reserved[code] = struct{}{}
+				break
+			}
+		}
+		if code == "" {
+			return fmt.Errorf("无法为用户 %s 生成唯一的六位邀请码", profile.UserID)
+		}
+		updated := tx.Model(&model.ReferralProfile{}).Where("user_id = ? AND code = ?", profile.UserID, profile.Code).UpdateColumn("code", code)
+		if updated.Error != nil {
+			return updated.Error
+		}
+		if updated.RowsAffected != 1 {
+			return fmt.Errorf("用户 %s 的邀请码在迁移时发生变化", profile.UserID)
+		}
+	}
+	return nil
 }
 
 func migrateRedeemBatchLifecycle(tx *gorm.DB) error {
@@ -469,7 +510,7 @@ func migrationsForDatabase(db *gorm.DB) ([]migration, error) {
 func upstreamFirstMigrationPlan() []migration {
 	const sharedCount = 23
 	const localCount = 4
-	const commonTailCount = 13
+	const commonTailCount = 14
 	plan := append([]migration(nil), schemaMigrations[:sharedCount]...)
 	middleEnd := len(schemaMigrations) - commonTailCount
 	for index, item := range schemaMigrations[sharedCount+localCount : middleEnd] {

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"infinite-canvas/backend/internal/model"
+	"infinite-canvas/backend/internal/referralcode"
 
 	"gorm.io/gorm"
 )
@@ -22,22 +23,84 @@ func TestCurrentSchemaVersionMatchesMigrationPlan(t *testing.T) {
 			}
 		}
 		latest := plan[len(plan)-1]
-		if CurrentSchemaVersion != latest.version || latest.name != "referral_rewards" {
-			t.Fatalf("%s latest migration = %d/%q, want %d/referral_rewards", name, latest.version, latest.name, CurrentSchemaVersion)
+		if CurrentSchemaVersion != latest.version || latest.name != "six_character_referral_codes" {
+			t.Fatalf("%s latest migration = %d/%q, want %d/six_character_referral_codes", name, latest.version, latest.name, CurrentSchemaVersion)
 		}
 	}
 }
 
 func TestTopupProductAccentColorMigrationIsSharedTail(t *testing.T) {
 	for name, plan := range map[string][]migration{"local": schemaMigrations, "upstream": upstreamFirstMigrationPlan()} {
-		firstShared := plan[len(plan)-13]
+		firstShared := plan[len(plan)-14]
 		if firstShared.version != 37 || firstShared.name != "user_profiles" {
 			t.Fatalf("%s shared migration tail starts at %d/%s, want 37/user_profiles", name, firstShared.version, firstShared.name)
 		}
-		item := plan[len(plan)-6]
+		item := plan[len(plan)-7]
 		if item.version != 44 || item.name != "topup_product_accent_color" {
 			t.Fatalf("%s migration 44 = %d/%s", name, item.version, item.name)
 		}
+	}
+}
+
+func TestSixCharacterReferralCodeMigrationPreservesReferralData(t *testing.T) {
+	db, err := Open(Config{Driver: "sqlite", DSN: "file:referral-code-migration?mode=memory&cache=shared"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AutoMigrate(&model.ReferralProfile{}, &model.ReferralReward{}); err != nil {
+		t.Fatal(err)
+	}
+	rate := int64(1_250)
+	profiles := []model.ReferralProfile{
+		{UserID: "inviter", Code: "INVITERCODE1", RateBPS: &rate},
+		{UserID: "invitee", Code: "INVITEECODE1", InviterID: "inviter"},
+		{UserID: "current", Code: "ABC234"},
+	}
+	if err := db.Create(&profiles).Error; err != nil {
+		t.Fatal(err)
+	}
+	reward := model.ReferralReward{ID: "reward", PaymentOrderID: "order", InviterID: "inviter", InviteeID: "invitee", RewardMicrocredits: 100_000, Status: model.ReferralRewardApproved}
+	if err := db.Create(&reward).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Transaction(migrateSixCharacterReferralCodes); err != nil {
+		t.Fatal(err)
+	}
+	var migrated []model.ReferralProfile
+	if err := db.Order("user_id").Find(&migrated).Error; err != nil {
+		t.Fatal(err)
+	}
+	if len(migrated) != 3 {
+		t.Fatalf("profile count = %d", len(migrated))
+	}
+	seen := map[string]bool{}
+	for _, profile := range migrated {
+		if !referralcode.Valid(profile.Code) || seen[profile.Code] {
+			t.Fatalf("invalid or duplicate migrated code %q", profile.Code)
+		}
+		seen[profile.Code] = true
+		switch profile.UserID {
+		case "inviter":
+			if profile.Code == "INVITERCODE1" || profile.RateBPS == nil || *profile.RateBPS != rate {
+				t.Fatalf("inviter profile changed unexpectedly: %#v", profile)
+			}
+		case "invitee":
+			if profile.Code == "INVITEECODE1" || profile.InviterID != "inviter" {
+				t.Fatalf("invitee profile changed unexpectedly: %#v", profile)
+			}
+		case "current":
+			if profile.Code != "ABC234" {
+				t.Fatalf("existing six-character code was changed: %q", profile.Code)
+			}
+		}
+	}
+	var count int64
+	if err := db.Model(&model.ReferralProfile{}).Where("code IN ?", []string{"INVITERCODE1", "INVITEECODE1"}).Count(&count).Error; err != nil || count != 0 {
+		t.Fatalf("old codes still exist: count=%d err=%v", count, err)
+	}
+	var storedReward model.ReferralReward
+	if err := db.First(&storedReward, "id = ?", reward.ID).Error; err != nil || storedReward.InviterID != reward.InviterID || storedReward.InviteeID != reward.InviteeID {
+		t.Fatalf("reward changed: %#v err=%v", storedReward, err)
 	}
 }
 
@@ -201,8 +264,8 @@ func TestMigrateSchemaSupportsLocalAndUpstreamPost23Lineages(t *testing.T) {
 		expectedV24Name  string
 		expectedTailName string
 	}{
-		{name: "local", plan: schemaMigrations, appliedThrough: 27, expectedV24Name: "topup_product_benefits", expectedTailName: "referral_rewards"},
-		{name: "upstream", plan: upstreamFirstMigrationPlan(), appliedThrough: 32, expectedV24Name: "channel_model_label", expectedTailName: "referral_rewards"},
+		{name: "local", plan: schemaMigrations, appliedThrough: 27, expectedV24Name: "topup_product_benefits", expectedTailName: "six_character_referral_codes"},
+		{name: "upstream", plan: upstreamFirstMigrationPlan(), appliedThrough: 32, expectedV24Name: "channel_model_label", expectedTailName: "six_character_referral_codes"},
 	} {
 		t.Run(scenario.name, func(t *testing.T) {
 			db, err := Open(Config{Driver: "sqlite", DSN: "file:" + t.Name() + "?mode=memory&cache=shared"})
