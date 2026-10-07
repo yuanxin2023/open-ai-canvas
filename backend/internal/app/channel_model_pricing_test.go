@@ -79,11 +79,11 @@ func TestRepriceAdminChannelModelsMultipleSpecifications(t *testing.T) {
 	}).Error; err != nil {
 		t.Fatal(err)
 	}
-	request := repricingRequest("a", 4_000)
+	request := repricingRequest("a", 40_000)
 	for _, spec := range []struct {
 		id    string
 		price int64
-	}{{"2K", 5_500}, {"4K", 6_000}} {
+	}{{"2K", 50_000}, {"4K", 60_000}} {
 		tier := model.ChannelModelPriceTier{ID: spec.id, ChannelModelID: "a", SelectorKey: `{"vquality":"` + spec.id + `"}`,
 			SelectorJSON: `{"vquality":"` + spec.id + `"}`, Resolution: spec.id, BillingMode: "fixed_request",
 			Enabled: true, PriceConfigured: true, PriceVersion: 1, UnitPriceMicrocredits: 9,

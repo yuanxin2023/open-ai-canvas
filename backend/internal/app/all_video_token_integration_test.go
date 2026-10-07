@@ -21,7 +21,7 @@ func TestAllVideoProtocolsQuoteReserveAndSettleWithoutProviderUsage(t *testing.T
 			if err != nil {
 				t.Fatal(err)
 			}
-			assertVideoTokenQuote(t, quote, 1_900_800)
+			assertVideoTokenQuote(t, quote, 1_910_000)
 			input := quoteInput(intent, channelModel.ModelKey)
 			input["config"].(map[string]any)["channelId"] = channel.ID
 			input, err = svc.resolveSystemChannelModelSelection(input, "canvas_video", "")
@@ -47,14 +47,14 @@ func TestAllVideoProtocolsQuoteReserveAndSettleWithoutProviderUsage(t *testing.T
 			if err != nil {
 				t.Fatal(err)
 			}
-			if settled.Status != model.BillingStatusSettled || settled.UsageSource != "video_formula" || settled.UsageAvailable || settled.OutputTokens != 108_000 || settled.ActualAmountMicrocredits != 1_728_000 || settled.RefundedAmountMicrocredits != 172_800 {
+			if settled.Status != model.BillingStatusSettled || settled.UsageSource != "video_formula" || settled.UsageAvailable || settled.OutputTokens != 108_000 || settled.ActualAmountMicrocredits != 1_730_000 || settled.RefundedAmountMicrocredits != 180_000 {
 				t.Fatalf("wrong formula settlement: %#v", settled)
 			}
 			var account model.CreditAccount
 			if err := db.First(&account, "user_id = ?", "quote-user").Error; err != nil {
 				t.Fatal(err)
 			}
-			if account.AvailableMicrocredits != 10_000_000-1_728_000 || account.ReservedMicrocredits != 250_000 {
+			if account.AvailableMicrocredits != 10_000_000-1_730_000 || account.ReservedMicrocredits != 250_000 {
 				t.Fatalf("incorrect balance after idempotent settlement: %#v", account)
 			}
 		})

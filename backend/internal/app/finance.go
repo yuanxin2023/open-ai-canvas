@@ -29,10 +29,18 @@ func validCreditPrecision(amount int64) bool {
 }
 
 func roundCreditAmountUp(amount int64) (int64, error) {
-	if amount < 0 || amount > (1<<63-1)-(CreditQuantumMicrocredits-1) {
+	if amount < 0 {
 		return 0, errors.New("积分金额无效")
 	}
-	return ((amount + CreditQuantumMicrocredits - 1) / CreditQuantumMicrocredits) * CreditQuantumMicrocredits, nil
+	remainder := amount % CreditQuantumMicrocredits
+	if remainder == 0 {
+		return amount, nil
+	}
+	increment := CreditQuantumMicrocredits - remainder
+	if amount > (1<<63-1)-increment {
+		return 0, errors.New("积分金额无效")
+	}
+	return amount + increment, nil
 }
 
 type WalletSummary struct {

@@ -149,7 +149,8 @@ func (c *pluginRuntime) migrateStoredPluginRegistry() error {
 			continue
 		}
 		oldName := filepath.Base(record.PackagePath)
-		if protocol.IsPluginPackageFileName(oldName) {
+		extension := protocol.PluginPackageExtensionForAPIVersion(manifest.APIVersion)
+		if protocol.IsPluginPackageFileName(oldName) && strings.HasSuffix(strings.ToLower(oldName), extension) {
 			continue
 		}
 		oldPath := filepath.Join(c.packageDir, oldName)
@@ -160,7 +161,6 @@ func (c *pluginRuntime) migrateStoredPluginRegistry() error {
 		if readErr != nil {
 			return fmt.Errorf("读取待迁移插件包 %s：%w", record.ID, readErr)
 		}
-		extension := protocol.PluginPackageExtensionForAPIVersion(manifest.APIVersion)
 		newName := strings.TrimSuffix(oldName, filepath.Ext(oldName)) + extension
 		newPath := filepath.Join(c.packageDir, newName)
 		created := false

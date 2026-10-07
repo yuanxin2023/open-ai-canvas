@@ -24,10 +24,10 @@ func TestVideoTokenSettlementChoosesProviderOrFormulaSnapshot(t *testing.T) {
 			wantSource string
 			wantError  bool
 		}{
-			{name: "missing usage", formula: 108000, wantTokens: 108000, wantAmount: 1728000, wantSource: "video_formula"},
-			{name: "zero usage", formula: 108000, log: &model.ApiCallLog{UsageAvailable: true}, wantTokens: 108000, wantAmount: 1728000, wantSource: "video_formula"},
-			{name: "negative usage", formula: 108000, log: &model.ApiCallLog{UsageAvailable: true, OutputTokens: -1}, wantTokens: 108000, wantAmount: 1728000, wantSource: "video_formula"},
-			{name: "unavailable usage", formula: 108000, log: &model.ApiCallLog{OutputTokens: 200000}, wantTokens: 108000, wantAmount: 1728000, wantSource: "video_formula"},
+			{name: "missing usage", formula: 108000, wantTokens: 108000, wantAmount: 1730000, wantSource: "video_formula"},
+			{name: "zero usage", formula: 108000, log: &model.ApiCallLog{UsageAvailable: true}, wantTokens: 108000, wantAmount: 1730000, wantSource: "video_formula"},
+			{name: "negative usage", formula: 108000, log: &model.ApiCallLog{UsageAvailable: true, OutputTokens: -1}, wantTokens: 108000, wantAmount: 1730000, wantSource: "video_formula"},
+			{name: "unavailable usage", formula: 108000, log: &model.ApiCallLog{OutputTokens: 200000}, wantTokens: 108000, wantAmount: 1730000, wantSource: "video_formula"},
 			{name: "provider refund", formula: 108000, log: &model.ApiCallLog{UsageAvailable: true, OutputTokens: 100000, InputTokens: 20, CachedTokens: 10}, wantTokens: 100000, wantAmount: 1600000, wantSource: "provider"},
 			{name: "provider supplement", formula: 108000, log: &model.ApiCallLog{UsageAvailable: true, OutputTokens: 200000}, wantTokens: 200000, wantAmount: 3200000, wantSource: "provider"},
 			{name: "provider cap", formula: 108000, cap: 1000000, log: &model.ApiCallLog{UsageAvailable: true, OutputTokens: 200000}, wantTokens: 200000, wantAmount: 1000000, wantSource: "provider"},
@@ -38,7 +38,7 @@ func TestVideoTokenSettlementChoosesProviderOrFormulaSnapshot(t *testing.T) {
 			t.Run(mode+"/"+test.name, func(t *testing.T) {
 				repo, db := newRefundedBillingRecoveryRepository(t)
 				const available = int64(10000000)
-				const reserved = int64(1900800)
+				const reserved = int64(1910000)
 				order := model.BillingOrder{
 					ID: "order", UserID: "user", IdempotencyKey: "task", Capability: "video", BillingMode: "token",
 					Quantity: 118800, VideoFormulaTokens: test.formula, AmountMicrocredits: reserved,

@@ -27,7 +27,7 @@ func TestBuiltinSeedSyncPreservesUserState(t *testing.T) {
 			t.Error(err)
 		}
 	})
-	if err := db.AutoMigrate(&model.Skill{}, &model.UserSkillState{}, &model.SkillVersion{}, &model.SkillFile{}, &model.User{}, &model.UserIdentity{}); err != nil {
+	if err := db.AutoMigrate(&model.Skill{}, &model.UserSkillState{}, &model.SkillPlatformState{}, &model.SkillCategoryPlatformState{}, &model.SkillVersion{}, &model.SkillFile{}, &model.User{}, &model.UserIdentity{}); err != nil {
 		t.Fatal(err)
 	}
 	svc := New(repository.New(db), t.TempDir(), nil)

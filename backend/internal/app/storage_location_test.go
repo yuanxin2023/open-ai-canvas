@@ -40,7 +40,7 @@ func TestTencentCOSConnectionTestUsesStorageEndpointInsteadOfCDN(t *testing.T) {
 			w.Header().Set("Accept-Ranges", "bytes")
 			w.Header().Set("Content-Range", "bytes 0-3/19")
 			w.WriteHeader(http.StatusPartialContent)
-			_, _ = io.WriteString(w, "ying")
+			_, _ = io.WriteString(w, "open")
 		case http.MethodDelete:
 			w.WriteHeader(http.StatusNoContent)
 		default:

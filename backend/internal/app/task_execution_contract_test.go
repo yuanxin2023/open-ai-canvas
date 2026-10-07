@@ -15,7 +15,7 @@ func TestAgentMediaAdmissionPersistsOriginAndChargeAuthorization(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	req.admission = &taskAdmission{ID: "generation-task", MaxCharge: 1000, AgentRunID: run.ID, GenerationID: "generation", ApprovalID: "approval"}
+	req.admission = &taskAdmission{ID: "generation-task", MaxCharge: 10_000, AgentRunID: run.ID, GenerationID: "generation", ApprovalID: "approval"}
 	req.creationPrepare = &creationTaskPreparation{}
 	task, err := s.CreateTask(run.UserID, req)
 	if err != nil {

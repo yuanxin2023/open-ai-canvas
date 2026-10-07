@@ -1,6 +1,9 @@
 package app
 
 import (
+	"errors"
+	"math"
+
 	"infinite-canvas/backend/internal/kernel"
 	"infinite-canvas/backend/internal/model"
 )
@@ -46,7 +49,10 @@ func billingCreditCost(order model.BillingOrder) (*int64, error) {
 	var err error
 	switch order.CostBillingMode {
 	case "fixed_request", "per_second":
-		amount, err = creditAmount(cost.UnitPriceMicrocredits, order.CostQuantity, 10_000)
+		if cost.UnitPriceMicrocredits < 0 || order.CostQuantity <= 0 || cost.UnitPriceMicrocredits > math.MaxInt64/order.CostQuantity {
+			return nil, errors.New("积分成本计费参数无效")
+		}
+		amount = cost.UnitPriceMicrocredits * order.CostQuantity
 	case "token":
 		input, output, cached := order.InputTokens, order.OutputTokens, order.CachedTokens
 		if !order.UsageAvailable {

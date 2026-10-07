@@ -68,7 +68,7 @@ func TestRegisterFirstUserUsesEmailIdentityWithoutVerification(t *testing.T) {
 		}
 	}
 	var loginEvent model.UserLoginEvent
-	if err := db.First(&loginEvent, "user_id = ?", user.ID).Error; err != nil {
+	if err := db.First(&loginEvent, "user_id = ? AND login_method = ?", user.ID, "email_register").Error; err != nil {
 		t.Fatal(err)
 	}
 	if loginEvent.LoginMethod != "email_register" || loginEvent.IPAddress != stored.RegistrationIP || loginEvent.Browser != "Chrome" || loginEvent.OS != "Windows" {

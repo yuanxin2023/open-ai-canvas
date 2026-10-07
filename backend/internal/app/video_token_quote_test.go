@@ -20,9 +20,9 @@ func TestVideoTokenChannelQuoteAgreesWithTaskBilling(t *testing.T) {
 		wantPrice int64
 		wantCost  int64
 	}{
-		{name: "audio default", wantTier: "video-audio", wantPrice: 16_000_000, wantCost: 1_900_800},
-		{name: "explicit audio", audio: true, wantTier: "video-audio", wantPrice: 16_000_000, wantCost: 1_900_800},
-		{name: "silent", audio: false, wantTier: "video-silent", wantPrice: 8_000_000, wantCost: 950_400},
+		{name: "audio default", wantTier: "video-audio", wantPrice: 16_000_000, wantCost: 1_910_000},
+		{name: "explicit audio", audio: true, wantTier: "video-audio", wantPrice: 16_000_000, wantCost: 1_910_000},
+		{name: "silent", audio: false, wantTier: "video-silent", wantPrice: 8_000_000, wantCost: 960_000},
 		{name: "configured free", audio: true, free: true, wantTier: "video-audio"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -100,7 +100,7 @@ func TestVideoTokenLogicalQuoteAgreesWithSystemChannel(t *testing.T) {
 			if err != nil {
 				t.Fatalf("QuoteLogicalModel() error = %v", err)
 			}
-			assertVideoTokenQuote(t, logicalQuote, 1_900_800)
+			assertVideoTokenQuote(t, logicalQuote, 1_910_000)
 			if logicalQuote.LogicalModelID != logical.ID {
 				t.Fatalf("logicalModelId = %q, want %q", logicalQuote.LogicalModelID, logical.ID)
 			}

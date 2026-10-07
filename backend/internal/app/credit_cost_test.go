@@ -63,7 +63,7 @@ func TestCreditCostSnapshotPersistsWithoutChangingSalesOrPublicResponses(t *test
 	historical.Status = model.BillingStatusSettled
 	cost, err := billingCreditCost(historical)
 	if err != nil || cost == nil || *cost != 123_456 {
-		t.Fatalf("historical cost changed: %v %v", cost, err)
+		t.Fatalf("historical cost changed: %v %v; order=%+v", cost, err, historical)
 	}
 	catalog, err := svc.ModelCatalog(nil)
 	if err != nil {

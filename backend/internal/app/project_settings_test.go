@@ -18,6 +18,7 @@ func newProjectSettingsTestService(t *testing.T) (*Service, *gorm.DB) {
 		t.Fatal(err)
 	}
 	if err := db.AutoMigrate(
+		&model.User{},
 		&model.Project{}, &model.ProjectUnit{}, &model.Resource{}, &model.Asset{}, &model.AssetVersion{}, &model.AssetRepresentation{},
 		&model.CanvasProject{}, &model.StyleProfile{}, &model.ProjectAssetCandidate{}, &model.WorkflowInstance{}, &model.WorkflowStepInstance{},
 		&model.CanvasSnapshot{}, &model.CanvasSnapshotResource{},
@@ -26,6 +27,8 @@ func newProjectSettingsTestService(t *testing.T) (*Service, *gorm.DB) {
 		&model.CreationRun{}, &model.CreationSubmission{},
 		&model.CloudAgentResourceLease{}, &model.Tool{},
 		&model.Announcement{}, &model.AnnouncementImageDraft{},
+		&model.Inspiration{}, &model.UserPrompt{}, &model.InspirationCoverDraft{},
+		&model.SystemSetting{}, &model.PaymentPromotionImageDraft{},
 	); err != nil {
 		t.Fatal(err)
 	}

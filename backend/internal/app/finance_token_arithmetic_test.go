@@ -27,19 +27,19 @@ func TestTokenEstimateAmountUsesExactArithmetic(t *testing.T) {
 			prices: model.ChannelModel{
 				InputTokenPriceMicrocredits: 2_000_000, OutputTokenPriceMicrocredits: 5_000_000, CachedTokenPriceMicrocredits: 1_000_000,
 			},
-			estimate: tokenBillingEstimate{InputTokens: 100, OutputTokens: 20}, multiplier: 10_000, want: 300,
+			estimate: tokenBillingEstimate{InputTokens: 100, OutputTokens: 20}, multiplier: 10_000, want: 10_000,
 		},
 		{
 			name: "round after combining input and output",
 			prices: model.ChannelModel{
 				InputTokenPriceMicrocredits: 400_000, OutputTokenPriceMicrocredits: 400_000,
 			},
-			estimate: tokenBillingEstimate{InputTokens: 1, OutputTokens: 1}, multiplier: 12_500, want: 1,
+			estimate: tokenBillingEstimate{InputTokens: 1, OutputTokens: 1}, multiplier: 12_500, want: 10_000,
 		},
 		{
 			name:     "maximum final amount",
 			prices:   model.ChannelModel{OutputTokenPriceMicrocredits: 1_000_000},
-			estimate: tokenBillingEstimate{OutputTokens: math.MaxInt64}, multiplier: 10_000, want: math.MaxInt64,
+			estimate: tokenBillingEstimate{OutputTokens: math.MaxInt64 / CreditQuantumMicrocredits * CreditQuantumMicrocredits}, multiplier: 10_000, want: math.MaxInt64 / CreditQuantumMicrocredits * CreditQuantumMicrocredits,
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -63,6 +63,7 @@ func TestTokenEstimateAmountRejectsInvalidArithmetic(t *testing.T) {
 		{name: "negative price", prices: model.ChannelModel{OutputTokenPriceMicrocredits: -1}, estimate: tokenBillingEstimate{OutputTokens: 1}, multiplier: 10_000},
 		{name: "zero multiplier", estimate: tokenBillingEstimate{OutputTokens: 1}},
 		{name: "final overflow", prices: model.ChannelModel{OutputTokenPriceMicrocredits: 1_000_000}, estimate: tokenBillingEstimate{OutputTokens: math.MaxInt64}, multiplier: 10_001},
+		{name: "rounding overflow", prices: model.ChannelModel{OutputTokenPriceMicrocredits: 1_000_000}, estimate: tokenBillingEstimate{OutputTokens: math.MaxInt64}, multiplier: 10_000},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			if amount, err := tokenEstimateAmount(&test.prices, test.estimate, test.multiplier); amount != 0 || err == nil {

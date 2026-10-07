@@ -31,7 +31,7 @@ func creationTestService(t *testing.T) (*Service, *gorm.DB, string, CreationGuar
 	}
 	s := &Service{repo: repository.New(db), dataDir: t.TempDir()}
 	capabilityConfig := mustEncodeModelCapabilityConfig(t, DefaultModelCapabilityConfigForModel(string(model.ChannelInterfaceChatCompletion), "text-test"))
-	for _, item := range []any{&model.ModelChannel{ID: "channel", Scope: model.ChannelScopeSystem, Enabled: true, Name: "受控测试"}, &model.ChannelModel{ID: "cm", ChannelID: "channel", ModelKey: "text-test", Capability: "text", Protocol: model.ChannelInterfaceChatCompletion, CapabilityConfigJSON: capabilityConfig, BillingMode: "fixed_request", UnitPriceMicrocredits: 100, PriceConfigured: true, Enabled: true}, &model.ChannelModelPriceTier{ID: "tier", ChannelModelID: "cm", SelectorKey: "{}", SelectorJSON: "{}", BillingMode: "fixed_request", UnitPriceMicrocredits: 100, PriceConfigured: true, Enabled: true}, &model.CreditAccount{UserID: "user", AvailableMicrocredits: 10000}} {
+	for _, item := range []any{&model.ModelChannel{ID: "channel", Scope: model.ChannelScopeSystem, Enabled: true, Name: "受控测试"}, &model.ChannelModel{ID: "cm", ChannelID: "channel", ModelKey: "text-test", Capability: "text", Protocol: model.ChannelInterfaceChatCompletion, CapabilityConfigJSON: capabilityConfig, BillingMode: "fixed_request", UnitPriceMicrocredits: 100, PriceConfigured: true, Enabled: true}, &model.ChannelModelPriceTier{ID: "tier", ChannelModelID: "cm", SelectorKey: "{}", SelectorJSON: "{}", BillingMode: "fixed_request", UnitPriceMicrocredits: 100, PriceConfigured: true, Enabled: true}, &model.CreditAccount{UserID: "user", AvailableMicrocredits: 100_000_000}} {
 		if err = db.Create(item).Error; err != nil {
 			t.Fatal(err)
 		}
@@ -112,7 +112,7 @@ func TestCreationSubmissionApprovalExpiryAndChangedQuote(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = db.Model(&model.ChannelModelPriceTier{}).Where("id = ?", "tier").Updates(map[string]any{"unit_price_microcredits": 200, "price_version": 2}).Error; err != nil {
+	if err = db.Model(&model.ChannelModelPriceTier{}).Where("id = ?", "tier").Updates(map[string]any{"unit_price_microcredits": 20_000, "price_version": 2}).Error; err != nil {
 		t.Fatal(err)
 	}
 	if _, err = s.ApproveCreationSubmissions("user", id, CreationRequest{CreationGuard: guard, SubmissionIDs: []string{item.ID}}); err == nil {
@@ -192,7 +192,7 @@ func TestCreationConcurrentExecuteChargesOnceAndRollback(t *testing.T) {
 	}
 	var account model.CreditAccount
 	db.First(&account, "user_id = ?", "user")
-	if account.AvailableMicrocredits != 9900 || account.ReservedMicrocredits != 100 {
+	if account.AvailableMicrocredits != 99_990_000 || account.ReservedMicrocredits != 10_000 {
 		t.Fatalf("account = %#v", account)
 	}
 	db.Model(&model.CreationSubmission{}).Where("id = ?", item.ID).Update("expires_at", time.Now().Add(-time.Hour))
@@ -327,7 +327,7 @@ func TestCreationRefreshCreatesOneUnapprovedSuccessor(t *testing.T) {
 	originalQuote := stored.QuoteJSON
 	originalApprovedAt := stored.ApprovedAt
 	// A changed server price must produce a new quote without modifying the old evidence.
-	if err = db.Model(&model.ChannelModelPriceTier{}).Where("id = ?", "tier").Updates(map[string]any{"unit_price_microcredits": 200, "price_version": 2}).Error; err != nil {
+	if err = db.Model(&model.ChannelModelPriceTier{}).Where("id = ?", "tier").Updates(map[string]any{"unit_price_microcredits": 20_000, "price_version": 2}).Error; err != nil {
 		t.Fatal(err)
 	}
 	var wg sync.WaitGroup
@@ -363,7 +363,7 @@ func TestCreationRefreshCreatesOneUnapprovedSuccessor(t *testing.T) {
 	if successor == nil {
 		t.Fatal("no successor")
 	}
-	if successor.ApprovedAt != nil || successor.TaskID != nil || successor.Quote.AmountMicrocredits != 200 || !successor.Quote.ExpiresAt.After(time.Now()) {
+	if successor.ApprovedAt != nil || successor.TaskID != nil || successor.Quote.AmountMicrocredits != 20_000 || !successor.Quote.ExpiresAt.After(time.Now()) {
 		t.Fatalf("bad successor: %#v", successor)
 	}
 	stored, err = s.repo.CreationSubmission("user", id, old.ID)

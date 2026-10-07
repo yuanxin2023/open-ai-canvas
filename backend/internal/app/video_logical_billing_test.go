@@ -57,7 +57,7 @@ func TestUnifiedVideoQuoteAndTaskUseResolvedProviderGeneration(t *testing.T) {
 	if quote.VideoTokenEstimate == nil || quote.VideoTokenEstimate.OutputWidth != 854 || quote.VideoTokenEstimate.OutputHeight != 480 || quote.VideoTokenEstimate.DimensionsEstimated {
 		t.Fatalf("wrong generation-specific quote: %#v", quote.VideoTokenEstimate)
 	}
-	if order == nil || order.VideoFormulaTokens != 48038 || order.Quantity != 52842 || order.AmountMicrocredits != 845472 || quote.Quantity != order.Quantity || quote.AmountMicrocredits != order.AmountMicrocredits {
+	if order == nil || order.VideoFormulaTokens != 48038 || order.Quantity != 52842 || order.AmountMicrocredits != 850000 || quote.Quantity != order.Quantity || quote.AmountMicrocredits != order.AmountMicrocredits {
 		t.Fatalf("quote/task mismatch: quote=%#v order=%#v", quote, order)
 	}
 	assertVideoQuoteHasNoFinancialWrites(t, db)
