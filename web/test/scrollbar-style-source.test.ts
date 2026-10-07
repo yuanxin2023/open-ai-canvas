@@ -10,6 +10,7 @@ test("滚动条样式按复用边界拆分，并保持全局入口可用", async
         Bun.file(new URL("../src/lib/plugins/builtin/editor/editor-shell.css", import.meta.url)).text(),
         Bun.file(new URL("../src/lib/plugins/builtin/editor/editor-shell.tsx", import.meta.url)).text(),
     ]);
+    const compactCreation = creation.replace(/\s+/g, " ");
 
     expect(application).toContain('import "./styles/shared/scrollbars.css";');
     expect(globals).not.toContain(".hide-scrollbar {");
@@ -25,7 +26,7 @@ test("滚动条样式按复用边界拆分，并保持全局入口可用", async
     expect(shared).toContain(".storyboard-scrollbar {");
     expect(shared).toContain(".hover-scrollbar {");
     expect(creation).toContain(".creation-scrollbar {");
-    expect(creation).toContain(".creation-scrollbar::-webkit-scrollbar-button { display: none; width: 0; height: 0; }");
+    expect(compactCreation).toContain(".creation-scrollbar::-webkit-scrollbar-button { display: none; width: 0; height: 0; }");
     expect(creation).toContain(".creation-scrollbar.creation-conversation-sidebar-scroll,");
     expect(creation).toContain(".creation-conversation-sidebar:hover .creation-conversation-sidebar-scroll");
     expect(creation).toContain("scrollbar-color: transparent transparent;");

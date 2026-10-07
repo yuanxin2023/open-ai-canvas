@@ -16,7 +16,7 @@ describe("settings credit ledger", () => {
         expect(orders).toBeGreaterThan(-1);
         expect(wallet).toBeGreaterThan(orders);
         expect(channels).toBeGreaterThan(wallet);
-        expect(settings).toContain('["wallet", "orders"].includes(section.key) || creditsEnabled');
+        expect(settings).toContain('!["wallet", "orders", "referrals"].includes(section.key) || creditsEnabled');
         expect(settings).toContain("wallet: <SettingsPane><CreditLedgerPane /></SettingsPane>");
     });
 

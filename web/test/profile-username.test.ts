@@ -15,15 +15,15 @@ test("profile username changes require confirmation and cancellation restores on
     expect(source).toContain("void saveProfile();");
 });
 
-test("profile renders login username rules and remaining change quota", async () => {
+test("profile renders login username rules and explains the change quota", async () => {
     const source = await Bun.file(new URL("../src/pages/profile/index.tsx", import.meta.url)).text();
 
     expect(source).toContain("登录用户名");
-    expect(source).toContain("含中文时 2-6 位，其他情况 3-6 位");
-    expect(source).toContain("首次将系统生成的用户名改为自选名称不计入限额");
-    expect(source).toContain("policy.remaining");
-    expect(source).toContain("policy.nextAvailableAt");
-    expect(source).toContain("管理员修改用户名不受次数限制");
+    expect(source).toContain("用户名为 3–9 位，可使用中文、英文字母和数字");
+    expect(source).toContain("这是首次自选用户名，不计入修改限额。");
+    expect(source).toContain("policy.customized");
+    expect(source).toContain("policy.windowDays");
+    expect(source).toContain("policy.limit");
 });
 
 test("account identity surfaces use username instead of deprecated display aliases", async () => {

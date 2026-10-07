@@ -6,6 +6,7 @@ test("模型行只保留选中高亮，价格使用独立的彩色标签", async
         Bun.file(new URL("../src/styles/shared/model-picker.css", import.meta.url)).text(),
         Bun.file(new URL("../src/styles/workspace-product.css", import.meta.url)).text(),
     ]);
+    const compactStyles = styles.replace(/\s+/g, " ");
     expect(component).not.toContain("previewedModel");
     expect(component).not.toContain("onMouseEnter");
     expect(styles).not.toMatch(/canvas-model-picker-(?:brand|option)(?:\[[^\]]*\])?:hover/);
@@ -13,8 +14,8 @@ test("模型行只保留选中高亮，价格使用独立的彩色标签", async
     expect(styles).toContain('.canvas-model-picker-brand[aria-pressed="true"]');
     expect(styles).toContain('.canvas-model-picker-option[aria-selected="true"]');
     expect(styles).toContain(".canvas-model-picker-option:focus-visible");
-    expect(styles).toContain(".creation-model-picker-surface .canvas-model-picker-brand { display: flex;");
-    expect(styles).toContain("text-align: left; transition: none;");
+    expect(compactStyles).toContain(".creation-model-picker-surface .canvas-model-picker-brand { display: flex;");
+    expect(compactStyles).toContain("text-align: left; transition: none;");
     expect(component).toContain("memo(function ModelPickerGroupButton");
     const price = styles.match(/\.model-picker-price \{([^}]+)\}/)?.[1] || "";
     expect(price).toContain("color: var(--model-price-ink)");
