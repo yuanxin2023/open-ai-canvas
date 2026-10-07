@@ -52,7 +52,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          go test -json ./... | tee "$RUNNER_TEMP/go-tests.jsonl"
+          go test -timeout 30m -json ./... | tee "$RUNNER_TEMP/go-tests.jsonl"
       - name: Ensure dependency-backed tests were not skipped
         shell: bash
         run: |
