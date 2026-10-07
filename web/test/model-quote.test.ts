@@ -47,7 +47,18 @@ describe("model quote API targets", () => {
 test("video estimates disclose platform reserves, unknown references and final settlement", () => {
     const description = modelQuoteDescription({
         ...quote,
-        videoTokenEstimate: { formulaTokens: 100_000, reservedTokens: 110_000, outputWidth: 1280, outputHeight: 720, framesPerSecond: 24, outputSeconds: 5, referenceSeconds: 15, referenceDurationEstimated: true, dimensionsEstimated: true, reservationMarginPercent: 10 },
+        videoTokenEstimate: {
+            formulaTokens: 100_000,
+            reservedTokens: 110_000,
+            outputWidth: 1280,
+            outputHeight: 720,
+            framesPerSecond: 24,
+            outputSeconds: 5,
+            referenceSeconds: 15,
+            referenceDurationEstimated: true,
+            dimensionsEstimated: true,
+            reservationMarginPercent: 10,
+        },
     });
     expect(description).toContain("预计消耗 0.5 积分");
     expect(description).toContain("公式预估 100,000 视频 Token");

@@ -40,8 +40,8 @@ describe("settings credit ledger", () => {
         const settings = source("../src/pages/settings/index.tsx");
 
         expect(settings).not.toContain("item.description");
-        expect(settings).not.toContain("description: \"查看充值记录与取消订单\"");
-        expect(settings).not.toContain("description: \"按领域选择默认模型\"");
+        expect(settings).not.toContain('description: "查看充值记录与取消订单"');
+        expect(settings).not.toContain('description: "按领域选择默认模型"');
     });
 
     test("uses the wallet API with filters, paging, readable types and balances", () => {
