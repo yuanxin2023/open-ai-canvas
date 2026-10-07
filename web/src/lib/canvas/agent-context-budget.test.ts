@@ -7,12 +7,7 @@ import { assertAgentExchangeBudget, budgetAgentHistory } from "./agent-context-b
 const largeExchange = [{ role: "user" as const, content: "x".repeat(800_000) }];
 
 test("1M context capability accepts an exchange larger than legacy byte thresholds", () => {
-    assert.doesNotThrow(() => assertAgentExchangeBudget(
-        largeExchange,
-        [],
-        "",
-        { contextWindowTokens: 1_000_000, maxOutputTokens: 64_000 },
-    ));
+    assert.doesNotThrow(() => assertAgentExchangeBudget(largeExchange, [], "", { contextWindowTokens: 1_000_000, maxOutputTokens: 64_000 }));
 });
 
 test("the same exchange is rejected when the selected model only exposes the default window", () => {

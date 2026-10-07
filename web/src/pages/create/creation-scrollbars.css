@@ -8,15 +8,26 @@
         scrollbar-width: thin;
     }
 
-    .creation-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
-    .creation-scrollbar::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
-    .creation-scrollbar::-webkit-scrollbar-track { background: transparent; }
+    .creation-scrollbar::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+    }
+    .creation-scrollbar::-webkit-scrollbar-button {
+        display: none;
+        width: 0;
+        height: 0;
+    }
+    .creation-scrollbar::-webkit-scrollbar-track {
+        background: transparent;
+    }
     .creation-scrollbar::-webkit-scrollbar-thumb {
         border: 0;
         border-radius: 999px;
         background: var(--creation-scrollbar-thumb);
     }
-    .creation-scrollbar::-webkit-scrollbar-thumb:hover { background: var(--creation-scrollbar-thumb-hover); }
+    .creation-scrollbar::-webkit-scrollbar-thumb:hover {
+        background: var(--creation-scrollbar-thumb-hover);
+    }
 
     html:not(.dark) .creation-scrollbar {
         --creation-scrollbar-thumb: color-mix(in srgb, var(--user-ink, #1b1b1f) 22%, transparent);

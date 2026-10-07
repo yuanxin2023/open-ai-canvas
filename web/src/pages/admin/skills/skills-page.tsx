@@ -9,14 +9,7 @@ import { AdminPageFrame } from "@/pages/admin/components/admin-shell";
 import { AdminStatusBadge } from "@/pages/admin/components/admin-ui";
 import { Checkbox, Switch } from "@/pages/admin/ui/controls";
 import { AdminModal } from "@/pages/admin/ui/overlays";
-import {
-    fetchAdminSkills,
-    setAdminSkillAvailability,
-    setAdminSkillCategoryAvailability,
-    type AdminSkillCatalog,
-    type AdminSkillCategory,
-    type AdminSkillItem,
-} from "@/services/api/admin-skills";
+import { fetchAdminSkills, setAdminSkillAvailability, setAdminSkillCategoryAvailability, type AdminSkillCatalog, type AdminSkillCategory, type AdminSkillItem } from "@/services/api/admin-skills";
 
 import "./skills-page.css";
 
@@ -40,7 +33,7 @@ export default function AdminSkillsPage() {
     const applyCatalog = (result: AdminSkillCatalog) => {
         setCatalog(result);
         setSelectedIds((current) => new Set([...current].filter((id) => result.skills.some((skill) => skill.skillId === id))));
-        setActiveSkill((current) => current ? result.skills.find((skill) => skill.skillId === current.skillId) ?? null : null);
+        setActiveSkill((current) => (current ? (result.skills.find((skill) => skill.skillId === current.skillId) ?? null) : null));
     };
 
     const reload = async () => {
@@ -59,10 +52,7 @@ export default function AdminSkillsPage() {
     }, []);
 
     const categories = catalog?.categories || [];
-    const categoryTabs = useMemo(() => [
-        { value: "all", label: "全部技能", totalCount: catalog?.skills.length || 0, available: true },
-        ...categories,
-    ], [catalog?.skills.length, categories]);
+    const categoryTabs = useMemo(() => [{ value: "all", label: "全部技能", totalCount: catalog?.skills.length || 0, available: true }, ...categories], [catalog?.skills.length, categories]);
 
     const filteredSkills = useMemo(() => {
         const keyword = search.trim().toLocaleLowerCase();
@@ -76,10 +66,14 @@ export default function AdminSkillsPage() {
         });
     }, [activeCategory, availabilityFilter, catalog?.skills, search]);
 
-    const sections = useMemo(() => categories
-        .filter((category) => activeCategory === "all" || category.value === activeCategory)
-        .map((category) => ({ category, skills: filteredSkills.filter((skill) => skill.tag === category.value) }))
-        .filter((section) => activeCategory !== "all" || section.skills.length > 0), [activeCategory, categories, filteredSkills]);
+    const sections = useMemo(
+        () =>
+            categories
+                .filter((category) => activeCategory === "all" || category.value === activeCategory)
+                .map((category) => ({ category, skills: filteredSkills.filter((skill) => skill.tag === category.value) }))
+                .filter((section) => activeCategory !== "all" || section.skills.length > 0),
+        [activeCategory, categories, filteredSkills],
+    );
 
     const visibleIds = filteredSkills.map((skill) => skill.skillId);
     const visibleSelectedCount = visibleIds.filter((id) => selectedIds.has(id)).length;
@@ -89,11 +83,7 @@ export default function AdminSkillsPage() {
         if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
         event.preventDefault();
         const current = categoryTabs.findIndex((category) => category.value === activeCategory);
-        const next = event.key === "Home"
-            ? 0
-            : event.key === "End"
-                ? categoryTabs.length - 1
-                : (current + (event.key === "ArrowRight" ? 1 : -1) + categoryTabs.length) % categoryTabs.length;
+        const next = event.key === "Home" ? 0 : event.key === "End" ? categoryTabs.length - 1 : (current + (event.key === "ArrowRight" ? 1 : -1) + categoryTabs.length) % categoryTabs.length;
         setActiveCategory(categoryTabs[next].value);
         tabsRef.current?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus();
     };
@@ -198,18 +188,24 @@ export default function AdminSkillsPage() {
             title="技能管理"
             description="分级管理技能广场中的平台内置与社区公共技能；用户自行创建的技能不受影响"
             scroll
-            actions={(
+            actions={
                 <>
-                    <Button icon={<RefreshCw className="size-4" />} loading={loading} onClick={() => void reload()}>刷新</Button>
-                    <Button type="primary" icon={<UploadCloud className="size-4" />} disabled={!catalog} onClick={() => setInstallOpen(true)}>安装技能</Button>
+                    <Button icon={<RefreshCw className="size-4" />} loading={loading} onClick={() => void reload()}>
+                        刷新
+                    </Button>
+                    <Button type="primary" icon={<UploadCloud className="size-4" />} disabled={!catalog} onClick={() => setInstallOpen(true)}>
+                        安装技能
+                    </Button>
                 </>
-            )}
+            }
         >
             <div className="admin-skills-page">
                 {!catalog?.globalAvailable && !loading ? (
                     <div className="admin-skills-global-warning">
                         <ShieldAlert className="size-4 shrink-0" aria-hidden="true" />
-                        <div><strong>用户技能库总开关当前已关闭。</strong> 本页配置仍会保存，但所有技能能力均保持不可用。</div>
+                        <div>
+                            <strong>用户技能库总开关当前已关闭。</strong> 本页配置仍会保存，但所有技能能力均保持不可用。
+                        </div>
                     </div>
                 ) : null}
 
@@ -237,7 +233,15 @@ export default function AdminSkillsPage() {
                 </div>
 
                 <div className="admin-skills-toolbar">
-                    <Input allowClear prefix={<Search className="size-4 text-foreground/40" />} className="admin-skills-search" value={search} placeholder="搜索技能名称、ID、作者或版本" aria-label="搜索平台公共技能" onChange={(event) => setSearch(event.target.value)} />
+                    <Input
+                        allowClear
+                        prefix={<Search className="size-4 text-foreground/40" />}
+                        className="admin-skills-search"
+                        value={search}
+                        placeholder="搜索技能名称、ID、作者或版本"
+                        aria-label="搜索平台公共技能"
+                        onChange={(event) => setSearch(event.target.value)}
+                    />
                     <Select<AvailabilityFilter>
                         className="admin-skills-status-filter"
                         aria-label="按技能状态筛选"
@@ -251,14 +255,22 @@ export default function AdminSkillsPage() {
                         ]}
                     />
                     <div className="admin-skills-batch-actions">
-                        <Checkbox checked={allVisibleSelected} indeterminate={visibleSelectedCount > 0 && !allVisibleSelected} onChange={(event) => toggleVisible(event.target.checked)}>全选当前结果</Checkbox>
+                        <Checkbox checked={allVisibleSelected} indeterminate={visibleSelectedCount > 0 && !allVisibleSelected} onChange={(event) => toggleVisible(event.target.checked)}>
+                            全选当前结果
+                        </Checkbox>
                         <span className="admin-skills-selected-count">已选 {selectedIds.size}</span>
-                        <Button disabled={selectedIds.size === 0} loading={batchSaving} onClick={() => runBatch(true)}>批量开启</Button>
-                        <Button danger disabled={selectedIds.size === 0} loading={batchSaving} onClick={() => runBatch(false)}>批量关闭</Button>
+                        <Button disabled={selectedIds.size === 0} loading={batchSaving} onClick={() => runBatch(true)}>
+                            批量开启
+                        </Button>
+                        <Button danger disabled={selectedIds.size === 0} loading={batchSaving} onClick={() => runBatch(false)}>
+                            批量关闭
+                        </Button>
                     </div>
                 </div>
 
-                {loading && !catalog ? <AdminSkillsSkeleton /> : sections.length ? (
+                {loading && !catalog ? (
+                    <AdminSkillsSkeleton />
+                ) : sections.length ? (
                     <div className="admin-skills-sections">
                         {sections.map(({ category, skills }) => (
                             <CategorySection
@@ -276,7 +288,9 @@ export default function AdminSkillsPage() {
                             />
                         ))}
                     </div>
-                ) : <div className="admin-skills-empty">没有符合当前分类和筛选条件的平台公共技能</div>}
+                ) : (
+                    <div className="admin-skills-empty">没有符合当前分类和筛选条件的平台公共技能</div>
+                )}
             </div>
 
             <SkillDetailModal skill={activeSkill} globalAvailable={catalog?.globalAvailable ?? true} categories={categories} onClose={() => setActiveSkill(null)} />
@@ -294,7 +308,18 @@ export default function AdminSkillsPage() {
     );
 }
 
-function CategorySection({ category, skills, globalAvailable, savingCategory, savingIds, selectedIds, onCategoryAvailability, onSelect, onOpen, onAvailability }: {
+function CategorySection({
+    category,
+    skills,
+    globalAvailable,
+    savingCategory,
+    savingIds,
+    selectedIds,
+    onCategoryAvailability,
+    onSelect,
+    onOpen,
+    onAvailability,
+}: {
     category: AdminSkillCategory;
     skills: AdminSkillItem[];
     globalAvailable: boolean;
@@ -311,13 +336,17 @@ function CategorySection({ category, skills, globalAvailable, savingCategory, sa
         <section className="admin-skills-section" data-category={category.value} aria-labelledby={`admin-skills-category-${category.value}`}>
             <header className="admin-skills-section-heading">
                 <div className="admin-skills-section-title">
-                    <span className="admin-skills-category-icon" aria-hidden="true"><Icon /></span>
+                    <span className="admin-skills-category-icon" aria-hidden="true">
+                        <Icon />
+                    </span>
                     <div>
                         <div className="admin-skills-section-title-line">
                             <h2 id={`admin-skills-category-${category.value}`}>{category.label}</h2>
                             <AdminStatusBadge label={category.available ? "分类已开启" : "分类已关闭"} tone={category.available ? "success" : "warning"} />
                         </div>
-                        <p>共 {category.totalCount} 项，当前有效开启 {category.availableCount} 项</p>
+                        <p>
+                            共 {category.totalCount} 项，当前有效开启 {category.availableCount} 项
+                        </p>
                     </div>
                 </div>
                 <div className="admin-skills-category-switch">
@@ -341,12 +370,23 @@ function CategorySection({ category, skills, globalAvailable, savingCategory, sa
                         />
                     ))}
                 </div>
-            ) : <div className="admin-skills-section-empty">当前分类没有符合筛选条件的技能</div>}
+            ) : (
+                <div className="admin-skills-section-empty">当前分类没有符合筛选条件的技能</div>
+            )}
         </section>
     );
 }
 
-function AdminSkillCard({ skill, categoryLabel, globalAvailable, selected, saving, onSelect, onOpen, onAvailability }: {
+function AdminSkillCard({
+    skill,
+    categoryLabel,
+    globalAvailable,
+    selected,
+    saving,
+    onSelect,
+    onOpen,
+    onAvailability,
+}: {
     skill: AdminSkillItem;
     categoryLabel: string;
     globalAvailable: boolean;
@@ -361,7 +401,9 @@ function AdminSkillCard({ skill, categoryLabel, globalAvailable, selected, savin
         <article className={cn("admin-skill-card", selected && "is-selected", !skill.effectiveAvailable && "is-unavailable")} data-category={skill.tag}>
             <div className="admin-skill-card-top">
                 <Checkbox checked={selected} aria-label={`选择 ${skill.skillName}`} onChange={(event) => onSelect(event.target.checked)} />
-                <span className="admin-skill-card-icon" aria-hidden="true"><Icon /></span>
+                <span className="admin-skill-card-icon" aria-hidden="true">
+                    <Icon />
+                </span>
                 <SkillAvailabilityBadge skill={skill} globalAvailable={globalAvailable} />
             </div>
             <button type="button" className="admin-skill-card-content" aria-label={`查看 ${skill.skillName} 管理详情`} onClick={onOpen}>
@@ -369,17 +411,28 @@ function AdminSkillCard({ skill, categoryLabel, globalAvailable, selected, savin
                 <code>{skill.skillId}</code>
                 <p>{skill.description || "暂无技能简介"}</p>
                 <div className="admin-skill-card-meta">
-                    <span className="admin-skill-card-author" title={skill.authorName || "平台"}>{skill.authorName || "平台"}</span>
+                    <span className="admin-skill-card-author" title={skill.authorName || "平台"}>
+                        {skill.authorName || "平台"}
+                    </span>
                     <span>v{skill.version || "1.0"}</span>
                     <span className="admin-skill-card-category">{categoryLabel}</span>
                 </div>
                 <div className="admin-skill-card-metrics">
-                    <span><Heart aria-hidden="true" />{formatCount(skill.likeCount)} 收藏</span>
-                    <span><UsersRound aria-hidden="true" />{formatCount(skill.addedCount)} 加入</span>
+                    <span>
+                        <Heart aria-hidden="true" />
+                        {formatCount(skill.likeCount)} 收藏
+                    </span>
+                    <span>
+                        <UsersRound aria-hidden="true" />
+                        {formatCount(skill.addedCount)} 加入
+                    </span>
                 </div>
             </button>
             <div className="admin-skill-card-control">
-                <div><strong>技能开关</strong><span>{skill.available ? "原始状态已开启" : "原始状态已关闭"}</span></div>
+                <div>
+                    <strong>技能开关</strong>
+                    <span>{skill.available ? "原始状态已开启" : "原始状态已关闭"}</span>
+                </div>
                 <Switch loading={saving} checked={skill.available} aria-label={`${skill.skillName}技能开关`} onChange={onAvailability} />
             </div>
         </article>
@@ -410,29 +463,70 @@ function SkillDetailModal({ skill, globalAvailable, categories, onClose }: { ski
         >
             <div className="admin-skill-detail" data-category={skill.tag}>
                 <div className="admin-skill-detail-heading">
-                    <span className="admin-skill-detail-icon" aria-hidden="true"><Icon /></span>
-                    <div className="min-w-0"><h2>{skill.skillName}</h2><code>{skill.skillId}</code></div>
+                    <span className="admin-skill-detail-icon" aria-hidden="true">
+                        <Icon />
+                    </span>
+                    <div className="min-w-0">
+                        <h2>{skill.skillName}</h2>
+                        <code>{skill.skillId}</code>
+                    </div>
                     <SkillAvailabilityBadge skill={skill} globalAvailable={globalAvailable} />
                 </div>
-                <section><h3>技能简介</h3><p className="admin-skill-detail-description">{skill.description || "暂无技能简介"}</p></section>
+                <section>
+                    <h3>技能简介</h3>
+                    <p className="admin-skill-detail-description">{skill.description || "暂无技能简介"}</p>
+                </section>
                 <section>
                     <h3>基本信息</h3>
                     <dl className="admin-skill-detail-grid">
-                        <div><dt>分类</dt><dd>{category?.label || "其他"}</dd></div>
-                        <div><dt>来源</dt><dd>{sourceLabel(skill.sourceType)}</dd></div>
-                        <div><dt>作者</dt><dd>{skill.authorName || "平台"}</dd></div>
-                        <div><dt>版本</dt><dd>v{skill.version || "1.0"}</dd></div>
-                        <div><dt>收藏量</dt><dd>{formatCount(skill.likeCount)}</dd></div>
-                        <div><dt>加入量</dt><dd>{formatCount(skill.addedCount)}</dd></div>
-                        <div className="is-wide"><dt>更新时间</dt><dd className="inline-flex items-center gap-1.5"><CalendarClock className="size-3.5" aria-hidden="true" />{formatDate(skill.updatedAt)}</dd></div>
+                        <div>
+                            <dt>分类</dt>
+                            <dd>{category?.label || "其他"}</dd>
+                        </div>
+                        <div>
+                            <dt>来源</dt>
+                            <dd>{sourceLabel(skill.sourceType)}</dd>
+                        </div>
+                        <div>
+                            <dt>作者</dt>
+                            <dd>{skill.authorName || "平台"}</dd>
+                        </div>
+                        <div>
+                            <dt>版本</dt>
+                            <dd>v{skill.version || "1.0"}</dd>
+                        </div>
+                        <div>
+                            <dt>收藏量</dt>
+                            <dd>{formatCount(skill.likeCount)}</dd>
+                        </div>
+                        <div>
+                            <dt>加入量</dt>
+                            <dd>{formatCount(skill.addedCount)}</dd>
+                        </div>
+                        <div className="is-wide">
+                            <dt>更新时间</dt>
+                            <dd className="inline-flex items-center gap-1.5">
+                                <CalendarClock className="size-3.5" aria-hidden="true" />
+                                {formatDate(skill.updatedAt)}
+                            </dd>
+                        </div>
                     </dl>
                 </section>
                 <section>
                     <h3>三级可用状态</h3>
                     <div className="admin-skill-detail-statuses">
-                        <div><span>用户技能库总开关</span><AdminStatusBadge label={globalAvailable ? "已开启" : "已关闭"} tone={globalAvailable ? "success" : "warning"} /></div>
-                        <div><span>{category?.label || "所属分类"}总开关</span><AdminStatusBadge label={skill.categoryAvailable ? "已开启" : "已关闭"} tone={skill.categoryAvailable ? "success" : "warning"} /></div>
-                        <div><span>技能原始开关</span><AdminStatusBadge label={skill.available ? "已开启" : "已关闭"} tone={skill.available ? "success" : "neutral"} /></div>
+                        <div>
+                            <span>用户技能库总开关</span>
+                            <AdminStatusBadge label={globalAvailable ? "已开启" : "已关闭"} tone={globalAvailable ? "success" : "warning"} />
+                        </div>
+                        <div>
+                            <span>{category?.label || "所属分类"}总开关</span>
+                            <AdminStatusBadge label={skill.categoryAvailable ? "已开启" : "已关闭"} tone={skill.categoryAvailable ? "success" : "warning"} />
+                        </div>
+                        <div>
+                            <span>技能原始开关</span>
+                            <AdminStatusBadge label={skill.available ? "已开启" : "已关闭"} tone={skill.available ? "success" : "neutral"} />
+                        </div>
                     </div>
                 </section>
             </div>
@@ -441,7 +535,16 @@ function SkillDetailModal({ skill, globalAvailable, categories, onClose }: { ski
 }
 
 function AdminSkillsSkeleton() {
-    return <div className="admin-skills-skeleton"><Skeleton active paragraph={{ rows: 1 }} /><div className="admin-skills-grid">{Array.from({ length: 8 }, (_, index) => <div key={index} className="admin-skill-card-skeleton" />)}</div></div>;
+    return (
+        <div className="admin-skills-skeleton">
+            <Skeleton active paragraph={{ rows: 1 }} />
+            <div className="admin-skills-grid">
+                {Array.from({ length: 8 }, (_, index) => (
+                    <div key={index} className="admin-skill-card-skeleton" />
+                ))}
+            </div>
+        </div>
+    );
 }
 
 function sourceLabel(sourceType: string) {

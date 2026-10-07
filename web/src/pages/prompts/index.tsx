@@ -24,25 +24,28 @@ export default function UserPromptsPage() {
     const [deletingID, setDeletingID] = useState("");
     const requestRef = useRef<AbortController | null>(null);
 
-    const load = useCallback(async (nextPage = page, nextPageSize = pageSize) => {
-        requestRef.current?.abort();
-        const controller = new AbortController();
-        requestRef.current = controller;
-        setLoading(true);
-        setLoadError("");
-        try {
-            const result = await listUserPrompts({ page: nextPage, pageSize: nextPageSize }, controller.signal);
-            setRows(result.prompts);
-            setTotal(result.total);
-            setPage(result.page);
-            setPageSize(result.pageSize);
-        } catch (error) {
-            if (controller.signal.aborted) return;
-            setLoadError(error instanceof Error ? error.message : "提示词加载失败");
-        } finally {
-            if (!controller.signal.aborted) setLoading(false);
-        }
-    }, [page, pageSize]);
+    const load = useCallback(
+        async (nextPage = page, nextPageSize = pageSize) => {
+            requestRef.current?.abort();
+            const controller = new AbortController();
+            requestRef.current = controller;
+            setLoading(true);
+            setLoadError("");
+            try {
+                const result = await listUserPrompts({ page: nextPage, pageSize: nextPageSize }, controller.signal);
+                setRows(result.prompts);
+                setTotal(result.total);
+                setPage(result.page);
+                setPageSize(result.pageSize);
+            } catch (error) {
+                if (controller.signal.aborted) return;
+                setLoadError(error instanceof Error ? error.message : "提示词加载失败");
+            } finally {
+                if (!controller.signal.aborted) setLoading(false);
+            }
+        },
+        [page, pageSize],
+    );
 
     useEffect(() => {
         void load(1, pageSize);
@@ -76,47 +79,87 @@ export default function UserPromptsPage() {
             <PageHeader
                 title="我的提示词"
                 description="保存自己的提示词记录，随时复制使用或继续沉淀创作方法。"
-                actions={<Button type="primary" icon={<Plus className="size-4" />} onClick={() => openEditor()}>添加提示词</Button>}
+                actions={
+                    <Button type="primary" icon={<Plus className="size-4" />} onClick={() => openEditor()}>
+                        添加提示词
+                    </Button>
+                }
             />
 
             <section className="user-prompts-records" aria-labelledby="user-prompts-records-title">
-                <div className="user-prompts-records-header"><h2 id="user-prompts-records-title">我的记录</h2><span>共 {total} 条</span></div>
-                <div className="user-prompts-table-head" aria-hidden><span>标题</span><span>分类</span><span>更新时间</span><span>操作</span></div>
-                {loading ? <WorkspaceLoadingState label="正在读取提示词" detail="整理你的个人提示词记录" rows={3} className="px-5" /> : loadError ? (
+                <div className="user-prompts-records-header">
+                    <h2 id="user-prompts-records-title">我的记录</h2>
+                    <span>共 {total} 条</span>
+                </div>
+                <div className="user-prompts-table-head" aria-hidden>
+                    <span>标题</span>
+                    <span>分类</span>
+                    <span>更新时间</span>
+                    <span>操作</span>
+                </div>
+                {loading ? (
+                    <WorkspaceLoadingState label="正在读取提示词" detail="整理你的个人提示词记录" rows={3} className="px-5" />
+                ) : loadError ? (
                     <WorkspaceErrorState compact description={loadError} onRetry={() => void load(page, pageSize)} />
                 ) : rows.length ? (
                     <div className="user-prompts-table-body">
-                        {rows.map((row) => <PromptRow key={row.id} row={row} deleting={deletingID === row.id} onCopy={() => copyPrompt(row)} onEdit={() => openEditor(row)} onDelete={() => void remove(row)} />)}
+                        {rows.map((row) => (
+                            <PromptRow key={row.id} row={row} deleting={deletingID === row.id} onCopy={() => copyPrompt(row)} onEdit={() => openEditor(row)} onDelete={() => void remove(row)} />
+                        ))}
                     </div>
-                ) : <WorkspaceState compact title="还没有保存提示词" description="点击右上角“添加提示词”，建立自己的可复用提示词库。" action={<Button icon={<Plus className="size-4" />} onClick={() => openEditor()}>添加第一条提示词</Button>} />}
+                ) : (
+                    <WorkspaceState
+                        compact
+                        title="还没有保存提示词"
+                        description="点击右上角“添加提示词”，建立自己的可复用提示词库。"
+                        action={
+                            <Button icon={<Plus className="size-4" />} onClick={() => openEditor()}>
+                                添加第一条提示词
+                            </Button>
+                        }
+                    />
+                )}
             </section>
 
             <PaginationBar current={page} pageSize={pageSize} total={total} itemLabel="条" onChange={(nextPage, nextPageSize) => void load(nextPage, nextPageSize)} />
 
-            <UserPromptEditorModal
-                open={editing !== undefined}
-                prompt={editing}
-                onClose={() => setEditing(undefined)}
-                onSaved={() => void load(editing ? page : 1, pageSize)}
-            />
+            <UserPromptEditorModal open={editing !== undefined} prompt={editing} onClose={() => setEditing(undefined)} onSaved={() => void load(editing ? page : 1, pageSize)} />
         </WorkspacePage>
     );
 }
 
 function PromptRow({ row, deleting, onCopy, onEdit, onDelete }: { row: UserPrompt; deleting: boolean; onCopy: () => void; onEdit: () => void; onDelete: () => void }) {
-    return <article className="user-prompt-row">
-        <div className="user-prompt-row-main">
-            <div className="user-prompt-row-cover">{row.coverResourceId || row.coverUrl ? <img src={row.coverResourceId ? resourceFileUrl(row.coverResourceId) : row.coverUrl} alt="" referrerPolicy="no-referrer" /> : <ImageIcon />}</div>
-            <div className="min-w-0"><h3>{row.title}</h3><p>{row.description || row.prompt}</p>{row.tags.length ? <div className="user-prompt-row-tags">{row.tags.slice(0, 3).map((tag) => <Tag key={tag}>{tag}</Tag>)}</div> : null}</div>
-        </div>
-        <span className="user-prompt-row-mode">{modeLabels[row.mode]}</span>
-        <time dateTime={row.updatedAt}>{formatPromptTime(row.updatedAt)}</time>
-        <div className="user-prompt-row-actions">
-            <Button type="text" icon={<Copy className="size-4" />} onClick={onCopy}>复制</Button>
-            <Button type="text" icon={<Pencil className="size-4" />} onClick={onEdit}>编辑</Button>
-            <Popconfirm title="删除这条提示词？" description="删除后无法恢复。" okText="删除" cancelText="取消" okButtonProps={{ danger: true }} onConfirm={onDelete}><Button type="text" danger loading={deleting} icon={<Trash2 className="size-4" />} aria-label={`删除${row.title}`} /></Popconfirm>
-        </div>
-    </article>;
+    return (
+        <article className="user-prompt-row">
+            <div className="user-prompt-row-main">
+                <div className="user-prompt-row-cover">{row.coverResourceId || row.coverUrl ? <img src={row.coverResourceId ? resourceFileUrl(row.coverResourceId) : row.coverUrl} alt="" referrerPolicy="no-referrer" /> : <ImageIcon />}</div>
+                <div className="min-w-0">
+                    <h3>{row.title}</h3>
+                    <p>{row.description || row.prompt}</p>
+                    {row.tags.length ? (
+                        <div className="user-prompt-row-tags">
+                            {row.tags.slice(0, 3).map((tag) => (
+                                <Tag key={tag}>{tag}</Tag>
+                            ))}
+                        </div>
+                    ) : null}
+                </div>
+            </div>
+            <span className="user-prompt-row-mode">{modeLabels[row.mode]}</span>
+            <time dateTime={row.updatedAt}>{formatPromptTime(row.updatedAt)}</time>
+            <div className="user-prompt-row-actions">
+                <Button type="text" icon={<Copy className="size-4" />} onClick={onCopy}>
+                    复制
+                </Button>
+                <Button type="text" icon={<Pencil className="size-4" />} onClick={onEdit}>
+                    编辑
+                </Button>
+                <Popconfirm title="删除这条提示词？" description="删除后无法恢复。" okText="删除" cancelText="取消" okButtonProps={{ danger: true }} onConfirm={onDelete}>
+                    <Button type="text" danger loading={deleting} icon={<Trash2 className="size-4" />} aria-label={`删除${row.title}`} />
+                </Popconfirm>
+            </div>
+        </article>
+    );
 }
 
 function formatPromptTime(value: string) {

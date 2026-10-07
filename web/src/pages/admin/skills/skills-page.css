@@ -43,7 +43,10 @@
     cursor: pointer;
     font: inherit;
     white-space: nowrap;
-    transition: background-color var(--admin-motion), color var(--admin-motion), box-shadow var(--admin-motion);
+    transition:
+        background-color var(--admin-motion),
+        color var(--admin-motion),
+        box-shadow var(--admin-motion);
 }
 
 .admin-skills-tab:hover {
@@ -59,7 +62,9 @@
 
 .admin-skills-tab.is-active {
     background: var(--admin-surface);
-    box-shadow: 0 0 0 1px var(--admin-border), 0 1px 2px color-mix(in srgb, var(--admin-text) 8%, transparent);
+    box-shadow:
+        0 0 0 1px var(--admin-border),
+        0 1px 2px color-mix(in srgb, var(--admin-text) 8%, transparent);
     color: var(--admin-text);
 }
 
@@ -243,7 +248,10 @@
     border-radius: calc(var(--admin-radius-lg) + 2px);
     background: var(--admin-surface);
     box-shadow: var(--admin-card-shadow);
-    transition: border-color var(--admin-motion), box-shadow var(--admin-motion), transform var(--admin-motion);
+    transition:
+        border-color var(--admin-motion),
+        box-shadow var(--admin-motion),
+        transform var(--admin-motion);
 }
 
 .admin-skill-card:hover {
@@ -597,8 +605,12 @@
 }
 
 @keyframes admin-skill-card-loading {
-    from { background-position: 100% 0; }
-    to { background-position: -100% 0; }
+    from {
+        background-position: 100% 0;
+    }
+    to {
+        background-position: -100% 0;
+    }
 }
 
 @media (max-width: 1040px) {

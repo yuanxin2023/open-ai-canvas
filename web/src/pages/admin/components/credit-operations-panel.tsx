@@ -344,8 +344,8 @@ export default function CreditOperationsPanel({ users, activeOperation, onOperat
                             {order.usageSource === "video_formula"
                                 ? `公式结算 · ${order.outputTokens.toLocaleString()} 视频 Token`
                                 : order.capability === "video"
-                                    ? `上游用量 · ${order.outputTokens.toLocaleString()} 视频 Token`
-                                    : `输入 ${order.inputTokens} · 输出 ${order.outputTokens} · 缓存 ${order.cachedTokens}`}
+                                  ? `上游用量 · ${order.outputTokens.toLocaleString()} 视频 Token`
+                                  : `输入 ${order.inputTokens} · 输出 ${order.outputTokens} · 缓存 ${order.cachedTokens}`}
                         </div>
                     </div>
                 ) : (

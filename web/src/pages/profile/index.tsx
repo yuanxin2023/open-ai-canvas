@@ -165,18 +165,7 @@ export default function ProfilePage() {
     const previewUser = { ...user, avatarUrl: avatarUrl || undefined };
 
     return (
-        <AppModal
-            flush
-            centered
-            open
-            title={null}
-            footer={null}
-            width="min(960px, calc(100vw - 24px))"
-            maskClosable={!busy}
-            keyboard={!busy}
-            closable={!busy}
-            onCancel={close}
-        >
+        <AppModal flush centered open title={null} footer={null} width="min(960px, calc(100vw - 24px))" maskClosable={!busy} keyboard={!busy} closable={!busy} onCancel={close}>
             <div className="app-user-workspace flex h-[720px] max-h-[calc(100vh-24px)] min-h-0 flex-col overflow-hidden bg-[var(--user-surface)] text-[var(--user-ink)] sm:flex-row">
                 <aside className="shrink-0 border-b border-[var(--user-border)] bg-[var(--user-sidebar-bg)] px-4 py-4 sm:w-52 sm:border-r sm:border-b-0 sm:px-5 sm:py-6">
                     <h1 className="px-2 text-base font-semibold tracking-[-0.01em] sm:text-lg">账户管理</h1>
@@ -207,9 +196,7 @@ export default function ProfilePage() {
                 <main className="flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--user-surface)]">
                     <header className="shrink-0 border-b border-[var(--user-border)] px-5 py-5 pr-14 sm:px-7 sm:py-6 sm:pr-14">
                         <h2 className="text-xl font-semibold tracking-[-0.02em]">{activeSection === "profile" ? "个人主页" : "密码重置"}</h2>
-                        <p className="mt-1 text-sm text-[var(--user-ink-muted)]">
-                            {activeSection === "profile" ? "管理头像和登录用户名，查看账户注册信息。" : "验证当前密码后，为账户设置新的登录密码。"}
-                        </p>
+                        <p className="mt-1 text-sm text-[var(--user-ink-muted)]">{activeSection === "profile" ? "管理头像和登录用户名，查看账户注册信息。" : "验证当前密码后，为账户设置新的登录密码。"}</p>
                     </header>
 
                     {activeSection === "profile" ? (
@@ -229,16 +216,43 @@ export default function ProfilePage() {
                                             </div>
                                             <div className="flex shrink-0 flex-wrap gap-2">
                                                 <input ref={inputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => void selectAvatar(event)} />
-                                                <Button htmlType="button" icon={<Camera className="size-4" />} loading={uploading} onClick={() => inputRef.current?.click()}>{avatarResourceId ? "更换头像" : "上传头像"}</Button>
-                                                {avatarResourceId || avatarUrl ? <Button htmlType="button" danger icon={<Trash2 className="size-4" />} disabled={uploading} onClick={() => { setAvatarResourceId(""); setAvatarUrl(""); }}>移除</Button> : null}
+                                                <Button htmlType="button" icon={<Camera className="size-4" />} loading={uploading} onClick={() => inputRef.current?.click()}>
+                                                    {avatarResourceId ? "更换头像" : "上传头像"}
+                                                </Button>
+                                                {avatarResourceId || avatarUrl ? (
+                                                    <Button
+                                                        htmlType="button"
+                                                        danger
+                                                        icon={<Trash2 className="size-4" />}
+                                                        disabled={uploading}
+                                                        onClick={() => {
+                                                            setAvatarResourceId("");
+                                                            setAvatarUrl("");
+                                                        }}
+                                                    >
+                                                        移除
+                                                    </Button>
+                                                ) : null}
                                             </div>
                                         </div>
                                     </section>
 
                                     <section className="border-t border-[var(--user-border)] p-5 sm:p-7">
                                         <h3 className="text-base font-semibold">公开资料</h3>
-                                        <label htmlFor="profile-username" className="mt-4 mb-2 block text-sm font-medium">登录用户名</label>
-                                        <Input id="profile-username" size="large" prefix={<UserRound className="size-4 text-[var(--user-ink-soft)]" />} value={username} placeholder="输入登录用户名" showCount={{ formatter: ({ value }) => `${Array.from(value).length}/9` }} status={usernameError ? "error" : undefined} onChange={(event) => setUsername(event.target.value)} autoComplete="username" />
+                                        <label htmlFor="profile-username" className="mt-4 mb-2 block text-sm font-medium">
+                                            登录用户名
+                                        </label>
+                                        <Input
+                                            id="profile-username"
+                                            size="large"
+                                            prefix={<UserRound className="size-4 text-[var(--user-ink-soft)]" />}
+                                            value={username}
+                                            placeholder="输入登录用户名"
+                                            showCount={{ formatter: ({ value }) => `${Array.from(value).length}/9` }}
+                                            status={usernameError ? "error" : undefined}
+                                            onChange={(event) => setUsername(event.target.value)}
+                                            autoComplete="username"
+                                        />
                                         <p className={`mt-2 text-xs ${usernameError ? "text-red-500" : "text-[var(--user-ink-muted)]"}`}>{usernameError || "用户名为 3–9 位，可使用中文、英文字母和数字；英文字母将自动转为小写。"}</p>
                                     </section>
 
@@ -259,8 +273,12 @@ export default function ProfilePage() {
                                     </section>
 
                                     <div className="flex flex-col-reverse gap-2 border-t border-[var(--user-border)] px-5 py-5 sm:flex-row sm:justify-end sm:px-7">
-                                        <Button htmlType="button" size="large" onClick={close}>取消</Button>
-                                        <Button type="primary" htmlType="submit" size="large" icon={<Save className="size-4" />} loading={saving} disabled={uploading || Boolean(usernameError) || unchanged}>保存资料</Button>
+                                        <Button htmlType="button" size="large" onClick={close}>
+                                            取消
+                                        </Button>
+                                        <Button type="primary" htmlType="submit" size="large" icon={<Save className="size-4" />} loading={saving} disabled={uploading || Boolean(usernameError) || unchanged}>
+                                            保存资料
+                                        </Button>
                                     </div>
                                 </form>
                             </div>
@@ -277,20 +295,28 @@ export default function ProfilePage() {
                                 </div>
                                 <div className="space-y-5 bg-[var(--user-surface-muted)] p-4 sm:p-5">
                                     <div>
-                                        <label htmlFor="current-password" className="mb-2 block text-sm font-medium">当前密码</label>
+                                        <label htmlFor="current-password" className="mb-2 block text-sm font-medium">
+                                            当前密码
+                                        </label>
                                         <Input.Password id="current-password" size="large" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} autoComplete="current-password" disabled={changingPassword} />
                                     </div>
                                     <div>
-                                        <label htmlFor="new-password" className="mb-2 block text-sm font-medium">新密码</label>
+                                        <label htmlFor="new-password" className="mb-2 block text-sm font-medium">
+                                            新密码
+                                        </label>
                                         <Input.Password id="new-password" size="large" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} autoComplete="new-password" disabled={changingPassword} />
                                         <p className="mt-2 text-xs text-[var(--user-ink-muted)]">密码至少需要 8 个字符。</p>
                                     </div>
                                     <div>
-                                        <label htmlFor="confirm-password" className="mb-2 block text-sm font-medium">确认新密码</label>
+                                        <label htmlFor="confirm-password" className="mb-2 block text-sm font-medium">
+                                            确认新密码
+                                        </label>
                                         <Input.Password id="confirm-password" size="large" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} autoComplete="new-password" disabled={changingPassword} />
                                     </div>
                                     <div className="flex justify-end pt-1">
-                                        <Button type="primary" htmlType="submit" size="large" icon={<LockKeyhole className="size-4" />} loading={changingPassword} disabled={!currentPassword || !newPassword || !confirmPassword}>修改密码</Button>
+                                        <Button type="primary" htmlType="submit" size="large" icon={<LockKeyhole className="size-4" />} loading={changingPassword} disabled={!currentPassword || !newPassword || !confirmPassword}>
+                                            修改密码
+                                        </Button>
                                     </div>
                                 </div>
                             </form>

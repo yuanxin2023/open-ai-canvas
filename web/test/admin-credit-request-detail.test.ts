@@ -11,7 +11,7 @@ describe("admin credit reconciliation request details", () => {
         expect(panel).toContain('title: "创建时间 / 详情"');
         expect(panel).toContain("setDetailBillingOrderId(order.id)");
         expect(panel).toContain('className: "admin-table-clickable-row"');
-        expect(panel).toContain('<ApiLogDetailModal billingOrderId={detailBillingOrderId}');
+        expect(panel).toContain("<ApiLogDetailModal billingOrderId={detailBillingOrderId}");
         expect(modal).toContain("getAdminApiLogByBillingOrder(billingOrderId!)");
         expect(api).toContain("/admin/billing-orders/${encodeURIComponent(billingOrderId)}/api-log");
     });

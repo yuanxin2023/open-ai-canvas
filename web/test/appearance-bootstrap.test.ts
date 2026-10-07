@@ -55,7 +55,7 @@ test("appearance management exposes the composer glow color and live preview", a
     expect(pageSource).toContain("<Slider");
     expect(pageSource).toContain("显示创作首屏光晕");
     expect(createSource).toContain('"--creation-composer-glow": composerGlowColor');
-    expect(createSource).toContain('data-glow-enabled={composerGlowEnabled}');
+    expect(createSource).toContain("data-glow-enabled={composerGlowEnabled}");
     expect(createSource).toContain('"--creation-composer-glow-opacity": composerGlowIntensity / 100');
     expect(createSource).toContain('"--creation-composer-glow-scale": composerGlowSize / 100');
     expect(createSource).toContain('"--creation-composer-glow-x": `${composerGlowPositionX}%`');

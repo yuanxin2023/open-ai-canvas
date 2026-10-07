@@ -4,14 +4,7 @@ import { useEffect, useState } from "react";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { normalizeUsername, usernameValidationMessage } from "@/lib/username";
 import { Select } from "@/pages/admin/ui/controls";
-import {
-    createAdministrator,
-    listAdminUsers,
-    promoteAdministrator,
-    type AdminManagedUser,
-    type AdminUser,
-    type LocalUser,
-} from "@/services/api/auth";
+import { createAdministrator, listAdminUsers, promoteAdministrator, type AdminManagedUser, type AdminUser, type LocalUser } from "@/services/api/auth";
 import type { AdminLevel, AdminPermission } from "@/lib/admin-permissions";
 import { AdminAccessFields } from "./admin-user-editor-fields";
 
@@ -33,7 +26,7 @@ type PromoteValues = AccessValues & { userId: string };
 function adminAccess(values: AccessValues) {
     return {
         level: values.adminLevel || "scoped",
-        permissions: values.adminLevel === "full" ? [] : (values.permissions || []),
+        permissions: values.adminLevel === "full" ? [] : values.permissions || [],
     } as const;
 }
 
@@ -69,7 +62,9 @@ export function AdministratorCreateDrawer({ open, onClose, onCompleted }: { open
             .then((result) => active && setCandidates(result.users))
             .catch((error) => active && message.error(error instanceof Error ? error.message : "读取普通用户失败"))
             .finally(() => active && setCandidateLoading(false));
-        return () => { active = false; };
+        return () => {
+            active = false;
+        };
     }, [debouncedCandidateSearch, message, mode, open]);
 
     const close = () => {
@@ -128,7 +123,11 @@ export function AdministratorCreateDrawer({ open, onClose, onCompleted }: { open
             onClose={close}
             mask={{ closable: !saving }}
             destroyOnHidden
-            extra={<Button type="primary" loading={saving} onClick={() => void save()}>保存</Button>}
+            extra={
+                <Button type="primary" loading={saving} onClick={() => void save()}>
+                    保存
+                </Button>
+            }
         >
             <Tabs
                 activeKey={mode}
@@ -139,7 +138,18 @@ export function AdministratorCreateDrawer({ open, onClose, onCompleted }: { open
                         label: "创建新账号",
                         children: (
                             <Form form={createForm} layout="vertical" requiredMark={false}>
-                                <Form.Item name="username" label="用户名" rules={[{ validator: (_, value?: string) => { const error = usernameValidationMessage(value || ""); return error ? Promise.reject(new Error(error)) : Promise.resolve(); } }]}>
+                                <Form.Item
+                                    name="username"
+                                    label="用户名"
+                                    rules={[
+                                        {
+                                            validator: (_, value?: string) => {
+                                                const error = usernameValidationMessage(value || "");
+                                                return error ? Promise.reject(new Error(error)) : Promise.resolve();
+                                            },
+                                        },
+                                    ]}
+                                >
                                     <Input placeholder="3-9 位中文、英文字母或数字" />
                                 </Form.Item>
                                 <Form.Item name="email" label="邮箱" rules={[{ type: "email", message: "请输入有效邮箱" }]}>
@@ -148,11 +158,23 @@ export function AdministratorCreateDrawer({ open, onClose, onCompleted }: { open
                                 <Form.Item name="remark" label="备注" extra="仅管理员可见。">
                                     <Input.TextArea rows={3} maxLength={500} showCount />
                                 </Form.Item>
-                                <Form.Item name="password" label="初始密码" rules={[{ required: true, message: "请设置初始密码" }, { min: 8, message: "密码至少 8 位" }]}>
+                                <Form.Item
+                                    name="password"
+                                    label="初始密码"
+                                    rules={[
+                                        { required: true, message: "请设置初始密码" },
+                                        { min: 8, message: "密码至少 8 位" },
+                                    ]}
+                                >
                                     <Input.Password autoComplete="new-password" />
                                 </Form.Item>
                                 <Form.Item name="status" label="账号状态">
-                                    <Select options={[{ label: "已启用", value: "active" }, { label: "已停用", value: "disabled" }]} />
+                                    <Select
+                                        options={[
+                                            { label: "已启用", value: "active" },
+                                            { label: "已停用", value: "disabled" },
+                                        ]}
+                                    />
                                 </Form.Item>
                                 <AdminAccessFields level={createLevel} />
                             </Form>

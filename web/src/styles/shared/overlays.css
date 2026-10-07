@@ -16,10 +16,18 @@
 }
 
 /* React Aria exposes the placement on the floating element. */
-.ra-pop-in[data-placement^="top"] { --ra-pop-origin: bottom center; }
-.ra-pop-in[data-placement^="bottom"] { --ra-pop-origin: top center; }
-.ra-pop-in[data-placement^="left"] { --ra-pop-origin: right center; }
-.ra-pop-in[data-placement^="right"] { --ra-pop-origin: left center; }
+.ra-pop-in[data-placement^="top"] {
+    --ra-pop-origin: bottom center;
+}
+.ra-pop-in[data-placement^="bottom"] {
+    --ra-pop-origin: top center;
+}
+.ra-pop-in[data-placement^="left"] {
+    --ra-pop-origin: right center;
+}
+.ra-pop-in[data-placement^="right"] {
+    --ra-pop-origin: left center;
+}
 
 @media (prefers-reduced-motion: reduce) {
     .ra-pop-in {

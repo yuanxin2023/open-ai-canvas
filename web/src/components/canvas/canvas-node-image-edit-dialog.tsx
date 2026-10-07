@@ -41,13 +41,7 @@ export function CanvasNodeImageEditDialog({
                         <h3 className="text-lg font-semibold">{preset === "remove-background" ? "去除背景" : "描述你要修改的内容"}</h3>
                         <p className="mt-1 text-sm opacity-60">保留主体和构图，只修改你描述的部分。</p>
                     </div>
-                    <Input.TextArea
-                        autoFocus
-                        rows={7}
-                        value={prompt}
-                        placeholder="例如：把背景换成黄昏海边，保持人物姿势和服装不变"
-                        onChange={(event) => setPrompt(event.target.value)}
-                    />
+                    <Input.TextArea autoFocus rows={7} value={prompt} placeholder="例如：把背景换成黄昏海边，保持人物姿势和服装不变" onChange={(event) => setPrompt(event.target.value)} />
                     <div className="space-y-2">
                         <div className="text-sm font-medium opacity-75">编辑模型</div>
                         <ModelPicker
@@ -60,8 +54,15 @@ export function CanvasNodeImageEditDialog({
                         />
                     </div>
                     <div className="mt-auto flex justify-end gap-2">
-                        <Button icon={<X className="size-4" />} onClick={onClose}>取消</Button>
-                        <Button type="primary" icon={<WandSparkles className="size-4" />} disabled={!prompt.trim()} onClick={() => onConfirm({ prompt: prompt.trim(), generationConfig: { model: generationConfig.model, imageModel: generationConfig.imageModel, size: generationConfig.size, quality: generationConfig.quality } })}>
+                        <Button icon={<X className="size-4" />} onClick={onClose}>
+                            取消
+                        </Button>
+                        <Button
+                            type="primary"
+                            icon={<WandSparkles className="size-4" />}
+                            disabled={!prompt.trim()}
+                            onClick={() => onConfirm({ prompt: prompt.trim(), generationConfig: { model: generationConfig.model, imageModel: generationConfig.imageModel, size: generationConfig.size, quality: generationConfig.quality } })}
+                        >
                             开始编辑
                         </Button>
                     </div>

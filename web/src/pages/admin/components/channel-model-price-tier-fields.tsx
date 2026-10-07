@@ -115,7 +115,11 @@ export function PriceTierFields({
                                 ) : null}
                                 {isVideo ? (
                                     <Form.Item className="mb-0" name={[index, "videoSeconds"]} label="时长" rules={[{ required: true, message: "请输入时长" }]}>
-                                        {durationOptions.length ? <Select options={[{ label: "任意时长", value: 0 }, ...durationOptions.map((value) => ({ label: `${value} 秒`, value }))]} /> : <InputNumber className="w-full" min={0} precision={0} placeholder="0 表示任意时长" />}
+                                        {durationOptions.length ? (
+                                            <Select options={[{ label: "任意时长", value: 0 }, ...durationOptions.map((value) => ({ label: `${value} 秒`, value }))]} />
+                                        ) : (
+                                            <InputNumber className="w-full" min={0} precision={0} placeholder="0 表示任意时长" />
+                                        )}
                                     </Form.Item>
                                 ) : null}
                                 {isVideo ? (

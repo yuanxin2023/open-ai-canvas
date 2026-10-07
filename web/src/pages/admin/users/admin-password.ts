@@ -1,9 +1,4 @@
-const passwordCharacterGroups = [
-    "ABCDEFGHJKLMNPQRSTUVWXYZ",
-    "abcdefghijkmnopqrstuvwxyz",
-    "23456789",
-    "!@#$%&*+-_",
-] as const;
+const passwordCharacterGroups = ["ABCDEFGHJKLMNPQRSTUVWXYZ", "abcdefghijkmnopqrstuvwxyz", "23456789", "!@#$%&*+-_"] as const;
 
 const passwordCharacters = passwordCharacterGroups.join("");
 

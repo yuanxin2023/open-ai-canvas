@@ -1,10 +1,5 @@
 const STORAGE_KEY_NAMESPACE = "open-ai-canvas";
-const STORAGE_KEY_MARKERS = [
-    ".admin.announcements.pending-review",
-    ".announcements.dismiss-today",
-    ".announcements.dismiss-session",
-    ".banner-announcements.dismissed",
-] as const;
+const STORAGE_KEY_MARKERS = [".admin.announcements.pending-review", ".announcements.dismiss-today", ".announcements.dismiss-session", ".banner-announcements.dismissed"] as const;
 
 export function migrateFirstPartyStorage(storage: Pick<Storage, "length" | "key" | "getItem" | "setItem" | "removeItem">) {
     const migrations: Array<{ source: string; target: string; value: string }> = [];

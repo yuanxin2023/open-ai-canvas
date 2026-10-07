@@ -282,8 +282,14 @@ export default function FeatureAvailabilityPanel() {
             title: copy.title,
             content: (
                 <div className="space-y-3">
-                    <p><strong>操作效果：</strong>{copy.operation}</p>
-                    <p><strong>前端用户影响：</strong>{copy.userImpact}</p>
+                    <p>
+                        <strong>操作效果：</strong>
+                        {copy.operation}
+                    </p>
+                    <p>
+                        <strong>前端用户影响：</strong>
+                        {copy.userImpact}
+                    </p>
                 </div>
             ),
             okText: copy.okText,

@@ -65,15 +65,24 @@ export function CreditProductCard({ product, maxCreditsMicrocredits, actionLabel
                     </Button>
                 </div>
                 <div className="workspace-credit-product-quota">
-                    <strong>{product.quotaCaption || "到账积分"} {formatCredits(product.creditsMicrocredits)}</strong>
+                    <strong>
+                        {product.quotaCaption || "到账积分"} {formatCredits(product.creditsMicrocredits)}
+                    </strong>
                     {product.quotaDetail ? <span>{product.quotaDetail}</span> : null}
                 </div>
                 <div className="workspace-credit-product-meter" aria-hidden="true">
-                    {Array.from({ length: 28 }, (_, index) => <i key={index} className={index < activeSegments ? "is-active" : ""} />)}
+                    {Array.from({ length: 28 }, (_, index) => (
+                        <i key={index} className={index < activeSegments ? "is-active" : ""} />
+                    ))}
                 </div>
                 {benefits.length ? (
                     <div className="workspace-credit-product-facts">
-                        {benefits.map((benefit, index) => <span key={`${product.id}-benefit-${index}`}><Check aria-hidden />{benefit}</span>)}
+                        {benefits.map((benefit, index) => (
+                            <span key={`${product.id}-benefit-${index}`}>
+                                <Check aria-hidden />
+                                {benefit}
+                            </span>
+                        ))}
                     </div>
                 ) : null}
             </div>
@@ -87,7 +96,10 @@ export function creditProductActiveSegments(creditsMicrocredits: number, maxCred
 }
 
 export function splitProductBenefits(benefits?: string) {
-    return (benefits || "").split(/\r?\n/).map((item) => item.trim()).filter(Boolean);
+    return (benefits || "")
+        .split(/\r?\n/)
+        .map((item) => item.trim())
+        .filter(Boolean);
 }
 
 export function formatProductPrice(amountFen: number) {
@@ -97,7 +109,7 @@ export function formatProductPrice(amountFen: number) {
 
 export function formatUnitPrice(amountFen: number, creditsMicrocredits: number) {
     if (creditsMicrocredits <= 0) return "--";
-    return (amountFen * 1_000_000 / creditsMicrocredits).toFixed(2);
+    return ((amountFen * 1_000_000) / creditsMicrocredits).toFixed(2);
 }
 
 export function normalizeProductAccentColor(value?: string) {

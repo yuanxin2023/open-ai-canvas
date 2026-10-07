@@ -86,7 +86,9 @@ describe("pricing write validation", () => {
         expect(() => validateChannelModelPrices(video)).not.toThrow();
     });
     test("accepts supported video conditions and rejects the removed audio condition", () => {
-        expect(() => validateChannelModelPrices({ ...draft, capability: "video", protocol: "volcengine-ark-video", priceTiers: [{ ...defaultPriceTier("advanced"), billingMode: "token", outputTokenPrice: 0.01, videoGenerateAudio: "false" }] })).toThrow("匹配条件");
+        expect(() => validateChannelModelPrices({ ...draft, capability: "video", protocol: "volcengine-ark-video", priceTiers: [{ ...defaultPriceTier("advanced"), billingMode: "token", outputTokenPrice: 0.01, videoGenerateAudio: "false" }] })).toThrow(
+            "匹配条件",
+        );
         for (const condition of [{ videoSeconds: 5 }, { imageCount: 2 }, { operation: "image_to_video" }, { resolution: "1080p" }]) {
             expect(() => validateChannelModelPrices({ ...draft, capability: "video", protocol: "volcengine-ark-video", priceTiers: [{ ...defaultPriceTier("advanced"), billingMode: "token", outputTokenPrice: 0.01, ...condition }] })).not.toThrow();
         }

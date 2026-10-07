@@ -6,15 +6,7 @@ import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { PaymentPromotionBanner } from "@/components/payments/payment-promotion-banner";
 import { Switch } from "@/pages/admin/ui/controls";
 import { resourceFileUrl } from "@/services/api/resources";
-import {
-    discardAdminPaymentPromotionImage,
-    getAdminPaymentPromotion,
-    paymentPromotionImageUrl,
-    updateAdminPaymentPromotion,
-    uploadAdminPaymentPromotionImage,
-    type AdminPaymentPromotion,
-    type PublicPaymentPromotion,
-} from "@/services/api/payments";
+import { discardAdminPaymentPromotionImage, getAdminPaymentPromotion, paymentPromotionImageUrl, updateAdminPaymentPromotion, uploadAdminPaymentPromotionImage, type AdminPaymentPromotion, type PublicPaymentPromotion } from "@/services/api/payments";
 
 type PromotionFormValues = {
     cardEnabled: boolean;
@@ -97,9 +89,12 @@ export function PaymentPromotionPanel({ reloadKey = 0 }: { reloadKey?: number })
         })();
     }, [reloadKey]);
 
-    useEffect(() => () => {
-        if (draftRef.current) void discardAdminPaymentPromotionImage(draftRef.current).catch(() => undefined);
-    }, []);
+    useEffect(
+        () => () => {
+            if (draftRef.current) void discardAdminPaymentPromotionImage(draftRef.current).catch(() => undefined);
+        },
+        [],
+    );
 
     const discardDraft = async () => {
         const id = draftRef.current;
@@ -215,61 +210,121 @@ export function PaymentPromotionPanel({ reloadKey = 0 }: { reloadKey?: number })
             <section className="admin-payment-promotion-form">
                 <Form form={form} layout="vertical" initialValues={DEFAULT_VALUES} requiredMark="optional" disabled={loading || saving}>
                     <div className="admin-payment-promotion-section-heading">
-                        <div><strong>促销卡片</strong><span>关闭后卡片与限时价格同时停用。</span></div>
-                        <Form.Item name="cardEnabled" valuePropName="checked" noStyle><Switch aria-label="显示促销卡片" /></Form.Item>
+                        <div>
+                            <strong>促销卡片</strong>
+                            <span>关闭后卡片与限时价格同时停用。</span>
+                        </div>
+                        <Form.Item name="cardEnabled" valuePropName="checked" noStyle>
+                            <Switch aria-label="显示促销卡片" />
+                        </Form.Item>
                     </div>
-                    <Form.Item name="imageResourceId" hidden><Input /></Form.Item>
+                    <Form.Item name="imageResourceId" hidden>
+                        <Input />
+                    </Form.Item>
                     <div className="admin-payment-promotion-image-row">
-                        <div className="admin-payment-promotion-image-copy"><strong>背景图片</strong><span>支持 JPEG、PNG、WebP，最大 10MB，推荐约 8:1。</span></div>
+                        <div className="admin-payment-promotion-image-copy">
+                            <strong>背景图片</strong>
+                            <span>支持 JPEG、PNG、WebP，最大 10MB，推荐约 8:1。</span>
+                        </div>
                         <div className="flex gap-2">
-                            <Button icon={<ImagePlus className="size-4" />} loading={uploading} onClick={() => fileInputRef.current?.click()}>{imagePreview ? "替换图片" : "上传图片"}</Button>
-                            {imagePreview ? <Button danger icon={<Trash2 className="size-4" />} disabled={uploading} onClick={() => void clearImage()}>移除</Button> : null}
+                            <Button icon={<ImagePlus className="size-4" />} loading={uploading} onClick={() => fileInputRef.current?.click()}>
+                                {imagePreview ? "替换图片" : "上传图片"}
+                            </Button>
+                            {imagePreview ? (
+                                <Button danger icon={<Trash2 className="size-4" />} disabled={uploading} onClick={() => void clearImage()}>
+                                    移除
+                                </Button>
+                            ) : null}
                         </div>
                         <input ref={fileInputRef} className="hidden" type="file" accept="image/jpeg,image/png,image/webp" onChange={uploadImage} />
                     </div>
 
                     <div className="admin-payment-promotion-divider" />
                     <div className="admin-payment-promotion-section-heading">
-                        <div><strong>限时活动</strong><span>活动期间使用商品售价；结束后恢复划线对比价。</span></div>
-                        <Form.Item name="activityEnabled" valuePropName="checked" noStyle><Switch aria-label="启用限时活动" /></Form.Item>
+                        <div>
+                            <strong>限时活动</strong>
+                            <span>活动期间使用商品售价；结束后恢复划线对比价。</span>
+                        </div>
+                        <Form.Item name="activityEnabled" valuePropName="checked" noStyle>
+                            <Switch aria-label="启用限时活动" />
+                        </Form.Item>
                     </div>
                     <Form.Item noStyle shouldUpdate={(previous, current) => previous.activityEnabled !== current.activityEnabled}>
                         {({ getFieldValue }) => {
                             const enabled = getFieldValue("activityEnabled");
-                            return <>
-                                <Form.Item name="activeTitle" label="活动主标题" rules={[{ required: enabled, max: 120 }]}><Input placeholder="例如：品牌设计月，活动期间惊喜 5 折" /></Form.Item>
-                                <Form.Item name="activeSubtitle" label="活动副标题" rules={[{ max: 240 }]}><Input.TextArea rows={2} placeholder="例如：最高立享 31 天无限创作" /></Form.Item>
-                                <div className="grid grid-cols-2 gap-3">
-                                    <Form.Item name="startsAt" label="开始时间（北京时间）" rules={[{ required: enabled, message: "请选择活动开始时间" }]}><DatePicker showTime format="YYYY-MM-DD HH:mm:ss" className="w-full" placeholder="选择开始时间" /></Form.Item>
-                                    <Form.Item name="durationDays" label="活动时长（天）" rules={[{ required: enabled }, { type: "number", min: 1, max: 365 }]}><InputNumber min={1} max={365} precision={0} className="w-full" /></Form.Item>
-                                </div>
-                            </>;
+                            return (
+                                <>
+                                    <Form.Item name="activeTitle" label="活动主标题" rules={[{ required: enabled, max: 120 }]}>
+                                        <Input placeholder="例如：品牌设计月，活动期间惊喜 5 折" />
+                                    </Form.Item>
+                                    <Form.Item name="activeSubtitle" label="活动副标题" rules={[{ max: 240 }]}>
+                                        <Input.TextArea rows={2} placeholder="例如：最高立享 31 天无限创作" />
+                                    </Form.Item>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <Form.Item name="startsAt" label="开始时间（北京时间）" rules={[{ required: enabled, message: "请选择活动开始时间" }]}>
+                                            <DatePicker showTime format="YYYY-MM-DD HH:mm:ss" className="w-full" placeholder="选择开始时间" />
+                                        </Form.Item>
+                                        <Form.Item name="durationDays" label="活动时长（天）" rules={[{ required: enabled }, { type: "number", min: 1, max: 365 }]}>
+                                            <InputNumber min={1} max={365} precision={0} className="w-full" />
+                                        </Form.Item>
+                                    </div>
+                                </>
+                            );
                         }}
                     </Form.Item>
 
                     <div className="admin-payment-promotion-divider" />
                     <div className="admin-payment-promotion-section-heading">
-                        <div><strong>非活动文案</strong><span>活动未开始或结束后，背景图仍显示，可选择展示日常文案。</span></div>
-                        <Form.Item name="inactiveCopyEnabled" valuePropName="checked" noStyle><Switch aria-label="显示非活动文案" /></Form.Item>
+                        <div>
+                            <strong>非活动文案</strong>
+                            <span>活动未开始或结束后，背景图仍显示，可选择展示日常文案。</span>
+                        </div>
+                        <Form.Item name="inactiveCopyEnabled" valuePropName="checked" noStyle>
+                            <Switch aria-label="显示非活动文案" />
+                        </Form.Item>
                     </div>
                     <Form.Item noStyle shouldUpdate={(previous, current) => previous.inactiveCopyEnabled !== current.inactiveCopyEnabled}>
                         {({ getFieldValue }) => {
                             const enabled = getFieldValue("inactiveCopyEnabled");
-                            return <>
-                                <Form.Item name="inactiveTitle" label="日常主标题" rules={[{ required: enabled, max: 120 }]}><Input /></Form.Item>
-                                <Form.Item name="inactiveSubtitle" label="日常副标题" rules={[{ max: 240 }]}><Input.TextArea rows={2} /></Form.Item>
-                            </>;
+                            return (
+                                <>
+                                    <Form.Item name="inactiveTitle" label="日常主标题" rules={[{ required: enabled, max: 120 }]}>
+                                        <Input />
+                                    </Form.Item>
+                                    <Form.Item name="inactiveSubtitle" label="日常副标题" rules={[{ max: 240 }]}>
+                                        <Input.TextArea rows={2} />
+                                    </Form.Item>
+                                </>
+                            );
                         }}
                     </Form.Item>
                     <div className="admin-payment-promotion-actions">
-                        <Button icon={<RefreshCw className="size-4" />} disabled={saving || uploading} onClick={() => void reset()}>放弃修改</Button>
-                        <Button type="primary" icon={<Save className="size-4" />} loading={saving} disabled={uploading} onClick={() => void save()}>保存配置</Button>
+                        <Button icon={<RefreshCw className="size-4" />} disabled={saving || uploading} onClick={() => void reset()}>
+                            放弃修改
+                        </Button>
+                        <Button type="primary" icon={<Save className="size-4" />} loading={saving} disabled={uploading} onClick={() => void save()}>
+                            保存配置
+                        </Button>
                     </div>
                 </Form>
             </section>
 
             <aside className="admin-payment-promotion-preview">
-                <header><div><strong>前台效果预览</strong><span>预览仅用于排版，真实状态以服务器时间为准。</span></div><Segmented size="small" value={previewMode} options={[{ label: "活动中", value: "active" }, { label: "非活动", value: "inactive" }]} onChange={(value) => setPreviewMode(value as "active" | "inactive")} /></header>
+                <header>
+                    <div>
+                        <strong>前台效果预览</strong>
+                        <span>预览仅用于排版，真实状态以服务器时间为准。</span>
+                    </div>
+                    <Segmented
+                        size="small"
+                        value={previewMode}
+                        options={[
+                            { label: "活动中", value: "active" },
+                            { label: "非活动", value: "inactive" },
+                        ]}
+                        onChange={(value) => setPreviewMode(value as "active" | "inactive")}
+                    />
+                </header>
                 {imagePreview ? <PaymentPromotionBanner promotion={previewPromotion} serverTime={new Date().toISOString()} /> : <div className="admin-payment-promotion-empty">上传背景图后可预览促销卡片</div>}
             </aside>
         </div>
@@ -281,7 +336,16 @@ function beijingPickerValue(value?: string) {
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return undefined;
     const parts = new Intl.DateTimeFormat("zh-CN", {
-        timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
-    }).formatToParts(date).reduce<Record<string, string>>((result, part) => ({ ...result, [part.type]: part.value }), {});
+        timeZone: "Asia/Shanghai",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hourCycle: "h23",
+    })
+        .formatToParts(date)
+        .reduce<Record<string, string>>((result, part) => ({ ...result, [part.type]: part.value }), {});
     return dayjs(`${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second}`);
 }

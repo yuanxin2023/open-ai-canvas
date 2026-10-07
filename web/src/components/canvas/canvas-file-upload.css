@@ -50,22 +50,68 @@
     text-align: center;
 }
 
-.canvas-file-upload-copy > svg { color: var(--upload-muted); }
-.canvas-file-upload-label { font-size: var(--fs-caption); font-weight: 500; }
-.canvas-file-upload-detail { max-width: 100%; font-size: var(--fs-tiny); color: var(--upload-muted); overflow-wrap: anywhere; }
-.canvas-file-upload-retry { margin-top: var(--space-2); padding: var(--space-2) var(--space-3); border-radius: var(--r-md); background: color-mix(in srgb, var(--upload-text) 8%, transparent); font-size: var(--fs-caption); cursor: pointer; }
-.canvas-file-upload-retry:hover { background: color-mix(in srgb, var(--upload-text) 12%, transparent); }
-.canvas-file-upload-retry:focus-visible { outline: 2px solid var(--control-focus-ring); outline-offset: 2px; }
+.canvas-file-upload-copy > svg {
+    color: var(--upload-muted);
+}
+.canvas-file-upload-label {
+    font-size: var(--fs-caption);
+    font-weight: 500;
+}
+.canvas-file-upload-detail {
+    max-width: 100%;
+    font-size: var(--fs-tiny);
+    color: var(--upload-muted);
+    overflow-wrap: anywhere;
+}
+.canvas-file-upload-retry {
+    margin-top: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--r-md);
+    background: color-mix(in srgb, var(--upload-text) 8%, transparent);
+    font-size: var(--fs-caption);
+    cursor: pointer;
+}
+.canvas-file-upload-retry:hover {
+    background: color-mix(in srgb, var(--upload-text) 12%, transparent);
+}
+.canvas-file-upload-retry:focus-visible {
+    outline: 2px solid var(--control-focus-ring);
+    outline-offset: 2px;
+}
 
-@keyframes canvas-file-upload-drift { from { transform: translate(-8%, -4%) rotate(-8deg); } to { transform: translate(8%, 4%) rotate(12deg); } }
-@keyframes canvas-file-upload-sheen { from { transform: translateX(-35%); } to { transform: translateX(35%); } }
+@keyframes canvas-file-upload-drift {
+    from {
+        transform: translate(-8%, -4%) rotate(-8deg);
+    }
+    to {
+        transform: translate(8%, 4%) rotate(12deg);
+    }
+}
+@keyframes canvas-file-upload-sheen {
+    from {
+        transform: translateX(-35%);
+    }
+    to {
+        transform: translateX(35%);
+    }
+}
 
 .canvas-file-upload[data-static] .canvas-file-upload-glow,
-.canvas-file-upload[data-static] .canvas-file-upload-frost::after { animation: none; }
+.canvas-file-upload[data-static] .canvas-file-upload-frost::after {
+    animation: none;
+}
 .canvas-file-upload[data-static] .canvas-file-upload-glow,
-.canvas-file-upload[data-static] .canvas-file-upload-frost { transition: none; }
+.canvas-file-upload[data-static] .canvas-file-upload-frost {
+    transition: none;
+}
 
 @media (prefers-reduced-motion: reduce) {
-    .canvas-file-upload-glow, .canvas-file-upload-frost::after { animation: none; }
-    .canvas-file-upload-glow, .canvas-file-upload-frost { transition: none; }
+    .canvas-file-upload-glow,
+    .canvas-file-upload-frost::after {
+        animation: none;
+    }
+    .canvas-file-upload-glow,
+    .canvas-file-upload-frost {
+        transition: none;
+    }
 }

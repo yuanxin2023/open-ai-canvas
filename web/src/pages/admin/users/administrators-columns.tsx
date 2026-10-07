@@ -43,7 +43,12 @@ export function createAdministratorColumns({
             dataIndex: "username",
             render: (_, user) => (
                 <div>
-                    <div className="flex items-center gap-1.5"><button type="button" className="admin-table-primary-link font-medium" onClick={() => onView(user)}>{user.username}</button><IdentityProviderBadge user={user} /></div>
+                    <div className="flex items-center gap-1.5">
+                        <button type="button" className="admin-table-primary-link font-medium" onClick={() => onView(user)}>
+                            {user.username}
+                        </button>
+                        <IdentityProviderBadge user={user} />
+                    </div>
                     <div className="text-xs text-foreground/45">@{user.username}</div>
                 </div>
             ),
@@ -55,9 +60,14 @@ export function createAdministratorColumns({
             dataIndex: "email",
             width: 210,
             align: "center",
-            render: (email) => email
-                ? <span className="block max-w-full truncate whitespace-nowrap" title={email}>{email}</span>
-                : <span className="text-foreground/40">未填写</span>,
+            render: (email) =>
+                email ? (
+                    <span className="block max-w-full truncate whitespace-nowrap" title={email}>
+                        {email}
+                    </span>
+                ) : (
+                    <span className="text-foreground/40">未填写</span>
+                ),
         },
         {
             key: "level",
@@ -80,7 +90,18 @@ export function createAdministratorColumns({
             },
         },
         { key: "status", title: "状态", dataIndex: "status", width: 100, align: "center", render: (status) => <AdminStatusBadge label={status === "active" ? "已启用" : "已停用"} tone={status === "active" ? "success" : "neutral"} /> },
-        { key: "createdAt", title: "创建时间", dataIndex: "createdAt", width: 112, align: "center", render: (value) => <span className="tabular-nums" title={formatTime(value)}>{formatCompactTime(value)}</span> },
+        {
+            key: "createdAt",
+            title: "创建时间",
+            dataIndex: "createdAt",
+            width: 112,
+            align: "center",
+            render: (value) => (
+                <span className="tabular-nums" title={formatTime(value)}>
+                    {formatCompactTime(value)}
+                </span>
+            ),
+        },
         {
             key: "actions",
             title: "操作",

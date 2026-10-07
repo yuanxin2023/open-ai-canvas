@@ -398,9 +398,7 @@ export default function RuntimePolicySettingsPage() {
     const moreMenuItems: MenuProps["items"] = [
         { key: "refresh", icon: <RefreshCw className="size-4" aria-hidden="true" />, label: "刷新状态", disabled: saving || resetting || presetLoading },
         { key: "self", icon: <InfinityIcon className="size-4" aria-hidden="true" />, label: "填入自用模式草稿", disabled: saving || resetting || refreshing },
-        ...(savedSetting?.configured
-            ? ([{ type: "divider" }, { key: "reset", danger: true, icon: <RotateCcw className="size-4" aria-hidden="true" />, label: "恢复系统默认" }] satisfies MenuProps["items"])
-            : []),
+        ...(savedSetting?.configured ? ([{ type: "divider" }, { key: "reset", danger: true, icon: <RotateCcw className="size-4" aria-hidden="true" />, label: "恢复系统默认" }] satisfies MenuProps["items"]) : []),
     ];
 
     const runMoreAction: MenuProps["onClick"] = ({ key }) => {
@@ -627,7 +625,11 @@ function PolicySection({
                                         {dirty ? <em>已修改</em> : null}
                                     </span>
                                     <small>{field.extra}</small>
-                                    {dirty ? <span className="admin-runtime-policy-field-comparison">原 {formatPolicyValue(originalValue, field.unit)} → 当前 {formatPolicyValue(currentValue, field.unit)}</span> : null}
+                                    {dirty ? (
+                                        <span className="admin-runtime-policy-field-comparison">
+                                            原 {formatPolicyValue(originalValue, field.unit)} → 当前 {formatPolicyValue(currentValue, field.unit)}
+                                        </span>
+                                    ) : null}
                                 </span>
                             }
                             htmlFor={inputId}
@@ -653,16 +655,7 @@ function PolicyNumberControl({ value, onChange, inputId, label, unit, min, max, 
             <span className="admin-runtime-policy-number-unit" aria-hidden="true">
                 {unit}
             </span>
-            <Button
-                type="text"
-                size="small"
-                className="admin-runtime-policy-field-reset"
-                icon={<RotateCcw className="size-3.5" aria-hidden="true" />}
-                disabled={!dirty || disabled}
-                aria-label="撤销此项改动"
-                title="撤销此项改动"
-                onClick={onReset}
-            />
+            <Button type="text" size="small" className="admin-runtime-policy-field-reset" icon={<RotateCcw className="size-3.5" aria-hidden="true" />} disabled={!dirty || disabled} aria-label="撤销此项改动" title="撤销此项改动" onClick={onReset} />
         </div>
     );
 }

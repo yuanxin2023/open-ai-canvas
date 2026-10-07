@@ -7,12 +7,7 @@ import { Select } from "@/components/ui/base/select";
 import { Switch } from "@/components/ui/base/switch";
 import { cn } from "@/lib/utils";
 import { fallbackSkillCategories } from "@/pages/skills/skill-catalog";
-import {
-    installAdminGitHubSkill,
-    installAdminSkillUpload,
-    type AdminSkillCatalog,
-    type AdminSkillCategory,
-} from "@/services/api/admin-skills";
+import { installAdminGitHubSkill, installAdminSkillUpload, type AdminSkillCatalog, type AdminSkillCategory } from "@/services/api/admin-skills";
 import { installGitHubSkill, installSkillUpload, type Skill } from "@/services/api/skills";
 
 type InstallMode = "markdown" | "zip" | "github";
@@ -47,9 +42,33 @@ type AdminSkillInstallModalProps = {
 export type SkillInstallModalProps = UserSkillInstallModalProps | AdminSkillInstallModalProps;
 
 const modeOptions = [
-    { value: "markdown", label: <span className="inline-flex items-center gap-1.5"><FileText className="size-3.5" />Markdown</span> },
-    { value: "zip", label: <span className="inline-flex items-center gap-1.5"><FileArchive className="size-3.5" />ZIP 技能包</span> },
-    { value: "github", label: <span className="inline-flex items-center gap-1.5"><GitBranch className="size-3.5" />GitHub</span> },
+    {
+        value: "markdown",
+        label: (
+            <span className="inline-flex items-center gap-1.5">
+                <FileText className="size-3.5" />
+                Markdown
+            </span>
+        ),
+    },
+    {
+        value: "zip",
+        label: (
+            <span className="inline-flex items-center gap-1.5">
+                <FileArchive className="size-3.5" />
+                ZIP 技能包
+            </span>
+        ),
+    },
+    {
+        value: "github",
+        label: (
+            <span className="inline-flex items-center gap-1.5">
+                <GitBranch className="size-3.5" />
+                GitHub
+            </span>
+        ),
+    },
 ];
 
 export function SkillInstallModal(props: SkillInstallModalProps) {
@@ -92,41 +111,43 @@ export function SkillInstallModal(props: SkillInstallModalProps) {
         setInstalling(true);
         try {
             if (props.variant === "admin") {
-                const catalog = mode === "github"
-                    ? await installAdminGitHubSkill({
-                        url: values.url || "",
-                        ref: values.ref || undefined,
-                        subdir: values.subdir || undefined,
-                        tag: values.tag,
-                        autoUpdate: values.autoUpdate,
-                    })
-                    : await installAdminSkillUpload({
-                        file: file as File,
-                        sourceType: mode,
-                        name: values.name || undefined,
-                        description: values.description || undefined,
-                        tag: values.tag,
-                    });
+                const catalog =
+                    mode === "github"
+                        ? await installAdminGitHubSkill({
+                              url: values.url || "",
+                              ref: values.ref || undefined,
+                              subdir: values.subdir || undefined,
+                              tag: values.tag,
+                              autoUpdate: values.autoUpdate,
+                          })
+                        : await installAdminSkillUpload({
+                              file: file as File,
+                              sourceType: mode,
+                              name: values.name || undefined,
+                              description: values.description || undefined,
+                              tag: values.tag,
+                          });
                 message.success("平台公共技能已安装并加入技能广场");
                 props.onInstalled(catalog);
             } else {
-                const result = mode === "github"
-                    ? await installGitHubSkill({
-                        url: values.url || "",
-                        ref: values.ref || undefined,
-                        subdir: values.subdir || undefined,
-                        tag: values.tag,
-                        isPrivate: !values.is_public,
-                        autoUpdate: values.autoUpdate,
-                    })
-                    : await installSkillUpload({
-                        file: file as File,
-                        sourceType: mode,
-                        name: values.name || undefined,
-                        description: values.description || undefined,
-                        tag: values.tag,
-                        isPrivate: !values.is_public,
-                    });
+                const result =
+                    mode === "github"
+                        ? await installGitHubSkill({
+                              url: values.url || "",
+                              ref: values.ref || undefined,
+                              subdir: values.subdir || undefined,
+                              tag: values.tag,
+                              isPrivate: !values.is_public,
+                              autoUpdate: values.autoUpdate,
+                          })
+                        : await installSkillUpload({
+                              file: file as File,
+                              sourceType: mode,
+                              name: values.name || undefined,
+                              description: values.description || undefined,
+                              tag: values.tag,
+                              isPrivate: !values.is_public,
+                          });
                 message.success("技能已安装");
                 props.onInstalled(result.skill);
             }
@@ -151,22 +172,30 @@ export function SkillInstallModal(props: SkillInstallModalProps) {
             title={isAdmin ? "安装平台公共技能" : "安装技能"}
             onCancel={props.onClose}
             styles={isAdmin ? { body: { maxHeight: "min(72vh, 760px)", overflowX: "hidden", overflowY: "auto" } } : undefined}
-            footer={(
+            footer={
                 <div className={cn("flex items-center gap-3", isAdmin ? "justify-end" : "justify-between")}>
-                    {!isAdmin ? <Button type="text" disabled={installing} onClick={props.onManualCreate}>从空白创建单文件技能</Button> : null}
+                    {!isAdmin ? (
+                        <Button type="text" disabled={installing} onClick={props.onManualCreate}>
+                            从空白创建单文件技能
+                        </Button>
+                    ) : null}
                     <div className="flex gap-2">
-                        <Button disabled={installing} onClick={props.onClose}>取消</Button>
-                        <Button type="primary" loading={installing} onClick={() => void install()}>安装技能</Button>
+                        <Button disabled={installing} onClick={props.onClose}>
+                            取消
+                        </Button>
+                        <Button type="primary" loading={installing} onClick={() => void install()}>
+                            安装技能
+                        </Button>
                     </div>
                 </div>
-            )}
+            }
         >
             {isAdmin ? (
-                <div className="admin-skill-install-note">
-                    安装后将作为平台公共技能进入技能广场，所有用户均可查看、加入和使用；实际可用状态仍受技能库总开关、分类开关和技能开关控制。
-                </div>
+                <div className="admin-skill-install-note">安装后将作为平台公共技能进入技能广场，所有用户均可查看、加入和使用；实际可用状态仍受技能库总开关、分类开关和技能开关控制。</div>
             ) : (
-                <p className="mb-4 text-sm leading-6 text-foreground/55">支持标准 <code>SKILL.md</code>、包含多层目录的 ZIP 技能包，或公开 GitHub 仓库。名称和简介会优先从技能入口自动读取。</p>
+                <p className="mb-4 text-sm leading-6 text-foreground/55">
+                    支持标准 <code>SKILL.md</code>、包含多层目录的 ZIP 技能包，或公开 GitHub 仓库。名称和简介会优先从技能入口自动读取。
+                </p>
             )}
 
             <SegmentedControl
@@ -183,12 +212,23 @@ export function SkillInstallModal(props: SkillInstallModalProps) {
             <Form form={form} layout="vertical" requiredMark="optional" className={cn("skill-install-form", isAdmin && "admin-skill-install-form")}>
                 {mode === "github" ? (
                     <>
-                        <Form.Item name="url" label="GitHub 地址" rules={[{ required: true, message: "请填写 GitHub 仓库地址" }, { type: "url", message: "请输入有效链接" }]}>
+                        <Form.Item
+                            name="url"
+                            label="GitHub 地址"
+                            rules={[
+                                { required: true, message: "请填写 GitHub 仓库地址" },
+                                { type: "url", message: "请输入有效链接" },
+                            ]}
+                        >
                             <Input type="url" inputMode="url" spellCheck={false} prefix={<GitBranch className="size-4 text-foreground/35" />} placeholder="https://github.com/owner/repository" />
                         </Form.Item>
                         <div className={cn("grid gap-x-3 sm:grid-cols-2", isAdmin && "admin-skill-install-grid")}>
-                            <Form.Item name="ref" label="分支或标签" extra="留空时使用默认分支"><Input spellCheck={false} placeholder="main" /></Form.Item>
-                            <Form.Item name="subdir" label="技能子目录" extra="仓库仅含一个技能时可留空"><Input spellCheck={false} placeholder="skills/ai-director" /></Form.Item>
+                            <Form.Item name="ref" label="分支或标签" extra="留空时使用默认分支">
+                                <Input spellCheck={false} placeholder="main" />
+                            </Form.Item>
+                            <Form.Item name="subdir" label="技能子目录" extra="仓库仅含一个技能时可留空">
+                                <Input spellCheck={false} placeholder="skills/ai-director" />
+                            </Form.Item>
                         </div>
                     </>
                 ) : (
@@ -216,8 +256,12 @@ export function SkillInstallModal(props: SkillInstallModalProps) {
                             <div className={cn("mt-1 text-xs", isAdmin ? "admin-skill-install-upload-help" : "text-foreground/45")}>{mode === "zip" ? "根目录或唯一子目录中必须包含 SKILL.md" : "普通 .md 会作为技能入口 SKILL.md 安装"}</div>
                         </Upload.Dragger>
                         <div className={cn("mt-4 grid gap-x-3 sm:grid-cols-2", isAdmin && "admin-skill-install-grid")}>
-                            <Form.Item name="name" label="覆盖名称" extra="可选，留空时自动读取"><Input maxLength={80} autoComplete="off" /></Form.Item>
-                            <Form.Item name="description" label="覆盖简介" extra="可选，留空时自动读取"><Input maxLength={500} autoComplete="off" /></Form.Item>
+                            <Form.Item name="name" label="覆盖名称" extra="可选，留空时自动读取">
+                                <Input maxLength={80} autoComplete="off" />
+                            </Form.Item>
+                            <Form.Item name="description" label="覆盖简介" extra="可选，留空时自动读取">
+                                <Input maxLength={500} autoComplete="off" />
+                            </Form.Item>
                         </div>
                     </>
                 )}
@@ -226,13 +270,25 @@ export function SkillInstallModal(props: SkillInstallModalProps) {
                     <Form.Item name="tag" label="技能分类" rules={[{ required: true, message: "请选择技能分类" }]}>
                         <Select options={categories.map((category) => ({ value: category.value, label: category.label }))} />
                     </Form.Item>
-                    {isAdmin ? mode === "github" ? (
-                        <Form.Item name="autoUpdate" label="自动同步" valuePropName="checked" extra="后台每 6 小时检查一次提交版本。"><Switch checkedChildren="开启" unCheckedChildren="关闭" /></Form.Item>
-                    ) : <div /> : (
-                        <Form.Item name="is_public" label="公开状态" valuePropName="checked" extra="公开后其他用户可以加入使用。"><Switch checkedChildren="公开" unCheckedChildren="私有" /></Form.Item>
+                    {isAdmin ? (
+                        mode === "github" ? (
+                            <Form.Item name="autoUpdate" label="自动同步" valuePropName="checked" extra="后台每 6 小时检查一次提交版本。">
+                                <Switch checkedChildren="开启" unCheckedChildren="关闭" />
+                            </Form.Item>
+                        ) : (
+                            <div />
+                        )
+                    ) : (
+                        <Form.Item name="is_public" label="公开状态" valuePropName="checked" extra="公开后其他用户可以加入使用。">
+                            <Switch checkedChildren="公开" unCheckedChildren="私有" />
+                        </Form.Item>
                     )}
                 </div>
-                {!isAdmin && mode === "github" ? <Form.Item name="autoUpdate" label="自动同步" valuePropName="checked" extra="后台每 6 小时检查一次提交版本，并记录最近检查与同步时间。"><Switch checkedChildren="开启" unCheckedChildren="关闭" /></Form.Item> : null}
+                {!isAdmin && mode === "github" ? (
+                    <Form.Item name="autoUpdate" label="自动同步" valuePropName="checked" extra="后台每 6 小时检查一次提交版本，并记录最近检查与同步时间。">
+                        <Switch checkedChildren="开启" unCheckedChildren="关闭" />
+                    </Form.Item>
+                ) : null}
             </Form>
         </Modal>
     );

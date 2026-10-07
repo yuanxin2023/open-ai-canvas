@@ -129,13 +129,7 @@ export function ImageSizePresetsEditor({ profile, disabled, onChange }: { profil
                 </div>
                 <label className="grid shrink-0 justify-items-center gap-1 text-[var(--fs-tiny)] text-foreground/45">
                     <span>支持</span>
-                    <Switch
-                        aria-label="自动尺寸支持"
-                        size="sm"
-                        checked={autoSizeEnabled}
-                        disabled={disabled || (autoSizeEnabled && !hasConcreteSize)}
-                        onChange={(enabled) => onChange(setImageAutoSizeEnabled(profile.size, enabled))}
-                    />
+                    <Switch aria-label="自动尺寸支持" size="sm" checked={autoSizeEnabled} disabled={disabled || (autoSizeEnabled && !hasConcreteSize)} onChange={(enabled) => onChange(setImageAutoSizeEnabled(profile.size, enabled))} />
                 </label>
             </div>
             <div className="image-size-defaults">

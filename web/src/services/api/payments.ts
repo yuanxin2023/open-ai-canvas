@@ -184,7 +184,10 @@ export function listAdminTopupProducts() {
     return http.get<{ products: TopupProduct[] }>("/admin/payments/products");
 }
 
-export type TopupProductInput = Pick<TopupProduct, "name" | "amountFen" | "creditsMicrocredits" | "enabled" | "sortOrder" | "ribbonText" | "badgeText" | "compareAmountFen" | "priceCaption" | "quotaCaption" | "quotaDetail" | "actionText" | "accentColor" | "featured"> & { description?: string; benefits?: string };
+export type TopupProductInput = Pick<
+    TopupProduct,
+    "name" | "amountFen" | "creditsMicrocredits" | "enabled" | "sortOrder" | "ribbonText" | "badgeText" | "compareAmountFen" | "priceCaption" | "quotaCaption" | "quotaDetail" | "actionText" | "accentColor" | "featured"
+> & { description?: string; benefits?: string };
 
 export function createAdminTopupProduct(input: TopupProductInput) {
     return http.post<{ product: TopupProduct }>("/admin/payments/products", input);

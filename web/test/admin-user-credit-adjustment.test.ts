@@ -24,10 +24,7 @@ describe("admin user credit adjustment entry", () => {
     });
 
     test("keeps the user search draft local until IME composition and debounce finish", async () => {
-        const [panel, urlState] = await Promise.all([
-            Bun.file(new URL("../src/pages/admin/users/users-panel.tsx", import.meta.url)).text(),
-            Bun.file(new URL("../src/pages/admin/lib/use-table-url-state.ts", import.meta.url)).text(),
-        ]);
+        const [panel, urlState] = await Promise.all([Bun.file(new URL("../src/pages/admin/users/users-panel.tsx", import.meta.url)).text(), Bun.file(new URL("../src/pages/admin/lib/use-table-url-state.ts", import.meta.url)).text()]);
 
         expect(panel).toContain("const [filterDraft, setFilterDraft] = useState(state.filter)");
         expect(panel).toContain("useDebouncedValue(isFilterComposing ? state.filter : filterDraft)");

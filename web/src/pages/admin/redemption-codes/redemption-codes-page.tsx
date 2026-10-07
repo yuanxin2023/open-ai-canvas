@@ -24,13 +24,22 @@ export default function RedemptionCodesPage() {
         <AdminPageFrame
             title={isFullAdmin ? "兑换码" : "我的兑换码"}
             description={isFullAdmin ? "分区管理平台与模块管理员批次" : "使用个人积分发放兑换码，跟踪核销与退回"}
-            actions={canCreate ? <Button type="primary" disabled={createBlocked} title={createBlocked ? "请先核对上一次结果不确定的生成请求" : undefined} icon={<TicketCheck className="size-4" />} onClick={() => setCreateOpen(true)}>生成批次</Button> : undefined}
+            actions={
+                canCreate ? (
+                    <Button type="primary" disabled={createBlocked} title={createBlocked ? "请先核对上一次结果不确定的生成请求" : undefined} icon={<TicketCheck className="size-4" />} onClick={() => setCreateOpen(true)}>
+                        生成批次
+                    </Button>
+                ) : undefined
+            }
         >
             {isFullAdmin ? (
                 <Segmented<RedeemFundingSource>
                     aria-label="兑换码资金来源"
                     value={fundingSource}
-                    options={[{ label: "平台兑换码", value: "platform" }, { label: "模块管理员兑换码", value: "module_admin" }]}
+                    options={[
+                        { label: "平台兑换码", value: "platform" },
+                        { label: "模块管理员兑换码", value: "module_admin" },
+                    ]}
                     onChange={(value) => {
                         setCreateOpen(false);
                         setFundingSource(value);

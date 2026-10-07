@@ -52,9 +52,12 @@ export function UserPromptEditorModal({ open, prompt, onClose, onSaved }: { open
         });
     }, [form, open, prompt]);
 
-    useEffect(() => () => {
-        if (coverPreview.startsWith("blob:")) URL.revokeObjectURL(coverPreview);
-    }, [coverPreview]);
+    useEffect(
+        () => () => {
+            if (coverPreview.startsWith("blob:")) URL.revokeObjectURL(coverPreview);
+        },
+        [coverPreview],
+    );
 
     const close = () => {
         if (saving) return;
@@ -119,45 +122,106 @@ export function UserPromptEditorModal({ open, prompt, onClose, onSaved }: { open
         return coverPreview;
     }, [coverPreview, watched?.coverSource, watched?.coverUrl]);
 
-    return <AppModal
-        flush centered open={open} width="min(1240px, calc(100vw - 32px))"
-        title={null} footer={null} closable={false} maskClosable={!saving} keyboard={!saving}
-        rootClassName="user-prompt-editor-modal" onCancel={close}
-    >
-        <div className="user-prompt-editor-shell">
-            <header className="user-prompt-editor-header"><h2>{prompt ? "编辑提示词" : "新增提示词"}</h2><button type="button" disabled={saving} aria-label="关闭" onClick={close}>×</button></header>
-            <div className="user-prompt-editor-scroll">
-                <Form form={form} layout="vertical" requiredMark="optional" className="user-prompt-editor-layout">
-                    <div className="user-prompt-editor-fields">
-                        <div className="user-prompt-form-grid">
-                            <Form.Item name="title" label="提示词标题" rules={[{ required: true, message: "请输入提示词标题" }, { max: 120, message: "标题不能超过 120 个字符" }]}>
-                                <Input placeholder="例如：雨夜霓虹电影感开场" />
+    return (
+        <AppModal flush centered open={open} width="min(1240px, calc(100vw - 32px))" title={null} footer={null} closable={false} maskClosable={!saving} keyboard={!saving} rootClassName="user-prompt-editor-modal" onCancel={close}>
+            <div className="user-prompt-editor-shell">
+                <header className="user-prompt-editor-header">
+                    <h2>{prompt ? "编辑提示词" : "新增提示词"}</h2>
+                    <button type="button" disabled={saving} aria-label="关闭" onClick={close}>
+                        ×
+                    </button>
+                </header>
+                <div className="user-prompt-editor-scroll">
+                    <Form form={form} layout="vertical" requiredMark="optional" className="user-prompt-editor-layout">
+                        <div className="user-prompt-editor-fields">
+                            <div className="user-prompt-form-grid">
+                                <Form.Item
+                                    name="title"
+                                    label="提示词标题"
+                                    rules={[
+                                        { required: true, message: "请输入提示词标题" },
+                                        { max: 120, message: "标题不能超过 120 个字符" },
+                                    ]}
+                                >
+                                    <Input placeholder="例如：雨夜霓虹电影感开场" />
+                                </Form.Item>
+                                <Form.Item name="mode" label="创作类型" rules={[{ required: true }]}>
+                                    <Select options={modeOptions} />
+                                </Form.Item>
+                            </div>
+                            <Form.Item name="tags" label="标签" extra="使用逗号分隔，最多 8 个标签">
+                                <Input placeholder="例如：霓虹, 电影感, 雨夜" />
                             </Form.Item>
-                            <Form.Item name="mode" label="创作类型" rules={[{ required: true }]}><Select options={modeOptions} /></Form.Item>
+                            <Form.Item name="coverSource" label="封面来源">
+                                <Select
+                                    options={[
+                                        { value: "upload", label: "上传图片" },
+                                        { value: "url", label: "HTTPS 外链" },
+                                        { value: "none", label: "不设置封面" },
+                                    ]}
+                                />
+                            </Form.Item>
+                            {watched?.coverSource === "upload" ? (
+                                <Form.Item label="上传封面" extra="JPEG、PNG 或 WebP，最大 10 MB">
+                                    <input
+                                        ref={fileInputRef}
+                                        type="file"
+                                        accept="image/jpeg,image/png,image/webp"
+                                        hidden
+                                        onChange={(event) => {
+                                            selectCover(event.target.files?.[0]);
+                                            event.currentTarget.value = "";
+                                        }}
+                                    />
+                                    <Button icon={<Upload className="size-4" />} onClick={() => fileInputRef.current?.click()}>
+                                        {coverPreview ? "更换图片" : "选择图片"}
+                                    </Button>
+                                </Form.Item>
+                            ) : null}
+                            {watched?.coverSource === "url" ? (
+                                <Form.Item
+                                    name="coverUrl"
+                                    label="封面 URL"
+                                    rules={[{ type: "url", message: "请输入有效的 HTTPS 图片地址" }, { validator: (_, value) => (!value || String(value).startsWith("https://") ? Promise.resolve() : Promise.reject(new Error("仅支持 HTTPS 外链"))) }]}
+                                >
+                                    <Input placeholder="https://example.com/image.png" />
+                                </Form.Item>
+                            ) : null}
+                            <Form.Item
+                                name="prompt"
+                                label="提示词内容"
+                                rules={[
+                                    { required: true, message: "请输入提示词内容" },
+                                    { max: 20000, message: "提示词不能超过 20000 个字符" },
+                                ]}
+                            >
+                                <Input.TextArea rows={10} showCount maxLength={20000} placeholder="写入可直接用于生成的完整提示词" />
+                            </Form.Item>
+                            <Form.Item name="description" label="卡片说明" rules={[{ max: 500, message: "卡片说明不能超过 500 个字符" }]}>
+                                <Input.TextArea rows={3} placeholder="可选，记录适用场景、参数建议或效果说明" />
+                            </Form.Item>
+                            <Form.Item name="source" label="来源署名" rules={[{ max: 120, message: "来源署名不能超过 120 个字符" }]}>
+                                <Input placeholder="可选，例如：原创提示词" />
+                            </Form.Item>
                         </div>
-                        <Form.Item name="tags" label="标签" extra="使用逗号分隔，最多 8 个标签"><Input placeholder="例如：霓虹, 电影感, 雨夜" /></Form.Item>
-                        <Form.Item name="coverSource" label="封面来源"><Select options={[{ value: "upload", label: "上传图片" }, { value: "url", label: "HTTPS 外链" }, { value: "none", label: "不设置封面" }]} /></Form.Item>
-                        {watched?.coverSource === "upload" ? <Form.Item label="上传封面" extra="JPEG、PNG 或 WebP，最大 10 MB">
-                            <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={(event) => { selectCover(event.target.files?.[0]); event.currentTarget.value = ""; }} />
-                            <Button icon={<Upload className="size-4" />} onClick={() => fileInputRef.current?.click()}>{coverPreview ? "更换图片" : "选择图片"}</Button>
-                        </Form.Item> : null}
-                        {watched?.coverSource === "url" ? <Form.Item name="coverUrl" label="封面 URL" rules={[{ type: "url", message: "请输入有效的 HTTPS 图片地址" }, { validator: (_, value) => !value || String(value).startsWith("https://") ? Promise.resolve() : Promise.reject(new Error("仅支持 HTTPS 外链")) }]}><Input placeholder="https://example.com/image.png" /></Form.Item> : null}
-                        <Form.Item name="prompt" label="提示词内容" rules={[{ required: true, message: "请输入提示词内容" }, { max: 20000, message: "提示词不能超过 20000 个字符" }]}>
-                            <Input.TextArea rows={10} showCount maxLength={20000} placeholder="写入可直接用于生成的完整提示词" />
-                        </Form.Item>
-                        <Form.Item name="description" label="卡片说明" rules={[{ max: 500, message: "卡片说明不能超过 500 个字符" }]}><Input.TextArea rows={3} placeholder="可选，记录适用场景、参数建议或效果说明" /></Form.Item>
-                        <Form.Item name="source" label="来源署名" rules={[{ max: 120, message: "来源署名不能超过 120 个字符" }]}><Input placeholder="可选，例如：原创提示词" /></Form.Item>
-                    </div>
-                    <aside className="user-prompt-live-preview">
-                        <span>提示词卡片实时预览</span>
-                        <PromptPreview image={previewImage} title={watched?.title} description={watched?.description} source={watched?.source} mode={watched?.mode} />
-                        <p>按首页五列卡片的实际尺寸和图片原始比例预览，不会公开给其他用户。</p>
-                    </aside>
-                </Form>
+                        <aside className="user-prompt-live-preview">
+                            <span>提示词卡片实时预览</span>
+                            <PromptPreview image={previewImage} title={watched?.title} description={watched?.description} source={watched?.source} mode={watched?.mode} />
+                            <p>按首页五列卡片的实际尺寸和图片原始比例预览，不会公开给其他用户。</p>
+                        </aside>
+                    </Form>
+                </div>
+                <footer className="user-prompt-editor-footer">
+                    <Button disabled={saving} onClick={close}>
+                        取消
+                    </Button>
+                    <Button type="primary" loading={saving} onClick={() => void save()}>
+                        保存提示词
+                    </Button>
+                </footer>
             </div>
-            <footer className="user-prompt-editor-footer"><Button disabled={saving} onClick={close}>取消</Button><Button type="primary" loading={saving} onClick={() => void save()}>保存提示词</Button></footer>
-        </div>
-    </AppModal>;
+        </AppModal>
+    );
 }
 
 function PromptPreview({ image, title, description, source, mode }: { image?: string; title?: string; description?: string; source?: string; mode?: UserPromptMode }) {
@@ -169,24 +233,42 @@ function PromptPreview({ image, title, description, source, mode }: { image?: st
         setFailed(false);
         setAspectRatio("");
     }, [image]);
-    return <div className="product-collection-card creation-featured-card user-prompt-preview-card">
-        <span className="creation-featured-media" style={aspectRatio ? { aspectRatio } : undefined}>
-            <img src={previewImage} alt="封面预览" referrerPolicy="no-referrer" onLoad={(event) => { const current = event.currentTarget; if (current.naturalWidth > 0 && current.naturalHeight > 0) setAspectRatio(`${current.naturalWidth} / ${current.naturalHeight}`); }} onError={() => setFailed(true)} />
-        </span>
-        <span className="creation-featured-copy">
-            <strong>{title?.trim() || "提示词标题"}</strong>
-            {description?.trim() ? <span>{description.trim()}</span> : null}
-            <em><Sparkles />{source?.trim() || "个人灵感"} · {mode ? cardModeLabels[mode] : "图片"}</em>
-        </span>
-    </div>;
+    return (
+        <div className="product-collection-card creation-featured-card user-prompt-preview-card">
+            <span className="creation-featured-media" style={aspectRatio ? { aspectRatio } : undefined}>
+                <img
+                    src={previewImage}
+                    alt="封面预览"
+                    referrerPolicy="no-referrer"
+                    onLoad={(event) => {
+                        const current = event.currentTarget;
+                        if (current.naturalWidth > 0 && current.naturalHeight > 0) setAspectRatio(`${current.naturalWidth} / ${current.naturalHeight}`);
+                    }}
+                    onError={() => setFailed(true)}
+                />
+            </span>
+            <span className="creation-featured-copy">
+                <strong>{title?.trim() || "提示词标题"}</strong>
+                {description?.trim() ? <span>{description.trim()}</span> : null}
+                <em>
+                    <Sparkles />
+                    {source?.trim() || "个人灵感"} · {mode ? cardModeLabels[mode] : "图片"}
+                </em>
+            </span>
+        </div>
+    );
 }
 
 function normalizeTags(value?: string) {
     const seen = new Set<string>();
-    return (value || "").split(/[,，]/).map((item) => item.trim()).filter((item) => {
-        const key = item.toLowerCase();
-        if (!item || seen.has(key)) return false;
-        seen.add(key);
-        return true;
-    }).slice(0, 8);
+    return (value || "")
+        .split(/[,，]/)
+        .map((item) => item.trim())
+        .filter((item) => {
+            const key = item.toLowerCase();
+            if (!item || seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        })
+        .slice(0, 8);
 }
