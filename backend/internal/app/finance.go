@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"infinite-canvas/backend/internal/kernel"
 	"infinite-canvas/backend/internal/model"
 	"infinite-canvas/backend/internal/repository"
 
@@ -28,10 +29,18 @@ func validCreditPrecision(amount int64) bool {
 }
 
 func roundCreditAmountUp(amount int64) (int64, error) {
-	if amount < 0 || amount > (1<<63-1)-(CreditQuantumMicrocredits-1) {
+	if amount < 0 {
 		return 0, errors.New("积分金额无效")
 	}
-	return ((amount + CreditQuantumMicrocredits - 1) / CreditQuantumMicrocredits) * CreditQuantumMicrocredits, nil
+	remainder := amount % CreditQuantumMicrocredits
+	if remainder == 0 {
+		return amount, nil
+	}
+	increment := CreditQuantumMicrocredits - remainder
+	if amount > (1<<63-1)-increment {
+		return 0, errors.New("积分金额无效")
+	}
+	return amount + increment, nil
 }
 
 type WalletSummary struct {
@@ -44,10 +53,19 @@ type WalletSummary struct {
 }
 
 type RedeemBatchPage struct {
-	Batches []model.RedeemBatch `json:"batches"`
-	Total   int64               `json:"total"`
-	Page    int                 `json:"page"`
-	Limit   int                 `json:"pageSize"`
+	Batches        []model.RedeemBatch            `json:"batches"`
+	FundingSource  model.RedeemBatchFundingSource `json:"fundingSource"`
+	FundingSummary *RedeemFundingSummary          `json:"fundingSummary,omitempty"`
+	Total          int64                          `json:"total"`
+	Page           int                            `json:"page"`
+	Limit          int                            `json:"pageSize"`
+}
+
+type RedeemFundingSummary struct {
+	AvailableMicrocredits      int64 `json:"availableMicrocredits"`
+	RedeemReservedMicrocredits int64 `json:"redeemReservedMicrocredits"`
+	OtherReservedMicrocredits  int64 `json:"otherReservedMicrocredits"`
+	TotalReservedMicrocredits  int64 `json:"totalReservedMicrocredits"`
 }
 
 type AdminRedeemCodeDetail struct {
@@ -73,6 +91,29 @@ type AdminRedeemCodePage struct {
 	Limit              int                     `json:"pageSize"`
 }
 
+type AdminRedeemCodeLookupRequest struct {
+	Code          string `json:"code"`
+	FundingSource string `json:"fundingSource"`
+	CreatorID     string `json:"creatorId"`
+}
+
+type AdminRedeemCodeLookupResult struct {
+	Batch model.RedeemBatch     `json:"batch"`
+	Code  AdminRedeemCodeDetail `json:"code"`
+}
+
+type AdminRedeemCodeSearchRequest struct {
+	Query         string `json:"query"`
+	FundingSource string `json:"fundingSource"`
+	CreatorID     string `json:"creatorId"`
+}
+
+type AdminRedeemCodeSearchResult struct {
+	Matches   []AdminRedeemCodeLookupResult `json:"matches"`
+	Total     int                           `json:"total"`
+	Truncated bool                          `json:"truncated"`
+}
+
 type BillingOrderPage struct {
 	Orders []model.BillingOrder `json:"orders"`
 	Total  int64                `json:"total"`
@@ -88,8 +129,14 @@ type CreateRedeemBatchRequest struct {
 }
 
 type CreateRedeemBatchResult struct {
-	Batch model.RedeemBatch `json:"batch"`
-	Codes []string          `json:"codes"`
+	Batch   model.RedeemBatch    `json:"batch"`
+	Codes   []string             `json:"codes"`
+	Account *model.CreditAccount `json:"account,omitempty"`
+}
+
+type RedeemDisableResult struct {
+	DisabledCount        int64 `json:"disabledCount"`
+	RefundedMicrocredits int64 `json:"refundedMicrocredits"`
 }
 
 type AdminCreditAdjustmentRequest struct {
@@ -121,6 +168,8 @@ type ResolveBillingBatchResult struct {
 type tokenBillingEstimate struct {
 	InputTokens  int64
 	OutputTokens int64
+	Video        *VideoTokenEstimate
+	Err          error
 }
 
 func (s *Service) Wallet(user *model.User, entryType string, page int, limit int) (*WalletSummary, error) {
@@ -135,6 +184,9 @@ func (s *Service) Wallet(user *model.User, entryType string, page int, limit int
 	}
 	if limit <= 0 || limit > 100 {
 		limit = 30
+	}
+	if err := s.settleExpiredRedeemCodesForScope(user.ID); err != nil {
+		return nil, err
 	}
 	account, err := s.repo.CreditAccount(user.ID)
 	if err != nil {
@@ -170,7 +222,7 @@ func (s *Service) RedeemCredits(user *model.User, code string, redeemedIP string
 }
 
 func (s *Service) AdminCreateRedeemBatch(actor *model.User, req CreateRedeemBatchRequest) (*CreateRedeemBatchResult, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionRedeemCodes); err != nil {
 		return nil, err
 	}
 	if req.AmountMicrocredits <= 0 {
@@ -182,10 +234,21 @@ func (s *Service) AdminCreateRedeemBatch(actor *model.User, req CreateRedeemBatc
 	if req.Count <= 0 || req.Count > 5000 {
 		return nil, BadAuthRequest("单批兑换码数量需为 1-5000")
 	}
+	if int64(req.Count) > (1<<63-1)/req.AmountMicrocredits {
+		return nil, BadAuthRequest("兑换码批次总积分超出可处理范围")
+	}
 	if req.ExpiresAt != nil && !req.ExpiresAt.After(time.Now()) {
 		return nil, BadAuthRequest("兑换码过期时间必须晚于当前时间")
 	}
-	batch := model.RedeemBatch{ID: newID(), AmountMicrocredits: req.AmountMicrocredits, Count: req.Count, Note: truncateRunes(strings.TrimSpace(req.Note), 500), CreatedBy: actor.ID, ExpiresAt: req.ExpiresAt}
+	fundingSource := model.RedeemBatchFundingPlatform
+	if actor.AdminLevel == model.AdminLevelScoped {
+		fundingSource = model.RedeemBatchFundingModuleAdmin
+		if err := s.settleExpiredRedeemCodesForScope(actor.ID); err != nil {
+			return nil, err
+		}
+	}
+	totalMicrocredits := req.AmountMicrocredits * int64(req.Count)
+	batch := model.RedeemBatch{ID: newID(), AmountMicrocredits: req.AmountMicrocredits, Count: req.Count, Note: truncateRunes(strings.TrimSpace(req.Note), 500), CreatedBy: actor.ID, FundingSource: fundingSource, ExpiresAt: req.ExpiresAt, TotalMicrocredits: totalMicrocredits}
 	codes := make([]string, 0, req.Count)
 	items := make([]model.RedeemCode, 0, req.Count)
 	for range req.Count {
@@ -210,20 +273,35 @@ func (s *Service) AdminCreateRedeemBatch(actor *model.User, req CreateRedeemBatc
 	// SQLite 只有一个写入器；批次生成串行进入短事务，避免并发生成占满连接池拖住全站读取。
 	s.redeemBatchMu.Lock()
 	defer s.redeemBatchMu.Unlock()
-	if err := s.repo.CreateRedeemBatch(&batch, items); err != nil {
+	audit, err := newAdminAuditEvent(actor, "redeem_batch.create", "redeem_batch", batch.ID, "创建兑换码批次", map[string]any{"count": batch.Count, "amountMicrocredits": batch.AmountMicrocredits, "totalMicrocredits": totalMicrocredits, "fundingSource": batch.FundingSource})
+	if err != nil {
 		return nil, err
 	}
-	if err := s.appendAdminAudit(actor, "redeem_batch.create", "redeem_batch", batch.ID, "创建兑换码批次", map[string]any{"count": batch.Count, "amountMicrocredits": batch.AmountMicrocredits}); err != nil {
+	account, err := s.repo.CreateRedeemBatch(&batch, items, totalMicrocredits, audit)
+	if errors.Is(err, repository.ErrInsufficientCredits) {
+		return nil, BadAuthRequest("可用积分不足，无法生成该兑换码批次")
+	}
+	if err != nil {
 		return nil, err
 	}
-	return &CreateRedeemBatchResult{Batch: batch, Codes: codes}, nil
+	return &CreateRedeemBatchResult{Batch: batch, Codes: codes, Account: account}, nil
 }
 
-func (s *Service) AdminRedeemCodePage(actor *model.User, batchID string, status string, page int, limit int) (*AdminRedeemCodePage, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+func (s *Service) AdminRedeemCodePage(actor *model.User, batchID string, fundingSource string, status string, page int, limit int) (*AdminRedeemCodePage, error) {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionRedeemCodes); err != nil {
 		return nil, err
 	}
-	batch, err := s.repo.RedeemBatch(strings.TrimSpace(batchID))
+	scope, err := redeemAdminScopeFor(actor, fundingSource, "")
+	if err != nil {
+		return nil, err
+	}
+	if err := s.settleExpiredRedeemCodesForScope(scope.creatorID); err != nil {
+		return nil, err
+	}
+	batch, err := s.repo.RedeemBatch(strings.TrimSpace(batchID), scope.fundingSource, scope.creatorID)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, NotFound("兑换码批次不存在")
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -243,18 +321,139 @@ func (s *Service) AdminRedeemCodePage(actor *model.User, batchID string, status 
 	now := time.Now()
 	details := make([]AdminRedeemCodeDetail, 0, len(rows))
 	for _, row := range rows {
-		status := string(row.Status)
-		if row.Status == model.RedeemCodeUnused && row.ExpiresAt != nil && !row.ExpiresAt.After(now) {
-			status = "expired"
-		}
-		details = append(details, AdminRedeemCodeDetail{
-			ID: row.ID, Code: plainByHash[row.CodeHash], CodeSuffix: row.CodeSuffix, Status: status,
-			RedeemedBy: row.RedeemedBy, RedeemedUsername: row.RedeemedUsername, RedeemedDisplayName: row.RedeemedDisplayName,
-			RedeemedAt: row.RedeemedAt, RedeemedIP: row.RedeemedIP, ExpiresAt: row.ExpiresAt, AmountMicrocredits: row.AmountMicrocredits,
-		})
+		details = append(details, adminRedeemCodeDetail(row, plainByHash[row.CodeHash], now))
 	}
 	batch.CodesCipher = ""
 	return &AdminRedeemCodePage{Batch: *batch, Codes: details, PlaintextAvailable: len(plainCodes) > 0, Total: total, Page: page, Limit: limit}, nil
+}
+
+func (s *Service) AdminLookupRedeemCode(actor *model.User, req AdminRedeemCodeLookupRequest) (*AdminRedeemCodeLookupResult, error) {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionRedeemCodes); err != nil {
+		return nil, err
+	}
+	scope, err := redeemAdminScopeFor(actor, req.FundingSource, req.CreatorID)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.settleExpiredRedeemCodesForScope(scope.creatorID); err != nil {
+		return nil, err
+	}
+	code := strings.ToLower(strings.TrimSpace(req.Code))
+	if len(code) != 32 {
+		return nil, BadAuthRequest("请输入完整的 32 位兑换码")
+	}
+	row, err := s.repo.AdminRedeemCodeByHash(hashRedeemCode(code), scope.fundingSource, scope.creatorID)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, NotFound("未找到该兑换码")
+	}
+	if err != nil {
+		return nil, err
+	}
+	batch, err := s.repo.RedeemBatch(row.BatchID, scope.fundingSource, scope.creatorID)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, NotFound("未找到该兑换码")
+	}
+	if err != nil {
+		return nil, err
+	}
+	batch.CodesCipher = ""
+	return &AdminRedeemCodeLookupResult{
+		Batch: *batch,
+		Code:  adminRedeemCodeDetail(*row, code, time.Now()),
+	}, nil
+}
+
+func (s *Service) AdminSearchRedeemCodes(actor *model.User, req AdminRedeemCodeSearchRequest) (*AdminRedeemCodeSearchResult, error) {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionRedeemCodes); err != nil {
+		return nil, err
+	}
+	scope, err := redeemAdminScopeFor(actor, req.FundingSource, req.CreatorID)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.settleExpiredRedeemCodesForScope(scope.creatorID); err != nil {
+		return nil, err
+	}
+	query := strings.ToLower(strings.TrimSpace(req.Query))
+	if len(query) < 1 || len(query) > 32 {
+		return nil, BadAuthRequest("请输入兑换码中的任意 1-32 位字符")
+	}
+	if len(query) == 32 {
+		result, err := s.AdminLookupRedeemCode(actor, AdminRedeemCodeLookupRequest{Code: query, FundingSource: string(scope.fundingSource), CreatorID: scope.creatorID})
+		if err == nil {
+			return &AdminRedeemCodeSearchResult{Matches: []AdminRedeemCodeLookupResult{*result}, Total: 1}, nil
+		}
+		var appErr *kernel.AppError
+		if !errors.As(err, &appErr) || appErr.Status != kernel.CodeNotFound {
+			return nil, err
+		}
+	}
+
+	batches, err := s.repo.AdminRedeemBatchesWithCodeSecrets(scope.fundingSource, scope.creatorID)
+	if err != nil {
+		return nil, err
+	}
+	type candidate struct {
+		code    string
+		hash    string
+		batchID string
+	}
+	const resultLimit = 50
+	candidates := make([]candidate, 0, resultLimit)
+	total := 0
+	batchByID := make(map[string]model.RedeemBatch, len(batches))
+	for _, batch := range batches {
+		plainCodes, decryptErr := s.redeemBatchPlainCodes(batch.CodesCipher)
+		if decryptErr != nil {
+			return nil, decryptErr
+		}
+		batch.CodesCipher = ""
+		batchByID[batch.ID] = batch
+		for _, code := range plainCodes {
+			if !strings.Contains(strings.ToLower(code), query) {
+				continue
+			}
+			total++
+			if len(candidates) < resultLimit {
+				candidates = append(candidates, candidate{code: code, hash: hashRedeemCode(code), batchID: batch.ID})
+			}
+		}
+	}
+	hashes := make([]string, 0, len(candidates))
+	for _, item := range candidates {
+		hashes = append(hashes, item.hash)
+	}
+	rows, err := s.repo.AdminRedeemCodesByHashes(hashes, scope.fundingSource, scope.creatorID)
+	if err != nil {
+		return nil, err
+	}
+	rowByHash := make(map[string]repository.AdminRedeemCodeRow, len(rows))
+	for _, row := range rows {
+		rowByHash[row.CodeHash] = row
+	}
+	now := time.Now()
+	matches := make([]AdminRedeemCodeLookupResult, 0, len(candidates))
+	for _, item := range candidates {
+		row, exists := rowByHash[item.hash]
+		batch, batchExists := batchByID[item.batchID]
+		if !exists || !batchExists {
+			continue
+		}
+		matches = append(matches, AdminRedeemCodeLookupResult{Batch: batch, Code: adminRedeemCodeDetail(row, item.code, now)})
+	}
+	return &AdminRedeemCodeSearchResult{Matches: matches, Total: total, Truncated: total > len(matches)}, nil
+}
+
+func adminRedeemCodeDetail(row repository.AdminRedeemCodeRow, code string, now time.Time) AdminRedeemCodeDetail {
+	status := string(row.Status)
+	if row.Status == model.RedeemCodeUnused && row.ExpiresAt != nil && !row.ExpiresAt.After(now) {
+		status = "expired"
+	}
+	return AdminRedeemCodeDetail{
+		ID: row.ID, Code: code, CodeSuffix: row.CodeSuffix, Status: status,
+		RedeemedBy: row.RedeemedBy, RedeemedUsername: row.RedeemedUsername, RedeemedDisplayName: row.RedeemedDisplayName,
+		RedeemedAt: row.RedeemedAt, RedeemedIP: row.RedeemedIP, ExpiresAt: row.ExpiresAt, AmountMicrocredits: row.AmountMicrocredits,
+	}
 }
 
 func (s *Service) redeemBatchPlainCodes(ciphertext string) ([]string, error) {
@@ -272,20 +471,85 @@ func (s *Service) redeemBatchPlainCodes(ciphertext string) ([]string, error) {
 	return codes, nil
 }
 
+type redeemAdminScope struct {
+	fundingSource model.RedeemBatchFundingSource
+	creatorID     string
+}
+
+func (s *Service) settleExpiredRedeemCodesForScope(creatorID string) error {
+	for {
+		expired, _, err := s.repo.SettleExpiredRedeemCodes(time.Now(), creatorID, 100)
+		if err != nil {
+			return err
+		}
+		if expired == 0 || creatorID == "" {
+			return nil
+		}
+	}
+}
+
+func redeemAdminScopeFor(actor *model.User, requestedSource string, requestedCreatorID string) (redeemAdminScope, error) {
+	source := model.RedeemBatchFundingSource(strings.TrimSpace(requestedSource))
+	if actor.AdminLevel == model.AdminLevelScoped {
+		if source != "" && source != model.RedeemBatchFundingModuleAdmin {
+			return redeemAdminScope{}, adminPermissionDenied("模块管理员只能访问自己生成的兑换码")
+		}
+		return redeemAdminScope{fundingSource: model.RedeemBatchFundingModuleAdmin, creatorID: actor.ID}, nil
+	}
+	if source == "" {
+		source = model.RedeemBatchFundingPlatform
+	}
+	if source != model.RedeemBatchFundingPlatform && source != model.RedeemBatchFundingModuleAdmin {
+		return redeemAdminScope{}, BadAuthRequest("兑换码资金来源无效")
+	}
+	creatorID := ""
+	if source == model.RedeemBatchFundingModuleAdmin {
+		creatorID = strings.TrimSpace(requestedCreatorID)
+	}
+	return redeemAdminScope{fundingSource: source, creatorID: creatorID}, nil
+}
+
 func (s *Service) AdminRedeemBatchPage(actor *model.User, query AdminListQuery) (*RedeemBatchPage, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionRedeemCodes); err != nil {
 		return nil, err
 	}
-	page, limit := normalizeAdminPage(query.Page, query.Limit)
-	items, total, err := s.repo.AdminRedeemBatches(query.Keyword, query.Status, limit, (page-1)*limit)
+	scope, err := redeemAdminScopeFor(actor, query.FundingSource, query.CreatorID)
 	if err != nil {
 		return nil, err
 	}
-	return &RedeemBatchPage{Batches: items, Total: total, Page: page, Limit: limit}, nil
+	if err := s.settleExpiredRedeemCodesForScope(scope.creatorID); err != nil {
+		return nil, err
+	}
+	lifecycle := strings.TrimSpace(query.Lifecycle)
+	if lifecycle != "" && lifecycle != "ongoing" && lifecycle != "completed" && lifecycle != "all" {
+		return nil, BadAuthRequest("兑换码批次生命周期筛选无效")
+	}
+	page, limit := normalizeAdminPage(query.Page, query.Limit)
+	items, total, err := s.repo.AdminRedeemBatches(query.Keyword, query.Status, lifecycle, scope.fundingSource, scope.creatorID, limit, (page-1)*limit)
+	if err != nil {
+		return nil, err
+	}
+	var fundingSummary *RedeemFundingSummary
+	if actor.AdminLevel == model.AdminLevelScoped {
+		snapshot, err := s.repo.RedeemFundingSnapshot(actor.ID, time.Now())
+		if err != nil {
+			return nil, err
+		}
+		if snapshot.RedeemReservedMicrocredits > snapshot.TotalReservedMicrocredits {
+			return nil, errors.New("兑换码冻结积分与账户冻结积分不一致")
+		}
+		fundingSummary = &RedeemFundingSummary{
+			AvailableMicrocredits:      snapshot.AvailableMicrocredits,
+			RedeemReservedMicrocredits: snapshot.RedeemReservedMicrocredits,
+			OtherReservedMicrocredits:  snapshot.TotalReservedMicrocredits - snapshot.RedeemReservedMicrocredits,
+			TotalReservedMicrocredits:  snapshot.TotalReservedMicrocredits,
+		}
+	}
+	return &RedeemBatchPage{Batches: items, FundingSource: scope.fundingSource, FundingSummary: fundingSummary, Total: total, Page: page, Limit: limit}, nil
 }
 
 func (s *Service) AdminAdjustCredits(actor *model.User, userID string, req AdminCreditAdjustmentRequest) (*model.CreditAccount, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionCredits); err != nil {
 		return nil, err
 	}
 	if req.AmountMicrocredits == 0 {
@@ -298,7 +562,7 @@ func (s *Service) AdminAdjustCredits(actor *model.User, userID string, req Admin
 	if note == "" {
 		return nil, BadAuthRequest("请填写调账原因")
 	}
-	if _, err := s.repo.User(userID); err != nil {
+	if _, err := s.RequireOrdinaryUserTarget(actor, userID); err != nil {
 		return nil, err
 	}
 	account, err := s.repo.AdjustCredits(userID, actor.ID, req.AmountMicrocredits, truncateRunes(note, 500))
@@ -315,7 +579,7 @@ func (s *Service) AdminAdjustCredits(actor *model.User, userID string, req Admin
 }
 
 func (s *Service) AdminBillingOrderPage(actor *model.User, query AdminListQuery) (*BillingOrderPage, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionCredits); err != nil {
 		return nil, err
 	}
 	page, limit := normalizeAdminPage(query.Page, query.Limit)
@@ -327,7 +591,7 @@ func (s *Service) AdminBillingOrderPage(actor *model.User, query AdminListQuery)
 }
 
 func (s *Service) ResolveBillingOrder(actor *model.User, id string, req ResolveBillingRequest) (*model.BillingOrder, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionCredits); err != nil {
 		return nil, err
 	}
 	note := strings.TrimSpace(req.Note)
@@ -342,7 +606,7 @@ func (s *Service) ResolveBillingOrder(actor *model.User, id string, req ResolveB
 }
 
 func (s *Service) ResolveBillingOrders(actor *model.User, req ResolveBillingBatchRequest) (*ResolveBillingBatchResult, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionCredits); err != nil {
 		return nil, err
 	}
 	note := strings.TrimSpace(req.Note)
@@ -411,38 +675,64 @@ func (s *Service) resolveBillingOrder(actor *model.User, id string, action strin
 	return s.repo.BillingOrder(id)
 }
 
-func (s *Service) AdminDisableRedeemBatch(actor *model.User, batchID string) (int64, error) {
-	if err := s.RequireAdmin(actor); err != nil {
-		return 0, err
+func (s *Service) AdminDisableRedeemBatch(actor *model.User, batchID string, fundingSource string) (*RedeemDisableResult, error) {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionRedeemCodes); err != nil {
+		return nil, err
 	}
-	if _, err := s.repo.RedeemBatch(strings.TrimSpace(batchID)); err != nil {
-		return 0, err
-	}
-	count, err := s.repo.DisableRedeemBatch(batchID, time.Now())
+	scope, err := redeemAdminScopeFor(actor, fundingSource, "")
 	if err != nil {
-		return 0, err
+		return nil, err
+	}
+	if err := s.settleExpiredRedeemCodesForScope(scope.creatorID); err != nil {
+		return nil, err
+	}
+	batchID = strings.TrimSpace(batchID)
+	if _, err := s.repo.RedeemBatch(batchID, scope.fundingSource, scope.creatorID); errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, NotFound("兑换码批次不存在")
+	} else if err != nil {
+		return nil, err
+	}
+	count, refunded, err := s.repo.DisableRedeemBatch(batchID, time.Now())
+	if err != nil {
+		return nil, err
 	}
 	if count == 0 {
-		return 0, BadAuthRequest("该批次没有可禁用的兑换码")
+		return nil, BadAuthRequest("该批次没有可禁用的兑换码")
 	}
-	if err := s.appendAdminAudit(actor, "redeem_batch.disable", "redeem_batch", batchID, "禁用批次内全部未使用兑换码", map[string]any{"disabledCount": count}); err != nil {
-		return 0, err
+	if err := s.appendAdminAudit(actor, "redeem_batch.disable", "redeem_batch", batchID, "禁用批次内全部未使用兑换码", map[string]any{"disabledCount": count, "refundedMicrocredits": refunded}); err != nil {
+		return nil, err
 	}
-	return count, nil
+	return &RedeemDisableResult{DisabledCount: count, RefundedMicrocredits: refunded}, nil
 }
 
-func (s *Service) AdminDisableRedeemCode(actor *model.User, batchID string, codeID string) error {
-	if err := s.RequireAdmin(actor); err != nil {
-		return err
+func (s *Service) AdminDisableRedeemCode(actor *model.User, batchID string, codeID string, fundingSource string) (*RedeemDisableResult, error) {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionRedeemCodes); err != nil {
+		return nil, err
 	}
-	disabled, err := s.repo.DisableRedeemCode(batchID, codeID, time.Now())
+	scope, err := redeemAdminScopeFor(actor, fundingSource, "")
 	if err != nil {
-		return err
+		return nil, err
+	}
+	if err := s.settleExpiredRedeemCodesForScope(scope.creatorID); err != nil {
+		return nil, err
+	}
+	batchID = strings.TrimSpace(batchID)
+	if _, err := s.repo.RedeemBatch(batchID, scope.fundingSource, scope.creatorID); errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, NotFound("兑换码批次不存在")
+	} else if err != nil {
+		return nil, err
+	}
+	disabled, refunded, err := s.repo.DisableRedeemCode(batchID, codeID, time.Now())
+	if err != nil {
+		return nil, err
 	}
 	if !disabled {
-		return BadAuthRequest("兑换码不存在、已使用、已禁用或已过期")
+		return nil, BadAuthRequest("兑换码不存在、已使用、已禁用或已过期")
 	}
-	return s.appendAdminAudit(actor, "redeem_code.disable", "redeem_code", codeID, "禁用单个兑换码", map[string]any{"batchId": batchID})
+	if err := s.appendAdminAudit(actor, "redeem_code.disable", "redeem_code", codeID, "禁用单个兑换码", map[string]any{"batchId": batchID, "refundedMicrocredits": refunded}); err != nil {
+		return nil, err
+	}
+	return &RedeemDisableResult{DisabledCount: 1, RefundedMicrocredits: refunded}, nil
 }
 
 func (s *Service) taskBillingOrder(userID string, task *model.Task, input map[string]any) (*model.BillingOrder, error) {
@@ -526,6 +816,9 @@ func (s *Service) newLogicalModelBillingOrder(userID string, task *model.Task, i
 		if channelModel.Capability != capability || !supportsTokenBilling(capability, channelModel.Protocol) {
 			return nil, BadAuthRequest("当前供应线路不支持前台模型的 Token 计费方式")
 		}
+		if capability == "video" && (logicalModel.InputPriceMicrocredits != 0 || logicalModel.CachedPriceMicrocredits != 0) {
+			return nil, BadAuthRequest("视频 Token 仅按视频用量定价，请将输入与缓存价格设为 0")
+		}
 		pricing := &model.ChannelModel{InputTokenPriceMicrocredits: logicalModel.InputPriceMicrocredits, OutputTokenPriceMicrocredits: logicalModel.OutputPriceMicrocredits, CachedTokenPriceMicrocredits: logicalModel.CachedPriceMicrocredits}
 		amount, err = tokenEstimateAmount(pricing, tokenEstimate, 10_000)
 		quantity = tokenEstimate.InputTokens + tokenEstimate.OutputTokens
@@ -535,22 +828,31 @@ func (s *Service) newLogicalModelBillingOrder(userID string, task *model.Task, i
 	if err != nil {
 		return nil, err
 	}
-	if amount <= 0 {
+	if amount < 0 {
 		return nil, BadAuthRequest("当前模型尚未配置有效的用户价格")
 	}
 	revision, err := s.repo.LogicalModelRevision(task.LogicalModelRevisionID)
 	if err != nil {
 		return nil, err
 	}
-	return &model.BillingOrder{
+	var videoFormulaTokens int64
+	if logicalModel.BillingMode == "token" && tokenEstimate.Video != nil {
+		videoFormulaTokens = tokenEstimate.Video.FormulaTokens
+	}
+	order := &model.BillingOrder{
 		ID: newID(), UserID: userID, IdempotencyKey: "task:" + task.ID + ":" + newID(), TaskID: task.ID,
 		ChannelID: channelModel.ChannelID, ChannelModelID: channelModel.ID, Model: logicalModel.Code, Capability: capability,
 		Scene: truncateRunes(firstNonEmpty(strings.TrimSpace(task.Operation), task.Type), 80), BillingMode: logicalModel.BillingMode, PriceVersion: int64(revision.Version),
 		UnitPriceMicrocredits: logicalModel.UnitPriceMicrocredits, MultiplierBasisPoints: 10_000, Quantity: quantity, AmountMicrocredits: amount,
 		ReservedAmountMicrocredits: amount, InputTokenPriceMicrocredits: logicalModel.InputPriceMicrocredits,
 		OutputTokenPriceMicrocredits: logicalModel.OutputPriceMicrocredits, CachedTokenPriceMicrocredits: logicalModel.CachedPriceMicrocredits,
-		Status: model.BillingStatusReserved,
-	}, nil
+		VideoFormulaTokens: videoFormulaTokens,
+		Status:             model.BillingStatusReserved,
+	}
+	intent := ModelRequestIntentFromTaskInput(input, task.Type, task.Operation)
+	priceTierID, _ := config["priceTierId"].(string)
+	snapshotCreditCost(order, channelModelPriceTierForBilling(*channelModel, priceTierID, capability, intent), billingQuantity(capability, config["videoSeconds"]), tokenEstimate)
+	return order, nil
 }
 
 func (s *Service) ReserveProxyBilling(userID string, channelID string, modelKey string, capability string, scene string, idempotencyKey string, quantity int64) (*model.BillingOrder, error) {
@@ -610,14 +912,20 @@ func (s *Service) newBillingOrderWithPriceTier(userID string, taskID string, ide
 		}
 		quantity = requestedQuantity
 	case "token":
+		if tokenEstimate.Err != nil {
+			return nil, tokenEstimate.Err
+		}
 		if !supportsTokenBilling(item.Capability, item.Protocol) || item.Capability != capability {
-			return nil, BadAuthRequest("Token 计费仅支持文本生成和火山方舟视频生成")
+			return nil, BadAuthRequest("Token 计费仅支持文本和视频生成")
 		}
 		if capability == "text" && (tokenEstimate.InputTokens <= 0 || tokenEstimate.OutputTokens <= 0) {
 			return nil, BadAuthRequest("无法估算文本 Token 用量")
 		}
 		if capability == "video" && tokenEstimate.OutputTokens <= 0 {
-			return nil, BadAuthRequest("无法估算火山方舟视频 Token 用量")
+			return nil, BadAuthRequest("无法计算视频 Token 用量，请检查时长与尺寸")
+		}
+		if capability == "video" && (tier.InputTokenPriceMicrocredits != 0 || tier.CachedTokenPriceMicrocredits != 0) {
+			return nil, BadAuthRequest("视频 Token 仅按视频用量定价，请将输入与缓存价格设为 0")
 		}
 		quantity = tokenEstimate.InputTokens + tokenEstimate.OutputTokens
 	default:
@@ -639,15 +947,22 @@ func (s *Service) newBillingOrderWithPriceTier(userID string, taskID string, ide
 	if err != nil {
 		return nil, err
 	}
-	return &model.BillingOrder{
+	var videoFormulaTokens int64
+	if tier.BillingMode == "token" && tokenEstimate.Video != nil {
+		videoFormulaTokens = tokenEstimate.Video.FormulaTokens
+	}
+	order := &model.BillingOrder{
 		ID: newID(), UserID: userID, IdempotencyKey: idempotencyKey, TaskID: taskID,
 		ChannelID: channelID, ChannelModelID: item.ID, PriceTierID: tier.ID, PriceTierVersion: tier.PriceVersion, PriceSelectorJSON: tier.SelectorJSON, Model: modelKey, Capability: capability,
 		Scene: truncateRunes(scene, 80), BillingMode: tier.BillingMode, PriceVersion: item.PriceVersion,
 		UnitPriceMicrocredits: tier.UnitPriceMicrocredits, MultiplierBasisPoints: multiplierBPS, Quantity: quantity, AmountMicrocredits: amount,
 		ReservedAmountMicrocredits: amount, InputTokenPriceMicrocredits: tier.InputTokenPriceMicrocredits,
 		OutputTokenPriceMicrocredits: tier.OutputTokenPriceMicrocredits, CachedTokenPriceMicrocredits: tier.CachedTokenPriceMicrocredits,
-		Status: model.BillingStatusReserved,
-	}, nil
+		VideoFormulaTokens: videoFormulaTokens,
+		Status:             model.BillingStatusReserved,
+	}
+	snapshotCreditCost(order, tier, requestedQuantity, tokenEstimate)
+	return order, nil
 }
 
 func channelModelPriceTierForBilling(channelModel model.ChannelModel, priceTierID string, capability string, intents ...ModelRequestIntent) *model.ChannelModelPriceTier {
@@ -682,94 +997,6 @@ func estimateTaskBillingTokens(input map[string]any, capability string) tokenBil
 	return estimateTaskTokens(input)
 }
 
-// 方舟视频成功后才返回真实 completion_tokens；创建任务前按官方像素帧公式预授权，
-// 并保留少量帧率/取整余量，实际结算时会按 usage 自动退回差额。
-func estimateArkVideoTokens(input map[string]any) tokenBillingEstimate {
-	config, _ := input["config"].(map[string]any)
-	if config == nil {
-		return tokenBillingEstimate{}
-	}
-	durationSeconds, err := strconv.ParseInt(strings.TrimSpace(fmt.Sprint(config["videoSeconds"])), 10, 64)
-	if err != nil || durationSeconds <= 0 {
-		return tokenBillingEstimate{}
-	}
-	pixels := arkVideoOutputPixels(fmt.Sprint(config["vquality"]), fmt.Sprint(config["size"]), fmt.Sprint(config["model"]))
-	if pixels <= 0 {
-		return tokenBillingEstimate{}
-	}
-
-	if durationSeconds > (1<<63-1)/1000 {
-		return tokenBillingEstimate{}
-	}
-	totalDurationMillis := durationSeconds * 1000
-	referenceCount := int64(0)
-	if references, ok := input["referenceVideos"].([]any); ok && len(references) > 0 {
-		referenceCount = int64(len(references))
-		knownDurationMillis := int64(0)
-		unknownDuration := false
-		for _, raw := range references {
-			media, _ := raw.(map[string]any)
-			durationMillis := firstInt64(media, "durationMs")
-			if durationMillis <= 0 {
-				unknownDuration = true
-				continue
-			}
-			knownDurationMillis = min(15_000, knownDurationMillis+min(durationMillis, int64(15_000)))
-		}
-		// 方舟参考视频总时长上限为 15 秒；缺少媒体元数据时按上限预留。
-		if unknownDuration {
-			knownDurationMillis = 15_000
-		}
-		totalDurationMillis += knownDurationMillis
-	}
-	frames := (totalDurationMillis*24+999)/1000 + 1 + referenceCount
-	if pixels > (1<<63-1-1023)/frames {
-		return tokenBillingEstimate{}
-	}
-	tokens := (pixels*frames + 1023) / 1024
-	if tokens > (1<<63-1-99)/110 {
-		return tokenBillingEstimate{}
-	}
-	return tokenBillingEstimate{OutputTokens: (tokens*110 + 99) / 100}
-}
-
-func arkVideoOutputPixels(resolution string, ratio string, modelName string) int64 {
-	resolution = normalizeSeedanceResolution(resolution, modelName)
-	ratio = normalizeSeedanceRatio(ratio)
-	pixelsByRatio := map[string]map[string]int64{
-		"480p": {
-			"16:9": 864 * 496, "4:3": 752 * 560, "1:1": 640 * 640,
-			"3:4": 560 * 752, "9:16": 496 * 864, "21:9": 992 * 432,
-		},
-		"720p": {
-			"16:9": 1280 * 720, "4:3": 1112 * 834, "1:1": 960 * 960,
-			"3:4": 834 * 1112, "9:16": 720 * 1280, "21:9": 1470 * 630,
-		},
-		"1080p": {
-			"16:9": 1920 * 1080, "4:3": 1664 * 1248, "1:1": 1440 * 1440,
-			"3:4": 1248 * 1664, "9:16": 1080 * 1920, "21:9": 2206 * 946,
-		},
-	}
-	values := pixelsByRatio[resolution]
-	if resolution == "2160p" {
-		values = make(map[string]int64, len(pixelsByRatio["1080p"]))
-		for key, value := range pixelsByRatio["1080p"] {
-			values[key] = value * 4
-		}
-	}
-	if len(values) == 0 {
-		return 0
-	}
-	if ratio != "adaptive" {
-		return values[ratio]
-	}
-	var largest int64
-	for _, value := range values {
-		largest = max(largest, value)
-	}
-	return largest
-}
-
 func estimateProxyTokens(body []byte) tokenBillingEstimate {
 	var payload map[string]any
 	_ = json.Unmarshal(body, &payload)
@@ -802,33 +1029,23 @@ func maxOutputTokens(payload map[string]any) int64 {
 
 // Token 单价按每百万 Token 配置；预授权使用输入价估算缓存 Token，真实结算再按 usage 拆分。
 func tokenEstimateAmount(item *model.ChannelModel, estimate tokenBillingEstimate, multiplierBPS int64) (int64, error) {
+	if estimate.Err != nil {
+		return 0, estimate.Err
+	}
 	if item == nil || estimate.InputTokens < 0 || estimate.OutputTokens <= 0 || multiplierBPS <= 0 {
 		return 0, errors.New("Token 计费参数无效")
 	}
-	inputAmount, ok := safeTokenProduct(estimate.InputTokens, item.InputTokenPriceMicrocredits)
-	if !ok {
+	amount, err := kernel.TokenBillingAmount(multiplierBPS,
+		kernel.TokenBillingTerm{Tokens: estimate.InputTokens, PriceMicrocredits: item.InputTokenPriceMicrocredits},
+		kernel.TokenBillingTerm{Tokens: estimate.OutputTokens, PriceMicrocredits: item.OutputTokenPriceMicrocredits},
+	)
+	if errors.Is(err, kernel.ErrTokenBillingOverflow) {
 		return 0, errors.New("Token 计费金额溢出")
 	}
-	outputAmount, ok := safeTokenProduct(estimate.OutputTokens, item.OutputTokenPriceMicrocredits)
-	if !ok || inputAmount > 1<<63-1-outputAmount {
-		return 0, errors.New("Token 计费金额溢出")
-	}
-	base := inputAmount + outputAmount
-	if base > (1<<63-1-9_999_999_999)/multiplierBPS {
-		return 0, errors.New("Token 计费金额溢出")
-	}
-	amount := (base*multiplierBPS + 9_999_999_999) / 10_000_000_000
-	if amount <= 0 {
-		return 0, errors.New("Token 计费金额必须大于 0")
+	if err != nil {
+		return 0, errors.New("Token 计费参数无效")
 	}
 	return roundCreditAmountUp(amount)
-}
-
-func safeTokenProduct(tokens int64, price int64) (int64, bool) {
-	if tokens < 0 || price < 0 || (tokens > 0 && price > (1<<63-1)/tokens) {
-		return 0, false
-	}
-	return tokens * price, true
 }
 
 func billingQuantity(capability string, value any) int64 {

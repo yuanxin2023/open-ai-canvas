@@ -6,7 +6,7 @@ import type { ReferenceImage } from "@/types/image";
 import { withOpenAIPromptCacheKey } from "@/lib/openai-prompt-cache";
 import { modelCapabilityConfigFor, normalizeImageValue } from "@/lib/model-capabilities";
 import { buildGeminiImageGenerationConfig, parseGeminiImageDataUrl, type GeminiImageGenerationConfig } from "@/lib/gemini-image";
-import { isVolcengineArkImageProtocol } from "@/lib/model-protocols";
+import { isGeminiImageProtocol, isVolcengineArkImageProtocol } from "@/lib/model-protocols";
 import { aiApiUrl, aiHeaders, imageChannelTransport, postChannelJSON, postGeminiJSON, postVolcengineArkImage } from "@/services/api/image-transport";
 
 const IMAGE_OUTPUT_FORMAT = "png";
@@ -62,7 +62,7 @@ export async function requestGeneration(config: AiConfig, prompt: string, option
     validateImageCapability(imageProfile, []);
     const normalizedImage = normalizeImageValue(imageProfile, config);
     const n = Number(normalizedImage.count);
-    if (requestConfig.interfaceType === "gemini-image") {
+    if (isGeminiImageProtocol(requestConfig.interfaceType)) {
         try {
             return await requestGeminiImages(requestConfig, prompt, [], n, buildGeminiImageGenerationConfig(normalizedImage.size, normalizedImage.quality), options);
         } catch (error) {
@@ -139,7 +139,7 @@ export async function requestEdit(config: AiConfig, prompt: string, references: 
     const normalizedImage = normalizeImageValue(imageProfile, config);
     const n = Number(normalizedImage.count);
     const requestPrompt = buildImageReferencePromptText(prompt, references);
-    if (requestConfig.interfaceType === "gemini-image") {
+    if (isGeminiImageProtocol(requestConfig.interfaceType)) {
         if (mask) throw new Error("Gemini 调用格式暂不支持蒙版编辑");
         try {
             return await requestGeminiImages(requestConfig, requestPrompt, references, n, buildGeminiImageGenerationConfig(normalizedImage.size, normalizedImage.quality), options);

@@ -11,15 +11,19 @@ import (
 )
 
 const (
-	manifestContractStart            = "<!-- YINGCE_MANIFEST_CONTRACT_START -->"
-	manifestContractEnd              = "<!-- YINGCE_MANIFEST_CONTRACT_END -->"
+	manifestContractStart            = "<!-- OPEN_AI_CANVAS_MANIFEST_CONTRACT_START -->"
+	manifestContractEnd              = "<!-- OPEN_AI_CANVAS_MANIFEST_CONTRACT_END -->"
 	manifestDocumentationPlaceholder = "<当前插件的完整 documentation，由 README.md 与 docs/interface.md 拼接而成；为避免 JSON 递归，此处不重复展开正文。>"
 )
 
 func TestOfficialProtocolPackagesAreSelfContainedDeclarativePlugins(t *testing.T) {
-	paths, err := filepath.Glob(filepath.Join("..", "..", "..", "plugin-packages", "*.yingce-plugin"))
-	if err != nil {
-		t.Fatal(err)
+	paths := make([]string, 0, 80)
+	for _, extension := range PluginPackageExtensions() {
+		matched, err := filepath.Glob(filepath.Join("..", "..", "..", "plugin-packages", "*"+extension))
+		if err != nil {
+			t.Fatal(err)
+		}
+		paths = append(paths, matched...)
 	}
 	if len(paths) < 70 {
 		t.Fatalf("official protocol packages = %d, want at least 70", len(paths))
@@ -35,11 +39,15 @@ func TestOfficialProtocolPackagesAreSelfContainedDeclarativePlugins(t *testing.T
 			t.Fatalf("parse %s: %v", filepath.Base(path), err)
 		}
 		if len(pkg.Manifest.Contributes.PaymentProviders) > 0 {
-			// Payment packages use the yingce.payment/v1 executable ABI rather than
+			// Payment packages use the open-ai-canvas.payment/v1 executable ABI rather than
 			// the declarative AI provider contract covered by this catalog test.
 			continue
 		}
-		if pkg.Manifest.APIVersion != "yingce.plugin/v2" {
+		expectedAPIVersion := "open-ai-canvas.plugin/v2"
+		if strings.HasSuffix(strings.ToLower(path), LovwowPackageExtension) {
+			expectedAPIVersion = "lovwow.plugin/v2"
+		}
+		if pkg.Manifest.APIVersion != expectedAPIVersion {
 			t.Fatalf("%s apiVersion = %q", filepath.Base(path), pkg.Manifest.APIVersion)
 		}
 		if strings.HasPrefix(strings.TrimSpace(pkg.Manifest.Runtime.Backend), "host:") {
@@ -87,7 +95,7 @@ func TestOfficialProtocolPackagesAreSelfContainedDeclarativePlugins(t *testing.T
 }
 
 func TestOfficialAtlasCloudChatProfile(t *testing.T) {
-	data, err := os.ReadFile(filepath.Join("..", "..", "..", "plugin-packages", "atlascloud-chat.yingce-plugin"))
+	data, err := os.ReadFile(filepath.Join("..", "..", "..", "plugin-packages", "atlascloud-chat.canvas-plugin"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,7 +108,7 @@ func TestOfficialAtlasCloudChatProfile(t *testing.T) {
 		t.Fatalf("Atlas Cloud provider metadata = %#v", provider)
 	}
 
-	adapter := officialPackageAdapter(t, "atlascloud-chat.yingce-plugin", "atlascloud-chat")
+	adapter := officialPackageAdapter(t, "atlascloud-chat.canvas-plugin", "atlascloud-chat")
 	spec, err := adapter.BuildCreate(context.Background(), RequestContext{Request: GenerationRequest{
 		Model:    "openai/gpt-5.6-luna",
 		Messages: []Message{{Role: "user", Content: "hello"}},
@@ -164,19 +172,19 @@ func TestOfficialAgentProfilesMapToolRequestsAndResponses(t *testing.T) {
 		name, packageName, providerID, marker, wantPath, response, wantID, wantSignature string
 	}{
 		{
-			name: "openai-chat", packageName: "openai-chat-completions.yingce-plugin", providerID: "chat-completion", marker: "chat", wantPath: "/chat/completions", wantID: "call-chat",
+			name: "openai-chat", packageName: "openai-chat-completions.canvas-plugin", providerID: "chat-completion", marker: "chat", wantPath: "/chat/completions", wantID: "call-chat",
 			response: `{"choices":[{"message":{"content":"chat answer","tool_calls":[{"id":"call-chat","function":{"name":"canvas_get_state","arguments":"{\"scope\":\"all\"}"}}]}}]}`,
 		},
 		{
-			name: "openai-responses", packageName: "openai-responses.yingce-plugin", providerID: "openai-response", marker: "responses", wantPath: "/responses", wantID: "call-responses",
+			name: "openai-responses", packageName: "openai-responses.canvas-plugin", providerID: "openai-response", marker: "responses", wantPath: "/responses", wantID: "call-responses",
 			response: `{"output_text":"responses answer","output":[{"type":"message"},{"type":"function_call","call_id":"call-responses","name":"canvas_get_state","arguments":"{\"scope\":\"all\"}"}]}`,
 		},
 		{
-			name: "anthropic", packageName: "anthropic-messages.yingce-plugin", providerID: "claude-api", marker: "claude", wantPath: "/v1/messages", wantID: "call-claude",
+			name: "anthropic", packageName: "anthropic-messages.canvas-plugin", providerID: "claude-api", marker: "claude", wantPath: "/v1/messages", wantID: "call-claude",
 			response: `{"content":[{"type":"text","text":"claude answer"},{"type":"tool_use","id":"call-claude","name":"canvas_get_state","input":{"scope":"all"}}]}`,
 		},
 		{
-			name: "gemini", packageName: "google-gemini-generate-content.yingce-plugin", providerID: "gemini-generate-content", marker: "gemini", wantPath: "/v1beta/models/gemini-test:generateContent", wantSignature: "signature-1",
+			name: "gemini", packageName: "google-gemini-generate-content.canvas-plugin", providerID: "gemini-generate-content", marker: "gemini", wantPath: "/v1beta/models/gemini-test:generateContent", wantSignature: "signature-1",
 			response: `{"candidates":[{"content":{"parts":[{"text":"gemini answer"},{"functionCall":{"name":"canvas_get_state","args":{"scope":"all"}},"thoughtSignature":"signature-1"}]}}]}`,
 		},
 	}
@@ -234,7 +242,7 @@ func TestOfficialVideoProfilesPreserveExplicitMediaRoles(t *testing.T) {
 		assert      func(t *testing.T, spec RequestSpec)
 	}{
 		{
-			packageName: "minimax-hailuo-video-v2.yingce-plugin", providerID: "minimax-video", model: "MiniMax-H3", resolution: "1080P",
+			packageName: "minimax-hailuo-video-v2.canvas-plugin", providerID: "minimax-video", model: "MiniMax-H3", resolution: "1080P",
 			assert: func(t *testing.T, spec RequestSpec) {
 				body := manifestTestBody(t, spec)
 				content, _ := body["content"].([]any)
@@ -249,7 +257,7 @@ func TestOfficialVideoProfilesPreserveExplicitMediaRoles(t *testing.T) {
 			},
 		},
 		{
-			packageName: "newapi-media-task-v1.yingce-plugin", providerID: "newapi-channel-1", model: "minimax-h3", resolution: "720P",
+			packageName: "newapi-media-task-v1.canvas-plugin", providerID: "newapi-channel-1", model: "minimax-h3", resolution: "720P",
 			assert: func(t *testing.T, spec RequestSpec) {
 				body := manifestTestBody(t, spec)
 				input, _ := body["input"].(map[string]any)
@@ -262,7 +270,7 @@ func TestOfficialVideoProfilesPreserveExplicitMediaRoles(t *testing.T) {
 			},
 		},
 		{
-			packageName: "agnes-video-25.yingce-plugin", providerID: "agnes-video", model: "agnes-video-2.5", resolution: "720P",
+			packageName: "agnes-video-25.canvas-plugin", providerID: "agnes-video", model: "agnes-video-2.5", resolution: "720P",
 			assert: func(t *testing.T, spec RequestSpec) {
 				body := manifestTestBody(t, spec)
 				if body["mode"] != "keyframe" || body["first_frame"] != "https://cdn.example/first.png" || body["last_frame"] != "https://cdn.example/last.png" {
@@ -271,7 +279,7 @@ func TestOfficialVideoProfilesPreserveExplicitMediaRoles(t *testing.T) {
 			},
 		},
 		{
-			packageName: "dashscope-wan-video.yingce-plugin", providerID: "dashscope-wan-video", model: "wan2.2-kf2v-flash", resolution: "720P",
+			packageName: "dashscope-wan-video.canvas-plugin", providerID: "dashscope-wan-video", model: "wan2.2-kf2v-flash", resolution: "720P",
 			assert: func(t *testing.T, spec RequestSpec) {
 				body := manifestTestBody(t, spec)
 				input, _ := body["input"].(map[string]any)
@@ -303,7 +311,7 @@ func TestOfficialVideoProfilesPreserveExplicitMediaRoles(t *testing.T) {
 }
 
 func TestOfficialWanProfilesUseMutuallyExclusiveReferenceFields(t *testing.T) {
-	video := officialPackageAdapter(t, "dashscope-wan-video.yingce-plugin", "dashscope-wan-video")
+	video := officialPackageAdapter(t, "dashscope-wan-video.canvas-plugin", "dashscope-wan-video")
 	videoSpec, err := video.BuildCreate(context.Background(), RequestContext{Request: GenerationRequest{
 		Model: "wan2.6-r2v", Prompt: "保持角色一致", Operation: "reference_to_video",
 		Images: []MediaReference{
@@ -324,7 +332,7 @@ func TestOfficialWanProfilesUseMutuallyExclusiveReferenceFields(t *testing.T) {
 		t.Fatalf("Wan reference_images = %#v", references)
 	}
 
-	image := officialPackageAdapter(t, "dashscope-wanx-image.yingce-plugin", "dashscope-wanx-image")
+	image := officialPackageAdapter(t, "dashscope-wanx-image.canvas-plugin", "dashscope-wanx-image")
 	for _, test := range []struct {
 		name   string
 		images []MediaReference
@@ -350,7 +358,7 @@ func TestOfficialWanProfilesUseMutuallyExclusiveReferenceFields(t *testing.T) {
 }
 
 func TestOfficialRollDekWanVideoUsesVideosLifecycle(t *testing.T) {
-	adapter := officialPackageAdapter(t, "rolldek-wan-video.yingce-plugin", "rolldek-wan-video")
+	adapter := officialPackageAdapter(t, "rolldek-wan-video.canvas-plugin", "rolldek-wan-video")
 	request := GenerationRequest{
 		Model: "wan3.0-video-prime-1080p", Prompt: "保持角色一致", Duration: 11, AspectRatio: "16:9", Resolution: "1080p",
 		Images: []MediaReference{{URL: "https://cdn.example/character.png", Role: "reference_image"}},
@@ -413,7 +421,7 @@ func TestOfficialRollDekWanVideoUsesVideosLifecycle(t *testing.T) {
 }
 
 func TestNewAPIVideoGenerationsParsesNestedTaskIDs(t *testing.T) {
-	adapter := officialPackageAdapter(t, "newapi-video-generations-v1.yingce-plugin", "newapi-channel-2")
+	adapter := officialPackageAdapter(t, "newapi-video-generations-v1.canvas-plugin", "newapi-channel-2")
 	tests := []struct {
 		name    string
 		payload string
@@ -437,13 +445,15 @@ func TestNewAPIVideoGenerationsParsesNestedTaskIDs(t *testing.T) {
 }
 
 func TestNewAPIVideoGenerationsParsesNestedVideoResults(t *testing.T) {
-	adapter := officialPackageAdapter(t, "newapi-video-generations-v1.yingce-plugin", "newapi-channel-2")
+	adapter := officialPackageAdapter(t, "newapi-video-generations-v1.canvas-plugin", "newapi-channel-2")
 	tests := []struct {
 		name    string
 		payload string
+		wantURL string
 	}{
-		{name: "channel result URL", payload: `{"code":"success","data":{"task_id":"task-upstream","status":"SUCCESS","result_url":"https://cdn.example/channel-result.mp4"}}`},
-		{name: "provider nested video URL", payload: `{"code":"success","data":{"task_id":"task-upstream","status":"SUCCESS","data":{"status":"completed","video_url":"https://cdn.example/provider-result.mp4"}}}`},
+		{name: "channel result URL", payload: `{"code":"success","data":{"task_id":"task-upstream","status":"SUCCESS","result_url":"https://cdn.example/channel-result.mp4"}}`, wantURL: "https://cdn.example/channel-result.mp4"},
+		{name: "provider nested video URL", payload: `{"code":"success","data":{"task_id":"task-upstream","status":"SUCCESS","data":{"status":"completed","video_url":"https://cdn.example/provider-result.mp4"}}}`, wantURL: "https://cdn.example/provider-result.mp4"},
+		{name: "provider data array URL", payload: `{"created":1789773326,"data":[{"url":"https://cdn.example/seedance-result.mp4?preview=1"}],"id":"task-upstream","object":"video.generation","status":"completed","usage":{"completion_tokens":108872,"total_tokens":108872}}`, wantURL: "https://cdn.example/seedance-result.mp4?preview=1"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -454,15 +464,15 @@ func TestNewAPIVideoGenerationsParsesNestedVideoResults(t *testing.T) {
 			if state.Status != StatusSucceeded || state.Result == nil || len(state.Result.Videos) != 1 {
 				t.Fatalf("state = %#v, want one completed video", state)
 			}
-			if state.Result.Videos[0].URL == "" {
-				t.Fatalf("video = %#v, want a result URL", state.Result.Videos[0])
+			if state.Result.Videos[0].URL != test.wantURL {
+				t.Fatalf("video = %#v, want URL %q", state.Result.Videos[0], test.wantURL)
 			}
 		})
 	}
 }
 
 func TestOfficialOpenAIVideosDeclaresAuthenticatedResultDownload(t *testing.T) {
-	adapter := officialPackageAdapter(t, "openai-videos.yingce-plugin", "newapi")
+	adapter := officialPackageAdapter(t, "openai-videos.canvas-plugin", "newapi")
 	capability, ok := adapter.(ResultCapability)
 	if !ok || !capability.ResultAvailable() {
 		t.Fatal("OpenAI Videos result operation is unavailable")
@@ -486,12 +496,12 @@ func TestOfficialTextProtocolsDeliverInstructions(t *testing.T) {
 	tests := []struct {
 		name, packageName, providerID, messagesField, instructionField string
 	}{
-		{name: "openai-chat", packageName: "openai-chat-completions.yingce-plugin", providerID: "chat-completion", messagesField: "messages"},
-		{name: "deepseek", packageName: "deepseek-chat.yingce-plugin", providerID: "deepseek-chat", messagesField: "messages"},
-		{name: "atlascloud", packageName: "atlascloud-chat.yingce-plugin", providerID: "atlascloud-chat", messagesField: "messages"},
-		{name: "openai-responses", packageName: "openai-responses.yingce-plugin", providerID: "openai-response", messagesField: "input", instructionField: "instructions"},
-		{name: "anthropic", packageName: "anthropic-messages.yingce-plugin", providerID: "claude-api", messagesField: "messages", instructionField: "system"},
-		{name: "gemini", packageName: "google-gemini-generate-content.yingce-plugin", providerID: "gemini-generate-content", messagesField: "contents", instructionField: "systemInstruction"},
+		{name: "openai-chat", packageName: "openai-chat-completions.canvas-plugin", providerID: "chat-completion", messagesField: "messages"},
+		{name: "deepseek", packageName: "deepseek-chat.canvas-plugin", providerID: "deepseek-chat", messagesField: "messages"},
+		{name: "atlascloud", packageName: "atlascloud-chat.canvas-plugin", providerID: "atlascloud-chat", messagesField: "messages"},
+		{name: "openai-responses", packageName: "openai-responses.canvas-plugin", providerID: "openai-response", messagesField: "input", instructionField: "instructions"},
+		{name: "anthropic", packageName: "anthropic-messages.canvas-plugin", providerID: "claude-api", messagesField: "messages", instructionField: "system"},
+		{name: "gemini", packageName: "google-gemini-generate-content.canvas-plugin", providerID: "gemini-generate-content", messagesField: "contents", instructionField: "systemInstruction"},
 	}
 	const instructions = "只输出一个 JSON 对象"
 	for _, test := range tests {
@@ -566,7 +576,7 @@ func manifestTestBody(t *testing.T, spec RequestSpec) map[string]any {
 }
 
 func TestOfficialArkSeedreamMapsAspectRatioToPixelSize(t *testing.T) {
-	adapter := officialPackageAdapter(t, "volcengine-ark-seedream.yingce-plugin", "volcengine-ark-image")
+	adapter := officialPackageAdapter(t, "volcengine-ark-seedream.canvas-plugin", "volcengine-ark-image")
 	tests := []struct {
 		name, aspectRatio, wantSize string
 	}{
@@ -600,7 +610,7 @@ func TestOfficialArkSeedreamMapsAspectRatioToPixelSize(t *testing.T) {
 }
 
 func TestOfficialArkAgentPlanPluginsUsePlanPaths(t *testing.T) {
-	image := officialPackageAdapter(t, "volcengine-ark-agent-plan-seedream.yingce-plugin", "volcengine-ark-agent-plan-image")
+	image := officialPackageAdapter(t, "volcengine-ark-agent-plan-seedream.canvas-plugin", "volcengine-ark-agent-plan-image")
 	imageCreate, err := image.BuildCreate(context.Background(), RequestContext{Request: GenerationRequest{Model: "doubao-seedream-5-0-260128", Prompt: "circle", AspectRatio: "1:1"}})
 	if err != nil {
 		t.Fatal(err)
@@ -612,7 +622,7 @@ func TestOfficialArkAgentPlanPluginsUsePlanPaths(t *testing.T) {
 		t.Fatalf("agent plan image size = %#v", body["size"])
 	}
 
-	video := officialPackageAdapter(t, "volcengine-ark-agent-plan-seedance.yingce-plugin", "volcengine-ark-agent-plan-video")
+	video := officialPackageAdapter(t, "volcengine-ark-agent-plan-seedance.canvas-plugin", "volcengine-ark-agent-plan-video")
 	videoCreate, err := video.BuildCreate(context.Background(), RequestContext{Request: GenerationRequest{Model: "doubao-seedance-2-0-260128", Prompt: "walk", AspectRatio: "16:9", Resolution: "720p", Duration: 5}})
 	if err != nil {
 		t.Fatal(err)
@@ -630,7 +640,7 @@ func TestOfficialArkAgentPlanPluginsUsePlanPaths(t *testing.T) {
 }
 
 func TestOfficialGeminiImageMapsQualityToImageSize(t *testing.T) {
-	adapter := officialPackageAdapter(t, "google-gemini-image.yingce-plugin", "gemini-image")
+	adapter := officialPackageAdapter(t, "google-gemini-image.canvas-plugin", "gemini-image")
 	tests := []struct {
 		name, quality, wantSize string
 		wantOmitted             bool
@@ -676,7 +686,7 @@ func TestOfficialGeminiImageMapsQualityToImageSize(t *testing.T) {
 }
 
 func TestOfficialGeminiImagePrefersQualityOverVideoResolution(t *testing.T) {
-	adapter := officialPackageAdapter(t, "google-gemini-image.yingce-plugin", "gemini-image")
+	adapter := officialPackageAdapter(t, "google-gemini-image.canvas-plugin", "gemini-image")
 	tests := []struct {
 		name, quality, resolution, wantSize string
 		wantOmitted                         bool
@@ -709,8 +719,78 @@ func TestOfficialGeminiImagePrefersQualityOverVideoResolution(t *testing.T) {
 	}
 }
 
+func TestSubRouterGeminiImageParsesMarkdownSignedURL(t *testing.T) {
+	adapter := officialPackageAdapter(t, "subrouter-gemini-image.canvas-plugin", "subrouter-gemini-image")
+	create, err := adapter.BuildCreate(context.Background(), RequestContext{Request: GenerationRequest{
+		Model: "gemini-compatible-image", Prompt: "edit the references", AspectRatio: "1:1", Quality: "1k",
+		Images: []MediaReference{
+			{DataURL: "data:image/png;base64,aGVsbG8=", MIMEType: "image/png"},
+			{URL: "https://cdn.example/reference.jpg", MIMEType: "image/jpeg"},
+		},
+		Output: OutputOptions{AspectRatio: "16:9", Quality: "4k"},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if create.Path != "/v1beta/models/gemini-compatible-image:generateContent" {
+		t.Fatalf("create path = %q", create.Path)
+	}
+	if create.Method != "POST" || create.ContentType != "application/json" || create.Auth.Type != "google-api-key" || create.Auth.Field != "apiKey" {
+		t.Fatalf("create contract = %#v", create)
+	}
+	if len(create.Headers) != 0 || len(create.Query) != 0 || len(create.Files) != 0 {
+		t.Fatalf("unexpected request extras = %#v", create)
+	}
+	body := manifestTestBody(t, create)
+	contents, _ := body["contents"].([]any)
+	content, _ := contents[0].(map[string]any)
+	parts, _ := content["parts"].([]any)
+	if len(parts) != 3 {
+		t.Fatalf("SubRouter image request parts = %#v", contents)
+	}
+	inline, _ := parts[1].(map[string]any)
+	inlineData, _ := inline["inlineData"].(map[string]any)
+	if inlineData["mimeType"] != "image/png" || inlineData["data"] != "aGVsbG8=" {
+		t.Fatalf("SubRouter inline reference = %#v", parts[1])
+	}
+	remote, _ := parts[2].(map[string]any)
+	fileData, _ := remote["fileData"].(map[string]any)
+	if fileData["mimeType"] != "image/jpeg" || fileData["fileUri"] != "https://cdn.example/reference.jpg" {
+		t.Fatalf("SubRouter remote reference = %#v", parts[2])
+	}
+	generationConfig, _ := body["generationConfig"].(map[string]any)
+	imageConfig, _ := generationConfig["imageConfig"].(map[string]any)
+	if imageConfig["aspectRatio"] != "16:9" || imageConfig["imageSize"] != "4K" {
+		t.Fatalf("imageConfig = %#v", imageConfig)
+	}
+
+	response := []byte(`{"candidates":[{"content":{"parts":[{"text":"![原图链接5小时有效](https://cdn.example/image.jpg?X-Amz-Expires=18000&X-Amz-Signature=test)"}],"role":"model"},"finishReason":"STOP"}],"usageMetadata":{"totalTokenCount":2189}}`)
+	result, err := adapter.ParseCreate(context.Background(), response)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Status != StatusSucceeded || result.Result == nil || len(result.Result.Images) != 1 {
+		t.Fatalf("result = %#v", result)
+	}
+	image := result.Result.Images[0]
+	if image.URL != "https://cdn.example/image.jpg?X-Amz-Expires=18000&X-Amz-Signature=test" || !image.Ephemeral {
+		t.Fatalf("image = %#v", image)
+	}
+
+	inlineResult, err := adapter.ParseCreate(context.Background(), []byte(`{"candidates":[{"content":{"parts":[{"inlineData":{"mimeType":"image/png","data":"aGVsbG8="}}]}}]}`))
+	if err != nil || inlineResult.Result == nil || len(inlineResult.Result.Images) != 1 || inlineResult.Result.Images[0].DataURL != "data:image/png;base64,aGVsbG8=" || !inlineResult.Result.Images[0].Ephemeral {
+		t.Fatalf("inline result = %#v, err = %v", inlineResult, err)
+	}
+
+	failed, err := adapter.ParseCreate(context.Background(), []byte(`{"error":{"code":400,"message":"invalid request"}}`))
+	if err != nil || failed.Status != StatusFailed || failed.Message != "invalid request" {
+		t.Fatalf("failed result = %#v, err = %v", failed, err)
+	}
+
+}
+
 func TestOfficialGrokImageMapsAspectAndResolution(t *testing.T) {
-	adapter := officialPackageAdapter(t, "xai-grok-images.yingce-plugin", "grok-image")
+	adapter := officialPackageAdapter(t, "xai-grok-images.canvas-plugin", "grok-image")
 	create, err := adapter.BuildCreate(context.Background(), RequestContext{Request: GenerationRequest{
 		Model: "grok-imagine-image", Prompt: "a cat", AspectRatio: "1280x720", Quality: "high",
 	}})
@@ -730,7 +810,7 @@ func TestOfficialGrokImageMapsAspectAndResolution(t *testing.T) {
 }
 
 func TestOfficialJimengImageSplitsPixelSize(t *testing.T) {
-	adapter := officialPackageAdapter(t, "volcengine-jimeng-image.yingce-plugin", "volcengine-jimeng-image")
+	adapter := officialPackageAdapter(t, "volcengine-jimeng-image.canvas-plugin", "volcengine-jimeng-image")
 	create, err := adapter.BuildCreate(context.Background(), RequestContext{Request: GenerationRequest{
 		Model: "jimeng_t2i_v40", Prompt: "still", AspectRatio: "1024x768",
 		Images: []MediaReference{{DataURL: "data:image/png;base64,aGVsbG8="}},
@@ -749,7 +829,7 @@ func TestOfficialJimengImageSplitsPixelSize(t *testing.T) {
 }
 
 func TestOfficialOpenAIAudioUsesBinaryPayload(t *testing.T) {
-	adapter := officialPackageAdapter(t, "openai-audio.yingce-plugin", "openai-audio")
+	adapter := officialPackageAdapter(t, "openai-audio.canvas-plugin", "openai-audio")
 	result, err := adapter.ParseCreate(context.Background(), []byte("ID3fake-mp3"))
 	if err != nil {
 		t.Fatal(err)
@@ -760,7 +840,7 @@ func TestOfficialOpenAIAudioUsesBinaryPayload(t *testing.T) {
 }
 
 func TestOfficialOpenAIAudioSpeedDefaultsInvalidAndZeroValues(t *testing.T) {
-	adapter := officialPackageAdapter(t, "openai-audio.yingce-plugin", "openai-audio")
+	adapter := officialPackageAdapter(t, "openai-audio.canvas-plugin", "openai-audio")
 	for _, test := range []struct {
 		name  string
 		value any
@@ -789,8 +869,8 @@ func TestOfficialArkSeedreamParsesB64JSONAsDataURL(t *testing.T) {
 	for _, tc := range []struct {
 		packageName, providerID string
 	}{
-		{"volcengine-ark-seedream.yingce-plugin", "volcengine-ark-image"},
-		{"volcengine-ark-agent-plan-seedream.yingce-plugin", "volcengine-ark-agent-plan-image"},
+		{"volcengine-ark-seedream.canvas-plugin", "volcengine-ark-image"},
+		{"volcengine-ark-agent-plan-seedream.canvas-plugin", "volcengine-ark-agent-plan-image"},
 	} {
 		t.Run(tc.providerID, func(t *testing.T) {
 			adapter := officialPackageAdapter(t, tc.packageName, tc.providerID)

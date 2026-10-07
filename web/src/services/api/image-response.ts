@@ -286,15 +286,18 @@ export function parseGeminiToolResponse(payload: GeminiPayload): ToolResponseRes
 
 export function parseGeminiImagePayload(payload: GeminiPayload) {
     validateGeminiPayload(payload);
+    const markdownImagePattern = /!\[[^\]]*\]\((https?:\/\/[^)\s]+)\)/g;
     const images =
         payload.candidates
             ?.flatMap((candidate) => candidate.content?.parts || [])
-            .map((part) => {
+            .flatMap((part) => {
                 const inlineData = part.inlineData || (part.inline_data ? { mimeType: part.inline_data.mimeType || part.inline_data.mime_type, data: part.inline_data.data } : undefined);
-                if (inlineData?.data) return `data:${inlineData.mimeType || "image/png"};base64,${inlineData.data}`;
-                return part.fileData?.fileUri || null;
+                const values: string[] = [];
+                if (inlineData?.data) values.push(`data:${inlineData.mimeType || "image/png"};base64,${inlineData.data}`);
+                if (part.fileData?.fileUri) values.push(part.fileData.fileUri);
+                if (part.text) values.push(...[...part.text.matchAll(markdownImagePattern)].map((match) => match[1]));
+                return values;
             })
-            .filter((value): value is string => Boolean(value))
             .map((dataUrl) => ({ id: nanoid(), dataUrl })) || [];
     if (!images.length) throw new Error("Gemini 接口没有返回图片");
     return images;

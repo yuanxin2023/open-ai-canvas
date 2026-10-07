@@ -3,13 +3,25 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = dirname(fileURLToPath(import.meta.url));
-const contractStart = "<!-- YINGCE_MANIFEST_CONTRACT_START -->";
-const contractEnd = "<!-- YINGCE_MANIFEST_CONTRACT_END -->";
+const contractStart = "<!-- OPEN_AI_CANVAS_MANIFEST_CONTRACT_START -->";
+const contractEnd = "<!-- OPEN_AI_CANVAS_MANIFEST_CONTRACT_END -->";
 const recursiveDocumentationPlaceholder =
   "<当前插件的完整 documentation，由 README.md 与 docs/interface.md 拼接而成；为避免 JSON 递归，此处不重复展开正文。>";
 
 function normalizeNewlines(document) {
   return document.replace(/\r\n?/g, "\n");
+}
+
+async function writeText(path, content) {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      await writeFile(path, content);
+      return;
+    } catch (error) {
+      if (attempt >= 5 || !["EBUSY", "EPERM", "UNKNOWN"].includes(error?.code)) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 100 * (attempt + 1)));
+    }
+  }
 }
 
 function withoutGeneratedContract(document) {
@@ -63,9 +75,9 @@ for (const packageID of packageDirectories) {
   const interfaceDocument = `${withoutGeneratedContract(interfaceSource)}\n\n${renderContract(manifest)}\n`;
   manifest.documentation = `${readme}\n\n---\n\n${interfaceDocument.trim()}\n`;
 
-  await writeFile(readmePath, `${readme}\n`);
-  await writeFile(interfacePath, interfaceDocument);
-  await writeFile(join(packageRoot, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
+  await writeText(readmePath, `${readme}\n`);
+  await writeText(interfacePath, interfaceDocument);
+  await writeText(join(packageRoot, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
   updated += 1;
 }
 

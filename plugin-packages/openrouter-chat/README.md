@@ -1,5 +1,5 @@
 # OpenRouter Chat
 
-该目录是独立官方协议插件源码。后端从生成的 `openrouter-chat.yingce-plugin` 包加载，不依赖系统内置 `host:` 适配器。
+该目录是独立官方协议插件源码。后端从生成的 `openrouter-chat.canvas-plugin` 包加载，不依赖系统内置 `host:` 适配器。
 
 完整接口见 [docs/interface.md](docs/interface.md)。

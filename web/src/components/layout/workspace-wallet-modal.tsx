@@ -352,7 +352,7 @@ export function WorkspaceWalletModal({
 
 function WalletLedgerRow({ entry }: { entry: CreditLedgerEntry }) {
     const positive = entry.amountMicrocredits > 0;
-    const title = entry.type === "consume" ? "模型调用" : entry.type === "refund" ? "消费退款" : entry.type === "payment_topup" ? "在线充值" : entry.type === "redeem" ? "兑换码充值" : entry.note || "积分调整";
+    const title = entry.scene === "redeem_code" && entry.type === "consume" ? "兑换码发放" : entry.scene === "redeem_code" && entry.type === "refund" ? "兑换码退回" : entry.type === "consume" ? "模型调用" : entry.type === "refund" ? "消费退款" : entry.type === "payment_topup" ? "在线充值" : entry.type === "redeem" ? "兑换码充值" : entry.note || "积分调整";
     return <article className="workspace-wallet-ledger-row"><span className={cn("workspace-wallet-ledger-icon", positive ? "is-income" : "is-consume")}>{positive ? <Coins /> : <CreditCard />}</span><div><strong>{title}</strong><span>{[entry.scene, entry.model, entry.note].filter(Boolean).join(" · ") || "积分账户变动"}</span></div><time>{new Date(entry.createdAt).toLocaleString("zh-CN", { hour12: false })}</time><b className={positive ? "is-income" : "is-consume"}>{positive ? "+" : ""}{formatCredits(entry.amountMicrocredits, 6)}</b></article>;
 }
 

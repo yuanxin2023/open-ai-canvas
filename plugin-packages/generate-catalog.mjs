@@ -23,6 +23,7 @@ const toFloat = (value) => ({ $toFloat: value });
 const toInt = (value) => ({ $toInt: value });
 const split = (value, separator) => ({ $split: [value, separator] });
 const at = (value, index) => ({ $at: [value, index] });
+const concatArrays = (...values) => ({ $concatArrays: values });
 const divide = (left, right) => ({ $divide: [left, right] });
 const conditional = (condition, thenValue, elseValue = null) => ({ $if: { condition, then: thenValue, else: elseValue } });
 const nonZeroFloat = (value) => conditional(ne(toFloat(value), 0), toFloat(value));
@@ -492,14 +493,18 @@ add({
 });
 
 // Gemini imageConfig.imageSize 只接受 1K/2K/4K；画布统一层用 1k/2k/4k 或 low/medium/high。
+const geminiImageQuality = coalesce(ref("request.output.quality"), ref("request.quality"));
+const geminiImageResolution = coalesce(ref("request.output.resolution"), ref("request.resolution"));
+const geminiImageAspectRatio = coalesce(ref("request.output.aspectRatio"), ref("request.aspectRatio"));
+
 const geminiImageSize = omit({
   $coalesce: [
     {
       $switch: {
         cases: [
-          { when: { $in: [lower(ref("request.quality")), ["1k", "low"]] }, then: "1K" },
-          { when: { $in: [lower(ref("request.quality")), ["2k", "medium"]] }, then: "2K" },
-          { when: { $in: [lower(ref("request.quality")), ["4k", "high"]] }, then: "4K" }
+          { when: { $in: [lower(geminiImageQuality), ["1k", "low"]] }, then: "1K" },
+          { when: { $in: [lower(geminiImageQuality), ["2k", "medium"]] }, then: "2K" },
+          { when: { $in: [lower(geminiImageQuality), ["4k", "high"]] }, then: "4K" }
         ],
         default: null
       }
@@ -507,9 +512,9 @@ const geminiImageSize = omit({
     {
       $switch: {
         cases: [
-          { when: { $in: [lower(ref("request.resolution")), ["1k", "low"]] }, then: "1K" },
-          { when: { $in: [lower(ref("request.resolution")), ["2k", "medium"]] }, then: "2K" },
-          { when: { $in: [lower(ref("request.resolution")), ["4k", "high"]] }, then: "4K" }
+          { when: { $in: [lower(geminiImageResolution), ["1k", "low"]] }, then: "1K" },
+          { when: { $in: [lower(geminiImageResolution), ["2k", "medium"]] }, then: "2K" },
+          { when: { $in: [lower(geminiImageResolution), ["4k", "high"]] }, then: "4K" }
         ],
         default: null
       }
@@ -517,30 +522,61 @@ const geminiImageSize = omit({
   ]
 });
 
+const geminiImageBody = (providerId, includeImages = true) => ({
+  contents: [{ role: "user", parts: includeImages ? concatArrays(
+    [{ text: ref("request.prompt") }],
+    map(ref("request.images"), "media", conditional(ref("media.dataUrl"), { inlineData: { mimeType: { $dataMime: ref("media.dataUrl") }, data: { $dataPayload: ref("media.dataUrl") } } }, { fileData: { mimeType: omit(ref("media.mimeType")), fileUri: ref("media.url") } }))
+  ) : [{ text: ref("request.prompt") }] }],
+  generationConfig: {
+    responseModalities: coalesce(ref(`request.providerOptions.${providerId}.responseModalities`), ["TEXT", "IMAGE"]),
+    imageConfig: { aspectRatio: omit(geminiImageAspectRatio), imageSize: geminiImageSize },
+    temperature: omit(ref(`request.providerOptions.${providerId}.temperature`)), topP: omit(ref(`request.providerOptions.${providerId}.topP`)), topK: omit(ref(`request.providerOptions.${providerId}.topK`)), seed: omit(ref(`request.providerOptions.${providerId}.seed`))
+  },
+  safetySettings: omit(ref(`request.providerOptions.${providerId}.safetySettings`)),
+  systemInstruction: omit(coalesce(ref(`request.providerOptions.${providerId}.systemInstruction`), conditional(ref("request.instructions"), { parts: [{ text: ref("request.instructions") }] }, null)))
+});
+
+const geminiInlineImages = map(filter(ref("response.candidates.0.content.parts"), "part", { $or: [ref("part.inlineData"), ref("part.inline_data")] }), "part", {
+  dataUrl: { $concat: ["data:", coalesce(ref("part.inlineData.mimeType"), ref("part.inline_data.mime_type"), "image/png"), ";base64,", coalesce(ref("part.inlineData.data"), ref("part.inline_data.data"))] }
+});
+
+const geminiResponseText = map(filter(ref("response.candidates.0.content.parts"), "part", ref("part.text")), "part", ref("part.text"));
+
 add({
   id: "google-gemini-image", providerId: "gemini-image", name: "Google Gemini Image", vendor: "Google", capability: "image",
   baseUrl: "https://generativelanguage.googleapis.com", auth: { type: "google-api-key", field: "apiKey" }, params: imageParams,
   notes: "imageSize 只映射 1K/2K/4K；未知质量值（如视频清晰度 720）必须省略。多图输出由宿主按次创建，不映射 candidateCount。",
-  create: jsonCreate("/v1beta/models/{{model}}:generateContent", {
-    contents: [{ role: "user", parts: { $concatArrays: [
-      [{ text: ref("request.prompt") }],
-      map(ref("request.images"), "media", conditional(ref("media.dataUrl"), { inlineData: { mimeType: { $dataMime: ref("media.dataUrl") }, data: { $dataPayload: ref("media.dataUrl") } } }, { fileData: { mimeType: omit(ref("media.mimeType")), fileUri: ref("media.url") } }))
-    ] } }],
-    generationConfig: {
-      responseModalities: coalesce(ref("request.providerOptions.gemini-image.responseModalities"), ["TEXT", "IMAGE"]),
-      imageConfig: { aspectRatio: omit(ref("request.aspectRatio")), imageSize: geminiImageSize },
-      temperature: omit(ref("request.providerOptions.gemini-image.temperature")), topP: omit(ref("request.providerOptions.gemini-image.topP")), topK: omit(ref("request.providerOptions.gemini-image.topK")), seed: omit(ref("request.providerOptions.gemini-image.seed"))
-    },
-    safetySettings: omit(ref("request.providerOptions.gemini-image.safetySettings")),
-    systemInstruction: omit(coalesce(ref("request.providerOptions.gemini-image.systemInstruction"), conditional(ref("request.instructions"), { parts: [{ text: ref("request.instructions") }] }, null)))
-  }),
+  create: jsonCreate("/v1beta/models/{{model}}:generateContent", geminiImageBody("gemini-image")),
   response: {
     status: "succeeded",
-    images: map(filter(ref("response.candidates.0.content.parts"), "part", { $or: [ref("part.inlineData"), ref("part.inline_data")] }), "part", {
-      dataUrl: { $concat: ["data:", coalesce(ref("part.inlineData.mimeType"), ref("part.inline_data.mime_type"), "image/png"), ";base64,", coalesce(ref("part.inlineData.data"), ref("part.inline_data.data"))] }
-    }),
-    text: map(filter(ref("response.candidates.0.content.parts"), "part", ref("part.text")), "part", ref("part.text")),
+    images: geminiInlineImages,
+    text: geminiResponseText,
     usage: ref("response.usageMetadata"), errorPaths: ["error.code"], messagePaths: ["error.message"]
+  }
+});
+
+const subrouterMarkdownImages = map(
+  filter(ref("response.candidates.0.content.parts"), "part", gt(len(split(ref("part.text"), "](")), 1)),
+  "part",
+  {
+    url: trim(at(split(at(split(ref("part.text"), "]("), 1), ")"), 0))
+  }
+);
+
+add({
+  id: "subrouter-gemini-image", providerId: "subrouter-gemini-image", name: "SubRouter Gemini Image", vendor: "SubRouter", capability: "image",
+  version: "2.1.0", author: "SubRouter",
+  officialDocs: "https://subrouter.ai/docs?tab=channels&source=self&model=gemini-3.1-flash-image&provider=4k-image", reviewedAt: "2026-09-29",
+  baseUrl: "https://asiasouth.up.railway.app", auth: { type: "google-api-key", field: "apiKey" },
+  modelScope: "同类 Gemini Image generateContent 模型（使用渠道配置的模型 ID）",
+  params: imageParams.filter(([name]) => name !== "imageCount"),
+  notes: "支持同步文生图与图生图，不限制具体模型 ID；模型必须兼容 Gemini Image generateContent 请求结构。参考图从 request.images 写入 contents[0].parts：Data URL 转为 inlineData，远程 URL 转为 fileData。响应兼容标准 inlineData 和 parts[].text 中的 Markdown 图片链接。尚未确认批量出图和异步任务，因此插件不声明这些能力。签名链接标称 5 小时有效，宿主必须立即下载持久化。",
+  create: jsonCreate("/v1beta/models/{{model}}:generateContent", geminiImageBody("subrouter-gemini-image")),
+  response: {
+    status: "succeeded",
+    images: concatArrays(geminiInlineImages, subrouterMarkdownImages),
+    text: geminiResponseText,
+    usage: ref("response.usageMetadata"), errorPaths: ["error.code"], messagePaths: ["error.message"], resultEphemeral: true
   }
 });
 
@@ -908,6 +944,51 @@ add({
   response: { status: "succeeded", images: coalesce(ref("response.data"), ref("response.images")), errorPaths: ["error.code"], messagePaths: ["error.message", "message"] }
 });
 
+const wan3MediaType = coalesce(
+  ref("media.role"),
+  conditional(eq(ref("media.kind"), "image"), "reference_image", conditional(
+    eq(ref("media.kind"), "video"), "reference_video", conditional(
+      eq(ref("media.kind"), "audio"), "reference_audio", ref("media.kind")
+    )
+  ))
+);
+
+add({
+  id: "dashscope-wan3-video", providerId: "dashscope-wan3-video", name: "DashScope Wan 3.0 Video", vendor: "Alibaba Cloud", capability: "video",
+  baseUrl: "https://dashscope.aliyuncs.com", auth: bearer, params: videoParams, requiresPublicMediaUrls: true,
+  validations: [
+    { assert: { $in: [lower(ref("request.model")), ["wan3.0-video-prime", "wan3.0-video"]] }, message: "Wan 3.0 Video 仅支持 wan3.0-video-prime 或 wan3.0-video" },
+    { assert: { $lte: [len(mediaWithRoles("request.images", ["first_frame"])), 1] }, message: "Wan 3.0 Video 最多只能有一个 first_frame" },
+    { assert: { $lte: [len(mediaWithRoles("request.images", ["last_frame"])), 1] }, message: "Wan 3.0 Video 最多只能有一个 last_frame" }
+  ],
+  create: jsonCreate("/api/v1/services/aigc/video-generation/video-synthesis", {
+    model: ref("request.model"),
+    input: {
+      prompt: omit(ref("request.prompt")),
+      media: omit(coalesce(
+        ref("request.providerOptions.dashscope-wan3-video.media"),
+        map(sorted(ref("request.inputs")), "media", { type: wan3MediaType, url: ref("media.value") })
+      ))
+    },
+    parameters: {
+      resolution: omit(ref("request.resolution")),
+      ratio: omit(ref("request.aspectRatio")),
+      duration: omit(ref("request.duration")),
+      audio: coalesce(ref("request.providerOptions.dashscope-wan3-video.audio"), ref("request.generateAudio")),
+      seed: omit(ref("request.providerOptions.dashscope-wan3-video.seed")),
+      prompt_extend: coalesce(ref("request.providerOptions.dashscope-wan3-video.prompt_extend"), true),
+      watermark: ref("request.watermark")
+    }
+  }, { headers: { "X-DashScope-Async": "enable" }, originPath: true }),
+  poll: { method: "GET", path: "/api/v1/tasks/{{taskId}}", originPath: true },
+  response: asyncResponse("video", {
+    taskId: coalesce(ref("response.output.task_id"), ref("response.task_id"), ref("taskId")),
+    status: conditional(eq(lower(ref("response.output.task_status")), "unknown"), "failed", coalesce(ref("response.output.task_status"), ref("response.status"), "pending")),
+    videos: ref("response.output.video_url"),
+    usage: ref("response.usage"), errorPaths: ["code", "output.code"], messagePaths: ["message", "output.message"]
+  })
+});
+
 add({
   id: "dashscope-wan-video", providerId: "dashscope-wan-video", name: "DashScope Wan Video", vendor: "Alibaba Cloud", capability: "video",
   baseUrl: "https://dashscope.aliyuncs.com", auth: bearer, params: videoParams, requiresPublicMediaUrls: true,
@@ -1107,13 +1188,13 @@ for (const [id, name, capability, createPath, pollPath, resultPath] of [
 
 function manifestFor(spec) {
   return {
-    apiVersion: "yingce.plugin/v2",
+    apiVersion: spec.apiVersion || "open-ai-canvas.plugin/v2",
     id: spec.id,
     name: spec.name,
-    version: "2.0.0",
-    author: `${spec.vendor} / 影策`,
+    version: spec.version || "2.0.0",
+    author: spec.author || `${spec.vendor} / AI 创作工作台`,
     description: `${spec.name} 独立请求协议插件。`,
-    documentation: `# ${spec.name}\n\n完整字段、映射、响应、鉴权和兼容边界见包内 README.md 与 docs/interface.md。\n\n## 影策运行时合同\n\n用户只操作统一的文本、图片或视频能力；插件负责把统一请求转换为 ${spec.name} 上游协议。`,
+    documentation: `# ${spec.name}\n\n完整字段、映射、响应、鉴权和兼容边界见包内 README.md 与 docs/interface.md。\n\n## 工作台运行时合同\n\n用户只操作统一的文本、图片或视频能力；插件负责把统一请求转换为 ${spec.name} 上游协议。`,
     permissions: ["generation.run", "media.read"],
     configuration: spec.configuration || config(),
     contributes: {
@@ -1137,6 +1218,13 @@ function manifestFor(spec) {
       }]
     }
   };
+}
+
+function readmeFor(spec) {
+  const extension = spec.packageExtension || ".canvas-plugin";
+  const lifecycle = spec.poll ? "异步创建并轮询" : "同步响应";
+  const source = spec.officialDocs ? `\n- 官方 API 文档：${spec.officialDocs}\n- 文档核对日期：${spec.reviewedAt || "待补充"}` : "";
+  return `# ${spec.name}\n\n- 插件 ID：\`${spec.id}\`\n- Provider ID：\`${spec.providerId}\`\n- 网站/供应商：${spec.vendor}\n- 模型范围：${spec.modelScope || "见接口文档"}\n- 能力：\`${spec.capability}\`\n- 默认 Base URL：\`${spec.baseUrl}\`\n- 鉴权方式：\`${spec.auth?.type || "默认"}\`\n- 生命周期：${lifecycle}\n- 安装包：\`${spec.id}${extension}\`${source}\n\n## 已知限制\n\n${spec.notes || "该插件只覆盖接口文档声明的协议范围。"}\n\n完整字段和响应映射见 [docs/interface.md](docs/interface.md)。\n`;
 }
 
 function collectTemplateFields(value, prefix, rows) {
@@ -1190,7 +1278,7 @@ function docsFor(spec) {
   const optionRefs = [...new Set([...manifestJSON.matchAll(new RegExp(`request\\.providerOptions\\.${spec.providerId.replaceAll("-", "\\-")}\\.([A-Za-z0-9_.-]+)`, "g"))].map((match) => match[1]))].sort();
   const optionRows = optionRefs.length ? optionRefs.map((name) => `- \`providerOptions.${spec.providerId}.${name}\``).join("\n") : "- 无额外扩展键。";
   const configRows = (spec.configuration || config()).fields.map((field) => `| \`${field.name}\` | ${field.type} | ${field.required ? "是" : "否"} | ${field.label || ""} |`).join("\n");
-  return `# ${spec.name} 接口字段\n\n## 协议身份\n\n- 插件 ID：\`${spec.id}\`。\n- Provider ID：\`${spec.providerId}\`。\n- 能力：\`${spec.capability}\`。\n- 默认 Base URL：\`${spec.baseUrl}\`。\n- 鉴权驱动：\`${spec.auth?.type || "默认"}\`。\n- 创建：\`${spec.create.method} ${spec.create.path || "动态路径"}\`。\n${spec.agent ? `- Agent：\`${spec.agent.method} ${spec.agent.path || "动态路径"}\`。\n` : ""}${spec.poll ? `- 查询：\`${spec.poll.method} ${spec.poll.path}\`。\n` : "- 生命周期：同步响应。\n"}${spec.cancel ? `- 取消：\`${spec.cancel.method} ${spec.cancel.path}\`。\n` : ""}\n## 配置字段\n\n| 字段 | 类型 | 必填 | 含义 |\n| --- | --- | --- | --- |\n${configRows}\n\n## 统一字段映射\n\n| 统一字段 | 类型 | 必填 | 上游映射 | 说明 |\n| --- | --- | --- | --- | --- |\n${rows}\n\n## 上游请求模板逐字段清单\n\n下表由插件请求模板生成，覆盖 body、query、headers 和 multipart 文件声明中的每个字段。\n\n| 上游位置 | 值或转换表达式 |\n| --- | --- |\n${operationRows || "| `create` | 无请求字段 |"}\n\n## Provider 扩展键\n\n${optionRows}\n\n动态模型或工作流允许使用文档声明的完整 \`parameters/input/extra_body\` 对象；该对象是协议本身的开放 schema，不会被宿主裁剪。\n\n## 响应映射逐字段清单\n\n| 映射位置 | 上游路径或转换表达式 |\n| --- | --- |\n${mappedResponseRows || "| `response` | 无显式映射 |"}\n\n## 响应与错误\n\n插件把上游 task/status/text/media/usage 映射为统一结果。临时媒体 URL 标记为 ephemeral，由宿主立即下载持久化。HTTP 错误、业务 code 和 error object 保持失败语义，不包装成成功。\n\n## 兼容边界\n\n${spec.notes || "该包只代表上述线协议 profile；同一品牌的其他 endpoint、云区域或网关包装必须使用独立插件，不能根据模型名猜测。"}\n`;
+  return `# ${spec.name} 接口字段\n\n## 协议身份\n\n- 插件 ID：\`${spec.id}\`。\n- Provider ID：\`${spec.providerId}\`。\n- 能力：\`${spec.capability}\`。\n- 默认 Base URL：\`${spec.baseUrl}\`。\n- 鉴权驱动：\`${spec.auth?.type || "默认"}\`。\n- 创建：\`${spec.create.method} ${spec.create.path || "动态路径"}\`。\n${spec.agent ? `- Agent：\`${spec.agent.method} ${spec.agent.path || "动态路径"}\`。\n` : ""}${spec.poll ? `- 查询：\`${spec.poll.method} ${spec.poll.path}\`。\n` : "- 生命周期：同步响应。\n"}${spec.cancel ? `- 取消：\`${spec.cancel.method} ${spec.cancel.path}\`。\n` : ""}${spec.officialDocs ? `\n## 文档依据\n\n- 官方 API 文档：${spec.officialDocs}\n- 核对日期：${spec.reviewedAt || "待补充"}\n` : ""}\n## 配置字段\n\n| 字段 | 类型 | 必填 | 含义 |\n| --- | --- | --- | --- |\n${configRows}\n\n## 统一字段映射\n\n| 统一字段 | 类型 | 必填 | 上游映射 | 说明 |\n| --- | --- | --- | --- | --- |\n${rows}\n\n## 上游请求模板逐字段清单\n\n下表由插件请求模板生成，覆盖 body、query、headers 和 multipart 文件声明中的每个字段。\n\n| 上游位置 | 值或转换表达式 |\n| --- | --- |\n${operationRows || "| `create` | 无请求字段 |"}\n\n## Provider 扩展键\n\n${optionRows}\n\n动态模型或工作流允许使用文档声明的完整 \`parameters/input/extra_body\` 对象；该对象是协议本身的开放 schema，不会被宿主裁剪。\n\n## 响应映射逐字段清单\n\n| 映射位置 | 上游路径或转换表达式 |\n| --- | --- |\n${mappedResponseRows || "| `response` | 无显式映射 |"}\n\n## 响应与错误\n\n插件把上游 task/status/text/media/usage 映射为统一结果。临时媒体 URL 标记为 ephemeral，由宿主立即下载持久化。HTTP 错误、业务 code 和 error object 保持失败语义，不包装成成功。\n\n## 兼容边界与待确认项\n\n${spec.notes || "该包只代表上述线协议 profile；同一品牌的其他 endpoint、云区域或网关包装必须使用独立插件，不能根据模型名猜测。"}\n`;
 }
 
 const requestedPackageIDs = new Set(process.argv.slice(2).map((value) => value.trim()).filter(Boolean));
@@ -1205,7 +1293,7 @@ for (const spec of selectedSpecs) {
   const dir = join(root, spec.id);
   await mkdir(join(dir, "docs"), { recursive: true });
   await writeFile(join(dir, "manifest.json"), JSON.stringify(manifestFor(spec), null, 2) + "\n");
-  await writeFile(join(dir, "README.md"), `# ${spec.name}\n\n该目录是独立官方协议插件源码。后端从生成的 \`${spec.id}.yingce-plugin\` 包加载，不依赖系统内置 \`host:\` 适配器。\n\n完整接口见 [docs/interface.md](docs/interface.md)。\n`);
+  await writeFile(join(dir, "README.md"), readmeFor(spec));
   await writeFile(join(dir, "docs", "interface.md"), docsFor(spec));
 }
 

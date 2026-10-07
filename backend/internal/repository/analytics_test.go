@@ -187,3 +187,33 @@ func TestQueryAPICallLogsHidesInternalPollStages(t *testing.T) {
 		t.Fatalf("visible logs = %#v, want video-create and image-create", items)
 	}
 }
+
+func TestAPICallLogByBillingOrderSelectsExactBillableRequest(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open("file:api-log-billing-order?mode=memory&cache=shared"), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AutoMigrate(&model.ApiCallLog{}); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	logs := []model.ApiCallLog{
+		{ID: "matching-create", UserID: "user-1", BillingOrderID: "order-1", Billable: true, RequestKind: "create", CreatedAt: now},
+		{ID: "matching-poll", UserID: "user-1", BillingOrderID: "order-1", Billable: true, RequestKind: "poll", CreatedAt: now.Add(time.Second)},
+		{ID: "matching-download", UserID: "user-1", BillingOrderID: "order-1", Billable: true, RequestKind: "download", CreatedAt: now.Add(2 * time.Second)},
+		{ID: "not-billable", UserID: "user-1", BillingOrderID: "order-1", Billable: false, RequestKind: "repair", CreatedAt: now.Add(3 * time.Second)},
+		{ID: "other-user", UserID: "user-2", BillingOrderID: "order-1", Billable: true, RequestKind: "create", CreatedAt: now.Add(-time.Second)},
+		{ID: "other-order", UserID: "user-1", BillingOrderID: "order-2", Billable: true, RequestKind: "create", CreatedAt: now.Add(-time.Second)},
+	}
+	if err := db.Create(&logs).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	log, err := New(db).APICallLogByBillingOrder("order-1", "user-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if log.ID != "matching-create" {
+		t.Fatalf("APICallLogByBillingOrder() = %q, want matching-create", log.ID)
+	}
+}

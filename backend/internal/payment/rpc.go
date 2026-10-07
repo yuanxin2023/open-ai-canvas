@@ -1,6 +1,6 @@
 package payment
 
-// RPCProvider is the host side of the yingce.payment/v1 process ABI. The
+// RPCProvider is the host side of the open-ai-canvas.payment/v1 process ABI. The
 // process is shipped inside a validated plugin package and receives exactly
 // one JSON request on stdin, returning one JSON response on stdout. The host
 // still owns the order, credential storage, network policy and crediting
@@ -32,7 +32,7 @@ import (
 )
 
 const (
-	pluginRPCVersion   = "yingce.payment/v1"
+	pluginRPCVersion   = "open-ai-canvas.payment/v1"
 	pluginRPCMaxOutput = 2 << 20
 	pluginRPCTimeout   = 30 * time.Second
 )
@@ -42,9 +42,10 @@ type RPCProvider struct {
 	entry      string
 	command    string
 	dir        string
+	version    string
 }
 
-func NewRPCProvider(descriptor Descriptor, packageDir, entry string) (*RPCProvider, error) {
+func NewRPCProvider(descriptor Descriptor, packageDir, entry string, versions ...string) (*RPCProvider, error) {
 	if strings.TrimSpace(descriptor.ID) == "" || strings.TrimSpace(descriptor.PluginID) == "" {
 		return nil, errors.New("payment plugin descriptor requires id and plugin id")
 	}
@@ -58,7 +59,11 @@ func NewRPCProvider(descriptor Descriptor, packageDir, entry string) (*RPCProvid
 	if err != nil {
 		return nil, fmt.Errorf("payment plugin package directory is invalid: %w", err)
 	}
-	return &RPCProvider{descriptor: descriptor, entry: entry, dir: packageDir}, nil
+	version := pluginRPCVersion
+	if len(versions) > 0 && strings.TrimSpace(versions[0]) != "" {
+		version = strings.TrimSpace(versions[0])
+	}
+	return &RPCProvider{descriptor: descriptor, entry: entry, dir: packageDir, version: version}, nil
 }
 
 func (p *RPCProvider) Descriptor() Descriptor { return p.descriptor }
@@ -406,36 +411,36 @@ func expectedPEMachine(arch string) (uint16, bool) {
 }
 
 func (p *RPCProvider) ValidateConfig(config Config) error {
-	return p.call(context.Background(), rpcRequest{Version: pluginRPCVersion, Operation: "validate_config", Config: config}, nil)
+	return p.call(context.Background(), rpcRequest{Version: p.version, Operation: "validate_config", Config: config}, nil)
 }
 
 func (p *RPCProvider) CreateOrder(ctx context.Context, config Config, request CreateRequest) (Checkout, error) {
 	var result Checkout
-	err := p.call(ctx, rpcRequest{Version: pluginRPCVersion, Operation: "create_order", Config: config, Request: request}, &result)
+	err := p.call(ctx, rpcRequest{Version: p.version, Operation: "create_order", Config: config, Request: request}, &result)
 	return result, err
 }
 
 func (p *RPCProvider) QueryOrder(ctx context.Context, config Config, request QueryRequest) (Result, error) {
 	var result Result
-	err := p.call(ctx, rpcRequest{Version: pluginRPCVersion, Operation: "query_order", Config: config, Request: request}, &result)
+	err := p.call(ctx, rpcRequest{Version: p.version, Operation: "query_order", Config: config, Request: request}, &result)
 	return result, err
 }
 
 func (p *RPCProvider) CloseOrder(ctx context.Context, config Config, request CloseRequest) (Result, error) {
 	var result Result
-	err := p.call(ctx, rpcRequest{Version: pluginRPCVersion, Operation: "close_order", Config: config, Request: request}, &result)
+	err := p.call(ctx, rpcRequest{Version: p.version, Operation: "close_order", Config: config, Request: request}, &result)
 	return result, err
 }
 
 func (p *RPCProvider) VerifyNotification(ctx context.Context, config Config, headers http.Header, rawBody []byte) (Notification, error) {
 	var result Notification
 	headerValues := map[string][]string(headers)
-	err := p.call(ctx, rpcRequest{Version: pluginRPCVersion, Operation: "verify_notification", Config: config, Headers: headerValues, Body: base64.StdEncoding.EncodeToString(rawBody)}, &result)
+	err := p.call(ctx, rpcRequest{Version: p.version, Operation: "verify_notification", Config: config, Headers: headerValues, Body: base64.StdEncoding.EncodeToString(rawBody)}, &result)
 	return result, err
 }
 
 func (p *RPCProvider) DownloadTradeBill(ctx context.Context, config Config, billDate time.Time) ([]BillRecord, error) {
 	var result []BillRecord
-	err := p.call(ctx, rpcRequest{Version: pluginRPCVersion, Operation: "download_trade_bill", Config: config, BillDate: billDate.Format("2006-01-02")}, &result)
+	err := p.call(ctx, rpcRequest{Version: p.version, Operation: "download_trade_bill", Config: config, BillDate: billDate.Format("2006-01-02")}, &result)
 	return result, err
 }

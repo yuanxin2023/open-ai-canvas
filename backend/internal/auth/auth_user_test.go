@@ -10,12 +10,12 @@ import (
 	"gorm.io/gorm"
 )
 
-func TestPublicAuthUserIncludesLinuxDOIdentity(t *testing.T) {
+func TestPublicAuthUserKeepsIdentityMetadataWithoutUsingThirdPartyAvatar(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&model.User{}, &model.UserIdentity{}); err != nil {
+	if err := db.AutoMigrate(&model.User{}, &model.UserUsernameChange{}, &model.UserIdentity{}); err != nil {
 		t.Fatal(err)
 	}
 	user := model.User{ID: "user-1", Username: "canvas-user", DisplayName: "Canvas User", Role: model.UserRoleUser, Status: model.UserStatusActive}
@@ -31,7 +31,7 @@ func TestPublicAuthUserIncludesLinuxDOIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.AvatarURL != identity.AvatarURL || result.IdentityProvider != "linuxdo" || result.IdentityID != identity.Subject || result.IdentityUsername != identity.ProviderUsername {
+	if result.AvatarURL != "" || result.IdentityProvider != "linuxdo" || result.IdentityID != identity.Subject || result.IdentityUsername != identity.ProviderUsername {
 		t.Fatalf("PublicAuthUser() = %#v", result)
 	}
 }
@@ -41,7 +41,7 @@ func TestPublicAuthUserKeepsLocalUserWithoutIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&model.UserIdentity{}); err != nil {
+	if err := db.AutoMigrate(&model.UserUsernameChange{}, &model.UserIdentity{}); err != nil {
 		t.Fatal(err)
 	}
 	user := model.User{ID: "user-1", Username: "local-user", DisplayName: "Local User"}

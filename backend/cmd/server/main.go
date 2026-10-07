@@ -91,12 +91,18 @@ func run(ctx context.Context) error {
 	if err := svc.EnsureSkillPackages(); err != nil {
 		return err
 	}
+	if err := svc.EnsureBuiltinTools(); err != nil {
+		return err
+	}
 	if summary, err := svc.MigrateLegacyStorage(); err != nil {
 		log.Printf("storage migration skipped after error: %v", err)
 	} else if summary.Backup != "" {
 		log.Printf("storage migration completed: tasks=%d assets=%d projects=%d backup=%s", summary.Tasks, summary.Assets, summary.Projects, summary.Backup)
 	}
 	r := gin.New()
+	if err := configureTrustedProxies(r); err != nil {
+		return err
+	}
 	r.Use(gin.LoggerWithFormatter(func(param gin.LogFormatterParams) string {
 		return fmt.Sprintf("%s - [%s] \"%s %s\" %d %s %s\n", param.ClientIP, param.TimeStamp.Format(time.RFC3339), param.Method, redactCanvasSharePath(param.Path), param.StatusCode, param.Latency, param.ErrorMessage)
 	}), gin.Recovery())
@@ -161,6 +167,26 @@ func run(ctx context.Context) error {
 		return err
 	}
 	log.Printf("backend stopped gracefully")
+	return nil
+}
+
+func configureTrustedProxies(r *gin.Engine) error {
+	raw := strings.TrimSpace(os.Getenv("CANVAS_TRUSTED_PROXIES"))
+	if raw == "" {
+		raw = "127.0.0.0/8,::1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+	}
+	values := make([]string, 0)
+	for _, value := range strings.Split(raw, ",") {
+		if value = strings.TrimSpace(value); value != "" {
+			values = append(values, value)
+		}
+	}
+	if len(values) == 0 {
+		return errors.New("CANVAS_TRUSTED_PROXIES 至少需要一个代理地址或 CIDR")
+	}
+	if err := r.SetTrustedProxies(values); err != nil {
+		return fmt.Errorf("CANVAS_TRUSTED_PROXIES 配置无效：%w", err)
+	}
 	return nil
 }
 

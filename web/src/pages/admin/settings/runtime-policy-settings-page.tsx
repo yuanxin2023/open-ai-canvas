@@ -1,5 +1,6 @@
-import { App, Button, Form, InputNumber, Skeleton } from "antd";
-import { AlertTriangle, Database, Gauge, Infinity as InfinityIcon, Network, RefreshCw, RotateCcw, Save, ShieldCheck, TimerReset } from "lucide-react";
+import { App, Button, Dropdown, Form, Input, InputNumber, Skeleton, Switch } from "antd";
+import type { MenuProps } from "antd";
+import { AlertTriangle, Database, Gauge, Infinity as InfinityIcon, MoreHorizontal, Network, RefreshCw, RotateCcw, Save, Search, ShieldCheck, TimerReset } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useBlocker } from "react-router";
 
@@ -7,11 +8,21 @@ import { cn } from "@/lib/utils";
 import { getAdminRuntimePolicySetting, getAdminSelfUseRuntimePolicy, resetAdminRuntimePolicySetting, updateAdminRuntimePolicySetting, type RuntimePolicySetting } from "@/services/api/auth";
 import { useAdminContext } from "../admin-context";
 import { AdminPageFrame } from "../components/admin-shell";
-import { AdminStatTile, AdminStatusBadge, SettingsSectionCard } from "../components/admin-ui";
+import { AdminStatusBadge, SettingsSectionCard } from "../components/admin-ui";
 
 type PolicyGroup = "resource" | "task" | "request";
 type RuntimePolicyDraft = Pick<RuntimePolicySetting, "resource" | "task" | "request">;
-type PolicyField = { group: PolicyGroup; name: string; label: string; extra: string; unit: string; min?: number; max: number };
+type PolicyField = {
+    [Group in PolicyGroup]: {
+        group: Group;
+        name: Extract<keyof RuntimePolicyDraft[Group], string>;
+        label: string;
+        extra: string;
+        unit: string;
+        min?: number;
+        max: number;
+    };
+}[PolicyGroup];
 type PolicySectionDefinition = {
     id: string;
     icon: ReactNode;
@@ -20,6 +31,19 @@ type PolicySectionDefinition = {
     description: string;
     fields: PolicyField[];
     status?: ReactNode;
+};
+
+type PolicyNumberControlProps = {
+    value?: number;
+    onChange?: (value: number | null) => void;
+    inputId: string;
+    label: string;
+    unit: string;
+    min: number;
+    max: number;
+    disabled: boolean;
+    dirty: boolean;
+    onReset: () => void;
 };
 
 const resourceFields: PolicyField[] = [
@@ -92,6 +116,7 @@ const policySections: PolicySectionDefinition[] = [
     { id: "policy-relay", icon: <Network className="size-4" aria-hidden="true" />, title: "渠道中转与熔断", shortTitle: "中转与熔断", description: "请求体、响应体、并发、超时和上游故障保护。", fields: relayFields },
 ];
 const allPolicyFields = policySections.flatMap((section) => section.fields);
+const totalPolicyFieldCount = allPolicyFields.length;
 
 export default function RuntimePolicySettingsPage() {
     const { message, modal } = App.useApp();
@@ -105,12 +130,15 @@ export default function RuntimePolicySettingsPage() {
     const [presetLoading, setPresetLoading] = useState(false);
     const [loadError, setLoadError] = useState("");
     const [saveError, setSaveError] = useState("");
+    const [activeSectionId, setActiveSectionId] = useState(policySections[0].id);
+    const [fieldSearch, setFieldSearch] = useState("");
+    const [changedOnly, setChangedOnly] = useState(false);
     const [form] = Form.useForm<RuntimePolicyDraft>();
     const requestVersionRef = useRef(0);
     const formReadyRef = useRef(false);
     const navigationConfirmOpenRef = useRef(false);
     const navigationTriggerRef = useRef<HTMLElement | null>(null);
-    const userNameById = useMemo(() => new Map(references.users.map((user) => [user.id, user.displayName || user.username])), [references.users]);
+    const userNameById = useMemo(() => new Map(references.users.map((user) => [user.id, user.username])), [references.users]);
 
     const load = useCallback(
         async (initial = false, announce = false) => {
@@ -158,6 +186,26 @@ export default function RuntimePolicySettingsPage() {
         if (!savedSetting || !draft) return [];
         return allPolicyFields.filter((field) => readPolicyValue(savedSetting, field) !== readPolicyValue(draft, field));
     }, [draft, savedSetting]);
+    const dirtyFieldKeys = useMemo(() => new Set(dirtyFields.map(policyFieldKey)), [dirtyFields]);
+    const normalizedFieldSearch = fieldSearch.trim().toLocaleLowerCase("zh-CN");
+    const visibleFieldsBySection = useMemo(
+        () =>
+            new Map(
+                policySections.map((section) => [
+                    section.id,
+                    section.fields.filter((field) => {
+                        if (changedOnly && !dirtyFieldKeys.has(policyFieldKey(field))) return false;
+                        return !normalizedFieldSearch || policyFieldMatches(section, field, normalizedFieldSearch);
+                    }),
+                ]),
+            ),
+        [changedOnly, dirtyFieldKeys, normalizedFieldSearch],
+    );
+    const searchMode = normalizedFieldSearch.length > 0;
+    const hasVisibleFields = policySections.some((section) => {
+        const sectionActive = searchMode || section.id === activeSectionId;
+        return sectionActive && (visibleFieldsBySection.get(section.id)?.length || 0) > 0;
+    });
     const dirty = dirtyFields.length > 0;
     const busy = loading || refreshing || saving || resetting || presetLoading;
     const blocker = useBlocker(dirty && !saving && !resetting);
@@ -208,6 +256,15 @@ export default function RuntimePolicySettingsPage() {
         message.info("已撤销本页尚未保存的调整");
     };
 
+    const resetField = (field: PolicyField) => {
+        if (!savedSetting || !draft || busy) return;
+        const value = readPolicyValue(savedSetting, field);
+        const nextDraft = updatePolicyField(draft, field, value);
+        form.setFieldsValue(nextDraft);
+        setDraft(nextDraft);
+        setSaveError("");
+    };
+
     const requestRefresh = () => {
         if (!dirty) {
             void load(false, true);
@@ -231,7 +288,7 @@ export default function RuntimePolicySettingsPage() {
             title: "填入自用模式上限？",
             content: (
                 <div className="admin-runtime-policy-confirm-copy">
-                    <p>这会把全部 42 项配额、并发、频控和超时填到允许范围的高值，并把熔断等待缩短到 1 秒。</p>
+                    <p>这会把全部 {totalPolicyFieldCount} 项配额、并发、频控和超时填到允许范围的高值，并把熔断等待缩短到 1 秒。</p>
                     <p>{dirty ? `当前 ${dirtyFields.length} 项暂存调整会被覆盖。` : "只会改动本页草稿，点击保存修改后生效。"}</p>
                 </div>
             ),
@@ -267,7 +324,7 @@ export default function RuntimePolicySettingsPage() {
             title: "恢复全部系统默认策略？",
             content: (
                 <div className="admin-runtime-policy-confirm-copy">
-                    <p>确认后会删除管理员保存的自定义策略，全部 42 项立即恢复系统默认值。</p>
+                    <p>确认后会删除管理员保存的自定义策略，全部 {totalPolicyFieldCount} 项立即恢复系统默认值。</p>
                     {dirty ? <p>当前 {dirtyFields.length} 项未保存调整也会一并丢弃。</p> : null}
                 </div>
             ),
@@ -338,6 +395,18 @@ export default function RuntimePolicySettingsPage() {
         }
     };
 
+    const moreMenuItems: MenuProps["items"] = [
+        { key: "refresh", icon: <RefreshCw className="size-4" aria-hidden="true" />, label: "刷新状态", disabled: saving || resetting || presetLoading },
+        { key: "self", icon: <InfinityIcon className="size-4" aria-hidden="true" />, label: "填入自用模式草稿", disabled: saving || resetting || refreshing },
+        ...(savedSetting?.configured ? ([{ type: "divider" }, { key: "reset", danger: true, icon: <RotateCcw className="size-4" aria-hidden="true" />, label: "恢复系统默认" }] satisfies MenuProps["items"]) : []),
+    ];
+
+    const runMoreAction: MenuProps["onClick"] = ({ key }) => {
+        if (key === "refresh") requestRefresh();
+        else if (key === "self") requestSelfMode();
+        else if (key === "reset") requestReset();
+    };
+
     if (loading && !draft) {
         return (
             <AdminPageFrame title="资源与策略" description="账号配额、任务调度与请求安全策略" scroll>
@@ -345,12 +414,10 @@ export default function RuntimePolicySettingsPage() {
                     <div className="admin-runtime-policy-command-bar">
                         <Skeleton active title={{ width: 190 }} paragraph={false} />
                     </div>
-                    <div className="admin-runtime-policy-overview">
-                        {Array.from({ length: 4 }).map((_, index) => (
-                            <div key={index} className="admin-stat-tile">
-                                <Skeleton active title={{ width: 96 }} paragraph={{ rows: 1 }} />
-                            </div>
-                        ))}
+                    <div className="admin-runtime-policy-workspace-controls">
+                        <div className="admin-runtime-policy-workspace-toolbar">
+                            <Skeleton.Input active block />
+                        </div>
                     </div>
                     <div className="admin-runtime-policy-loading-card">
                         <Skeleton active paragraph={{ rows: 8 }} />
@@ -383,9 +450,6 @@ export default function RuntimePolicySettingsPage() {
 
     const updateActor = savedSetting.updatedBy ? userNameById.get(savedSetting.updatedBy) || savedSetting.updatedBy : "";
     const updateDetail = savedSetting.configured ? `${formatTime(savedSetting.updatedAt)}${updateActor ? ` · ${updateActor}` : ""}` : "尚未由管理员保存，使用系统默认值";
-    const workerConcurrency = readDraftNumber(draft, "task", "workerConcurrency");
-    const activeTaskLimit = readDraftNumber(draft, "task", "activeTaskLimit");
-
     return (
         <AdminPageFrame title="资源与策略" description="账号配额、任务调度与请求安全策略" scroll>
             <Form
@@ -414,27 +478,17 @@ export default function RuntimePolicySettingsPage() {
                             </div>
                         </div>
                         <div className="admin-runtime-policy-command-actions">
-                            {dirty ? (
-                                <Button icon={<RotateCcw className="size-4" />} disabled={busy} onClick={resetDraft}>
-                                    撤销改动
-                                </Button>
-                            ) : null}
-                            <Button icon={<RefreshCw className="size-4" />} loading={refreshing} disabled={saving || resetting || presetLoading} onClick={requestRefresh}>
-                                刷新状态
+                            <Button icon={<RotateCcw className="size-4" />} disabled={!dirty || busy} onClick={resetDraft}>
+                                撤销改动
                             </Button>
-                            <Button icon={<InfinityIcon className="size-4" />} loading={presetLoading} disabled={saving || resetting || refreshing} onClick={requestSelfMode}>
-                                自用模式草稿
+                            <Button type="primary" icon={<Save className="size-4" />} loading={saving} disabled={!dirty || busy} onClick={() => void submitSave()}>
+                                保存修改
                             </Button>
-                            {savedSetting.configured && !dirty ? (
-                                <Button danger icon={<RotateCcw className="size-4" />} loading={resetting} disabled={saving || refreshing || presetLoading} onClick={requestReset}>
-                                    恢复系统默认
+                            <Dropdown menu={{ items: moreMenuItems, onClick: runMoreAction }} trigger={["click"]} placement="bottomRight">
+                                <Button icon={<MoreHorizontal className="size-4" />} disabled={busy} aria-label="更多资源与策略操作">
+                                    更多
                                 </Button>
-                            ) : null}
-                            {dirty ? (
-                                <Button type="primary" icon={<Save className="size-4" />} loading={saving} disabled={busy} onClick={() => void submitSave()}>
-                                    保存修改
-                                </Button>
-                            ) : null}
+                            </Dropdown>
                         </div>
                     </div>
 
@@ -445,53 +499,164 @@ export default function RuntimePolicySettingsPage() {
                         </div>
                     ) : null}
 
-                    <div className="admin-runtime-policy-overview" aria-label="资源与策略配置概览">
-                        <AdminStatTile label="配置来源" value={savedSetting.configured ? "管理员配置" : "系统默认"} detail={updateDetail} />
-                        <AdminStatTile label="待保存调整" value={dirtyFields.length} detail={dirty ? "仅本页暂存，尚未生效" : "当前草稿与服务端一致"} />
-                        <AdminStatTile label="Worker 并发" value={formatNumber(workerConcurrency)} detail={dirtyFields.some((field) => field.name === "workerConcurrency") ? "暂存状态预览" : "集群后台任务并发"} />
-                        <AdminStatTile label="账号活动任务" value={formatNumber(activeTaskLimit)} detail={dirtyFields.some((field) => field.name === "activeTaskLimit") ? "暂存状态预览" : "单账号排队与运行总数"} />
+                    <div className="admin-runtime-policy-workspace-controls">
+                        <div className="admin-runtime-policy-workspace-toolbar">
+                            <Input
+                                aria-label="搜索资源与策略参数"
+                                allowClear
+                                autoComplete="off"
+                                prefix={<Search className="size-4" aria-hidden="true" />}
+                                value={fieldSearch}
+                                placeholder="搜索参数名称、说明或单位"
+                                onChange={(event) => setFieldSearch(event.target.value)}
+                            />
+                            <label className="admin-runtime-policy-changed-filter">
+                                <Switch size="small" checked={changedOnly} disabled={!dirty && !changedOnly} onChange={setChangedOnly} />
+                                <span>仅看已修改</span>
+                            </label>
+                        </div>
+                        <nav className="admin-runtime-policy-tabs" aria-label="策略分类">
+                            {policySections.map((section) => {
+                                const changedCount = section.fields.filter((field) => dirtyFieldKeys.has(policyFieldKey(field))).length;
+                                const active = !searchMode && section.id === activeSectionId;
+                                return (
+                                    <button
+                                        key={section.id}
+                                        type="button"
+                                        className={cn("admin-runtime-policy-tab", active && "is-active")}
+                                        aria-pressed={active}
+                                        onClick={() => {
+                                            setActiveSectionId(section.id);
+                                            setFieldSearch("");
+                                        }}
+                                    >
+                                        <span>{section.shortTitle}</span>
+                                        <small>{section.fields.length}</small>
+                                        {changedCount > 0 ? <em>已改 {changedCount}</em> : null}
+                                    </button>
+                                );
+                            })}
+                        </nav>
                     </div>
 
-                    {policySections.map((section) => (
-                        <div key={section.id} id={section.id} className="admin-settings-anchor admin-runtime-policy-anchor">
-                            <PolicySection {...section} />
-                        </div>
-                    ))}
+                    <div className="admin-runtime-policy-panels">
+                        {policySections.map((section) => {
+                            const visibleFields = visibleFieldsBySection.get(section.id) || [];
+                            const sectionVisible = (searchMode || section.id === activeSectionId) && visibleFields.length > 0;
+                            return (
+                                <div key={section.id} id={section.id} className="admin-settings-anchor admin-runtime-policy-anchor" hidden={!sectionVisible}>
+                                    <PolicySection
+                                        {...section}
+                                        fields={section.fields}
+                                        visibleFieldKeys={new Set(visibleFields.map(policyFieldKey))}
+                                        searchMode={searchMode}
+                                        matchCount={visibleFields.length}
+                                        savedSetting={savedSetting}
+                                        draft={draft}
+                                        disabled={busy}
+                                        onResetField={resetField}
+                                    />
+                                </div>
+                            );
+                        })}
+                        {!hasVisibleFields ? (
+                            <div className="admin-runtime-policy-empty" role="status">
+                                <Search className="size-5" aria-hidden="true" />
+                                <strong>{changedOnly && !dirty ? "当前没有待保存的修改" : "没有匹配的策略参数"}</strong>
+                                <p>{changedOnly ? "关闭“仅看已修改”后可继续浏览全部参数。" : "请尝试参数名称、说明文字或单位。"}</p>
+                            </div>
+                        ) : null}
+                    </div>
                 </div>
             </Form>
         </AdminPageFrame>
     );
 }
 
-function PolicySection({ icon, title, description, fields, status }: PolicySectionDefinition) {
+function PolicySection({
+    icon,
+    title,
+    description,
+    fields,
+    status,
+    visibleFieldKeys,
+    searchMode,
+    matchCount,
+    savedSetting,
+    draft,
+    disabled,
+    onResetField,
+}: PolicySectionDefinition & {
+    visibleFieldKeys: Set<string>;
+    searchMode: boolean;
+    matchCount: number;
+    savedSetting: RuntimePolicySetting;
+    draft: RuntimePolicyDraft;
+    disabled: boolean;
+    onResetField: (field: PolicyField) => void;
+}) {
+    const sectionStatus = searchMode ? (
+        <div className="admin-runtime-policy-section-status">
+            {status}
+            <AdminStatusBadge label={`${matchCount} 项匹配`} tone="info" />
+        </div>
+    ) : (
+        status
+    );
     return (
-        <SettingsSectionCard icon={icon} title={title} description={description} status={status}>
+        <SettingsSectionCard layout="stacked" icon={icon} title={title} description={description} status={sectionStatus}>
             <div className="admin-runtime-policy-field-grid">
                 {fields.map((field) => {
                     const inputId = `admin-runtime-policy-${field.group}-${field.name}`;
                     const min = field.min ?? 1;
+                    const fieldKey = policyFieldKey(field);
+                    const dirty = readPolicyValue(savedSetting, field) !== readPolicyValue(draft, field);
+                    const originalValue = readPolicyValue(savedSetting, field);
+                    const currentValue = readPolicyValue(draft, field);
                     return (
-                        <Form.Item key={`${field.group}.${field.name}`} label={field.label} htmlFor={inputId} extra={field.extra}>
-                            <div className="admin-runtime-policy-number-control">
-                                <Form.Item
-                                    noStyle
-                                    name={[field.group, field.name]}
-                                    rules={[
-                                        { required: true, message: `请填写${field.label}` },
-                                        { type: "number", min, max: field.max, message: `${field.label}必须是 ${min}-${field.max} 的整数` },
-                                    ]}
-                                >
-                                    <InputNumber id={inputId} min={min} max={field.max} precision={0} aria-label={field.label} />
-                                </Form.Item>
-                                <span className="admin-runtime-policy-number-unit" aria-hidden="true">
-                                    {field.unit}
+                        <Form.Item
+                            key={fieldKey}
+                            className={cn("admin-runtime-policy-field", dirty && "is-dirty")}
+                            hidden={!visibleFieldKeys.has(fieldKey)}
+                            label={
+                                <span className="admin-runtime-policy-field-copy">
+                                    <span className="admin-runtime-policy-field-heading">
+                                        <strong>{field.label}</strong>
+                                        {dirty ? <em>已修改</em> : null}
+                                    </span>
+                                    <small>{field.extra}</small>
+                                    {dirty ? (
+                                        <span className="admin-runtime-policy-field-comparison">
+                                            原 {formatPolicyValue(originalValue, field.unit)} → 当前 {formatPolicyValue(currentValue, field.unit)}
+                                        </span>
+                                    ) : null}
                                 </span>
-                            </div>
+                            }
+                            htmlFor={inputId}
+                            name={[field.group, field.name]}
+                            rules={[
+                                { required: true, message: `请填写${field.label}` },
+                                { type: "number", min, max: field.max, message: `${field.label}必须是 ${min}-${field.max} 的整数` },
+                            ]}
+                        >
+                            <PolicyNumberControl inputId={inputId} label={field.label} unit={field.unit} min={min} max={field.max} disabled={disabled} dirty={dirty} onReset={() => onResetField(field)} />
                         </Form.Item>
                     );
                 })}
             </div>
         </SettingsSectionCard>
+    );
+}
+
+function PolicyNumberControl({ value, onChange, inputId, label, unit, min, max, disabled, dirty, onReset }: PolicyNumberControlProps) {
+    return (
+        <div className="admin-runtime-policy-number-control">
+            <InputNumber<number> id={inputId} min={min} max={max} precision={0} value={value} disabled={disabled} aria-label={label} onChange={onChange} />
+            <span className="admin-runtime-policy-number-unit" aria-hidden="true">
+                {unit}
+            </span>
+            <Button type="text" size="small" className="admin-runtime-policy-field-reset" icon={<RotateCcw className="size-3.5" aria-hidden="true" />} disabled={!dirty || disabled} aria-label="撤销此项改动" title="撤销此项改动" onClick={onReset} />
+        </div>
     );
 }
 
@@ -501,6 +666,24 @@ function toPolicyDraft(value: RuntimePolicyDraft): RuntimePolicyDraft {
 
 function readPolicyValue(value: RuntimePolicyDraft, field: PolicyField) {
     return Number((value[field.group] as unknown as Record<string, unknown>)?.[field.name]);
+}
+
+function policyFieldKey(field: PolicyField) {
+    return `${field.group}.${field.name}`;
+}
+
+function policyFieldMatches(section: PolicySectionDefinition, field: PolicyField, query: string) {
+    return [section.title, section.shortTitle, field.label, field.extra, field.unit].some((value) => value.toLocaleLowerCase("zh-CN").includes(query));
+}
+
+function updatePolicyField(value: RuntimePolicyDraft, field: PolicyField, nextValue: number): RuntimePolicyDraft {
+    return {
+        ...value,
+        [field.group]: {
+            ...value[field.group],
+            [field.name]: nextValue,
+        },
+    } as RuntimePolicyDraft;
 }
 
 function readDraftNumber(value: RuntimePolicyDraft, group: PolicyGroup, name: string) {

@@ -53,6 +53,9 @@ func (r *Repository) CreateTopupProduct(product *model.TopupProduct) error {
 func (r *Repository) UpdateTopupProduct(product *model.TopupProduct) error {
 	return r.db.Model(&model.TopupProduct{}).Where("id = ?", product.ID).Updates(map[string]any{
 		"name": product.Name, "description": product.Description, "benefits": product.Benefits, "amount_fen": product.AmountFen,
+		"ribbon_text": product.RibbonText, "badge_text": product.BadgeText, "compare_amount_fen": product.CompareAmountFen,
+		"price_caption": product.PriceCaption, "quota_caption": product.QuotaCaption, "quota_detail": product.QuotaDetail,
+		"action_text": product.ActionText, "accent_color": product.AccentColor, "featured": product.Featured,
 		"credits_microcredits": product.CreditsMicrocredits, "enabled": product.Enabled,
 		"sort_order": product.SortOrder, "updated_by": product.UpdatedBy, "updated_at": time.Now(),
 	}).Error
@@ -207,7 +210,7 @@ func (r *Repository) RetryPaymentNotification(id, message string, next time.Time
 
 // CompletePaymentOrder atomically records provider success and grants credits.
 // The unique ledger reference is the final guard against callback/query races.
-func (r *Repository) CompletePaymentOrder(providerID, merchantOrderNo string, evidence PaymentEvidence) (*model.PaymentOrder, bool, error) {
+func (r *Repository) CompletePaymentOrder(providerID, merchantOrderNo string, evidence PaymentEvidence, referral ...*model.ReferralReward) (*model.PaymentOrder, bool, error) {
 	var order model.PaymentOrder
 	granted := false
 	err := r.db.Transaction(func(tx *gorm.DB) error {
@@ -291,6 +294,11 @@ func (r *Repository) CompletePaymentOrder(providerID, merchantOrderNo string, ev
 		}
 		if updated.RowsAffected != 1 {
 			return ErrPaymentOrderStateConflict
+		}
+		if len(referral) > 0 && referral[0] != nil {
+			if err := createReferralRewardTx(tx, &order, referral[0]); err != nil {
+				return err
+			}
 		}
 		granted = true
 		return tx.First(&order, "id = ?", order.ID).Error
@@ -415,7 +423,7 @@ func (r *Repository) paymentOrderQuery(filter PaymentOrderFilter) *gorm.DB {
 	}
 	if normalized := strings.TrimSpace(filter.Keyword); normalized != "" {
 		like := "%" + normalized + "%"
-		users := r.db.Model(&model.User{}).Select("id").Where("LOWER(username) LIKE ? OR LOWER(display_name) LIKE ? OR LOWER(email) LIKE ?", strings.ToLower(like), strings.ToLower(like), strings.ToLower(like))
+		users := r.db.Model(&model.User{}).Select("id").Where("LOWER(username) LIKE ? OR LOWER(email) LIKE ?", strings.ToLower(like), strings.ToLower(like))
 		query = query.Where("merchant_order_no LIKE ? OR provider_trade_no LIKE ? OR user_id = ? OR user_id IN (?)", like, like, normalized, users)
 	}
 	if filter.ProviderID != "" && filter.ProviderID != "all" {

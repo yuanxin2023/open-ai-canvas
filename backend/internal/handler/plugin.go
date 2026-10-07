@@ -104,7 +104,7 @@ func RegisterPluginRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
-		if err := svc.RequireAdmin(user); err != nil {
+		if err := svc.RequireAdminPermission(user, model.AdminPermissionPlugins); err != nil {
 			failService(c, err)
 			return
 		}
@@ -162,7 +162,7 @@ func RegisterPluginRoutes(r *gin.RouterGroup, svc *service.Service) {
 			return
 		}
 		if fileName == "" {
-			fileName = c.Param("id") + ".yingce-plugin"
+			fileName = c.Param("id") + ".canvas-plugin"
 		}
 		c.Header("Cache-Control", "private, no-store")
 		c.Header("Content-Disposition", "attachment; filename=\""+strings.ReplaceAll(fileName, "\"", "")+"\"")
@@ -196,7 +196,7 @@ func RegisterPluginRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
-		if err := svc.RequireAdmin(user); err != nil {
+		if err := svc.RequireAdminPermission(user, model.AdminPermissionPlugins); err != nil {
 			failService(c, err)
 			return
 		}
@@ -327,7 +327,7 @@ func pluginToggle(svc *service.Service, enabled bool) gin.HandlerFunc {
 			failService(c, err)
 			return
 		}
-		if err := svc.RequireAdmin(user); err != nil {
+		if err := svc.RequireAdminPermission(user, model.AdminPermissionPlugins); err != nil {
 			failService(c, err)
 			return
 		}

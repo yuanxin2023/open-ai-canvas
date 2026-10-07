@@ -44,7 +44,7 @@
 
 | 步骤 | 改动文件 | 内容 | 验证 | 完成标准 |
 |---|---|---|---|---|
-| M1.1 | `web/src/lib/plugins/plugin-types.ts` | 加 `PLUGIN_API_VERSION "yingce.plugin/v2"` 类型、编辑器贡献类型（timeline-panel / preview-renderer / inspector / asset-ingest / subtitle-tool / transcription-provider / export-renderer / ai-assistant）、`timeline.*` / `export.run` / `ai.text` 权限字面量 | `bun run typecheck` | 纯类型增量，v1 类型零改动，既有代码零编译错误 |
+| M1.1 | `web/src/lib/plugins/plugin-types.ts` | 加 `PLUGIN_API_VERSION "open-ai-canvas.plugin/v2"` 类型、编辑器贡献类型（timeline-panel / preview-renderer / inspector / asset-ingest / subtitle-tool / transcription-provider / export-renderer / ai-assistant）、`timeline.*` / `export.run` / `ai.text` 权限字面量 | `bun run typecheck` | 纯类型增量，v1 类型零改动，既有代码零编译错误 |
 | M1.2 | `web/src/lib/plugins/editor-slot-registry.ts`（新建） | 插槽注册表：`registerEditorSlot / unregisterEditorSlot / getEditorSlot`，按插槽类型 + 优先级排序，幂等注册 | 新增 `web/test/editor-slot-registry.test.ts`：注册/去重/排序/未知插槽 | 专项测试通过，无 UI 依赖（纯函数） |
 | M1.3 | `web/src/lib/plugins/plugin-registry.ts` | 注册断言按 apiVersion 分支：v1 保持现状（kebab-case + ≥1 贡献）；v2 增加插槽贡献合法性校验；重复权限检查对 v2 生效 | `bun test test/canvas-node-registry.test.ts`（既有）全过 + 新增 v2 注册测试 | v1 插件行为完全不变；v2 注册/拒绝路径测试通过 |
 | M1.4 | `web/src/lib/plugins/builtin/editor/editor-shell.ts`（临时）+ `web/src/lib/plugins/builtin/index.ts` | 垂直切片：`editor-shell` 预设插件注册 1 个 timeline-panel 插槽，占位页渲染该插槽 | `bun run typecheck`；浏览器 `/projects/:id/editor` | 插槽注册→渲染链路全通（空面板可见），**这是第一条垂直切片** |

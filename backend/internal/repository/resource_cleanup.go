@@ -68,7 +68,10 @@ func (r *Repository) DeleteDetachedResources(resources []model.Resource, deletio
 			query string
 		}{
 			{&model.Announcement{}, "image_resource_id IN ?"},
+			{&model.Inspiration{}, "cover_resource_id IN ?"},
+			{&model.UserPrompt{}, "cover_resource_id IN ?"},
 			{&model.AnnouncementImageDraft{}, "resource_id IN ?"},
+			{&model.InspirationCoverDraft{}, "resource_id IN ?"},
 			{&model.AssetRepresentation{}, "resource_id IN ?"},
 			{&model.VoiceProfile{}, "sample_resource_id IN ?"},
 			{&model.ShotArtifact{}, "resource_id IN ?"},

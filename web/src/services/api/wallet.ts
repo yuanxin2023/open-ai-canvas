@@ -1,5 +1,5 @@
 import { http } from "@/services/api/request";
-
+import type { ModelTag } from "@/lib/model-tags";
 
 export type CreditAccount = {
     userId: string;
@@ -13,12 +13,14 @@ export type CreditAccount = {
 export type CreditLedgerEntry = {
     id: string;
     userId: string;
-    type: "redeem" | "payment_topup" | "admin_grant" | "consume" | "refund" | "admin_adjustment" | "signup_bonus" | "checkin_bonus";
+    type: "redeem" | "payment_topup" | "admin_grant" | "consume" | "refund" | "admin_adjustment" | "signup_bonus" | "checkin_bonus" | "referral";
     amountMicrocredits: number;
     availableAfterMicrocredits: number;
     reservedAfterMicrocredits: number;
     billingOrderId?: string;
     paymentOrderId?: string;
+    redeemCodeId?: string;
+    redeemBatchId?: string;
     model?: string;
     channelId?: string;
     scene?: string;
@@ -60,6 +62,9 @@ export type ChannelModel = {
     modelKey: string;
     providerModelKey: string;
     displayName: string;
+    channelLabel?: string;
+    tags?: ModelTag[];
+    description?: string;
     sortOrder?: number;
     icon: string;
     capability: "text" | "image" | "video" | "audio" | "";
@@ -80,6 +85,8 @@ export type ChannelModel = {
 };
 
 export type ChannelModelPriceTier = {
+    /** 仅管理员模型编辑接口返回，不能复制到用户模型目录。 */
+    costPricing?: CreditCostPricing;
     id: string;
     channelModelId: string;
     selector: Record<string, string>;
@@ -99,11 +106,22 @@ export type ChannelModelPriceTier = {
     updatedAt: string;
 };
 
+export type CreditCostPricing = {
+    configured: boolean;
+    unitPriceMicrocredits: number;
+    inputTokenPriceMicrocredits: number;
+    outputTokenPriceMicrocredits: number;
+    cachedTokenPriceMicrocredits: number;
+};
+
 // 系统渠道模型的写入合同。标量价格只用于兼容旧管理请求；新的后台界面只提交 priceTiers。
 export type ChannelModelMutation = {
     modelKey: string;
     providerModelKey?: string;
     displayName?: string;
+    channelLabel?: string;
+    tags?: ModelTag[];
+    description?: string;
     icon?: string;
     capability: ChannelModel["capability"];
     protocol?: ChannelModel["protocol"];
@@ -167,12 +185,33 @@ export type RedeemBatch = {
     count: number;
     note?: string;
     createdBy: string;
+    creatorUsername?: string;
+    fundingSource: "platform" | "module_admin";
+    totalMicrocredits: number;
     expiresAt?: string;
+    terminalAt?: string;
+    codeSecretsClearedAt?: string;
     createdAt: string;
     availableCount: number;
     redeemedCount: number;
     disabledCount: number;
     expiredCount: number;
+};
+
+export type RedeemFundingSummary = {
+    availableMicrocredits: number;
+    redeemReservedMicrocredits: number;
+    otherReservedMicrocredits: number;
+    totalReservedMicrocredits: number;
+};
+
+export type AdminRedeemBatchPage = {
+    batches: RedeemBatch[];
+    fundingSource: RedeemFundingSource;
+    fundingSummary?: RedeemFundingSummary;
+    total: number;
+    page: number;
+    pageSize: number;
 };
 
 export type AdminRedeemCode = {
@@ -196,6 +235,17 @@ export type AdminRedeemCodePage = {
     total: number;
     page: number;
     pageSize: number;
+};
+
+export type AdminRedeemCodeLookupResult = {
+    batch: RedeemBatch;
+    code: AdminRedeemCode;
+};
+
+export type AdminRedeemCodeSearchResult = {
+    matches: AdminRedeemCodeLookupResult[];
+    total: number;
+    truncated: boolean;
 };
 
 export type BillingOrder = {
@@ -222,6 +272,8 @@ export type BillingOrder = {
     outputTokens: number;
     cachedTokens: number;
     usageAvailable: boolean;
+    videoFormulaTokens?: number;
+    usageSource?: "provider" | "video_formula";
     status: "reserved" | "running" | "settled" | "refunded" | "uncertain";
     providerRequestId?: string;
     error?: string;
@@ -312,26 +364,51 @@ export function deleteAdminChannelModels(channelId: string, modelIds: string[]) 
     return http.post<{ deleted: number }>(`/admin/channels/${encodeURIComponent(channelId)}/models/batch-delete`, { modelIds });
 }
 
-export type AdminFinanceListParams = { keyword?: string; status?: string; validity?: string; page?: number; pageSize?: number };
+export type ChannelModelRepriceInput = {
+    modelId: string;
+    priceVersion: number;
+    priceTiers: { id: string; priceVersion: number; prices: Partial<Record<"unitPriceMicrocredits" | "inputTokenPriceMicrocredits" | "outputTokenPriceMicrocredits" | "cachedTokenPriceMicrocredits", number>> }[];
+};
+
+export function repriceAdminChannelModels(channelId: string, models: ChannelModelRepriceInput[]) {
+    return http.post<{ updated: number }>(`/admin/channels/${encodeURIComponent(channelId)}/models/batch-reprice`, { models });
+}
+
+export type RedeemFundingSource = RedeemBatch["fundingSource"];
+export type RedeemBatchLifecycle = "ongoing" | "completed" | "all";
+
+export type AdminFinanceListParams = { keyword?: string; status?: string; validity?: string; lifecycle?: RedeemBatchLifecycle; fundingSource?: RedeemFundingSource; creatorId?: string; page?: number; pageSize?: number };
 
 export function listAdminRedeemBatches(params: AdminFinanceListParams = {}) {
-    return http.get<{ batches: RedeemBatch[]; total: number; page: number; pageSize: number }>("/admin/redeem-batches", { params });
+    return http.get<AdminRedeemBatchPage>("/admin/redeem-batches", { params });
+}
+
+export function searchAdminRedeemBatches(params: AdminFinanceListParams) {
+    return http.post<AdminRedeemBatchPage>("/admin/redeem-batches/search", params);
 }
 
 export function createAdminRedeemBatch(input: { amountMicrocredits: number; count: number; note?: string; expiresAt?: string }) {
-    return http.post<{ batch: RedeemBatch; codes: string[] }>("/admin/redeem-batches", input, { timeout: 30_000 });
+    return http.post<{ batch: RedeemBatch; codes: string[]; account?: CreditAccount }>("/admin/redeem-batches", input, { timeout: 30_000 });
 }
 
-export function listAdminRedeemBatchCodes(batchId: string, params: { status?: string; page?: number; pageSize?: number } = {}) {
-    return http.get<AdminRedeemCodePage>(`/admin/redeem-batches/${encodeURIComponent(batchId)}/codes`, { params });
+export function listAdminRedeemBatchCodes(batchId: string, fundingSource: RedeemFundingSource, params: { status?: string; page?: number; pageSize?: number } = {}) {
+    return http.get<AdminRedeemCodePage>(`/admin/redeem-batches/${encodeURIComponent(batchId)}/codes`, { params: { ...params, fundingSource } });
 }
 
-export function disableAdminRedeemBatch(batchId: string) {
-    return http.post<{ disabledCount: number }>(`/admin/redeem-batches/${encodeURIComponent(batchId)}/disable`);
+export function lookupAdminRedeemCode(code: string, fundingSource: RedeemFundingSource, creatorId?: string) {
+    return http.post<AdminRedeemCodeLookupResult>("/admin/redeem-codes/lookup", { code, fundingSource, creatorId });
 }
 
-export function disableAdminRedeemCode(batchId: string, codeId: string) {
-    return http.post<{ ok: boolean }>(`/admin/redeem-batches/${encodeURIComponent(batchId)}/codes/${encodeURIComponent(codeId)}/disable`);
+export function searchAdminRedeemCodes(query: string, fundingSource: RedeemFundingSource, creatorId?: string) {
+    return http.post<AdminRedeemCodeSearchResult>("/admin/redeem-codes/search", { query, fundingSource, creatorId });
+}
+
+export function disableAdminRedeemBatch(batchId: string, fundingSource: RedeemFundingSource) {
+    return http.post<{ disabledCount: number; refundedMicrocredits: number }>(`/admin/redeem-batches/${encodeURIComponent(batchId)}/disable`, undefined, { params: { fundingSource } });
+}
+
+export function disableAdminRedeemCode(batchId: string, codeId: string, fundingSource: RedeemFundingSource) {
+    return http.post<{ disabledCount: number; refundedMicrocredits: number }>(`/admin/redeem-batches/${encodeURIComponent(batchId)}/codes/${encodeURIComponent(codeId)}/disable`, undefined, { params: { fundingSource } });
 }
 
 export function adjustAdminUserCredits(userId: string, input: { amountMicrocredits: number; note: string }) {

@@ -1,36 +1,59 @@
 import { useEffect, useState } from "react";
-import { App, Button, Descriptions, Progress, Skeleton, Tabs } from "antd";
-import { AdminDrawer } from "@/pages/admin/ui/overlays";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { App, Button, DatePicker, Descriptions, Input, Progress, Select, Skeleton, Tabs } from "antd";
+import { AdminModal } from "@/pages/admin/ui/overlays";
+import { ChevronLeft, ChevronRight, Search } from "lucide-react";
+import type { Dayjs } from "dayjs";
 
 import { formatCredits } from "@/constant/credits";
 import { IconButton } from "@/pages/admin/ui/controls";
 import { AdminDataTable, AdminEmpty, AdminStatusBadge, AdminTableEmpty, PaginationBar, type AdminStatusTone } from "./admin-ui";
-import { getAdminUserDetail, listAdminUserAuditEvents, listAdminUserLedger, listAdminUserTasks, type AdminAuditEvent, type AdminUserDetail, type AdminUserTask } from "@/services/api/auth";
+import { getAdminUserDetail, listAdminUserAuditEvents, listAdminUserLedger, listAdminUserLoginEvents, listAdminUserTasks, type AdminAuditEvent, type AdminUserDetail, type AdminUserLedgerFilter, type AdminUserLoginEvent, type AdminUserLoginEventQuery, type AdminUserTask } from "@/services/api/auth";
 import type { CreditLedgerEntry } from "@/services/api/wallet";
 
-export function AdminUserDetailDrawer({ userId, onClose, previousUserId, nextUserId, onNavigate }: { userId: string | null; onClose: () => void; previousUserId?: string; nextUserId?: string; onNavigate?: (userId: string) => void }) {
+type LoginEventFilters = Pick<AdminUserLoginEventQuery, "startAt" | "endAt" | "loginMethod" | "ip">;
+
+export function AdminUserDetailModal({ userId, onClose, previousUserId, nextUserId, onNavigate, accountKind = "user" }: { userId: string | null; onClose: () => void; previousUserId?: string; nextUserId?: string; onNavigate?: (userId: string) => void; accountKind?: "user" | "administrator" }) {
     const { message } = App.useApp();
     const [detail, setDetail] = useState<AdminUserDetail | null>(null);
     const [ledger, setLedger] = useState<CreditLedgerEntry[]>([]);
     const [tasks, setTasks] = useState<AdminUserTask[]>([]);
     const [events, setEvents] = useState<AdminAuditEvent[]>([]);
+    const [loginEvents, setLoginEvents] = useState<AdminUserLoginEvent[]>([]);
     const [loading, setLoading] = useState(false);
+    const [ledgerLoading, setLedgerLoading] = useState(false);
+    const [loginLoading, setLoginLoading] = useState(false);
+    const [ledgerFilter, setLedgerFilter] = useState<AdminUserLedgerFilter>("all");
     const [ledgerPage, setLedgerPage] = useState(1);
     const [ledgerTotal, setLedgerTotal] = useState(0);
     const [taskPage, setTaskPage] = useState(1);
     const [taskTotal, setTaskTotal] = useState(0);
     const [auditPage, setAuditPage] = useState(1);
     const [auditTotal, setAuditTotal] = useState(0);
+    const [loginPage, setLoginPage] = useState(1);
+    const [loginPageSize, setLoginPageSize] = useState(20);
+    const [loginTotal, setLoginTotal] = useState(0);
+    const [loginDateRange, setLoginDateRange] = useState<[Dayjs | null, Dayjs | null] | null>(null);
+    const [loginMethod, setLoginMethod] = useState("all");
+    const [loginIP, setLoginIP] = useState("");
+    const [loginFilters, setLoginFilters] = useState<LoginEventFilters>({});
+    const [expandedLoginEventId, setExpandedLoginEventId] = useState("");
 
     useEffect(() => {
         if (!userId) return;
         let active = true;
         setLoading(true);
         setDetail(null);
+        setLedgerFilter("all");
         setLedgerPage(1);
         setTaskPage(1);
         setAuditPage(1);
+        setLoginPage(1);
+        setLoginPageSize(20);
+        setLoginDateRange(null);
+        setLoginMethod("all");
+        setLoginIP("");
+        setLoginFilters({});
+        setExpandedLoginEventId("");
         void getAdminUserDetail(userId)
             .then((nextDetail) => {
                 if (active) setDetail(nextDetail);
@@ -45,18 +68,25 @@ export function AdminUserDetailDrawer({ userId, onClose, previousUserId, nextUse
     useEffect(() => {
         if (!userId) return;
         let active = true;
-        void listAdminUserLedger(userId, { page: ledgerPage, pageSize: 20 })
+        setLedgerLoading(true);
+        void listAdminUserLedger(userId, { page: ledgerPage, pageSize: 20, type: ledgerFilter })
             .then((result) => {
                 if (active) {
                     setLedger(result.entries);
                     setLedgerTotal(result.total);
                 }
             })
-            .catch((error) => active && message.error(error instanceof Error ? error.message : "读取积分流水失败"));
+            .catch((error) => {
+                if (!active) return;
+                setLedger([]);
+                setLedgerTotal(0);
+                message.error(error instanceof Error ? error.message : "读取积分流水失败");
+            })
+            .finally(() => active && setLedgerLoading(false));
         return () => {
             active = false;
         };
-    }, [ledgerPage, message, userId]);
+    }, [ledgerFilter, ledgerPage, message, userId]);
     useEffect(() => {
         if (!userId) return;
         let active = true;
@@ -74,6 +104,28 @@ export function AdminUserDetailDrawer({ userId, onClose, previousUserId, nextUse
     }, [message, taskPage, userId]);
     useEffect(() => {
         if (!userId) return;
+        const controller = new AbortController();
+        setLoginLoading(true);
+        void listAdminUserLoginEvents(userId, { page: loginPage, pageSize: loginPageSize, ...loginFilters }, controller.signal)
+            .then((result) => {
+                if (controller.signal.aborted) return;
+                setLoginEvents(result.events);
+                setLoginTotal(result.total);
+                if (result.total > 0 && result.events.length === 0 && loginPage > 1) setLoginPage(1);
+            })
+            .catch((error) => {
+                if (error instanceof DOMException && error.name === "AbortError") return;
+                setLoginEvents([]);
+                setLoginTotal(0);
+                message.error(error instanceof Error ? error.message : "读取登录环境失败");
+            })
+            .finally(() => {
+                if (!controller.signal.aborted) setLoginLoading(false);
+            });
+        return () => controller.abort();
+    }, [loginFilters, loginPage, loginPageSize, message, userId]);
+    useEffect(() => {
+        if (!userId) return;
         let active = true;
         void listAdminUserAuditEvents(userId, { page: auditPage, pageSize: 20 })
             .then((result) => {
@@ -88,19 +140,44 @@ export function AdminUserDetailDrawer({ userId, onClose, previousUserId, nextUse
         };
     }, [auditPage, message, userId]);
 
+    const draftLoginFilters = loginEventFilters(loginDateRange, loginMethod, loginIP);
+    const loginFiltersActive = hasLoginEventFilters(loginFilters);
+    const loginFiltersDirty = !sameLoginEventFilters(draftLoginFilters, loginFilters);
+
+    const applyLoginFilters = () => {
+        setLoginFilters(draftLoginFilters);
+        setLoginPage(1);
+        setExpandedLoginEventId("");
+    };
+
+    const resetLoginFilters = () => {
+        setLoginDateRange(null);
+        setLoginMethod("all");
+        setLoginIP("");
+        setLoginFilters({});
+        setLoginPage(1);
+        setExpandedLoginEventId("");
+    };
+
     return (
-        <AdminDrawer
-            title={detail ? `${detail.user.displayName || detail.user.username} · 用户详情` : "用户详情"}
-            open={Boolean(userId)}
-            onClose={onClose}
-            size="min(920px, 100vw)"
-            rootClassName="admin-drawer"
-            extra={onNavigate ? (
-                <div className="flex items-center gap-1">
-                    <IconButton size="sm" variant="ghost" aria-label="上一条用户" disabled={!previousUserId} icon={ChevronLeft} onClick={() => previousUserId && onNavigate(previousUserId)} />
-                    <IconButton size="sm" variant="ghost" aria-label="下一条用户" disabled={!nextUserId} icon={ChevronRight} onClick={() => nextUserId && onNavigate(nextUserId)} />
+        <AdminModal
+            title={(
+                <div className="flex items-center justify-between gap-4">
+                    <span className="min-w-0 truncate">{detail ? `${detail.user.username} · ${accountKind === "administrator" ? "管理员详情" : "用户详情"}` : (accountKind === "administrator" ? "管理员详情" : "用户详情")}</span>
+                    {onNavigate ? (
+                        <div className="flex shrink-0 items-center gap-1">
+                            <IconButton size="sm" variant="ghost" aria-label={`上一条${accountKind === "administrator" ? "管理员" : "用户"}`} disabled={!previousUserId} icon={ChevronLeft} onClick={() => previousUserId && onNavigate(previousUserId)} />
+                            <IconButton size="sm" variant="ghost" aria-label={`下一条${accountKind === "administrator" ? "管理员" : "用户"}`} disabled={!nextUserId} icon={ChevronRight} onClick={() => nextUserId && onNavigate(nextUserId)} />
+                        </div>
+                    ) : null}
                 </div>
-            ) : null}
+            )}
+            open={Boolean(userId)}
+            centered
+            width="min(920px, calc(100vw - 32px))"
+            onCancel={onClose}
+            footer={null}
+            styles={{ body: { maxHeight: "calc(100vh - 160px)", overflowY: "auto", paddingBottom: 20 } }}
         >
             {loading && !detail ? (
                 <Skeleton active paragraph={{ rows: 10 }} />
@@ -117,8 +194,11 @@ export function AdminUserDetailDrawer({ userId, onClose, previousUserId, nextUse
                                         size="small"
                                         column={{ xs: 1, sm: 2 }}
                                         items={[
+                                            { key: "id", label: "用户 ID", children: <span className="break-all font-mono text-xs">{detail.user.id}</span> },
+                                            { key: "registrationIp", label: "注册 IP", children: <span className="font-mono text-xs">{detail.registrationIp || "未记录"}</span> },
                                             { key: "username", label: "用户名", children: `@${detail.user.username}` },
                                             { key: "email", label: "邮箱", children: detail.user.email || "未填写" },
+                                            { key: "remark", label: "备注", span: 2, children: <span className="whitespace-pre-wrap break-words">{detail.user.remark || "未备注"}</span> },
                                             { key: "role", label: "角色", children: detail.user.role === "admin" ? "管理员" : "普通用户" },
                                             { key: "status", label: "状态", children: <AdminStatusBadge label={detail.user.status === "active" ? "启用" : "停用"} tone={detail.user.status === "active" ? "success" : "neutral"} /> },
                                             { key: "available", label: "可用积分", children: formatCredits(detail.account.availableMicrocredits) },
@@ -128,7 +208,7 @@ export function AdminUserDetailDrawer({ userId, onClose, previousUserId, nextUse
                                         ]}
                                     />
                                     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                                        {Object.entries({ 积分流水: detail.counts.ledgerEntries, 生成任务: detail.counts.tasks, 上游请求: detail.counts.apiCalls, 管理操作: detail.counts.auditEvents }).map(([label, value]) => (
+                                        {Object.entries({ 积分流水: detail.counts.ledgerEntries, 生成任务: detail.counts.tasks, 上游请求: detail.counts.apiCalls, 登录记录: detail.counts.loginEvents, 管理操作: detail.counts.auditEvents }).map(([label, value]) => (
                                             <div key={label} className="rounded-md border border-border p-3">
                                                 <div className="text-xs text-foreground/50">{label}</div>
                                                 <div className="mt-1 text-xl font-semibold tabular-nums">{value}</div>
@@ -157,9 +237,27 @@ export function AdminUserDetailDrawer({ userId, onClose, previousUserId, nextUse
                             label: `积分流水 ${detail.counts.ledgerEntries}`,
                             children: (
                                 <AdminDataTable
+                                    toolbar={(
+                                        <Select<AdminUserLedgerFilter>
+                                            aria-label="筛选积分流水"
+                                            className="w-40"
+                                            value={ledgerFilter}
+                                            options={[
+                                                { label: "全部流水", value: "all" },
+                                                { label: "增加积分", value: "increase" },
+                                                { label: "消耗积分", value: "consume" },
+                                                { label: "管理调整", value: "admin" },
+                                            ]}
+                                            onChange={(value) => {
+                                                setLedgerFilter(value);
+                                                setLedgerPage(1);
+                                            }}
+                                        />
+                                    )}
                                     table={{
                                         rowKey: "id",
                                         size: "small",
+                                        loading: ledgerLoading,
                                         dataSource: ledger,
                                         pagination: false,
                                         columns: [
@@ -170,7 +268,7 @@ export function AdminUserDetailDrawer({ userId, onClose, previousUserId, nextUse
                                         ],
                                         scroll: { x: 720 },
                                     }}
-                                    empty={<AdminTableEmpty />}
+                                    empty={<AdminTableEmpty filtered={ledgerFilter !== "all"} />}
                                     footer={<PaginationBar alwaysShow current={ledgerPage} pageSize={20} total={ledgerTotal} onChange={(page) => setLedgerPage(page)} pageSizeOptions={[20]} />}
                                 />
                             ),
@@ -196,6 +294,103 @@ export function AdminUserDetailDrawer({ userId, onClose, previousUserId, nextUse
                                     }}
                                     empty={<AdminTableEmpty />}
                                     footer={<PaginationBar alwaysShow current={taskPage} pageSize={20} total={taskTotal} onChange={(page) => setTaskPage(page)} pageSizeOptions={[20]} />}
+                                />
+                            ),
+                        },
+                        {
+                            key: "login-environment",
+                            label: `登录环境 ${detail.counts.loginEvents}`,
+                            children: (
+                                <AdminDataTable
+                                    toolbar={(
+                                        <Input
+                                            allowClear
+                                            className="app-list-search"
+                                            prefix={<Search className="size-4 text-foreground/40" />}
+                                            value={loginIP}
+                                            placeholder="搜索 IP 地址"
+                                            onChange={(event) => setLoginIP(event.target.value)}
+                                            onPressEnter={applyLoginFilters}
+                                        />
+                                    )}
+                                    toolbarActive={loginFiltersActive}
+                                    toolbarFilters={(
+                                        <>
+                                            <Select
+                                                aria-label="登录方式"
+                                                className="w-36"
+                                                value={loginMethod}
+                                                options={[
+                                                    { label: "全部登录方式", value: "all" },
+                                                    { label: "邮箱注册", value: "email_register" },
+                                                    { label: "密码登录", value: "password" },
+                                                    { label: "Linux.do", value: "linuxdo" },
+                                                ]}
+                                                onChange={setLoginMethod}
+                                            />
+                                            <DatePicker.RangePicker
+                                                showTime
+                                                value={loginDateRange}
+                                                format="YYYY-MM-DD HH:mm:ss"
+                                                placeholder={["开始时间", "结束时间"]}
+                                                onChange={setLoginDateRange}
+                                            />
+                                        </>
+                                    )}
+                                    trailing={(
+                                        <div className="flex items-center gap-2">
+                                            {loginFiltersDirty ? <span className="text-xs text-foreground/45">请先查询以应用筛选条件</span> : null}
+                                            <Button type="text" disabled={!loginFiltersActive && !loginFiltersDirty} onClick={resetLoginFilters}>重置</Button>
+                                            <Button loading={loginLoading} onClick={applyLoginFilters}>查询</Button>
+                                        </div>
+                                    )}
+                                    table={{
+                                        rowKey: "id",
+                                        size: "small",
+                                        loading: loginLoading,
+                                        dataSource: loginEvents,
+                                        pagination: false,
+                                        tableLayout: "fixed",
+                                        columns: [
+                                            { title: "登录时间", dataIndex: "createdAt", width: 170, render: formatTime },
+                                            { title: "登录方式", dataIndex: "loginMethod", width: 105, render: loginMethodLabel },
+                                            { title: "IP 地址", dataIndex: "ipAddress", width: 145, ellipsis: true, render: (value) => <span className="font-mono text-xs" title={fallbackText(value)}>{fallbackText(value)}</span> },
+                                            { title: "设备", dataIndex: "deviceType", width: 85, render: fallbackText },
+                                            { title: "操作系统", width: 145, ellipsis: true, render: (_, event) => environmentName(event.os, event.osVersion) },
+                                            { title: "浏览器", width: 150, ellipsis: true, render: (_, event) => environmentName(event.browser, event.browserVersion) },
+                                            {
+                                                title: "操作",
+                                                width: 100,
+                                                fixed: "right",
+                                                render: (_, event) => (
+                                                    <Button type="link" size="small" onClick={() => setExpandedLoginEventId((current) => current === event.id ? "" : event.id)}>
+                                                        {expandedLoginEventId === event.id ? "收起" : "查看详情"}
+                                                    </Button>
+                                                ),
+                                            },
+                                        ],
+                                        expandable: {
+                                            showExpandColumn: false,
+                                            expandedRowKeys: expandedLoginEventId ? [expandedLoginEventId] : [],
+                                            expandedRowRender: (event) => <LoginEventDetails event={event} />,
+                                            onExpand: (expanded, event) => setExpandedLoginEventId(expanded ? event.id : ""),
+                                        },
+                                        scroll: { x: 900 },
+                                    }}
+                                    empty={<AdminTableEmpty filtered={loginFiltersActive} title="没有登录环境记录" />}
+                                    footer={(
+                                        <PaginationBar
+                                            alwaysShow
+                                            current={loginPage}
+                                            pageSize={loginPageSize}
+                                            total={loginTotal}
+                                            onChange={(page, pageSize) => {
+                                                setLoginPage(pageSize !== loginPageSize ? 1 : page);
+                                                setLoginPageSize(pageSize);
+                                                setExpandedLoginEventId("");
+                                            }}
+                                        />
+                                    )}
                                 />
                             ),
                         },
@@ -227,12 +422,60 @@ export function AdminUserDetailDrawer({ userId, onClose, previousUserId, nextUse
             ) : (
                 <AdminEmpty size="compact" title="没有用户详情" />
             )}
-        </AdminDrawer>
+        </AdminModal>
     );
+}
+
+function LoginEventDetails({ event }: { event: AdminUserLoginEvent }) {
+    return (
+        <Descriptions
+            bordered
+            size="small"
+            column={{ xs: 1, sm: 2 }}
+            items={[
+                { key: "createdAt", label: "登录时间", children: formatTime(event.createdAt) },
+                { key: "loginMethod", label: "登录方式", children: loginMethodLabel(event.loginMethod) },
+                { key: "ipAddress", label: "IP 地址", children: <span className="font-mono text-xs">{fallbackText(event.ipAddress)}</span> },
+                { key: "deviceType", label: "设备", children: fallbackText(event.deviceType) },
+                { key: "os", label: "操作系统", children: environmentName(event.os, event.osVersion) },
+                { key: "browser", label: "浏览器", children: environmentName(event.browser, event.browserVersion) },
+                { key: "userAgent", label: "User-Agent", span: 2, children: <span className="break-all font-mono text-xs">{fallbackText(event.userAgent)}</span> },
+            ]}
+        />
+    );
+}
+
+function loginEventFilters(dateRange: [Dayjs | null, Dayjs | null] | null, method: string, ip: string): LoginEventFilters {
+    return {
+        startAt: dateRange?.[0]?.toISOString(),
+        endAt: dateRange?.[1]?.toISOString(),
+        loginMethod: method === "all" ? undefined : method,
+        ip: ip.trim() || undefined,
+    };
+}
+
+function hasLoginEventFilters(filters: LoginEventFilters) {
+    return Boolean(filters.startAt || filters.endAt || filters.loginMethod || filters.ip);
+}
+
+function sameLoginEventFilters(left: LoginEventFilters, right: LoginEventFilters) {
+    return left.startAt === right.startAt && left.endAt === right.endAt && left.loginMethod === right.loginMethod && left.ip === right.ip;
 }
 
 function formatTime(value?: string) {
     return value ? new Date(value).toLocaleString("zh-CN", { hour12: false }) : "--";
+}
+
+function fallbackText(value?: string) {
+    return value || "--";
+}
+
+function environmentName(name?: string, version?: string) {
+    return [name, version].filter(Boolean).join(" ") || "--";
+}
+
+function loginMethodLabel(value?: string) {
+    return ({ email_register: "邮箱注册", password: "密码登录", linuxdo: "Linux.do" } as Record<string, string>)[value || ""] || value || "--";
 }
 
 function taskStatusTone(value?: string): AdminStatusTone {

@@ -2,6 +2,12 @@ package model
 
 import "time"
 
+const (
+	SkillStatusEnabled  = 1
+	SkillSourceUser     = 1
+	SkillSourcePlatform = 3
+)
+
 type UserDailyActivity struct {
 	ID                string     `json:"id" gorm:"primaryKey;size:64"`
 	Day               time.Time  `json:"day" gorm:"type:date;uniqueIndex:idx_user_daily_activity_day_user,priority:1;index"`
@@ -112,6 +118,26 @@ type Skill struct {
 	UpdatedAt         time.Time  `json:"updatedAt" gorm:"index"`
 }
 
+// SkillPlatformState stores administrator availability separately from the
+// skill catalog so builtin synchronization cannot overwrite the decision.
+type SkillPlatformState struct {
+	SkillID   string    `json:"skillId" gorm:"primaryKey;size:36"`
+	Available bool      `json:"available" gorm:"index"`
+	UpdatedBy string    `json:"updatedBy" gorm:"size:36;index"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+// SkillCategoryPlatformState is a category-level gate. Child skill states are
+// intentionally retained while a category is unavailable.
+type SkillCategoryPlatformState struct {
+	Tag       string    `json:"tag" gorm:"primaryKey;size:32"`
+	Available bool      `json:"available" gorm:"index"`
+	UpdatedBy string    `json:"updatedBy" gorm:"size:36;index"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
 type SkillVersion struct {
 	ID           string    `json:"id" gorm:"primaryKey;size:36"`
 	SkillID      string    `json:"skillId" gorm:"size:36;index"`
@@ -146,4 +172,33 @@ type UserSkillState struct {
 	Liked              bool      `json:"liked" gorm:"index"`
 	CreatedAt          time.Time `json:"createdAt"`
 	UpdatedAt          time.Time `json:"updatedAt"`
+}
+
+type Tool struct {
+	ID            int64     `json:"id" gorm:"primaryKey;autoIncrement"`
+	Type          string    `json:"type" gorm:"size:24;index"`
+	LabelEn       string    `json:"labelEn" gorm:"size:120;index"`
+	Label         string    `json:"label" gorm:"size:120"`
+	Desc          string    `json:"desc" gorm:"size:500"`
+	Tag           string    `json:"tag" gorm:"size:64;index"`
+	Cover         string    `json:"cover" gorm:"size:500"`
+	ExtraInfoJSON string    `json:"-" gorm:"type:text"`
+	Prompt        string    `json:"prompt" gorm:"type:text"`
+	Ratio         string    `json:"ratio" gorm:"size:32"`
+	MediaURL      string    `json:"mediaUrl" gorm:"size:500"`
+	OwnerID       string    `json:"ownerId" gorm:"size:36;index"`
+	Source        string    `json:"source" gorm:"size:16;index"`
+	Enabled       bool      `json:"enabled" gorm:"index"`
+	Visibility    string    `json:"visibility" gorm:"size:16;index"`
+	SortWeight    int       `json:"sortWeight" gorm:"index"`
+	CreatedAt     time.Time `json:"createdAt" gorm:"index"`
+	UpdatedAt     time.Time `json:"updatedAt" gorm:"index"`
+}
+
+// ToolFavorite 保存用户对工具的收藏关系；一个用户对同一工具只能收藏一次。
+type ToolFavorite struct {
+	ID        int64     `json:"id" gorm:"primaryKey;autoIncrement"`
+	UserID    string    `json:"userId" gorm:"size:36;index;uniqueIndex:idx_tool_favorite_user_tool,priority:1"`
+	ToolID    int64     `json:"toolId" gorm:"index;uniqueIndex:idx_tool_favorite_user_tool,priority:2"`
+	CreatedAt time.Time `json:"createdAt" gorm:"index"`
 }

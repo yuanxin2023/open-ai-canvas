@@ -30,7 +30,7 @@ type registrationSettingValue struct {
 }
 
 func (s *Service) AdminRegistrationSetting(actor *model.User) (*PublicRegistrationSetting, error) {
-	if err := s.host.RequireAdmin(actor); err != nil {
+	if err := s.host.RequireAdminPermission(actor, model.AdminPermissionAccess); err != nil {
 		return nil, err
 	}
 	setting, value, err := s.readRegistrationSetting()
@@ -41,7 +41,7 @@ func (s *Service) AdminRegistrationSetting(actor *model.User) (*PublicRegistrati
 }
 
 func (s *Service) UpdateRegistrationSetting(actor *model.User, req RegistrationSettingRequest) (*PublicRegistrationSetting, error) {
-	if err := s.host.RequireAdmin(actor); err != nil {
+	if err := s.host.RequireAdminPermission(actor, model.AdminPermissionAccess); err != nil {
 		return nil, err
 	}
 	encoded, err := json.Marshal(registrationSettingValue{Enabled: req.Enabled})

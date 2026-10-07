@@ -3,6 +3,8 @@ package service
 import "infinite-canvas/backend/internal/app"
 
 const (
+	InspirationCoverMaxBytes           = app.InspirationCoverMaxBytes
+	Live2DMaxBytes                     = app.Live2DMaxBytes
 	AnnouncementImageMaxBytes          = app.AnnouncementImageMaxBytes
 	AppearanceAssetDarkLogo            = app.AppearanceAssetDarkLogo
 	AppearanceAssetLogo                = app.AppearanceAssetLogo
@@ -20,6 +22,7 @@ const (
 	CodeOK                             = app.CodeOK
 	CodeQuotaExceeded                  = app.CodeQuotaExceeded
 	CodeRateLimited                    = app.CodeRateLimited
+	CodeUsernameChangeLimit            = app.CodeUsernameChangeLimit
 	CodeTimeout                        = app.CodeTimeout
 	CodeTooManyRequests                = app.CodeTooManyRequests
 	CodeUnauthorized                   = app.CodeUnauthorized
@@ -38,17 +41,18 @@ const (
 	FeatureCredits                     = app.FeatureCredits
 	FeatureCustomChannels              = app.FeatureCustomChannels
 	FeatureFrontendModels              = app.FeatureFrontendModels
+	FeatureSkillLibrary                = app.FeatureSkillLibrary
 	FeaturePluginCenter                = app.FeaturePluginCenter
 	FeatureShortDrama                  = app.FeatureShortDrama
 	FeatureSystemPlugins               = app.FeatureSystemPlugins
 	FeatureTaskCenter                  = app.FeatureTaskCenter
 	FeatureTimelineTranscription       = app.FeatureTimelineTranscription
-	ModelCatalogSourceFrontend         = app.ModelCatalogSourceFrontend
 	ModelCatalogSourceSystem           = app.ModelCatalogSourceSystem
 	PaymentPluginAlipayPage            = app.PaymentPluginAlipayPage
 	PaymentPluginWeChatNative          = app.PaymentPluginWeChatNative
 	PaymentProviderAlipay              = app.PaymentProviderAlipay
 	PaymentProviderWeChat              = app.PaymentProviderWeChat
+	PaymentPromotionImageMaxBytes      = app.PaymentPromotionImageMaxBytes
 	PluginAIArtCritique                = app.PluginAIArtCritique
 	PluginConfigurationNone            = app.PluginConfigurationNone
 	PluginConfigurationSystem          = app.PluginConfigurationSystem
@@ -66,6 +70,7 @@ const (
 	PluginScopeSystem                  = app.PluginScopeSystem
 	PluginScopeUser                    = app.PluginScopeUser
 	ReasonBadGateway                   = app.ReasonBadGateway
+	ReasonUpstreamDNSFailed            = app.ReasonUpstreamDNSFailed
 	ReasonConflict                     = app.ReasonConflict
 	ReasonFailedPrecondition           = app.ReasonFailedPrecondition
 	ReasonForbidden                    = app.ReasonForbidden
@@ -74,6 +79,7 @@ const (
 	ReasonNotFound                     = app.ReasonNotFound
 	ReasonQuotaExceeded                = app.ReasonQuotaExceeded
 	ReasonRateLimited                  = app.ReasonRateLimited
+	ReasonUsernameChangeLimit          = app.ReasonUsernameChangeLimit
 	ReasonTimeout                      = app.ReasonTimeout
 	ReasonUnauthorized                 = app.ReasonUnauthorized
 	ReasonUnavailable                  = app.ReasonUnavailable

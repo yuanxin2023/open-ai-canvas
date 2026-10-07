@@ -4,6 +4,8 @@ import { Check, CircleCheck, CreditCard, Gift, Sparkles } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { CreditProductCard } from "@/components/payments/credit-product-card";
+import { PaymentPromotionBanner, promotionClockOffset } from "@/components/payments/payment-promotion-banner";
 import { AppModal } from "@/components/ui/product/app-modal";
 import { formatCredits } from "@/constant/credits";
 import { useWalletBalance } from "@/hooks/use-wallet-balance";
@@ -17,7 +19,7 @@ const workspaceCreditTheme = getWorkspaceAntThemeConfig();
 
 export function WorkspaceCreditPopover({ userId }: { userId: string }) {
     const { message } = App.useApp();
-    const { availableMicrocredits } = useWalletBalance(userId);
+    const { availableMicrocredits, policy } = useWalletBalance(userId);
     const [open, setOpen] = useState(false);
     const [productsOpen, setProductsOpen] = useState(false);
     const [selectedProduct, setSelectedProduct] = useState<TopupProduct | null>(null);
@@ -31,19 +33,22 @@ export function WorkspaceCreditPopover({ userId }: { userId: string }) {
     const paymentIdempotencyKey = useRef("");
     const completedPaymentOrderId = useRef("");
     const balance = availableMicrocredits === null ? "--" : formatCredits(availableMicrocredits);
+    const dailyBonus = policy === null ? "--" : formatCredits(policy.checkinBonusMicrocredits, 2);
     const normalizedCode = code.trim().toLowerCase();
-    const productBenefits = (product: TopupProduct) => (product.benefits || "").split(/\r?\n/).map((item) => item.trim()).filter(Boolean);
     const paymentCatalogQuery = useQuery({
         queryKey: ["payment-catalog", userId],
         queryFn: async () => {
             const [productsResult, providersResult] = await Promise.all([listTopupProducts(), listPaymentProviders()]);
-            return { products: productsResult.products, providers: providersResult.providers };
+            return { products: productsResult.products, promotion: productsResult.promotion, serverTime: productsResult.serverTime, providers: providersResult.providers };
         },
         staleTime: PAYMENT_CATALOG_STALE_TIME_MS,
         refetchOnWindowFocus: false,
     });
     const products = useMemo(() => paymentCatalogQuery.data?.products ?? [], [paymentCatalogQuery.data?.products]);
     const providers = useMemo(() => paymentCatalogQuery.data?.providers ?? [], [paymentCatalogQuery.data?.providers]);
+    const promotion = paymentCatalogQuery.data?.promotion;
+    const catalogServerTime = paymentCatalogQuery.data?.serverTime || new Date().toISOString();
+    const maxProductCredits = useMemo(() => products.reduce((maximum, product) => Math.max(maximum, product.creditsMicrocredits), 0), [products]);
     const productsLoading = paymentCatalogQuery.isPending;
     const productsError = !paymentCatalogQuery.data && paymentCatalogQuery.error
         ? paymentCatalogQuery.error instanceof Error ? paymentCatalogQuery.error.message : "读取商品套餐失败"
@@ -54,6 +59,31 @@ export function WorkspaceCreditPopover({ userId }: { userId: string }) {
         if (!productsOpen) return;
         void paymentCatalogQuery.refetch({ cancelRefetch: false });
     }, [productsOpen, paymentCatalogQuery.refetch]);
+
+    useEffect(() => {
+        if (!productsOpen || !promotion) return;
+        const boundary = promotion.phase === "scheduled" ? promotion.startsAt : promotion.phase === "active" ? promotion.endsAt : undefined;
+        if (!boundary) return;
+        const offset = promotionClockOffset(catalogServerTime);
+        const remaining = Date.parse(boundary) - (Date.now() + offset);
+        const timer = window.setTimeout(() => void paymentCatalogQuery.refetch({ cancelRefetch: false }), Math.max(250, Math.min(remaining + 150, 2_147_000_000)));
+        return () => window.clearTimeout(timer);
+    }, [catalogServerTime, paymentCatalogQuery.refetch, productsOpen, promotion]);
+
+    useEffect(() => {
+        if (!productsOpen) return;
+        const refreshWhenVisible = () => {
+            if (document.visibilityState === "visible") void paymentCatalogQuery.refetch({ cancelRefetch: false });
+        };
+        document.addEventListener("visibilitychange", refreshWhenVisible);
+        return () => document.removeEventListener("visibilitychange", refreshWhenVisible);
+    }, [paymentCatalogQuery.refetch, productsOpen]);
+
+    useEffect(() => {
+        if (!selectedProduct) return;
+        const refreshed = products.find((product) => product.id === selectedProduct.id);
+        if (refreshed) setSelectedProduct(refreshed);
+    }, [products, selectedProduct?.id]);
 
     useEffect(() => {
         const openProducts = () => {
@@ -198,7 +228,7 @@ export function WorkspaceCreditPopover({ userId }: { userId: string }) {
     return (
         <ConfigProvider theme={workspaceCreditTheme}>
             <Popover
-            trigger="click"
+            trigger="hover"
             placement="bottomRight"
             rootClassName="workspace-credit-popover"
             open={open}
@@ -215,6 +245,15 @@ export function WorkspaceCreditPopover({ userId }: { userId: string }) {
                             <span>余额</span>
                             <strong>{balance}</strong>
                         </div>
+                    </div>
+
+                    <div className="workspace-credit-daily-bonus" aria-label={`每日签到赠送 ${dailyBonus} 免费积分`}>
+                        <Gift aria-hidden />
+                        <div className="workspace-credit-daily-bonus-copy">
+                            <strong>每日免费积分</strong>
+                            <span>{policy === null ? "正在读取每日签到赠送额度" : `每天签到赠送 ${dailyBonus} 免费积分`}</span>
+                        </div>
+                        <strong className="workspace-credit-daily-bonus-amount">{dailyBonus}</strong>
                     </div>
 
                     <div className="workspace-credit-redeem-heading">
@@ -256,7 +295,10 @@ export function WorkspaceCreditPopover({ userId }: { userId: string }) {
                 type="button"
                 className="app-workspace-credit-button"
                 aria-label={availableMicrocredits === null ? "查看积分余额" : `积分余额 ${balance}`}
-                title="查看积分余额"
+                onClick={() => {
+                    setOpen(false);
+                    setProductsOpen(true);
+                }}
             >
                 <Sparkles aria-hidden />
                 <span>{balance}</span>
@@ -269,14 +311,16 @@ export function WorkspaceCreditPopover({ userId }: { userId: string }) {
                 open={productsOpen}
                 title={null}
                 footer={null}
-                width="min(1240px, calc(100vw - 24px))"
+                width="min(1280px, calc(100vw - 32px))"
                 rootClassName="workspace-credit-products-modal"
                 onCancel={() => setProductsOpen(false)}
             >
                 <section className="workspace-credit-products-shell">
+                    {promotion ? <PaymentPromotionBanner promotion={promotion} serverTime={catalogServerTime} onBoundary={() => void paymentCatalogQuery.refetch({ cancelRefetch: false })} /> : null}
                     <header className="workspace-credit-products-header">
-                        <h2>购买积分与套餐</h2>
-                        <p>选择管理员已上架的积分商品，支付成功后积分将自动到账。</p>
+                        <h2>选择您的套餐</h2>
+                        <p>选择适合你的积分套餐，购买成功后积分将自动到账</p>
+                        <span className="workspace-credit-products-balance"><Sparkles aria-hidden />当前余额 {balance} 积分</span>
                     </header>
 
                     {productsLoading ? (
@@ -289,31 +333,21 @@ export function WorkspaceCreditPopover({ userId }: { userId: string }) {
                             <span>{productsError}</span>
                             <Button onClick={() => void paymentCatalogQuery.refetch()}>重新加载</Button>
                         </div>
-                    ) : (
+                    ) : products.length ? (
                         <div className="workspace-credit-products-grid">
                             {products.map((product) => (
-                                <article key={product.id} className="workspace-credit-product-card">
-                                    <div className="workspace-credit-product-card-heading">
-                                        <Sparkles aria-hidden />
-                                        <h3>{product.name}</h3>
-                                    </div>
-                                    <div className="workspace-credit-product-price">
-                                        <small>¥</small>
-                                        <strong>{(product.amountFen / 100).toFixed(2)}</strong>
-                                    </div>
-                                    <p className="workspace-credit-product-description">{product.description || "管理员配置的积分充值商品"}</p>
-                                    <div className="workspace-credit-product-credits">
-                                        <Sparkles aria-hidden />
-                                        <strong>{formatCredits(product.creditsMicrocredits)} 积分</strong>
-                                    </div>
-                                    {productBenefits(product).length ? <div className="workspace-credit-product-facts">
-                                        {productBenefits(product).map((benefit, index) => <span key={`${product.id}-benefit-${index}`}><Check aria-hidden />{benefit}</span>)}
-                                    </div> : null}
-                                    <Button type="primary" block disabled={!providers.length} onClick={() => openPaymentSelector(product)}>{providers.length ? "选择套餐" : "暂无可用支付方式"}</Button>
-                                </article>
+                                <CreditProductCard
+                                    key={product.id}
+                                    product={product}
+                                    maxCreditsMicrocredits={maxProductCredits}
+                                    actionLabel={providers.length ? undefined : "暂无可用支付方式"}
+                                    actionDisabled={!providers.length}
+                                    onAction={() => openPaymentSelector(product)}
+                                />
                             ))}
-
                         </div>
+                    ) : (
+                        <div className="workspace-credit-products-state"><strong>暂无可购买套餐</strong><span>管理员尚未上架积分商品，请稍后再试。</span></div>
                     )}
                 </section>
             </AppModal>

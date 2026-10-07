@@ -29,6 +29,7 @@ describe("workspace route loading", () => {
         expect(navigation).toContain("onPointerEnter={() => preloadWorkspaceRoute(linkTo)}");
         expect(navigation).toContain("onPointerDown={() => preloadWorkspaceRoute(linkTo)}");
         expect(navigation).toContain("onFocus={() => preloadWorkspaceRoute(linkTo)}");
+        expect(modules).toContain("pathnameOrSlug.split(/[?#]/, 1)[0]");
     });
 
     test("keeps the creation page at root and preserves the create compatibility route", () => {
@@ -40,11 +41,14 @@ describe("workspace route loading", () => {
         expect(router).toContain('{ path: "/create", element: <RequireAuth>{deferred(<CreatePage />)}</RequireAuth> }');
         expect(router).not.toContain('path: "/home"');
         expect(router).not.toContain("HomePage");
-        expect(navigation).toContain('{ ...toolItem("create", "/"), id: "home", title: "创作" }');
+        expect(navigation).toContain('{ ...toolItem("create", "/?home=1"), id: "home", title: "创作" }');
         expect(navigation).not.toContain('to: "/create"');
         expect(navigation).not.toContain('to: "/home"');
         expect(topBar).toContain('home: "创作"');
-        expect(topBar).toContain('slug ? PAGE_TITLES[slug] || brandName : PAGE_TITLES.home');
+        expect(topBar).toContain('PAGE_TITLES[slug || "home"] || "工作台"');
+        expect(topBar).toContain('prompts: "提示词"');
+        expect(topBar).not.toContain("<Link");
+        expect(topBar).not.toContain('aria-hidden="true">/</span>');
     });
 
     test("hides feature-gated discovery entries while keeping direct routes guarded", () => {
@@ -134,7 +138,7 @@ describe("workspace route loading", () => {
         expect(loader).toContain("full-screen-loader-scene");
         expect(loader).toContain("full-screen-loader-guide");
         expect(loader).toContain("LoadingSignal");
-        expect(loader).not.toContain("YINGCE STUDIO");
+        expect(loader).not.toContain("OPEN AI CANVAS");
         expect(loader).not.toContain("loading-cue");
         expect(css).toContain("@keyframes loading-signal-spin");
         expect(css).toContain("@media (prefers-reduced-motion: reduce)");
@@ -161,9 +165,11 @@ describe("workspace wallet entry", () => {
         expect(host).toContain("openWorkspaceWallet");
         expect(palette).toContain('run: () => openWorkspaceWallet()');
         expect(palette).not.toContain('"/wallet"');
-        expect(canvasTopBar).toContain("openWorkspaceWallet()");
+        expect(canvasTopBar).toContain("<WorkspaceCreditPopover");
+        expect(canvasTopBar).not.toContain("openWorkspaceWallet()");
         expect(canvasTopBar).not.toContain('to="/wallet"');
-        expect(topBar).toContain("openWorkspaceWallet()");
+        expect(topBar).toContain("<WorkspaceCreditPopover");
+        expect(topBar).not.toContain("openWorkspaceWallet()");
         expect(css).not.toContain(".wallet-library-page");
         expect(css).not.toContain(".wallet-market-page");
     });

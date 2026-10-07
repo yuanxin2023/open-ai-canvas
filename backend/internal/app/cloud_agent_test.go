@@ -442,7 +442,7 @@ func TestCloudAgentConcurrentIdempotencyReservesOnce(t *testing.T) {
 	}
 	var account model.CreditAccount
 	db.First(&account, "user_id = ?", "user")
-	if account.AvailableMicrocredits != 9900 || account.ReservedMicrocredits != 100 {
+	if account.AvailableMicrocredits != 99_990_000 || account.ReservedMicrocredits != 10_000 {
 		t.Fatalf("unexpected reservation: %+v", account)
 	}
 }

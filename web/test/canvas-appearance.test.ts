@@ -14,9 +14,10 @@ import {
 } from "../src/lib/canvas/canvas-appearance";
 
 const values = new Map<string, string>();
-const originalWindow = (globalThis as { window?: unknown }).window;
+let originalWindow: PropertyDescriptor | undefined;
 
 beforeEach(() => {
+    originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
     values.clear();
     Object.defineProperty(globalThis, "window", {
         configurable: true,
@@ -31,8 +32,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-    if (originalWindow === undefined) delete (globalThis as { window?: unknown }).window;
-    else Object.defineProperty(globalThis, "window", { configurable: true, value: originalWindow });
+	if (originalWindow) Object.defineProperty(globalThis, "window", originalWindow);
+	else Reflect.deleteProperty(globalThis, "window");
 });
 
 describe("canvas custom appearance", () => {

@@ -19,11 +19,11 @@ function assertManifest(manifest: PluginManifest | PluginManifestV2) {
     if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(manifest.id)) throw new Error("插件 ID 必须使用 kebab-case");
     if (!manifest.name.trim() || !manifest.version.trim() || !manifest.apiVersion.trim()) throw new Error("插件清单缺少名称、版本或 API 版本");
     const apiVersion: string = manifest.apiVersion;
-    if (apiVersion !== "yingce.plugin/v1" && apiVersion !== "yingce.plugin/v2") {
+    if (apiVersion !== "open-ai-canvas.plugin/v1" && apiVersion !== "open-ai-canvas.plugin/v2" && apiVersion !== "lovwow.plugin/v1" && apiVersion !== "lovwow.plugin/v2" && apiVersion !== "yingce.plugin/v1" && apiVersion !== "yingce.plugin/v2") {
         throw new Error(`不支持的插件 API 版本：${apiVersion}`);
     }
     if (new Set(manifest.permissions).size !== manifest.permissions.length) throw new Error("插件权限不能重复");
-    if (manifest.apiVersion === "yingce.plugin/v2") assertManifestV2(manifest);
+    if (manifest.apiVersion === "open-ai-canvas.plugin/v2" || manifest.apiVersion === "lovwow.plugin/v2" || manifest.apiVersion === "yingce.plugin/v2") assertManifestV2(manifest);
     else assertManifestV1Contributions(manifest.contributes);
 }
 
@@ -60,7 +60,7 @@ export function registerPlugin(plugin: RegisteredPlugin) {
     if (existing && existing.manifest.version !== plugin.manifest.version) {
         throw new Error(`插件 ${plugin.manifest.id} 已注册其他版本`);
     }
-    if (plugin.manifest.apiVersion === "yingce.plugin/v2") {
+    if (plugin.manifest.apiVersion === "open-ai-canvas.plugin/v2" || plugin.manifest.apiVersion === "lovwow.plugin/v2" || plugin.manifest.apiVersion === "yingce.plugin/v2") {
         // v2：编辑器插槽声明由注册器提取存储；UI 渲染函数由插件 activate() 阶段经 registerEditorSlot 提供。
         plugin.editorSlots = plugin.manifest.contributes.editorSlots ?? [];
     }

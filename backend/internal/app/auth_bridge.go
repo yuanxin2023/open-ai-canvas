@@ -14,6 +14,9 @@ type (
 	EmailCodeCooldownError     = auth.EmailCodeCooldownError
 	RegisterRequest            = auth.RegisterRequest
 	LoginRequest               = auth.LoginRequest
+	LoginEnvironment           = auth.LoginEnvironment
+	UpdateProfileRequest       = auth.UpdateProfileRequest
+	ChangePasswordRequest      = auth.ChangePasswordRequest
 	PublicAuthSettings         = auth.PublicAuthSettings
 	AuthSessionResult          = auth.AuthSessionResult
 	AuthUser                   = auth.AuthUser
@@ -47,11 +50,19 @@ type authHost struct {
 	svc *Service
 }
 
-func (h authHost) RequireAdmin(user *model.User) error {
+func (h authHost) ReferralEnabled() (bool, error) {
+	if h.svc == nil {
+		return false, nil
+	}
+	policy, err := h.svc.referralPolicy()
+	return policy.Enabled, err
+}
+
+func (h authHost) RequireAdminPermission(user *model.User, permission model.AdminPermission) error {
 	if h.svc == nil {
 		return nil
 	}
-	return h.svc.RequireAdmin(user)
+	return h.svc.RequireAdminPermission(user, permission)
 }
 
 func (h authHost) EncryptSecret(value string) (string, error) {
@@ -128,8 +139,16 @@ func (s *Service) Register(req RegisterRequest) (*AuthSessionResult, error) {
 	return s.authDomain().Register(req)
 }
 
+func (s *Service) RegisterWithEnvironment(req RegisterRequest, environment LoginEnvironment) (*AuthSessionResult, error) {
+	return s.authDomain().RegisterWithEnvironment(req, environment)
+}
+
 func (s *Service) Login(req LoginRequest) (*AuthSessionResult, error) {
 	return s.authDomain().Login(req)
+}
+
+func (s *Service) LoginWithEnvironment(req LoginRequest, environment LoginEnvironment) (*AuthSessionResult, error) {
+	return s.authDomain().LoginWithEnvironment(req, environment)
 }
 
 func (s *Service) Logout(cookieValue string) error {
@@ -142,6 +161,14 @@ func (s *Service) CurrentUser(cookieValue string) (*model.User, error) {
 
 func (s *Service) PublicAuthUser(user *model.User) (AuthUser, error) {
 	return s.authDomain().PublicAuthUser(user)
+}
+
+func (s *Service) UpdateProfile(user *model.User, req UpdateProfileRequest) (AuthUser, error) {
+	return s.authDomain().UpdateProfile(user, req)
+}
+
+func (s *Service) ChangePassword(user *model.User, cookieValue string, req ChangePasswordRequest) error {
+	return s.authDomain().ChangePassword(user, cookieValue, req)
 }
 
 func (s *Service) AdminRegistrationSetting(actor *model.User) (*PublicRegistrationSetting, error) {
@@ -202,6 +229,10 @@ func (s *Service) BeginLinuxDOLogin(nextPath string) (string, error) {
 
 func (s *Service) CompleteLinuxDOLogin(stateValue string, code string) (*LinuxDOCallbackResult, error) {
 	return s.authDomain().CompleteLinuxDOLogin(stateValue, code)
+}
+
+func (s *Service) CompleteLinuxDOLoginWithEnvironment(stateValue string, code string, environment LoginEnvironment) (*LinuxDOCallbackResult, error) {
+	return s.authDomain().CompleteLinuxDOLoginWithEnvironment(stateValue, code, environment)
 }
 
 func (s *Service) AdminLibTVSetting(actor *model.User) (*PublicLibTVSetting, error) {

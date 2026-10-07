@@ -1,7 +1,11 @@
 import type { Asset } from "@/stores/use-asset-store";
 
-export const PLUGIN_API_VERSION = "yingce.plugin/v1" as const;
-export const PLUGIN_API_VERSION_V2 = "yingce.plugin/v2" as const;
+export const PLUGIN_API_VERSION = "open-ai-canvas.plugin/v1" as const;
+export const PLUGIN_API_VERSION_V2 = "open-ai-canvas.plugin/v2" as const;
+export const LOVWOW_PLUGIN_API_VERSION = "lovwow.plugin/v1" as const;
+export const LOVWOW_PLUGIN_API_VERSION_V2 = "lovwow.plugin/v2" as const;
+export const COMPAT_PLUGIN_API_VERSION = "yingce.plugin/v1" as const;
+export const COMPAT_PLUGIN_API_VERSION_V2 = "yingce.plugin/v2" as const;
 
 export type EditorSlotKind =
     | "timeline-panel"
@@ -26,7 +30,7 @@ export type PluginContributionsV2 = PluginContributions & {
 
 // 注意：必须把 permissions 一并 Omit 掉再完全替换，否则数组交叉类型会被归约为 v1 的 PluginPermission[]，v2 权限字面量无法赋值。
 export type PluginManifestV2 = Omit<PluginManifest, "apiVersion" | "contributes" | "permissions"> & {
-    apiVersion: typeof PLUGIN_API_VERSION_V2;
+    apiVersion: typeof PLUGIN_API_VERSION_V2 | typeof LOVWOW_PLUGIN_API_VERSION_V2 | typeof COMPAT_PLUGIN_API_VERSION_V2;
     permissions: Array<PluginPermission | EditorPluginPermission>;
     contributes: PluginContributionsV2;
 };
@@ -147,7 +151,7 @@ export type PluginPermission =
     | "external.open";
 
 export type PluginManifest = {
-    apiVersion: typeof PLUGIN_API_VERSION;
+    apiVersion: typeof PLUGIN_API_VERSION | typeof LOVWOW_PLUGIN_API_VERSION | typeof COMPAT_PLUGIN_API_VERSION;
     id: string;
     name: string;
     version: string;

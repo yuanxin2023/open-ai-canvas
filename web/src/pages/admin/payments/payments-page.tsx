@@ -1,11 +1,11 @@
-import { AlipayCircleFilled, WechatFilled } from "@ant-design/icons";
+import { PaymentBrandIcon } from "@/components/payment-brand-icons";
 import { Callout } from "@/pages/admin/ui/controls";
-import { App, Button, DatePicker, Descriptions, Drawer, Form, Input, InputNumber, Select, Tabs, Typography } from "antd";
+import { App, Button, DatePicker, Descriptions, Drawer, Form, Input, InputNumber, Select, Typography } from "antd";
 import { AdminDrawer } from "@/pages/admin/ui/overlays";
 import { Switch } from "@/pages/admin/ui/controls";
 import type { ColumnsType } from "antd/es/table";
 import dayjs, { type Dayjs } from "dayjs";
-import { Eye, Plus, RefreshCw, Search, Settings2, XCircle } from "lucide-react";
+import { Eye, RefreshCw, Search, Settings2, XCircle } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { PaginationBar } from "@/pages/admin/components/admin-ui";
@@ -15,16 +15,13 @@ import {
     exportAdminPaymentOrders,
     exportAdminPaymentReconciliations,
     exportAdminPaymentReconciliationItems,
-    createAdminTopupProduct,
     listAdminPaymentOrders,
     listAdminPaymentProviders,
     listAdminPaymentReconciliationItems,
     listAdminPaymentReconciliations,
-    listAdminTopupProducts,
     queryAdminPaymentOrder,
     runAdminPaymentReconciliation,
     updateAdminPaymentProvider,
-    updateAdminTopupProduct,
     type AdminPaymentProvider,
     type AdminPaymentOrder,
     type PaymentOrder,
@@ -32,28 +29,18 @@ import {
     type PaymentReconciliationFilters,
     type PaymentReconciliationItem,
     type PaymentReconciliationRun,
-    type TopupProduct,
 } from "@/services/api/payments";
 
 import { AdminPageFrame } from "../components/admin-shell";
 import { AdminDataTable, AdminExportButton, AdminRowActions, AdminStatusBadge, AdminTableEmpty, configuredSecretText } from "../components/admin-ui";
-import { AdminUserDetailDrawer } from "../components/admin-user-detail-drawer";
-import "./payments-page.css";
+import { AdminUserDetailModal } from "../components/admin-user-detail-drawer";
+import { hasAdminPermission } from "@/lib/admin-permissions";
+import { useUserStore } from "@/stores/use-user-store";
 
 type ProviderFormValues = {
     enabled: boolean;
     closeAfterMinutes: number;
     values: Record<string, string>;
-};
-
-type ProductFormValues = {
-    name: string;
-    description?: string;
-    benefits?: string;
-    amountYuan: number;
-    credits: number;
-    enabled: boolean;
-    sortOrder: number;
 };
 
 const paymentOrderStatus: Record<string, { label: string; tone: "neutral" | "success" | "warning" | "error" | "info" }> = {
@@ -75,20 +62,24 @@ const reconciliationResult: Record<string, { label: string; tone: "neutral" | "s
     credit_failed: { label: "补发失败", tone: "error" },
 };
 
-export default function AdminPaymentsPage() {
+type AdminPaymentView = "providers" | "orders" | "reconciliation";
+
+const paymentPageMeta: Record<AdminPaymentView, { title: string; description: string }> = {
+    providers: { title: "支付渠道", description: "管理系统支付适配器" },
+    orders: { title: "支付订单", description: "查询支付订单并同步或关闭未完成订单" },
+    reconciliation: { title: "支付对账", description: "执行并查看支付渠道 T+1 对账" },
+};
+
+export default function AdminPaymentsPage({ view = "providers" }: { view?: AdminPaymentView }) {
     const { message, modal } = App.useApp();
-    const [activeTab, setActiveTab] = useState("providers");
+	const adminAccess = useUserStore((state) => state.user?.adminAccess);
+	const canViewUserDetails = hasAdminPermission(adminAccess, "admin.users.accounts");
     const [providers, setProviders] = useState<AdminPaymentProvider[]>([]);
-    const [products, setProducts] = useState<TopupProduct[]>([]);
     const [loading, setLoading] = useState(true);
 
     const [providerDrawer, setProviderDrawer] = useState<AdminPaymentProvider>();
     const [providerSaving, setProviderSaving] = useState(false);
     const [providerForm] = Form.useForm<ProviderFormValues>();
-
-    const [productDrawer, setProductDrawer] = useState<TopupProduct | null | undefined>();
-    const [productSaving, setProductSaving] = useState(false);
-    const [productForm] = Form.useForm<ProductFormValues>();
 
     const [orders, setOrders] = useState<AdminPaymentOrder[]>([]);
     const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
@@ -151,9 +142,8 @@ export default function AdminPaymentsPage() {
     const loadBase = async () => {
         setLoading(true);
         try {
-            const [providerResult, productResult] = await Promise.all([listAdminPaymentProviders(), listAdminTopupProducts()]);
+            const providerResult = await listAdminPaymentProviders();
             setProviders(providerResult.providers);
-            setProducts(productResult.products);
             setBillProviderId((current) => current || providerResult.providers.find((item) => item.configured && item.supportsReconciliation)?.id || providerResult.providers.find((item) => item.supportsReconciliation)?.id || "");
         } catch (error) {
             message.error(error instanceof Error ? error.message : "读取支付配置失败");
@@ -207,17 +197,20 @@ export default function AdminPaymentsPage() {
     };
 
     useEffect(() => {
-        void Promise.all([loadBase(), loadOrders(1, orderPageSize), loadRuns(1, runPageSize)]);
+        const requests: Promise<void>[] = [loadBase()];
+        if (view === "orders") requests.push(loadOrders(1, orderPageSize));
+        if (view === "reconciliation") requests.push(loadRuns(1, runPageSize));
+        void Promise.all(requests);
         return () => {
             orderRequest.current?.abort();
             runRequest.current?.abort();
             detailRequest.current?.abort();
         };
-    }, []);
+    }, [view]);
 
     const refresh = async () => {
-        if (activeTab === "orders") await loadOrders();
-        else if (activeTab === "reconciliation") await loadRuns();
+        if (view === "orders") await loadOrders();
+        else if (view === "reconciliation") await loadRuns();
         else await loadBase();
     };
 
@@ -248,50 +241,6 @@ export default function AdminPaymentsPage() {
             message.error(error instanceof Error ? error.message : "保存支付渠道失败");
         } finally {
             setProviderSaving(false);
-        }
-    };
-
-    const openProduct = (product?: TopupProduct) => {
-        productForm.resetFields();
-        productForm.setFieldsValue(
-            product
-                ? {
-                      name: product.name,
-                      description: product.description,
-                      benefits: product.benefits,
-                      amountYuan: product.amountFen / 100,
-                      credits: product.creditsMicrocredits / 1_000_000,
-                      enabled: product.enabled,
-                      sortOrder: product.sortOrder,
-                  }
-                : { enabled: true, sortOrder: products.length * 10, amountYuan: 10, credits: 10 },
-        );
-        setProductDrawer(product || null);
-    };
-
-    const saveProduct = async () => {
-        if (productDrawer === undefined) return;
-        const values = await productForm.validateFields();
-        const input = {
-            name: values.name.trim(),
-            description: values.description?.trim(),
-            benefits: values.benefits?.trim(),
-            amountFen: Math.round(values.amountYuan * 100),
-            creditsMicrocredits: Math.round(values.credits * 1_000_000),
-            enabled: values.enabled,
-            sortOrder: values.sortOrder || 0,
-        };
-        setProductSaving(true);
-        try {
-            if (productDrawer) await updateAdminTopupProduct(productDrawer.id, input);
-            else await createAdminTopupProduct(input);
-            message.success(productDrawer ? "充值商品已更新" : "充值商品已创建");
-            setProductDrawer(undefined);
-            await loadBase();
-        } catch (error) {
-            message.error(error instanceof Error ? error.message : "保存充值商品失败");
-        } finally {
-            setProductSaving(false);
         }
     };
 
@@ -422,34 +371,6 @@ export default function AdminPaymentsPage() {
         },
     ];
 
-    const productColumns: ColumnsType<TopupProduct> = [
-        {
-            title: "商品",
-            key: "name",
-            render: (_, product) => (
-                <div>
-                    <div className="font-medium">{product.name}</div>
-                    <div className="mt-0.5 text-xs text-foreground/45">{product.description || "无说明"}</div>
-                </div>
-            ),
-        },
-        { title: "售价", dataIndex: "amountFen", width: 130, align: "right", render: (value) => <span className="font-medium tabular-nums">¥ {(value / 100).toFixed(2)}</span> },
-        { title: "到账积分", dataIndex: "creditsMicrocredits", width: 150, align: "right", render: (value) => <span className="tabular-nums">{formatCredits(value)}</span> },
-        { title: "排序", dataIndex: "sortOrder", width: 90, align: "center" },
-        { title: "状态", dataIndex: "enabled", width: 100, align: "center", render: (value) => <AdminStatusBadge label={value ? "销售中" : "已停用"} tone={value ? "success" : "neutral"} /> },
-        {
-            title: "操作",
-            key: "actions",
-            width: 90,
-            align: "center",
-            render: (_, product) => (
-                <Button size="small" onClick={() => openProduct(product)}>
-                    编辑
-                </Button>
-            ),
-        },
-    ];
-
     const orderColumns: ColumnsType<AdminPaymentOrder> = [
         {
             title: "用户",
@@ -459,7 +380,7 @@ export default function AdminPaymentsPage() {
                 <div className="min-w-0">
                     {order.user ? <>
                         <div className="flex min-w-0 items-baseline gap-2">
-                            <button type="button" className="admin-table-primary-link truncate font-medium" title={order.user.displayName || order.user.username} onClick={() => setSelectedUserId(order.user!.id)}>{order.user.displayName || order.user.username}</button>
+							{canViewUserDetails ? <button type="button" className="admin-table-primary-link truncate font-medium" title={order.user.username} onClick={() => setSelectedUserId(order.user!.id)}>{order.user.username}</button> : <span className="truncate font-medium" title={order.user.username}>{order.user.username}</span>}
                             <span className="truncate text-xs text-foreground/45" title={`@${order.user.username}`}>@{order.user.username}</span>
                         </div>
                         <div className="mt-1 truncate text-xs text-foreground/60" title={order.user.email}>{order.user.email || "未填写邮箱"}</div>
@@ -574,42 +495,20 @@ export default function AdminPaymentsPage() {
 
     return (
         <AdminPageFrame
-            title="支付充值"
-            description="管理系统支付适配器、充值商品、支付订单与 T+1 对账"
+            title={paymentPageMeta[view].title}
+            description={paymentPageMeta[view].description}
             actions={
-                <Button icon={<RefreshCw className="size-4" />} loading={loading || ordersLoading || runsLoading} onClick={() => void refresh()}>
+                <Button icon={<RefreshCw className="size-4" />} loading={loading || (view === "orders" && ordersLoading) || (view === "reconciliation" && runsLoading)} onClick={() => void refresh()}>
                     刷新
                 </Button>
             }
             scroll
         >
-            <Callout className="my-4" tone="info" title="平台不提供支付退款">
-                管理端仅提供查单、关单和对账。关单前始终先向渠道查单；对账发现已支付未入账订单时会幂等补发积分。
-            </Callout>
-            <Tabs
-                activeKey={activeTab}
-                onChange={setActiveTab}
-                items={[
+            {[
                     {
                         key: "providers",
                         label: "支付渠道",
                         children: <AdminDataTable table={{ rowKey: "id", loading, columns: providerColumns, dataSource: providers, pagination: false, scroll: { x: 980 } }} empty={<AdminTableEmpty title="没有发现支付渠道插件" />} />,
-                    },
-                    {
-                        key: "products",
-                        label: "充值商品",
-                        children: (
-                            <AdminDataTable
-                                toolbar={<span />}
-                                trailing={
-                                    <Button type="primary" className="admin-toolbar-primary-action" icon={<Plus className="size-4" />} onClick={() => openProduct()}>
-                                        新增商品
-                                    </Button>
-                                }
-                                table={{ rowKey: "id", loading, columns: productColumns, dataSource: products, pagination: false, scroll: { x: 820 } }}
-                                empty={<AdminTableEmpty title="还没有充值商品" />}
-                            />
-                        ),
                     },
                     {
                         key: "orders",
@@ -749,12 +648,11 @@ export default function AdminPaymentsPage() {
                             </div>
                         ),
                     },
-                ]}
-            />
+                ].find((section) => section.key === view)?.children}
 
             <AdminDrawer title="支付订单详情" size="min(680px, 100vw)" open={Boolean(selectedOrder)} onClose={() => setSelectedOrder(null)}>
                 {selectedOrder && <Descriptions column={1} bordered size="small" items={[
-                    { key: "user", label: "用户", children: selectedOrder.user ? <button type="button" className="admin-table-primary-link" onClick={() => { setSelectedUserId(selectedOrder.user!.id); setSelectedOrder(null); }}>{selectedOrder.user.displayName || selectedOrder.user.username} · @{selectedOrder.user.username}</button> : "用户不存在" },
+					{ key: "user", label: "用户", children: selectedOrder.user ? (canViewUserDetails ? <button type="button" className="admin-table-primary-link" onClick={() => { setSelectedUserId(selectedOrder.user!.id); setSelectedOrder(null); }}>@{selectedOrder.user.username}</button> : `@${selectedOrder.user.username}`) : "用户不存在" },
                     { key: "email", label: "邮箱", children: selectedOrder.user?.email || "未填写邮箱" },
                     { key: "userId", label: "用户 ID", children: <Typography.Text copyable className="break-all">{selectedOrder.userId || "--"}</Typography.Text> },
                     { key: "order", label: "订单号", children: <Typography.Text copyable className="break-all">{selectedOrder.merchantOrderNo}</Typography.Text> },
@@ -766,7 +664,7 @@ export default function AdminPaymentsPage() {
                     ...([{ key: "createdAt", label: "创建时间" }, { key: "expiresAt", label: "过期时间" }, { key: "providerPaidAt", label: "支付时间" }, { key: "creditedAt", label: "入账时间" }, { key: "closedAt", label: "关闭时间" }] as const).map(({ key, label }) => ({ key, label, children: selectedOrder[key] ? formatDateTime(selectedOrder[key]!) : "--" })),
                 ]} />}
             </AdminDrawer>
-            <AdminUserDetailDrawer userId={selectedUserId} onClose={() => setSelectedUserId(null)} />
+			{canViewUserDetails ? <AdminUserDetailModal userId={selectedUserId} onClose={() => setSelectedUserId(null)} /> : null}
 
             <Drawer
                 title={providerDrawer ? `配置 ${providerDrawer.name}` : "配置支付渠道"}
@@ -813,58 +711,6 @@ export default function AdminPaymentsPage() {
                         })}
                     </Form>
                 ) : null}
-            </Drawer>
-
-            <Drawer
-                title={productDrawer ? "编辑充值商品" : "新增充值商品"}
-                width={520}
-                open={productDrawer !== undefined}
-                destroyOnHidden
-                onClose={() => setProductDrawer(undefined)}
-                extra={
-                    <Button type="primary" loading={productSaving} onClick={() => void saveProduct()}>
-                        保存
-                    </Button>
-                }
-            >
-                <Form form={productForm} layout="vertical" requiredMark="optional">
-                    <Form.Item name="name" label="商品名称" rules={[{ required: true, max: 120 }]}>
-                        <Input placeholder="例如：100 积分" />
-                    </Form.Item>
-                    <Form.Item name="description" label="商品说明" rules={[{ max: 500 }]}>
-                        <Input.TextArea rows={3} />
-                    </Form.Item>
-                    <Form.Item name="benefits" label="套餐权益（每行一项）" rules={[{ max: 1000 }]} extra="用户端商品卡片会将每一行显示为一条勾选说明；留空则不显示权益区域。">
-                        <Input.TextArea rows={4} placeholder={'例如：\n支持图片与文本生成\n支付成功后积分自动到账'} />
-                    </Form.Item>
-                    <div className="grid grid-cols-2 gap-3">
-                        <Form.Item name="amountYuan" label="售价（元）" rules={[{ required: true }, { type: "number", min: 0.01, max: 1_000_000 }]}>
-                            <InputNumber min={0.01} max={1_000_000} precision={2} className="w-full" />
-                        </Form.Item>
-                        <Form.Item
-                            name="credits"
-                            label="到账积分"
-                            rules={[
-                                { required: true },
-                                {
-                                    validator: (_, value) => {
-                                        const credits = Number(value);
-                                        const microcredits = Math.round(credits * 1_000_000);
-                                        return Number.isFinite(credits) && credits >= 0.01 && credits <= 1_000_000_000 && Number.isSafeInteger(microcredits) ? Promise.resolve() : Promise.reject(new Error("请输入 0.01 至 10 亿之间且可安全处理的积分"));
-                                    },
-                                },
-                            ]}
-                        >
-                            <InputNumber min={0.01} max={1_000_000_000} precision={2} className="w-full" />
-                        </Form.Item>
-                    </div>
-                    <Form.Item name="sortOrder" label="排序" rules={[{ required: true }]}>
-                        <InputNumber precision={0} className="w-full" />
-                    </Form.Item>
-                    <Form.Item name="enabled" label="上架销售" valuePropName="checked">
-                        <Switch />
-                    </Form.Item>
-                </Form>
             </Drawer>
 
             <Drawer
@@ -919,23 +765,6 @@ export default function AdminPaymentsPage() {
             </Drawer>
         </AdminPageFrame>
     );
-}
-
-function PaymentBrandIcon({ providerId, compact = false }: { providerId: string; compact?: boolean }) {
-    const size = compact ? "size-6" : "size-10";
-    if (providerId === "wechat-native" || providerId === "zpay-wechat-qr")
-        return (
-            <span className={`grid ${size} shrink-0 place-items-center rounded-lg bg-[#07c160]/10 text-[#07c160]`}>
-                <WechatFilled className={compact ? "text-sm" : "text-xl"} aria-hidden />
-            </span>
-        );
-    if (providerId === "alipay-page-pay" || providerId === "zpay-alipay-qr")
-        return (
-            <span className={`grid ${size} shrink-0 place-items-center rounded-lg bg-[#1677ff]/10 text-[#1677ff]`}>
-                <AlipayCircleFilled className={compact ? "text-sm" : "text-xl"} aria-hidden />
-            </span>
-        );
-    return <span className={`grid ${size} shrink-0 place-items-center rounded-lg bg-muted text-xs`}>PAY</span>;
 }
 
 function formatDateTime(value: string) {

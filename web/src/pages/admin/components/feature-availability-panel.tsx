@@ -1,23 +1,33 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { App, Button, Skeleton } from "antd";
 import { Switch } from "@/pages/admin/ui/controls";
-import { AlertTriangle, Clapperboard, Coins, ListChecks, MonitorCog, PlugZap, RadioTower, RefreshCw, ShieldCheck, Sparkles } from "lucide-react";
+import { AlertTriangle, BookOpenCheck, Clapperboard, Coins, ListChecks, MonitorCog, PlugZap, RadioTower, RefreshCw, ShieldCheck, Sparkles } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { getAdminFeatureAvailability, updateAdminFeatureAvailability } from "@/services/api/auth";
 import { useUserStore, type FeatureAvailability } from "@/stores/use-user-store";
 import { AdminStatusBadge } from "./admin-ui";
 
-type FeatureKey = "shortDramaEnabled" | "taskCenterEnabled" | "creditsEnabled" | "customChannelsEnabled" | "frontendModelsEnabled" | "pluginCenterEnabled" | "systemPluginsVisibleToUsers";
+type FeatureKey = "shortDramaEnabled" | "taskCenterEnabled" | "creditsEnabled" | "customChannelsEnabled" | "frontendModelsEnabled" | "skillLibraryEnabled" | "pluginCenterEnabled" | "systemPluginsVisibleToUsers";
+type FeatureChangeCopy = {
+    title: string;
+    operation: string;
+    userImpact: string;
+    okText: string;
+};
 type FeatureRow = {
     key: FeatureKey;
     title: string;
     description: string;
     icon: ReactNode;
     dependsOn?: FeatureKey;
+    changeCopy: {
+        enabled: FeatureChangeCopy;
+        disabled: FeatureChangeCopy;
+    };
 };
 
-const editableFeatureKeys: FeatureKey[] = ["shortDramaEnabled", "taskCenterEnabled", "creditsEnabled", "customChannelsEnabled", "frontendModelsEnabled", "pluginCenterEnabled", "systemPluginsVisibleToUsers"];
+const editableFeatureKeys: FeatureKey[] = ["shortDramaEnabled", "taskCenterEnabled", "creditsEnabled", "customChannelsEnabled", "frontendModelsEnabled", "skillLibraryEnabled", "pluginCenterEnabled", "systemPluginsVisibleToUsers"];
 
 const workspaceFeatureRows: FeatureRow[] = [
     {
@@ -25,24 +35,100 @@ const workspaceFeatureRows: FeatureRow[] = [
         title: "短剧创作",
         description: "开放短剧入口、项目列表与项目详情。关闭不删除已有项目。",
         icon: <Clapperboard className="size-4" aria-hidden="true" />,
+        changeCopy: {
+            enabled: {
+                title: "确认开启短剧创作？",
+                operation: "开放短剧创作入口、项目列表和项目详情。",
+                userImpact: "普通用户将可以进入短剧工作区，并访问已有短剧项目。",
+                okText: "确认开启",
+            },
+            disabled: {
+                title: "确认关闭短剧创作？",
+                operation: "关闭短剧创作入口、项目列表和项目详情，但不会删除已有项目。",
+                userImpact: "普通用户将无法进入短剧工作区；重新开启后可以继续访问原有项目。",
+                okText: "确认关闭",
+            },
+        },
     },
     {
         key: "taskCenterEnabled",
         title: "任务中心",
         description: "开放任务记录页面。关闭不会停止生成任务。",
         icon: <ListChecks className="size-4" aria-hidden="true" />,
+        changeCopy: {
+            enabled: {
+                title: "确认开启任务中心？",
+                operation: "开放任务记录页面。",
+                userImpact: "普通用户将可以查看生成任务的状态、记录和结果。",
+                okText: "确认开启",
+            },
+            disabled: {
+                title: "确认关闭任务中心？",
+                operation: "关闭任务记录页面，但不会停止正在执行或排队中的生成任务。",
+                userImpact: "普通用户将无法进入任务中心查看任务进度和历史记录。",
+                okText: "确认关闭",
+            },
+        },
     },
     {
         key: "creditsEnabled",
         title: "积分计费",
         description: "控制积分中心弹窗及新任务的积分预授权与结算。",
         icon: <Coins className="size-4" aria-hidden="true" />,
+        changeCopy: {
+            enabled: {
+                title: "确认开启积分计费？",
+                operation: "开启积分中心，以及新任务和系统渠道请求的积分预授权与结算。",
+                userImpact: "普通用户提交相关任务时将按当前计费规则冻结并扣减积分，积分不足可能无法提交。",
+                okText: "确认开启",
+            },
+            disabled: {
+                title: "确认关闭积分计费？",
+                operation: "新任务和系统渠道请求将不再扣减积分；已经冻结的计费订单仍按原规则结算，已有余额和流水继续保留。",
+                userImpact: "普通用户将不再看到积分中心入口，新提交的相关任务不再执行积分预授权。",
+                okText: "确认关闭",
+            },
+        },
     },
     {
         key: "customChannelsEnabled",
         title: "自定义渠道",
         description: "允许用户配置并使用自己的模型渠道。",
         icon: <RadioTower className="size-4" aria-hidden="true" />,
+        changeCopy: {
+            enabled: {
+                title: "确认开启自定义渠道？",
+                operation: "允许普通用户配置并使用自己的模型渠道。",
+                userImpact: "用户需要自行维护渠道地址和密钥；渠道配置错误或上游异常可能导致生成失败。",
+                okText: "确认开启",
+            },
+            disabled: {
+                title: "确认关闭自定义渠道？",
+                operation: "停止向普通用户开放自定义渠道配置和调用能力。",
+                userImpact: "用户将无法选择或调用自己的模型渠道，相关生成请求需要改用系统提供的模型。",
+                okText: "确认关闭",
+            },
+        },
+    },
+    {
+        key: "skillLibraryEnabled",
+        title: "用户技能库",
+        description: "开放技能库入口、技能管理及创作中的技能调用能力。关闭不删除已有技能。",
+        icon: <BookOpenCheck className="size-4" aria-hidden="true" />,
+        changeCopy: {
+            enabled: {
+                title: "确认开启用户技能库？",
+                operation: "开放用户技能库入口、技能管理接口和创作中的技能调用能力。",
+                userImpact: "普通用户将可以浏览、安装、管理并在创作与 Agent 中使用技能。",
+                okText: "确认开启",
+            },
+            disabled: {
+                title: "确认关闭用户技能库？",
+                operation: "关闭技能库入口、技能管理接口和新运行中的技能调用，但保留已有技能与历史记录。",
+                userImpact: "普通用户将无法进入或调用技能库；重新开启后可继续使用原有技能。",
+                okText: "确认关闭",
+            },
+        },
     },
 ];
 
@@ -52,6 +138,20 @@ const pluginFeatureRows: FeatureRow[] = [
         title: "插件中心",
         description: "开放插件中心及插件调用能力。",
         icon: <PlugZap className="size-4" aria-hidden="true" />,
+        changeCopy: {
+            enabled: {
+                title: "确认开启插件中心？",
+                operation: "开放插件中心及插件调用能力；系统插件是否展示仍由下一项配置决定。",
+                userImpact: "普通用户将可以进入插件中心，并使用对其开放的插件能力。",
+                okText: "确认开启",
+            },
+            disabled: {
+                title: "确认关闭插件中心？",
+                operation: "关闭插件中心入口及插件调用能力，系统插件可见性配置将暂时不生效。",
+                userImpact: "普通用户将无法进入插件中心或调用插件；重新开启后仍按原可见性配置生效。",
+                okText: "确认关闭",
+            },
+        },
     },
     {
         key: "systemPluginsVisibleToUsers",
@@ -59,6 +159,20 @@ const pluginFeatureRows: FeatureRow[] = [
         description: "向普通用户展示系统协议插件和管理员上传插件。",
         icon: <ShieldCheck className="size-4" aria-hidden="true" />,
         dependsOn: "pluginCenterEnabled",
+        changeCopy: {
+            enabled: {
+                title: "确认向用户展示系统插件？",
+                operation: "在已开放的插件中心展示系统协议插件和管理员上传的插件。",
+                userImpact: "普通用户将可以发现并使用这些系统插件，具体能力取决于插件自身配置。",
+                okText: "确认展示",
+            },
+            disabled: {
+                title: "确认隐藏系统插件？",
+                operation: "停止向普通用户展示系统协议插件和管理员上传的插件。",
+                userImpact: "普通用户将无法发现或使用这些系统插件，管理员侧的插件配置不会被删除。",
+                okText: "确认隐藏",
+            },
+        },
     },
 ];
 
@@ -68,6 +182,20 @@ const modelFeatureRows: FeatureRow[] = [
         title: "前台模型目录",
         description: "选择前台模型目录，或直接使用系统渠道中的模型。",
         icon: <Sparkles className="size-4" aria-hidden="true" />,
+        changeCopy: {
+            enabled: {
+                title: "确认切换为前台模型目录？",
+                operation: "用户选模型时将读取后台已开放的前台模型目录。",
+                userImpact: "普通用户只能选择前台目录中已配置并开放的模型；请先确认目录中存在可用模型。",
+                okText: "确认切换",
+            },
+            disabled: {
+                title: "确认切换为系统渠道？",
+                operation: "用户选模型时将直接读取系统渠道中配置的模型，前台模型配置继续保留。",
+                userImpact: "普通用户看到的模型来源和可选范围会立即变化，原前台模型目录将暂时不再使用。",
+                okText: "确认切换",
+            },
+        },
     },
 ];
 
@@ -125,9 +253,7 @@ export default function FeatureAvailabilityPanel() {
 
     const setFeature = async (key: FeatureKey, enabled: boolean) => {
         if (!savedFeatures || saving || savedFeatures[key] === enabled) return;
-        const previous = savedFeatures;
         const expected = { ...savedFeatures, [key]: enabled };
-        setDraftFeatures(expected);
         setSaving(true);
         setSaveError("");
         try {
@@ -140,8 +266,7 @@ export default function FeatureAvailabilityPanel() {
             message.success(`${featureByKey.get(key)?.title || "功能"}已${enabled ? "开启" : "关闭"}`);
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : "保存功能开放配置失败";
-            setDraftFeatures(previous);
-            setSaveError(`${errorMessage}。已恢复修改前状态。`);
+            setSaveError(`${errorMessage}。配置保持修改前状态。`);
             message.error(errorMessage);
         } finally {
             setSaving(false);
@@ -150,29 +275,28 @@ export default function FeatureAvailabilityPanel() {
 
     const requestFeatureChange = (key: FeatureKey, enabled: boolean) => {
         if (!savedFeatures || saving || savedFeatures[key] === enabled) return;
-        if (key === "creditsEnabled" && !enabled) {
-            modal.confirm({
-                title: "关闭用户积分功能？",
-                content: "保存后新创建的任务和系统渠道请求将不再扣减积分；已经冻结的计费订单仍按原规则结算，已有余额和流水继续保留。",
-                okText: "确认关闭",
-                cancelText: "取消",
-                okButtonProps: { danger: true },
-                onOk: () => setFeature(key, false),
-            });
-            return;
-        }
-        if (key === "frontendModelsEnabled" && !enabled) {
-            modal.confirm({
-                title: "关闭前台模型功能？",
-                content: "关闭后用户将直接使用系统渠道中配置的模型；管理后台仍保留前台模型配置入口，重新开启后即可继续使用。",
-                okText: "确认关闭",
-                cancelText: "取消",
-                okButtonProps: { danger: true },
-                onOk: () => setFeature(key, false),
-            });
-            return;
-        }
-        void setFeature(key, enabled);
+        const row = featureByKey.get(key);
+        if (!row) return;
+        const copy = row.changeCopy[enabled ? "enabled" : "disabled"];
+        modal.confirm({
+            title: copy.title,
+            content: (
+                <div className="space-y-3">
+                    <p>
+                        <strong>操作效果：</strong>
+                        {copy.operation}
+                    </p>
+                    <p>
+                        <strong>前端用户影响：</strong>
+                        {copy.userImpact}
+                    </p>
+                </div>
+            ),
+            okText: copy.okText,
+            cancelText: "取消",
+            okButtonProps: enabled ? undefined : { danger: true },
+            onOk: () => setFeature(key, enabled),
+        });
     };
 
     if (loading && !draftFeatures) {
@@ -222,7 +346,7 @@ export default function FeatureAvailabilityPanel() {
             <div className="admin-feature-command-bar">
                 <div className="admin-feature-command-copy" aria-live="polite">
                     <div className="flex flex-wrap items-center gap-2">
-                        <strong>{saving ? "正在保存更改" : "开关切换后立即生效"}</strong>
+                        <strong>{saving ? "正在保存更改" : "配置经二次确认后立即生效"}</strong>
                         <AdminStatusBadge label={saving ? "提交中" : savedFeatures.configured ? "服务端配置" : "系统默认"} tone={saving ? "warning" : "neutral"} />
                     </div>
                 </div>
@@ -245,7 +369,7 @@ export default function FeatureAvailabilityPanel() {
                     title="1. 用户工作台入口"
                     description="先决定普通用户能进入哪些核心工作区"
                     icon={<MonitorCog className="size-4" aria-hidden="true" />}
-                    status={<AdminStatusBadge label={`${enabledWorkspaceFeatures}/4 开放`} tone={enabledWorkspaceFeatures === 4 ? "success" : "neutral"} />}
+                    status={<AdminStatusBadge label={`${enabledWorkspaceFeatures}/${workspaceFeatureRows.length} 开放`} tone={enabledWorkspaceFeatures === workspaceFeatureRows.length ? "success" : "neutral"} />}
                 >
                     {workspaceFeatureRows.map((row) => (
                         <FeatureSettingRow key={row.key} row={row} saved={savedFeatures} draft={draftFeatures} saving={saving} onChange={requestFeatureChange} />
@@ -309,7 +433,7 @@ function FeatureSettingRow({ row, saved, draft, saving, onChange, step }: { row:
             </div>
             <div className="admin-feature-board-row-control">
                 <span>{dependencyDisabled ? "依赖未开启" : enabled ? "已开放" : "已关闭"}</span>
-                <Switch checked={draft[row.key]} disabled={saving || dependencyDisabled} onChange={(checked) => onChange(row.key, checked)} aria-label={`设置${row.title}，切换后立即保存`} />
+                <Switch checked={draft[row.key]} disabled={saving || dependencyDisabled} onChange={(checked) => onChange(row.key, checked)} aria-label={`${draft[row.key] ? "关闭" : "开启"}${row.title}，需二次确认`} />
             </div>
         </article>
     );
@@ -352,6 +476,7 @@ function toEditablePayload(features: FeatureAvailability) {
         creditsEnabled: features.creditsEnabled,
         customChannelsEnabled: features.customChannelsEnabled,
         frontendModelsEnabled: features.frontendModelsEnabled,
+        skillLibraryEnabled: features.skillLibraryEnabled,
         pluginCenterEnabled: features.pluginCenterEnabled,
         systemPluginsVisibleToUsers: features.systemPluginsVisibleToUsers,
     };
@@ -374,6 +499,7 @@ function parseFeatureAvailability(value: unknown): FeatureAvailability {
         creditsEnabled: record.creditsEnabled as boolean,
         customChannelsEnabled: record.customChannelsEnabled as boolean,
         frontendModelsEnabled: record.frontendModelsEnabled as boolean,
+        skillLibraryEnabled: record.skillLibraryEnabled as boolean,
         pluginCenterEnabled: record.pluginCenterEnabled as boolean,
         systemPluginsVisibleToUsers: record.systemPluginsVisibleToUsers as boolean,
         configured: typeof record.configured === "boolean" ? record.configured : undefined,

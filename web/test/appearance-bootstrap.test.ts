@@ -5,9 +5,10 @@ import { appearanceLogoURL, normalizePublicAppearance } from "../src/stores/use-
 test("initial HTML stays brand neutral until the public appearance is resolved", async () => {
     const [html, mainSource] = await Promise.all([Bun.file(new URL("../index.html", import.meta.url)).text(), Bun.file(new URL("../src/main.tsx", import.meta.url)).text()]);
 
-    expect(html).not.toContain("影策");
-    expect(html).not.toContain("/logo.svg");
+    expect(html).not.toContain("AI 创作工作台");
     expect(html).toContain("<title>正在加载</title>");
+    expect(mainSource).toContain("bootstrapAppearance()");
+    expect(mainSource).toContain('import("./application")');
     expect(mainSource.indexOf("bootstrapAppearance()")).toBeLessThan(mainSource.indexOf('import("./application")'));
 });
 
@@ -34,6 +35,34 @@ test("a custom login video never falls back to the built-in poster", () => {
 test("login video autoplay defaults on and can be disabled explicitly", () => {
     expect(normalizePublicAppearance({}).authVideoAutoplay).toBe(true);
     expect(normalizePublicAppearance({ authVideoAutoplay: false }).authVideoAutoplay).toBe(false);
+});
+
+test("appearance management exposes the composer glow color and live preview", async () => {
+    const [pageSource, createSource, globalStyles] = await Promise.all([
+        Bun.file(new URL("../src/pages/admin/settings/appearance-settings-page.tsx", import.meta.url)).text(),
+        Bun.file(new URL("../src/pages/create/index.tsx", import.meta.url)).text(),
+        Bun.file(new URL("../src/styles/globals.css", import.meta.url)).text(),
+    ]);
+
+    expect(pageSource).toContain("创作首屏氛围");
+    expect(pageSource).toContain("composerGlowColor");
+    expect(pageSource).toContain("composerGlowEnabled");
+    expect(pageSource).toContain("composerGlowIntensity");
+    expect(pageSource).toContain("composerGlowSize");
+    expect(pageSource).toContain("composerGlowPositionX");
+    expect(pageSource).toContain("composerGlowPositionY");
+    expect(pageSource).toContain("ColorPicker");
+    expect(pageSource).toContain("<Slider");
+    expect(pageSource).toContain("显示创作首屏光晕");
+    expect(createSource).toContain('"--creation-composer-glow": composerGlowColor');
+    expect(createSource).toContain("data-glow-enabled={composerGlowEnabled}");
+    expect(createSource).toContain('"--creation-composer-glow-opacity": composerGlowIntensity / 100');
+    expect(createSource).toContain('"--creation-composer-glow-scale": composerGlowSize / 100');
+    expect(createSource).toContain('"--creation-composer-glow-x": `${composerGlowPositionX}%`');
+    expect(createSource).toContain('"--creation-composer-glow-y": `${composerGlowPositionY}px`');
+    expect(globalStyles).toContain(".creation-home-hero::before");
+    expect(globalStyles).toContain('.creation-home-hero[data-glow-enabled="false"]::before');
+    expect(globalStyles).toContain("color-mix(in srgb, var(--creation-composer-glow");
 });
 
 test("appearance URLs reject executable and insecure remote schemes", () => {
@@ -81,6 +110,14 @@ test("auth scene consumes resolved appearance instead of hardcoded media constan
     expect(source).not.toContain("AUTH_VIDEO_POSTER");
 });
 
+test("auth footer follows the form content instead of covering the scroll area", async () => {
+    const source = await Bun.file(new URL("../src/pages/auth/auth-scene.tsx", import.meta.url)).text();
+
+    expect(source).toContain('className="flex flex-1 items-center justify-center');
+    expect(source).toContain('<SiteComplianceFooter variant="auth" className="shrink-0" />');
+    expect(source).not.toContain('<SiteComplianceFooter variant="auth" className="absolute');
+});
+
 test("appearance management exposes light and dark logo uploads plus the frame switch", async () => {
     const [pageSource, brandSource, adminStyles, globalStyles] = await Promise.all([
         Bun.file(new URL("../src/pages/admin/settings/appearance-settings-page.tsx", import.meta.url)).text(),
@@ -119,10 +156,10 @@ test("object storage can adopt the configured English brand identifier without r
     expect(source).toContain("setting.pathPrefix || DEFAULT_OSS_PATH_PREFIX");
 });
 
-test("appearance management exposes a server-side reset to the built-in Yingce brand", async () => {
+test("appearance management exposes a server-side reset to the built-in neutral brand", async () => {
     const [pageSource, apiSource] = await Promise.all([Bun.file(new URL("../src/pages/admin/settings/appearance-settings-page.tsx", import.meta.url)).text(), Bun.file(new URL("../src/services/api/appearance.ts", import.meta.url)).text()]);
 
-    expect(pageSource).toContain("恢复影策默认");
+    expect(pageSource).toContain("恢复系统默认");
     expect(pageSource).toContain("resetAdminAppearance()");
     expect(pageSource).toContain("已上传文件仍保留在存储资源中");
     expect(apiSource).toContain('http.delete<{ setting: AdminAppearance }>("/admin/settings/appearance")');

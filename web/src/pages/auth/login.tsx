@@ -57,17 +57,14 @@ export default function LoginPage() {
 
     return (
         <form onSubmit={submit} className="space-y-5">
-            <AuthField label="用户名 / 邮箱" htmlFor="login-account">
-                <Input id="login-account" size="large" prefix={<UserRound className="size-4 text-white/35" />} value={username} onChange={(event) => setUsername(event.target.value)} placeholder="用户名或邮箱" autoComplete="username" required />
+            <AuthField label="邮箱 / 用户名" htmlFor="login-account">
+                <Input id="login-account" size="large" prefix={<UserRound className="size-4 text-white/35" />} value={username} onChange={(event) => setUsername(event.target.value)} placeholder="邮箱或用户名" autoComplete="username" required />
             </AuthField>
             <AuthField
                 label="密码"
                 htmlFor="login-password"
                 action={
-                    <Link
-                        to={forgotPasswordURL}
-                        className="-my-2 inline-flex min-h-8 items-center rounded-sm text-xs font-medium text-blue-300/80 transition-colors hover:text-blue-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300/45"
-                    >
+                    <Link to={forgotPasswordURL} className="auth-forgot-password-link -my-2 inline-flex min-h-8 items-center rounded-sm text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300/45">
                         忘记密码？
                     </Link>
                 }

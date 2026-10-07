@@ -1,13 +1,29 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { App, Button, Drawer, Form, Input, InputNumber, Modal, Popconfirm, Select, Space } from "antd";
+import { App, Button, Form, Input, InputNumber, Modal, Popconfirm, Segmented, Select, Space } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { Ban, Copy, Eye, KeyRound, RefreshCw, Search, TicketCheck } from "lucide-react";
 
 import { PaginationBar } from "@/pages/admin/components/admin-ui";
+import { AdminModal } from "@/pages/admin/ui/overlays";
 import { formatCredits } from "@/constant/credits";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { ApiError } from "@/services/api/request";
-import { createAdminRedeemBatch, disableAdminRedeemBatch, disableAdminRedeemCode, listAdminRedeemBatchCodes, listAdminRedeemBatches, type AdminRedeemCode, type RedeemBatch } from "@/services/api/wallet";
+import { listAdministrators, type AdminUser } from "@/services/api/auth";
+import {
+    createAdminRedeemBatch,
+    disableAdminRedeemBatch,
+    disableAdminRedeemCode,
+    listAdminRedeemBatchCodes,
+    listAdminRedeemBatches,
+    searchAdminRedeemBatches,
+    searchAdminRedeemCodes,
+    type AdminRedeemCode,
+    type AdminRedeemCodeSearchResult,
+    type RedeemBatch,
+    type RedeemBatchLifecycle,
+    type RedeemFundingSummary,
+    type RedeemFundingSource,
+} from "@/services/api/wallet";
 import { AdminDataTable, AdminExportButton, AdminRowActions, AdminStatusBadge, AdminTableEmpty, type AdminStatusTone } from "./admin-ui";
 
 type RedeemFormValues = { amount?: number | null; count?: number | null; note?: string; expiresAt?: string };
@@ -32,12 +48,27 @@ const DETAIL_STATUS_LABELS: Record<DetailStatus, string> = {
     disabled: "已禁用",
 };
 
-export default function RedemptionCodesPanel({ createOpen, onCreateOpenChange, onCreateBlockedChange }: { createOpen: boolean; onCreateOpenChange: (open: boolean) => void; onCreateBlockedChange: (blocked: boolean) => void }) {
+export default function RedemptionCodesPanel({
+    fundingSource,
+    isFullAdmin,
+    createOpen,
+    onCreateOpenChange,
+    onCreateBlockedChange,
+}: {
+    fundingSource: RedeemFundingSource;
+    isFullAdmin: boolean;
+    createOpen: boolean;
+    onCreateOpenChange: (open: boolean) => void;
+    onCreateBlockedChange: (blocked: boolean) => void;
+}) {
     const { message } = App.useApp();
     const [batches, setBatches] = useState<RedeemBatch[]>([]);
     const [generatedCodes, setGeneratedCodes] = useState<string[]>([]);
     const [generatedBatchId, setGeneratedBatchId] = useState("");
     const [selectedBatch, setSelectedBatch] = useState<RedeemBatch | null>(null);
+    const [lookupResult, setLookupResult] = useState<AdminRedeemCodeSearchResult | null>(null);
+    const [lookupOpen, setLookupOpen] = useState(false);
+    const [lookupNotFound, setLookupNotFound] = useState(false);
     const [pendingCreate, setPendingCreate] = useState<PendingRedeemBatch | null>(null);
     const [loading, setLoading] = useState(true);
     const [listError, setListError] = useState("");
@@ -47,11 +78,16 @@ export default function RedemptionCodesPanel({ createOpen, onCreateOpenChange, o
     const [keyword, setKeyword] = useState("");
     const debouncedKeyword = useDebouncedValue(keyword);
     const [validity, setValidity] = useState<BatchValidity>("all");
+    const [lifecycle, setLifecycle] = useState<Exclude<RedeemBatchLifecycle, "all">>("ongoing");
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(20);
     const [total, setTotal] = useState(0);
+    const [creatorId, setCreatorId] = useState("");
+    const [administratorOptions, setAdministratorOptions] = useState<AdminUser[]>([]);
+    const [fundingSummary, setFundingSummary] = useState<RedeemFundingSummary | null>(null);
     const [form] = Form.useForm<RedeemFormValues>();
     const listRequestRef = useRef(0);
+    const lookupRequestRef = useRef(0);
     const createInFlightRef = useRef(false);
     const batchMutationsRef = useRef(new Set<string>());
     const watchedAmount = Form.useWatch("amount", form);
@@ -66,21 +102,38 @@ export default function RedemptionCodesPanel({ createOpen, onCreateOpenChange, o
         return Number.isSafeInteger(amountMicrocredits) && Number.isSafeInteger(totalMicrocredits) ? totalMicrocredits : null;
     }, [watchedAmount, watchedCount]);
 
-    const reload = async (targetPage = page, targetPageSize = pageSize, queryOverride?: { keyword?: string; validity?: BatchValidity }) => {
+    const creatorOptions = useMemo(() => {
+        const options = new Map<string, string>();
+        for (const item of administratorOptions) options.set(item.id, `@${item.username}`);
+        for (const batch of batches) {
+            if (batch.createdBy) options.set(batch.createdBy, batch.creatorUsername ? `@${batch.creatorUsername}` : batch.createdBy);
+        }
+        return Array.from(options, ([value, label]) => ({ value, label }));
+    }, [administratorOptions, batches]);
+
+    const reload = async (targetPage = page, targetPageSize = pageSize, queryOverride?: { keyword?: string; validity?: BatchValidity; lifecycle?: Exclude<RedeemBatchLifecycle, "all"> }) => {
         const requestId = ++listRequestRef.current;
-        const queryKeyword = (queryOverride?.keyword ?? debouncedKeyword).trim();
+        const rawQueryKeyword = (queryOverride?.keyword ?? debouncedKeyword).trim();
+        // 非空搜索统一使用 POST，避免兑换码或片段进入批次列表 URL。
+        const queryKeyword = rawQueryKeyword;
         const queryValidity = queryOverride?.validity ?? validity;
+        const queryLifecycle = queryOverride?.lifecycle ?? lifecycle;
         setLoading(true);
         setListError("");
+        setLookupNotFound(false);
         setBatches([]);
         setTotal(0);
         try {
-            const result = await listAdminRedeemBatches({
+            const params = {
                 keyword: queryKeyword || undefined,
                 validity: queryValidity === "all" ? undefined : queryValidity,
+                lifecycle: queryLifecycle,
+                fundingSource,
+                creatorId: fundingSource === "module_admin" && isFullAdmin ? creatorId || undefined : undefined,
                 page: targetPage,
                 pageSize: targetPageSize,
-            });
+            };
+            const result = queryKeyword ? await searchAdminRedeemBatches(params) : await listAdminRedeemBatches(params);
             if (requestId !== listRequestRef.current) return false;
             const lastPage = Math.max(1, Math.ceil(result.total / targetPageSize));
             if (targetPage > lastPage) {
@@ -89,11 +142,13 @@ export default function RedemptionCodesPanel({ createOpen, onCreateOpenChange, o
             }
             setBatches(result.batches);
             setTotal(result.total);
+            setFundingSummary(result.fundingSummary ?? null);
             return true;
         } catch (error) {
             if (requestId === listRequestRef.current) {
                 const detail = error instanceof Error ? error.message : "读取兑换码批次失败";
                 setListError(detail);
+                setFundingSummary(null);
                 message.error(detail);
             }
             return false;
@@ -102,13 +157,63 @@ export default function RedemptionCodesPanel({ createOpen, onCreateOpenChange, o
         }
     };
 
+    const lookupCode = async (rawCode: string) => {
+        const requestId = ++lookupRequestRef.current;
+        try {
+            const result = await searchAdminRedeemCodes(rawCode.trim().toLowerCase(), fundingSource, fundingSource === "module_admin" && isFullAdmin ? creatorId || undefined : undefined);
+            if (requestId !== lookupRequestRef.current) return false;
+            setLookupResult(result);
+            setLookupOpen(result.matches.length > 0);
+            setLookupNotFound(result.matches.length === 0);
+            return true;
+        } catch (error) {
+            if (requestId === lookupRequestRef.current) {
+                setLookupResult(null);
+                setLookupOpen(false);
+                const detail = error instanceof Error ? error.message : "查询兑换码失败";
+                setListError(detail);
+                const notFound = error instanceof ApiError && error.reason === "not_found";
+                setLookupNotFound(notFound);
+                if (notFound) message.warning(detail);
+                else message.error(detail);
+            }
+            return false;
+        }
+    };
+
     useEffect(() => {
-        if (createOpen) form.setFieldsValue(DEFAULT_CREATE_VALUES);
+        if (createOpen) {
+            form.setFieldsValue(DEFAULT_CREATE_VALUES);
+        }
     }, [createOpen, form]);
 
     useEffect(() => {
+        setKeyword("");
+        setValidity("all");
+        setLifecycle("ongoing");
+        setCreatorId("");
+        setPage(1);
+        setSelectedBatch(null);
+        if (isFullAdmin && fundingSource === "module_admin") {
+            void listAdministrators({ page: 1, pageSize: 100 })
+                .then((result) => setAdministratorOptions(result.users))
+                .catch(() => setAdministratorOptions([]));
+        }
+    }, [fundingSource, isFullAdmin]);
+
+    useEffect(() => {
+        const search = debouncedKeyword.trim();
+        if (isRedeemCodeSearchCandidate(search)) {
+            void reload(page, pageSize);
+            void lookupCode(search);
+            return;
+        }
+        lookupRequestRef.current += 1;
+        setLookupOpen(false);
+        setLookupResult(null);
+        setLookupNotFound(false);
         void reload(page, pageSize);
-    }, [debouncedKeyword, validity, page, pageSize]);
+    }, [debouncedKeyword, validity, lifecycle, creatorId, fundingSource, page, pageSize]);
 
     const closeCreateDrawer = () => {
         if (creating || pendingCreate) return;
@@ -123,6 +228,10 @@ export default function RedemptionCodesPanel({ createOpen, onCreateOpenChange, o
         const totalMicrocredits = amountMicrocredits * count;
         if (!Number.isFinite(amount) || amount <= 0 || !Number.isSafeInteger(amountMicrocredits) || amountMicrocredits <= 0 || !Number.isInteger(count) || count < 1 || count > 5000 || !Number.isSafeInteger(totalMicrocredits)) {
             message.error("积分面额或生成数量超出可安全处理的范围");
+            return;
+        }
+        if (!isFullAdmin && fundingSummary && totalMicrocredits > fundingSummary.availableMicrocredits) {
+            message.error("可用积分不足，无法生成该批次");
             return;
         }
         let expiresAt: string | undefined;
@@ -153,8 +262,10 @@ export default function RedemptionCodesPanel({ createOpen, onCreateOpenChange, o
             onCreateOpenChange(false);
             setGeneratedCodes(result.codes);
             setGeneratedBatchId(result.batch.id);
+            if (result.account) window.dispatchEvent(new CustomEvent("wallet:updated"));
+            setLifecycle("ongoing");
             setPage(1);
-            await reload(1, pageSize);
+            await reload(1, pageSize, { lifecycle: "ongoing" });
             message.success(`已生成 ${result.codes.length} 个兑换码`);
         } catch (error) {
             const detail = error instanceof Error ? error.message : "生成兑换码失败";
@@ -166,9 +277,10 @@ export default function RedemptionCodesPanel({ createOpen, onCreateOpenChange, o
                 setPage(1);
                 setKeyword("");
                 setValidity("all");
-                const refreshed = await reload(1, pageSize, { keyword: "", validity: "all" });
-                setUncertainCreateNotice(`上一次生成请求的结果暂时无法确认：${detail}。${refreshed ? "已切换到未筛选的完整列表，请核对最新批次。" : "完整列表刷新失败，请在网络恢复后再次刷新。"} 核对完成前，生成入口已暂停。`);
-                message.warning({ content: "生成结果待核对，系统没有自动重试。请检查完整批次列表后再继续。", duration: 7 });
+                setLifecycle("ongoing");
+                const refreshed = await reload(1, pageSize, { keyword: "", validity: "all", lifecycle: "ongoing" });
+                setUncertainCreateNotice(`上一次生成请求的结果暂时无法确认：${detail}。${refreshed ? "已切换到未筛选的进行中列表，请核对最新批次。" : "进行中列表刷新失败，请在网络恢复后再次刷新。"} 核对完成前，生成入口已暂停。`);
+                message.warning({ content: "生成结果待核对，系统没有自动重试。请检查进行中批次列表后再继续。", duration: 7 });
             } else {
                 setPendingCreate(null);
                 message.error(detail);
@@ -184,8 +296,9 @@ export default function RedemptionCodesPanel({ createOpen, onCreateOpenChange, o
         batchMutationsRef.current.add(batch.id);
         setDisablingBatchIds((current) => new Set(current).add(batch.id));
         try {
-            const result = await disableAdminRedeemBatch(batch.id);
-            message.success(`已禁用 ${result.disabledCount} 个兑换码`);
+            const result = await disableAdminRedeemBatch(batch.id, batch.fundingSource);
+            message.success(result.refundedMicrocredits > 0 ? `已禁用 ${result.disabledCount} 个兑换码，退回 ${formatCredits(result.refundedMicrocredits)} 积分` : `已禁用 ${result.disabledCount} 个兑换码`);
+            if (result.refundedMicrocredits > 0) window.dispatchEvent(new CustomEvent("wallet:updated"));
         } catch (error) {
             const detail = error instanceof Error ? error.message : "禁用批次失败";
             if (isMutationResultUncertain(error)) message.warning({ content: `禁用结果暂时无法确认：${detail}。已刷新批次状态，请核对后再操作。`, duration: 6 });
@@ -212,6 +325,7 @@ export default function RedemptionCodesPanel({ createOpen, onCreateOpenChange, o
                 </div>
             ),
         },
+        ...(isFullAdmin && fundingSource === "module_admin" ? [{ title: "创建管理员", dataIndex: "creatorUsername", width: 140, render: (value: string | undefined, batch: RedeemBatch) => (value ? `@${value}` : batch.createdBy || "已注销") }] : []),
         { title: "单码积分", dataIndex: "amountMicrocredits", width: 120, align: "center", render: (value) => <span className="font-medium tabular-nums">{formatCredits(value)}</span> },
         { title: "总数", dataIndex: "count", width: 80, align: "center", render: (value) => <span className="tabular-nums">{value}</span> },
         { title: "状态分布", width: 300, align: "center", render: (_, batch) => <BatchStatusDistribution batch={batch} /> },
@@ -244,10 +358,12 @@ export default function RedemptionCodesPanel({ createOpen, onCreateOpenChange, o
             ),
         },
     ];
-    const hasFilters = Boolean(keyword.trim() || validity !== "all");
+    const hasFilters = Boolean(keyword.trim() || validity !== "all" || creatorId);
+    const codeQuery = isRedeemCodeSearchCandidate(keyword);
 
     return (
         <div className="admin-redemption-codes flex min-h-0 flex-1 flex-col">
+            {!isFullAdmin ? <RedeemFundingOverview summary={fundingSummary} refreshing={loading} /> : null}
             {uncertainCreateNotice ? (
                 <div className="admin-redemption-uncertain-notice" role="alert">
                     <div>
@@ -265,11 +381,11 @@ export default function RedemptionCodesPanel({ createOpen, onCreateOpenChange, o
                                 if (!refreshed) return;
                                 setUncertainCreateNotice("");
                                 onCreateBlockedChange(false);
-                                message.success("完整批次列表已刷新，请确认没有重复批次后再生成");
+                                message.success("进行中批次列表已刷新，请确认没有重复批次后再生成");
                             })();
                         }}
                     >
-                        刷新完整列表
+                        刷新进行中列表
                     </Button>
                 </div>
             ) : null}
@@ -278,11 +394,11 @@ export default function RedemptionCodesPanel({ createOpen, onCreateOpenChange, o
                     toolbar={
                         <Input
                             allowClear
-                            aria-label="搜索兑换码批次"
+                            aria-label="搜索兑换码或批次"
                             className="app-list-search"
                             prefix={<Search className="size-4 text-foreground/40" />}
                             value={keyword}
-                            placeholder="搜索批次备注、积分或数量"
+                            placeholder="搜索兑换码片段、批次备注、积分或数量"
                             onChange={(event) => {
                                 setKeyword(event.target.value);
                                 setPage(1);
@@ -291,24 +407,54 @@ export default function RedemptionCodesPanel({ createOpen, onCreateOpenChange, o
                     }
                     toolbarActive={hasFilters}
                     toolbarFilters={
-                        <Select<BatchValidity>
-                            aria-label="按批次到期状态筛选"
-                            className="w-44"
-                            value={validity}
-                            onChange={(value) => {
-                                setValidity(value);
-                                setPage(1);
-                            }}
-                            options={[
-                                { label: "全部到期状态", value: "all" },
-                                { label: "批次未到期", value: "active" },
-                                { label: "批次已到期", value: "expired" },
-                            ]}
-                        />
+                        <>
+                            <Segmented
+                                aria-label="按兑换码批次生命周期筛选"
+                                value={lifecycle}
+                                options={[
+                                    { label: "进行中", value: "ongoing" },
+                                    { label: "已结束", value: "completed" },
+                                ]}
+                                onChange={(value) => {
+                                    setLifecycle(value as Exclude<RedeemBatchLifecycle, "all">);
+                                    setPage(1);
+                                }}
+                            />
+                            <Select<BatchValidity>
+                                aria-label="按批次到期状态筛选"
+                                className="w-44"
+                                disabled={codeQuery}
+                                value={validity}
+                                onChange={(value) => {
+                                    setValidity(value);
+                                    setPage(1);
+                                }}
+                                options={[
+                                    { label: "全部到期状态", value: "all" },
+                                    { label: "批次未到期", value: "active" },
+                                    { label: "批次已到期", value: "expired" },
+                                ]}
+                            />
+                            {isFullAdmin && fundingSource === "module_admin" ? (
+                                <Select
+                                    allowClear
+                                    aria-label="按创建管理员筛选"
+                                    className="w-52"
+                                    value={creatorId || undefined}
+                                    placeholder="全部模块管理员"
+                                    onChange={(value) => {
+                                        setCreatorId(value || "");
+                                        setPage(1);
+                                    }}
+                                    options={creatorOptions}
+                                />
+                            ) : null}
+                        </>
                     }
                     onReset={() => {
                         setKeyword("");
                         setValidity("all");
+                        setCreatorId("");
                         setPage(1);
                     }}
                     trailing={
@@ -328,10 +474,41 @@ export default function RedemptionCodesPanel({ createOpen, onCreateOpenChange, o
                     empty={
                         <AdminTableEmpty
                             filtered={hasFilters}
-                            title={listError ? "批次读取失败" : !hasFilters ? "暂无兑换码批次" : undefined}
-                            description={listError || (!hasFilters ? "生成后的批次会在这里集中展示和追踪。" : undefined)}
+                            title={
+                                listError
+                                    ? codeQuery
+                                        ? lookupNotFound
+                                            ? "未找到兑换码"
+                                            : "兑换码查询失败"
+                                        : "批次读取失败"
+                                    : codeQuery && lookupResult?.matches.length
+                                      ? `已找到 ${lookupResult.total} 个兑换码`
+                                      : codeQuery && lookupResult
+                                        ? "未找到匹配的兑换码"
+                                        : !hasFilters
+                                          ? lifecycle === "ongoing"
+                                              ? "暂无进行中的兑换码批次"
+                                              : "暂无已结束的兑换码批次"
+                                          : undefined
+                            }
+                            description={
+                                listError ||
+                                (codeQuery && lookupResult?.matches.length
+                                    ? "可重新打开查询结果，查看状态和核销信息。"
+                                    : codeQuery && lookupResult
+                                      ? "批次列表仍按相同关键词筛选；已结束满 30 天的历史兑换码仅支持输入完整 32 位进行精确核验。"
+                                      : !hasFilters
+                                        ? lifecycle === "ongoing"
+                                            ? "生成后的批次会在这里集中展示；全部核销、禁用或过期后会自动进入“已结束”。"
+                                            : "全部核销、禁用或过期的批次会保留在这里供历史核对。"
+                                        : undefined)
+                            }
                             action={
-                                !listError && !hasFilters && !uncertainCreateNotice ? (
+                                !listError && codeQuery && lookupResult?.matches.length ? (
+                                    <Button icon={<Eye className="size-4" />} onClick={() => setLookupOpen(true)}>
+                                        查看查询结果
+                                    </Button>
+                                ) : !listError && lifecycle === "ongoing" && !hasFilters && !uncertainCreateNotice && (!isFullAdmin || fundingSource === "platform") ? (
                                     <Button type="primary" icon={<TicketCheck className="size-4" />} onClick={() => onCreateOpenChange(true)}>
                                         生成首个批次
                                     </Button>
@@ -354,7 +531,7 @@ export default function RedemptionCodesPanel({ createOpen, onCreateOpenChange, o
                 />
             </section>
 
-            <CreateRedeemBatchDrawer
+            <CreateRedeemBatchModal
                 open={createOpen}
                 creating={creating}
                 pending={pendingCreate}
@@ -362,6 +539,8 @@ export default function RedemptionCodesPanel({ createOpen, onCreateOpenChange, o
                 watchedAmount={watchedAmount}
                 watchedCount={watchedCount}
                 draftTotal={draftTotal}
+                fundingSummary={fundingSummary}
+                usesPersonalCredits={!isFullAdmin}
                 onClose={closeCreateDrawer}
                 onPreview={previewCreate}
                 onPendingChange={setPendingCreate}
@@ -376,12 +555,59 @@ export default function RedemptionCodesPanel({ createOpen, onCreateOpenChange, o
                     setGeneratedBatchId("");
                 }}
             />
-            <RedeemBatchCodesModal key={selectedBatch?.id || "closed"} batch={selectedBatch} onClose={() => setSelectedBatch(null)} onBatchChanged={() => reload(page, pageSize)} />
+            <RedeemCodeLookupModal
+                open={lookupOpen}
+                result={lookupResult}
+                onClose={() => setLookupOpen(false)}
+                onChanged={async () => {
+                    await Promise.all([lookupCode(keyword), reload(page, pageSize)]);
+                }}
+            />
+            <RedeemBatchCodesModal
+                key={selectedBatch?.id || "closed"}
+                batch={selectedBatch}
+                onClose={() => setSelectedBatch(null)}
+                onBatchChanged={async () => {
+                    await reload(page, pageSize);
+                }}
+            />
         </div>
     );
 }
 
-function CreateRedeemBatchDrawer({
+function RedeemFundingOverview({ summary, refreshing }: { summary: RedeemFundingSummary | null; refreshing: boolean }) {
+    const value = (amount?: number) => (typeof amount === "number" ? formatCredits(amount) : "--");
+    return (
+        <section className="admin-redemption-funding-overview" aria-label="个人兑换码资金概览" aria-busy={refreshing}>
+            <div className="admin-redemption-funding-heading">
+                <div>
+                    <strong>个人资金概览</strong>
+                    <p>冻结积分按兑换码占用和任务等其他预授权拆分。</p>
+                </div>
+                <span>{refreshing ? "正在刷新" : summary ? `账户总冻结 ${formatCredits(summary.totalReservedMicrocredits)}` : "暂时无法读取"}</span>
+            </div>
+            <dl className="admin-redemption-funding-grid">
+                <div>
+                    <dt>可分配积分</dt>
+                    <dd>{value(summary?.availableMicrocredits)}</dd>
+                    <small>可继续用于生成兑换码</small>
+                </div>
+                <div>
+                    <dt>兑换码冻结</dt>
+                    <dd>{value(summary?.redeemReservedMicrocredits)}</dd>
+                    <small>未核销且尚未过期</small>
+                </div>
+                <div>
+                    <dt>其他冻结</dt>
+                    <dd>{value(summary?.otherReservedMicrocredits)}</dd>
+                    <small>任务预扣等其他占用</small>
+                </div>
+            </dl>
+        </section>
+    );
+}
+
+function CreateRedeemBatchModal({
     open,
     creating,
     pending,
@@ -389,6 +615,8 @@ function CreateRedeemBatchDrawer({
     watchedAmount,
     watchedCount,
     draftTotal,
+    fundingSummary,
+    usesPersonalCredits,
     onClose,
     onPreview,
     onPendingChange,
@@ -401,19 +629,23 @@ function CreateRedeemBatchDrawer({
     watchedAmount?: number | null;
     watchedCount?: number | null;
     draftTotal: number | null;
+    fundingSummary: RedeemFundingSummary | null;
+    usesPersonalCredits: boolean;
     onClose: () => void;
     onPreview: (values: RedeemFormValues) => void;
     onPendingChange: (values: PendingRedeemBatch | null) => void;
     onConfirm: () => void;
 }) {
+    const insufficientCredits = usesPersonalCredits && fundingSummary !== null && draftTotal !== null && draftTotal > fundingSummary.availableMicrocredits;
     return (
         <>
-            <Drawer
+            <AdminModal
                 title="生成兑换码批次"
                 open={open && !pending}
-                size="min(600px, 100vw)"
-                onClose={onClose}
-                rootClassName="admin-drawer admin-redemption-drawer"
+                centered
+                width="min(680px, calc(100vw - 32px))"
+                onCancel={onClose}
+                rootClassName="admin-redemption-create-modal"
                 destroyOnHidden
                 mask={{ closable: !creating && !pending }}
                 keyboard={!creating && !pending}
@@ -423,14 +655,14 @@ function CreateRedeemBatchDrawer({
                         <Button disabled={creating || Boolean(pending)} onClick={onClose}>
                             取消
                         </Button>
-                        <Button type="primary" loading={creating} disabled={Boolean(pending)} icon={<TicketCheck className="size-4" />} onClick={() => form.submit()}>
+                        <Button type="primary" loading={creating} disabled={Boolean(pending) || insufficientCredits} icon={<TicketCheck className="size-4" />} onClick={() => form.submit()}>
                             核对并继续
                         </Button>
                     </div>
                 }
             >
-                <div className="admin-redemption-drawer-intro">
-                    <span className="admin-redemption-drawer-intro-icon" aria-hidden="true">
+                <div className="admin-redemption-create-intro">
+                    <span className="admin-redemption-create-intro-icon" aria-hidden="true">
                         <KeyRound className="size-4" />
                     </span>
                     <div>
@@ -439,8 +671,8 @@ function CreateRedeemBatchDrawer({
                     </div>
                 </div>
                 <Form form={form} layout="vertical" requiredMark={false} initialValues={DEFAULT_CREATE_VALUES} onFinish={onPreview}>
-                    <section className="admin-redemption-drawer-section">
-                        <div className="admin-redemption-drawer-section-heading">
+                    <section className="admin-redemption-create-section">
+                        <div className="admin-redemption-create-section-heading">
                             <h3>批次参数</h3>
                             <p>积分最多保留 2 位小数；单批最多生成 5,000 个兑换码。</p>
                         </div>
@@ -494,6 +726,18 @@ function CreateRedeemBatchDrawer({
                             <Input.TextArea rows={3} maxLength={500} showCount placeholder="例如：2026 年秋季活动发放" />
                         </Form.Item>
                         <dl className="admin-redemption-live-summary" aria-label="待生成批次摘要">
+                            {usesPersonalCredits ? (
+                                <>
+                                    <div>
+                                        <dt>当前可用积分</dt>
+                                        <dd>{fundingSummary ? formatCredits(fundingSummary.availableMicrocredits) : "--"}</dd>
+                                    </div>
+                                    <div>
+                                        <dt>当前冻结积分</dt>
+                                        <dd>{fundingSummary ? formatCredits(fundingSummary.totalReservedMicrocredits) : "--"}</dd>
+                                    </div>
+                                </>
+                            ) : null}
                             <div>
                                 <dt>单码积分</dt>
                                 <dd>{Number(watchedAmount) > 0 ? formatCredits(Math.round(Number(watchedAmount) * MICRO_CREDITS_PER_CREDIT)) : "--"}</dd>
@@ -503,17 +747,24 @@ function CreateRedeemBatchDrawer({
                                 <dd>{Number.isInteger(Number(watchedCount)) && Number(watchedCount) > 0 ? `${Number(watchedCount)} 个` : "--"}</dd>
                             </div>
                             <div className="is-emphasis">
-                                <dt>批次总面值</dt>
-                                <dd>{draftTotal !== null ? formatCredits(draftTotal) : "--"}</dd>
+                                <dt>{usesPersonalCredits ? "本批冻结积分" : "批次总面值"}</dt>
+                                <dd className={insufficientCredits ? "text-status-error" : undefined}>{draftTotal !== null ? formatCredits(draftTotal) : "--"}</dd>
                             </div>
+                            {usesPersonalCredits ? (
+                                <div className="is-emphasis">
+                                    <dt>生成后可用积分</dt>
+                                    <dd>{fundingSummary && draftTotal !== null ? formatCredits(Math.max(0, fundingSummary.availableMicrocredits - draftTotal)) : "--"}</dd>
+                                </div>
+                            ) : null}
                         </dl>
                     </section>
                 </Form>
-            </Drawer>
+            </AdminModal>
 
             <Modal
                 title="确认生成兑换码批次"
                 open={Boolean(pending)}
+                centered
                 okText="确认生成"
                 cancelText="返回修改"
                 onCancel={() => {
@@ -529,7 +780,7 @@ function CreateRedeemBatchDrawer({
             >
                 {pending ? (
                     <div className="admin-operation-confirmation">
-                        <p className="admin-operation-confirmation-copy">请核对本批次的总发放额度和有效期。确认后会立即生成，不能撤销整批记录。</p>
+                        <p className="admin-operation-confirmation-copy">{usesPersonalCredits ? "确认后将立即冻结本批总面值；核销后最终消耗，未使用码禁用或过期时退回。" : "请核对本批次的总发放额度和有效期。确认后会立即生成，不能撤销整批记录。"}</p>
                         <dl className="admin-operation-confirmation-grid">
                             <div>
                                 <dt>单码积分</dt>
@@ -540,9 +791,15 @@ function CreateRedeemBatchDrawer({
                                 <dd>{pending.count} 个</dd>
                             </div>
                             <div>
-                                <dt>批次总面值</dt>
+                                <dt>{usesPersonalCredits ? "冻结积分" : "批次总面值"}</dt>
                                 <dd className="is-positive">{formatCredits(pending.totalMicrocredits)}</dd>
                             </div>
+                            {usesPersonalCredits && fundingSummary ? (
+                                <div>
+                                    <dt>生成后可用积分</dt>
+                                    <dd>{formatCredits(fundingSummary.availableMicrocredits - pending.totalMicrocredits)}</dd>
+                                </div>
+                            ) : null}
                             <div>
                                 <dt>过期时间</dt>
                                 <dd>{pending.expiresAt ? formatTime(pending.expiresAt) : "永久有效"}</dd>
@@ -618,6 +875,138 @@ function GeneratedCodesModal({ codes, batchId, onClose }: { codes: string[]; bat
     );
 }
 
+function RedeemCodeLookupModal({ open, result, onClose, onChanged }: { open: boolean; result: AdminRedeemCodeSearchResult | null; onClose: () => void; onChanged: () => Promise<unknown> }) {
+    const { message } = App.useApp();
+    const [disabling, setDisabling] = useState(false);
+    const [selectedCodeID, setSelectedCodeID] = useState("");
+    const matches = result?.matches ?? [];
+    const selected = matches.find((match) => match.code.id === selectedCodeID) || matches[0];
+    const item = selected?.code;
+    const batch = selected?.batch;
+
+    useEffect(() => {
+        if (matches.length > 0 && !matches.some((match) => match.code.id === selectedCodeID)) {
+            setSelectedCodeID(matches[0].code.id);
+        }
+    }, [matches, selectedCodeID]);
+
+    const copyCode = async () => {
+        if (!item?.code) return;
+        try {
+            await navigator.clipboard.writeText(item.code);
+            message.success("兑换码已复制");
+        } catch {
+            message.error("复制失败，请检查浏览器剪贴板权限");
+        }
+    };
+
+    const disableCode = async () => {
+        if (!item || !batch || disabling) return;
+        setDisabling(true);
+        try {
+            const disabled = await disableAdminRedeemCode(batch.id, item.id, batch.fundingSource);
+            message.success(disabled.refundedMicrocredits > 0 ? `兑换码已禁用，退回 ${formatCredits(disabled.refundedMicrocredits)} 积分` : "兑换码已禁用");
+            if (disabled.refundedMicrocredits > 0) window.dispatchEvent(new CustomEvent("wallet:updated"));
+        } catch (error) {
+            const detail = error instanceof Error ? error.message : "禁用兑换码失败";
+            if (isMutationResultUncertain(error)) message.warning({ content: `禁用结果暂时无法确认：${detail}。正在重新查询兑换码状态。`, duration: 6 });
+            else message.error(detail);
+        } finally {
+            await onChanged();
+            setDisabling(false);
+        }
+    };
+
+    return (
+        <Modal
+            title={result && result.total > 1 ? `兑换码查询结果 · ${result.total} 条` : "兑换码查询结果"}
+            open={open && matches.length > 0}
+            onCancel={() => {
+                if (!disabling) onClose();
+            }}
+            destroyOnHidden
+            mask={{ closable: !disabling }}
+            keyboard={!disabling}
+            closable={!disabling}
+            width={720}
+            rootClassName="admin-modal-root"
+            footer={
+                <Space>
+                    {item?.status === "unused" ? (
+                        <Popconfirm
+                            title={`禁用尾号 ${item.codeSuffix} 的兑换码？`}
+                            description={`该兑换码面值 ${formatCredits(item.amountMicrocredits)} 积分，禁用后无法恢复。`}
+                            okText="确认禁用"
+                            cancelText="取消"
+                            okButtonProps={{ danger: true }}
+                            disabled={disabling}
+                            onConfirm={() => disableCode()}
+                        >
+                            <Button danger loading={disabling} icon={<Ban className="size-4" />}>
+                                禁用兑换码
+                            </Button>
+                        </Popconfirm>
+                    ) : null}
+                    <Button type="primary" disabled={disabling} onClick={onClose}>
+                        关闭
+                    </Button>
+                </Space>
+            }
+        >
+            {item && batch ? (
+                <div className="space-y-4">
+                    {matches.length > 1 ? (
+                        <Select
+                            className="w-full"
+                            aria-label="选择匹配的兑换码"
+                            value={item.id}
+                            onChange={setSelectedCodeID}
+                            options={matches.map((match) => ({ value: match.code.id, label: `${match.code.code} · ${formatCodeStatusLabel(match.code.status)}` }))}
+                        />
+                    ) : null}
+                    {result?.truncated ? (
+                        <div className="admin-redemption-sensitive-notice is-warning">
+                            共匹配 {result.total} 个兑换码，当前仅展示前 {matches.length} 个。请继续输入更多字符缩小范围。
+                        </div>
+                    ) : null}
+                    <div className="flex items-center gap-2 rounded-lg border border-border/70 bg-muted/25 px-3 py-2.5">
+                        <KeyRound className="size-4 shrink-0 text-foreground/45" aria-hidden />
+                        <code className="min-w-0 flex-1 break-all text-sm">{item.code}</code>
+                        <Button type="text" size="small" aria-label="复制兑换码" icon={<Copy className="size-3.5" />} disabled={disabling} onClick={() => void copyCode()} />
+                    </div>
+                    <div className="admin-redemption-detail-summary">
+                        {renderCodeStatus(item.status)}
+                        <span>单码 {formatCredits(item.amountMicrocredits)} 积分</span>
+                        <span>{item.expiresAt ? `到期 ${formatTime(item.expiresAt)}` : "永久有效"}</span>
+                    </div>
+                    <dl className="grid grid-cols-1 gap-px overflow-hidden rounded-lg border border-border/70 bg-border/60 sm:grid-cols-2">
+                        <LookupField
+                            label="核销用户"
+                            value={item.redeemedBy ? item.redeemedDisplayName || item.redeemedUsername || item.redeemedBy : "--"}
+                            detail={item.redeemedBy ? (item.redeemedUsername ? `@${item.redeemedUsername}` : item.redeemedBy) : undefined}
+                        />
+                        <LookupField label="核销时间" value={formatTime(item.redeemedAt)} />
+                        <LookupField label="核销 IP" value={item.redeemedIp || "--"} />
+                        <LookupField label="所属批次" value={batch.note || "未备注批次"} detail={`批次 ${batch.id.slice(0, 8)}`} />
+                        <LookupField label="批次创建时间" value={formatTime(batch.createdAt)} />
+                        <LookupField label="批次状态分布" value={`可用 ${batch.availableCount} · 核销 ${batch.redeemedCount} · 过期 ${batch.expiredCount} · 禁用 ${batch.disabledCount}`} />
+                    </dl>
+                </div>
+            ) : null}
+        </Modal>
+    );
+}
+
+function LookupField({ label, value, detail }: { label: string; value: string; detail?: string }) {
+    return (
+        <div className="min-w-0 bg-background px-4 py-3">
+            <dt className="text-xs text-foreground/45">{label}</dt>
+            <dd className="mt-1 break-words text-sm text-foreground/85">{value}</dd>
+            {detail ? <dd className="mt-0.5 truncate text-xs text-foreground/40">{detail}</dd> : null}
+        </div>
+    );
+}
+
 function RedeemBatchCodesModal({ batch, onClose, onBatchChanged }: { batch: RedeemBatch | null; onClose: () => void; onBatchChanged: () => void | Promise<unknown> }) {
     const { message } = App.useApp();
     const [batchSummary, setBatchSummary] = useState<RedeemBatch | null>(batch);
@@ -641,7 +1030,7 @@ function RedeemBatchCodesModal({ batch, onClose, onBatchChanged }: { batch: Rede
         setCodes([]);
         setTotal(0);
         try {
-            const result = await listAdminRedeemBatchCodes(batch.id, { status: targetStatus === "all" ? undefined : targetStatus, page: targetPage, pageSize: targetPageSize });
+            const result = await listAdminRedeemBatchCodes(batch.id, batch.fundingSource, { status: targetStatus === "all" ? undefined : targetStatus, page: targetPage, pageSize: targetPageSize });
             if (requestId !== requestRef.current) return false;
             const lastPage = Math.max(1, Math.ceil(result.total / targetPageSize));
             if (targetPage > lastPage) {
@@ -696,8 +1085,9 @@ function RedeemBatchCodesModal({ batch, onClose, onBatchChanged }: { batch: Rede
         codeMutationsRef.current.add(item.id);
         setDisablingCodeIds((current) => new Set(current).add(item.id));
         try {
-            await disableAdminRedeemCode(batch.id, item.id);
-            message.success("兑换码已禁用");
+            const disabled = await disableAdminRedeemCode(batch.id, item.id, batch.fundingSource);
+            message.success(disabled.refundedMicrocredits > 0 ? `兑换码已禁用，退回 ${formatCredits(disabled.refundedMicrocredits)} 积分` : "兑换码已禁用");
+            if (disabled.refundedMicrocredits > 0) window.dispatchEvent(new CustomEvent("wallet:updated"));
         } catch (error) {
             const detail = error instanceof Error ? error.message : "禁用兑换码失败";
             if (isMutationResultUncertain(error)) message.warning({ content: `禁用结果暂时无法确认：${detail}。已刷新明细，请核对后再操作。`, duration: 6 });
@@ -786,7 +1176,13 @@ function RedeemBatchCodesModal({ batch, onClose, onBatchChanged }: { batch: Rede
             width={1080}
             rootClassName="admin-modal-root"
         >
-            {!plaintextAvailable ? <div className="admin-redemption-sensitive-notice is-warning">该批次创建于加密回看功能上线前，系统当时只保存了哈希，无法恢复完整明文；核销状态和审计信息仍可查看。</div> : null}
+            {!plaintextAvailable ? (
+                <div className="admin-redemption-sensitive-notice is-warning">
+                    {batchSummary?.codeSecretsClearedAt
+                        ? `该批次结束已满 30 天，完整兑换码已于 ${formatTime(batchSummary.codeSecretsClearedAt)} 自动清除；尾号、核销状态和审计信息仍可查看，输入完整 32 位兑换码仍可精确核验。`
+                        : "该批次没有可恢复的完整兑换码；尾号、核销状态和审计信息仍可查看，输入完整 32 位兑换码仍可精确核验。"}
+                </div>
+            ) : null}
             <div className="admin-redemption-detail-summary">
                 <BatchStatusDistribution batch={batchSummary || batch || emptyBatchSummary} />
                 <span>单码 {formatCredits(batchSummary?.amountMicrocredits ?? batch?.amountMicrocredits ?? 0)} 积分</span>
@@ -841,6 +1237,8 @@ const emptyBatchSummary: RedeemBatch = {
     amountMicrocredits: 0,
     count: 0,
     createdBy: "",
+    fundingSource: "platform",
+    totalMicrocredits: 0,
     createdAt: "",
     availableCount: 0,
     redeemedCount: 0,
@@ -859,9 +1257,23 @@ function renderCodeStatus(status: AdminRedeemCode["status"]) {
     return <AdminStatusBadge label={configForStatus.label} tone={configForStatus.tone} />;
 }
 
+function formatCodeStatusLabel(status: AdminRedeemCode["status"]) {
+    return {
+        unused: "可用",
+        redeemed: "已核销",
+        disabled: "已禁用",
+        expired: "已过期",
+    }[status];
+}
+
 function isMutationResultUncertain(error: unknown) {
     if (!(error instanceof ApiError)) return true;
     return error.status === undefined || error.retryable || error.status >= 500;
+}
+
+function isRedeemCodeSearchCandidate(value: string) {
+    const normalized = value.trim();
+    return normalized.length >= 1 && normalized.length <= 32 && !/\s/.test(normalized);
 }
 
 function formatBatchDisableImpact(batch: RedeemBatch) {

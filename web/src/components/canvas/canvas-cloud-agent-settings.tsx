@@ -29,6 +29,7 @@ type AgentSettingsProps = {
     onSaveProfile: (input: { scope: AgentProfileScope; projectId?: string; canvasId?: string; content: string; revision: number }) => Promise<AgentProfileView>;
     contextScope: AgentContextKey[];
     nodeCount: number;
+    skillsEnabled: boolean;
     installedSkills: Skill[];
     marketSkills: Skill[];
     selectedSkillIds: string[];
@@ -74,9 +75,13 @@ export function CanvasCloudAgentSettings(props: AgentSettingsProps) {
     const title = section === "home" ? "Agent 设置" : sectionTitle(section);
     const goHome = () => setSection("home");
 
+    useEffect(() => {
+        if (!props.skillsEnabled && section === "skills") setSection("home");
+    }, [props.skillsEnabled, section]);
+
     return (
         <div className="canvas-agent-settings flex min-h-0 min-w-0 flex-1 flex-col" style={{ background: theme.node.panel }}>
-            <header data-agent-drag-handle className="flex h-[68px] shrink-0 items-center gap-2 px-3" style={{ boxShadow: `inset 0 -1px 0 ${theme.toolbar.border}` }}>
+            <header data-agent-drag-handle className="agent-panel-header flex shrink-0 items-center gap-2">
                 <Button type="text" shape="circle" icon={<ArrowLeft className="size-4" />} onClick={section === "home" ? props.onBack : goHome} aria-label={section === "home" ? "返回对话" : "返回设置"} />
                 <div className="min-w-0 flex-1"><div className="text-sm font-semibold">{title}</div><div className="mt-0.5 text-[11px] opacity-40">{section === "home" ? "只影响下一次新运行" : sectionSubtitle(section)}</div></div>
                 {section !== "home" ? <span className="rounded-full px-2 py-1 text-[10px] opacity-50" style={{ background: theme.node.fill }}>{section === "skills" ? `${props.selectedSkillIds.length} 已启用` : "当前 Agent"}</span> : null}
@@ -85,7 +90,7 @@ export function CanvasCloudAgentSettings(props: AgentSettingsProps) {
             {section === "home" ? <SettingsHome props={props} theme={theme} onOpen={setSection} /> : null}
             {section === "profile" ? <ProfileWorkspace props={props} theme={theme} /> : null}
             {section === "memories" ? <MemoriesWorkspace /> : null}
-            {section === "skills" ? <SkillsWorkspace props={props} theme={theme} tab={skillTab} onTabChange={setSkillTab} /> : null}
+            {section === "skills" && props.skillsEnabled ? <SkillsWorkspace props={props} theme={theme} tab={skillTab} onTabChange={setSkillTab} /> : null}
             {section === "mcp" ? <McpWorkspace theme={theme} /> : null}
             {section === "context" ? <ContextWorkspace props={props} theme={theme} /> : null}
             {section === "budget" ? <BudgetWorkspace props={props} theme={theme} /> : null}
@@ -129,8 +134,8 @@ function SettingsHome({ props, theme, onOpen }: { props: AgentSettingsProps; the
                     <SettingRow theme={theme} icon={<Cpu className="size-4" />} title="上下文" summary={`${props.nodeCount} 个节点 · ${props.contextScope.length} 个范围`} onClick={() => onOpen("context")} />
                     <SettingRow theme={theme} icon={<Sparkles className="size-4" />} title="长期偏好" summary={profileSummary(props.profileView)} onClick={() => onOpen("profile")} />
                     <SettingRow theme={theme} icon={<BookMarked className="size-4" />} title="个人记忆" summary="批准、添加、导出导入；只影响你的会话" onClick={() => onOpen("memories")} />
-                    <SettingRow theme={theme} icon={<Sparkles className="size-4" />} title="Skills · 用户技能库" summary={`${props.installedSkills.length} 个已安装 · 本轮启用 ${props.selectedSkillIds.length} 个`} onClick={() => onOpen("skills")} />
-                    <SettingRow theme={theme} icon={<Wrench className="size-4" />} title="工具与连接" summary="画布、技能参考文件、生成任务" onClick={() => onOpen("mcp")} />
+                    {props.skillsEnabled ? <SettingRow theme={theme} icon={<Sparkles className="size-4" />} title="Skills · 用户技能库" summary={`${props.installedSkills.length} 个已安装 · 本轮启用 ${props.selectedSkillIds.length} 个`} onClick={() => onOpen("skills")} /> : null}
+                    <SettingRow theme={theme} icon={<Wrench className="size-4" />} title="工具与连接" summary={props.skillsEnabled ? "画布、技能参考文件、生成任务" : "画布与生成任务"} onClick={() => onOpen("mcp")} />
                     <SettingRow theme={theme} icon={<Gauge className="size-4" />} title="预算" summary={`每轮最多 ${props.maxCredits || "未设置"} 积分 · 固定计价模型`} onClick={() => onOpen("budget")} />
                 </div>
             </section>
@@ -317,5 +322,5 @@ function sectionTitle(section: SettingsSection) { return section === "profile" ?
 function sectionSubtitle(section: SettingsSection) { return section === "profile" ? "用户、项目和画布的长期行为偏好" : section === "memories" ? "只属于你，批准后才会注入会话" : section === "skills" ? "搜索、安装并选择本轮技能" : section === "mcp" ? "云端工具与连接状态" : section === "context" ? "控制 Agent 能读取的范围" : "控制本轮积分与生成消耗"; }
 
 export function agentPermissionLabel(mode: AgentPermissionMode) { return permissionOptions.find((option) => option.value === mode)?.label || "请求审批"; }
-export function agentPermissionVisual(mode: AgentPermissionMode) { const option = permissionOptions.find((item) => item.value === mode) || permissionOptions[0]; return { color: option.color, soft: `${option.color}1f` }; }
+export function agentPermissionVisual(mode: AgentPermissionMode) { const option = permissionOptions.find((item) => item.value === mode) || permissionOptions[0]; return { color: option.color, soft: `${option.color}1f`, icon: option.icon }; }
 export function agentPermissionMenuItems(mode: AgentPermissionMode, onChange: (mode: AgentPermissionMode) => void) { return permissionOptions.map((option) => ({ key: option.value, label: <span>{option.label}</span>, icon: mode === option.value ? <Check className="size-3.5" style={{ color: option.color }} /> : <option.icon className="size-3.5" style={{ color: option.color }} />, onClick: () => onChange(option.value) })); }

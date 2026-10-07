@@ -21,7 +21,7 @@ import (
 const (
 	defaultXunHuPayGateway = "https://api.xunhupay.com"
 	xunhupayAPIVersion     = "1.1"
-	xunhupayPluginName     = "yingce-xunhupay"
+	xunhupayPluginName     = "open-ai-canvas-xunhupay"
 	xunhupayPayPath        = "/payment/do.html"
 	xunhupayQueryPath      = "/payment/query.html"
 	xunhupayQRLifetime     = 5 * time.Minute

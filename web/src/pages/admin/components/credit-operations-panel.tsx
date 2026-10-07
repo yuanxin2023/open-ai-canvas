@@ -1,15 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { App, Button, Drawer, Form, Input, InputNumber, Modal, Select } from "antd";
+import { App, Button, Form, Input, InputNumber, Modal, Select } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { BadgeCheck, Coins, Plus, RefreshCw, Search, Trash2, Undo2 } from "lucide-react";
 
 import { PaginationBar } from "@/pages/admin/components/admin-ui";
 import { formatCredits } from "@/constant/credits";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
-import { listAdminUsers, type AdminReferenceData, type AdminUser } from "@/services/api/auth";
+import { AdminModal } from "@/pages/admin/ui/overlays";
+import { searchAdminUserReferences, type AdminReferenceData, type AdminUserReference } from "@/services/api/auth";
 import { adjustAdminUserCredits, getAdminCreditPolicy, listAdminBillingOrders, resolveAdminBillingOrder, resolveAdminBillingOrders, updateAdminCreditPolicy, type BillingOrder } from "@/services/api/wallet";
 
 import { AdminBatchBar, AdminDataTable, AdminRowActions, AdminStatusBadge, AdminTableEmpty } from "./admin-ui";
+import { ApiLogDetailModal } from "./api-log-detail-drawer";
 
 export type CreditOperation = "policy" | "adjustment" | null;
 
@@ -18,7 +20,7 @@ type ResolutionFormValues = { note: string };
 type PolicyMultiplierRow = { model?: string; multiplier?: number };
 type PolicyFormValues = { signupBonus: number; checkinBonus: number; defaultMultiplier: number; modelMultipliers: PolicyMultiplierRow[] };
 type BillingResolutionAction = "settle" | "refund";
-type AdjustmentUser = AdminReferenceData["users"][number] & Partial<Pick<AdminUser, "email" | "availableMicrocredits" | "reservedMicrocredits">>;
+type AdjustmentUser = AdminUserReference;
 type BillingResolutionTarget = { kind: "single"; order: BillingOrder; action: BillingResolutionAction } | { kind: "batch"; orders: BillingOrder[]; action: BillingResolutionAction };
 
 const billingStatusLabels = {
@@ -49,6 +51,7 @@ export default function CreditOperationsPanel({ users, activeOperation, onOperat
     const [searchingUsers, setSearchingUsers] = useState(false);
     const [pendingAdjustment, setPendingAdjustment] = useState<AdjustmentFormValues | null>(null);
     const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
+    const [detailBillingOrderId, setDetailBillingOrderId] = useState<string | null>(null);
     const [resolutionTarget, setResolutionTarget] = useState<BillingResolutionTarget | null>(null);
     const [adjustmentForm] = Form.useForm<AdjustmentFormValues>();
     const [resolutionForm] = Form.useForm<ResolutionFormValues>();
@@ -59,7 +62,7 @@ export default function CreditOperationsPanel({ users, activeOperation, onOperat
 
     const userLabels = useMemo(() => {
         const labels = new Map<string, string>();
-        for (const user of [...users, ...adjustmentUsers]) labels.set(user.id, user.displayName || user.username);
+        for (const user of [...users, ...adjustmentUsers]) labels.set(user.id, user.username);
         return labels;
     }, [adjustmentUsers, users]);
     const selectedAdjustmentUser = adjustmentUsers.find((user) => user.id === selectedAdjustmentUserId);
@@ -134,7 +137,7 @@ export default function CreditOperationsPanel({ users, activeOperation, onOperat
         if (activeOperation !== "adjustment") return;
         const requestId = ++userSearchRequestRef.current;
         setSearchingUsers(true);
-        void listAdminUsers({ keyword: debouncedAdjustmentSearch.trim() || undefined, page: 1, pageSize: 50 })
+        void searchAdminUserReferences({ keyword: debouncedAdjustmentSearch.trim() || undefined, limit: 50 })
             .then((result) => {
                 if (requestId !== userSearchRequestRef.current) return;
                 const selectedId = adjustmentForm.getFieldValue("userId");
@@ -289,7 +292,17 @@ export default function CreditOperationsPanel({ users, activeOperation, onOperat
     };
 
     const columns: ColumnsType<BillingOrder> = [
-        { title: "创建时间", dataIndex: "createdAt", width: 170, align: "center", render: formatTime },
+        {
+            title: "创建时间 / 详情",
+            dataIndex: "createdAt",
+            width: 170,
+            align: "center",
+            render: (value: string, order) => (
+                <Button type="link" size="small" className="h-auto p-0 tabular-nums" aria-label={`查看计费订单 ${order.id} 的请求详情`} onClick={() => setDetailBillingOrderId(order.id)}>
+                    {formatTime(value)}
+                </Button>
+            ),
+        },
         {
             title: "用户",
             dataIndex: "userId",
@@ -328,7 +341,11 @@ export default function CreditOperationsPanel({ users, activeOperation, onOperat
                     <div className="text-xs leading-5">
                         <div className="font-medium tabular-nums">{order.status === "settled" ? `${formatCredits(order.actualAmountMicrocredits)} 积分` : "等待用量结算"}</div>
                         <div className="text-foreground/50">
-                            输入 {order.inputTokens} · 输出 {order.outputTokens} · 缓存 {order.cachedTokens}
+                            {order.usageSource === "video_formula"
+                                ? `公式结算 · ${order.outputTokens.toLocaleString()} 视频 Token`
+                                : order.capability === "video"
+                                  ? `上游用量 · ${order.outputTokens.toLocaleString()} 视频 Token`
+                                  : `输入 ${order.inputTokens} · 输出 ${order.outputTokens} · 缓存 ${order.cachedTokens}`}
                         </div>
                     </div>
                 ) : (
@@ -435,6 +452,13 @@ export default function CreditOperationsPanel({ users, activeOperation, onOperat
                         pagination: false,
                         columns,
                         dataSource: orders,
+                        onRow: (order) => ({
+                            onClick: (event) => {
+                                if ((event.target as HTMLElement).closest("button,a,input,.ant-checkbox-wrapper")) return;
+                                setDetailBillingOrderId(order.id);
+                            },
+                            className: "admin-table-clickable-row",
+                        }),
                         rowSelection: {
                             selectedRowKeys: selectedOrderIds,
                             preserveSelectedRowKeys: false,
@@ -462,16 +486,19 @@ export default function CreditOperationsPanel({ users, activeOperation, onOperat
                 />
             </section>
 
-            <Drawer
+            <ApiLogDetailModal billingOrderId={detailBillingOrderId} onClose={() => setDetailBillingOrderId(null)} onLogUpdated={() => void reload(page, pageSize)} />
+
+            <AdminModal
+                centered
                 title="积分策略"
                 open={activeOperation === "policy"}
-                size="min(700px, 100vw)"
-                onClose={() => {
+                width="min(760px, calc(100vw - 32px))"
+                onCancel={() => {
                     if (!savingPolicy) onOperationChange(null);
                 }}
-                rootClassName="admin-drawer admin-credit-drawer"
-                destroyOnHidden
+                rootClassName="admin-credit-modal admin-credit-policy-modal"
                 mask={{ closable: !savingPolicy }}
+                closable={!savingPolicy}
                 keyboard={!savingPolicy}
                 footer={
                     <div className="flex justify-end gap-2">
@@ -580,19 +607,20 @@ export default function CreditOperationsPanel({ users, activeOperation, onOperat
                         </section>
                     </Form>
                 )}
-            </Drawer>
+            </AdminModal>
 
-            <Drawer
+            <AdminModal
+                centered
                 title="人工调账"
                 open={activeOperation === "adjustment"}
-                size="min(580px, 100vw)"
-                onClose={() => {
+                width="min(620px, calc(100vw - 32px))"
+                onCancel={() => {
                     if (adjusting || pendingAdjustment) return;
                     onOperationChange(null);
                 }}
-                rootClassName="admin-drawer admin-credit-drawer"
-                destroyOnHidden
+                rootClassName="admin-credit-modal admin-credit-adjustment-modal"
                 mask={{ closable: !adjusting && !pendingAdjustment }}
+                closable={!adjusting && !pendingAdjustment}
                 keyboard={!adjusting && !pendingAdjustment}
                 footer={
                     <div className="flex justify-end gap-2">
@@ -620,7 +648,7 @@ export default function CreditOperationsPanel({ users, activeOperation, onOperat
                                 placeholder="搜索用户名、显示名称或邮箱"
                                 onSearch={setAdjustmentSearch}
                                 options={adjustmentUsers.map((user) => ({
-                                    label: `${user.displayName || user.username} · @${user.username}`,
+                                    label: `@${user.username}`,
                                     value: user.id,
                                 }))}
                             />
@@ -644,7 +672,7 @@ export default function CreditOperationsPanel({ users, activeOperation, onOperat
                         </Form.Item>
                     </section>
                 </Form>
-            </Drawer>
+            </AdminModal>
 
             <Modal
                 title={pendingAdjustment?.amount && pendingAdjustment.amount < 0 ? "确认扣减用户积分" : "确认增加用户积分"}
@@ -785,12 +813,12 @@ function getReservedAmount(order: BillingOrder) {
     return order.reservedAmountMicrocredits || order.amountMicrocredits;
 }
 
-function hasCreditBalance(user?: AdjustmentUser): user is AdjustmentUser & Pick<AdminUser, "availableMicrocredits" | "reservedMicrocredits"> {
+function hasCreditBalance(user?: AdjustmentUser): user is AdjustmentUser & Required<Pick<AdminUserReference, "availableMicrocredits" | "reservedMicrocredits">> {
     return Boolean(user && typeof user.availableMicrocredits === "number" && typeof user.reservedMicrocredits === "number");
 }
 
 function formatUserLabel(user: AdjustmentUser | undefined, fallback: string) {
-    return user ? `${user.displayName || user.username} · @${user.username}` : fallback;
+    return user ? `@${user.username}` : fallback;
 }
 
 function toMicrocredits(value: number) {

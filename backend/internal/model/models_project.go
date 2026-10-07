@@ -77,6 +77,22 @@ type AnnouncementImageDraft struct {
 	CreatedAt  time.Time `json:"createdAt" gorm:"index"`
 }
 
+// InspirationCoverDraft marks an uploaded cover as temporary until an
+// inspiration create or update transaction consumes it.
+type InspirationCoverDraft struct {
+	ResourceID string    `json:"resourceId" gorm:"primaryKey;size:36"`
+	UserID     string    `json:"userId" gorm:"index;size:36"`
+	CreatedAt  time.Time `json:"createdAt" gorm:"index"`
+}
+
+// PaymentPromotionImageDraft marks an uploaded banner as temporary until the
+// singleton payment promotion setting consumes it.
+type PaymentPromotionImageDraft struct {
+	ResourceID string    `json:"resourceId" gorm:"primaryKey;size:36"`
+	UserID     string    `json:"userId" gorm:"index;size:36"`
+	CreatedAt  time.Time `json:"createdAt" gorm:"index"`
+}
+
 type Asset struct {
 	ID               string             `json:"id" gorm:"primaryKey;size:80"`
 	UserID           string             `json:"userId" gorm:"index;size:36;index:idx_assets_user_updated,priority:1"`
@@ -416,6 +432,25 @@ type UserPromptCustomization struct {
 	UpdatedAt      time.Time `json:"updatedAt"`
 }
 
+// UserPrompt is a private reusable prompt owned by one user. It is separate
+// from PromptTemplate (system generation policy) and Inspiration (public
+// curated content).
+type UserPrompt struct {
+	ID              string          `json:"id" gorm:"primaryKey;size:36"`
+	UserID          string          `json:"-" gorm:"size:36;index;index:idx_user_prompts_user_updated,priority:1"`
+	Title           string          `json:"title" gorm:"size:120;index"`
+	Description     string          `json:"description" gorm:"size:500"`
+	Mode            InspirationMode `json:"mode" gorm:"size:16;index"`
+	Prompt          string          `json:"prompt" gorm:"type:text"`
+	Tags            []string        `json:"tags" gorm:"-"`
+	TagsJSON        string          `json:"-" gorm:"column:tags_json;type:text"`
+	Source          string          `json:"source,omitempty" gorm:"size:120"`
+	CoverResourceID string          `json:"coverResourceId,omitempty" gorm:"index;size:36"`
+	CoverURL        string          `json:"coverUrl,omitempty" gorm:"size:1000"`
+	CreatedAt       time.Time       `json:"createdAt"`
+	UpdatedAt       time.Time       `json:"updatedAt" gorm:"index:idx_user_prompts_user_updated,priority:2"`
+}
+
 type Announcement struct {
 	ID              string             `json:"id" gorm:"primaryKey;size:36"`
 	Title           string             `json:"title" gorm:"size:120"`
@@ -430,6 +465,29 @@ type Announcement struct {
 	ClosedAt        *time.Time         `json:"closedAt"`
 	CreatedAt       time.Time          `json:"createdAt"`
 	UpdatedAt       time.Time          `json:"updatedAt"`
+}
+
+// Inspiration is a curated prompt card shown in the creation workspace.
+// Tags are persisted as JSON and explicitly decoded by the repository layer.
+type Inspiration struct {
+	ID              string            `json:"id" gorm:"primaryKey;size:36"`
+	Title           string            `json:"title" gorm:"size:120;index"`
+	Description     string            `json:"description" gorm:"size:240"`
+	Mode            InspirationMode   `json:"mode" gorm:"size:16;index"`
+	Prompt          string            `json:"prompt" gorm:"type:text"`
+	Tags            []string          `json:"tags" gorm:"-"`
+	TagsJSON        string            `json:"-" gorm:"column:tags_json;type:text"`
+	Source          string            `json:"source,omitempty" gorm:"size:120"`
+	CoverResourceID string            `json:"coverResourceId,omitempty" gorm:"index;size:36"`
+	CoverURL        string            `json:"coverUrl" gorm:"size:1000"`
+	CoverWidth      int               `json:"coverWidth"`
+	CoverHeight     int               `json:"coverHeight"`
+	Status          InspirationStatus `json:"status" gorm:"size:16;index"`
+	SortOrder       int64             `json:"sortOrder" gorm:"index"`
+	CreatedBy       string            `json:"createdBy" gorm:"size:36;index"`
+	UpdatedBy       string            `json:"updatedBy" gorm:"size:36;index"`
+	CreatedAt       time.Time         `json:"createdAt"`
+	UpdatedAt       time.Time         `json:"updatedAt"`
 }
 
 type UserAnnouncementRead struct {

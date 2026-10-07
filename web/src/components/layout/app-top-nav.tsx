@@ -4,7 +4,7 @@ import { useLocation, useNavigate } from "react-router";
 import { BannerAnnouncementsSlider } from "@/components/layout/banner-announcements-slider";
 import { ModelSetupGuide } from "@/components/layout/model-setup-guide";
 import { WorkspaceSidebarNav } from "@/components/layout/workspace-sidebar-nav";
-import { readWorkspaceSidebarCollapsed, writeWorkspaceSidebarCollapsed } from "@/components/layout/workspace-sidebar-state";
+import { readWorkspaceSidebarCollapsed, subscribeWorkspaceSidebarCollapsed, writeWorkspaceSidebarCollapsed } from "@/components/layout/workspace-sidebar-state";
 import { WorkspaceTopBar } from "@/components/layout/workspace-top-bar";
 import { WorkspaceTopBarExtensionProvider } from "@/components/layout/workspace-top-bar-extension";
 import { WorkspaceWalletHost } from "@/components/layout/workspace-wallet-modal";
@@ -75,6 +75,8 @@ export function AppWorkspaceShell({ children }: { children: ReactNode }) {
         window.addEventListener("workspace:navigate", handleWorkspaceNavigation);
         return () => window.removeEventListener("workspace:navigate", handleWorkspaceNavigation);
     }, [navigate]);
+
+    useEffect(() => subscribeWorkspaceSidebarCollapsed(setDesktopSidebarCollapsed), []);
 
     return (
         <>

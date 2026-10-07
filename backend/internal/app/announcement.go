@@ -42,7 +42,7 @@ type UserAnnouncementFeed struct {
 }
 
 func (s *Service) AdminAnnouncementPage(actor *model.User, query AdminListQuery) (*AnnouncementPage, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionAnnouncements); err != nil {
 		return nil, err
 	}
 	page, limit := normalizeAdminPage(query.Page, query.Limit)
@@ -57,7 +57,7 @@ func (s *Service) AdminAnnouncementPage(actor *model.User, query AdminListQuery)
 }
 
 func (s *Service) CreateAnnouncement(actor *model.User, req CreateAnnouncementRequest) (*model.Announcement, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionAnnouncements); err != nil {
 		return nil, err
 	}
 	title, content, level, err := normalizeAnnouncementInput(req)
@@ -88,7 +88,7 @@ func (s *Service) CreateAnnouncement(actor *model.User, req CreateAnnouncementRe
 }
 
 func (s *Service) UpdateAnnouncement(actor *model.User, id string, req UpdateAnnouncementRequest) (*model.Announcement, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionAnnouncements); err != nil {
 		return nil, err
 	}
 	s.storageMu.Lock()
@@ -167,7 +167,7 @@ func (s *Service) UpdateAnnouncement(actor *model.User, id string, req UpdateAnn
 }
 
 func (s *Service) CloseAnnouncement(actor *model.User, id string) (*model.Announcement, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionAnnouncements); err != nil {
 		return nil, err
 	}
 	announcement, err := s.repo.Announcement(strings.TrimSpace(id))
@@ -210,7 +210,7 @@ func (s *Service) UserAnnouncements(user *model.User) (*UserAnnouncementFeed, er
 }
 
 func (s *Service) UploadAnnouncementImage(actor *model.User, header *multipart.FileHeader) (*model.Resource, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionAnnouncements); err != nil {
 		return nil, err
 	}
 	if err := validateAnnouncementImageUpload(header); err != nil {
@@ -233,7 +233,7 @@ func (s *Service) UploadAnnouncementImage(actor *model.User, header *multipart.F
 }
 
 func (s *Service) DiscardAnnouncementImage(actor *model.User, resourceID string) error {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionAnnouncements); err != nil {
 		return err
 	}
 	return s.discardAnnouncementImageDraft(actor.ID, resourceID)
@@ -360,12 +360,12 @@ DirectLoop:
 		break
 	}
 	if hasBlocking {
-		return BadAuthRequest("公告配图仍被其他业务数据引用，已停止删除")
+		return BadAuthRequest("资源仍被其他业务数据引用，已停止删除")
 	}
 	resourceIDs := map[string]struct{}{resource.ID: {}}
 	for _, document := range snapshot.Documents {
 		if documentReferencesResources(document.PrimaryJSON, resourceIDs) || documentReferencesResources(document.SecondaryJSON, resourceIDs) {
-			return BadAuthRequest("公告配图仍被其他业务数据引用，已停止删除")
+			return BadAuthRequest("资源仍被其他业务数据引用，已停止删除")
 		}
 	}
 	return nil
@@ -511,7 +511,7 @@ func (s *Service) ActiveBannerAnnouncements() ([]model.BannerAnnouncement, error
 }
 
 func (s *Service) AdminBannerAnnouncementPage(actor *model.User, query AdminListQuery) (*BannerAnnouncementPage, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionBannerAnnouncements); err != nil {
 		return nil, err
 	}
 	page, limit := normalizeAdminPage(query.Page, query.Limit)
@@ -699,7 +699,7 @@ func normalizeBannerNoticeType(value string) (string, error) {
 }
 
 func (s *Service) CreateBannerAnnouncement(actor *model.User, req CreateBannerAnnouncementRequest) (*model.BannerAnnouncement, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionBannerAnnouncements); err != nil {
 		return nil, err
 	}
 	title, titleRuns, err := normalizeBannerTitle(req.Title, req.TitleRuns)
@@ -742,7 +742,7 @@ func (s *Service) CreateBannerAnnouncement(actor *model.User, req CreateBannerAn
 }
 
 func (s *Service) UpdateBannerAnnouncement(actor *model.User, id string, req UpdateBannerAnnouncementRequest) (*model.BannerAnnouncement, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionBannerAnnouncements); err != nil {
 		return nil, err
 	}
 	banner, err := s.repo.BannerAnnouncement(strings.TrimSpace(id))
@@ -787,7 +787,7 @@ func (s *Service) UpdateBannerAnnouncement(actor *model.User, id string, req Upd
 }
 
 func (s *Service) DeleteBannerAnnouncement(actor *model.User, id string) error {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionBannerAnnouncements); err != nil {
 		return err
 	}
 	_, err := s.repo.BannerAnnouncement(strings.TrimSpace(id))

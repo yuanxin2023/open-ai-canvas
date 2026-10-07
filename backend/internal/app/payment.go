@@ -62,6 +62,15 @@ type TopupProductRequest struct {
 	Name                string `json:"name"`
 	Description         string `json:"description"`
 	Benefits            string `json:"benefits"`
+	RibbonText          string `json:"ribbonText"`
+	BadgeText           string `json:"badgeText"`
+	CompareAmountFen    int64  `json:"compareAmountFen"`
+	PriceCaption        string `json:"priceCaption"`
+	QuotaCaption        string `json:"quotaCaption"`
+	QuotaDetail         string `json:"quotaDetail"`
+	ActionText          string `json:"actionText"`
+	AccentColor         string `json:"accentColor"`
+	Featured            bool   `json:"featured"`
 	AmountFen           int64  `json:"amountFen"`
 	CreditsMicrocredits int64  `json:"creditsMicrocredits"`
 	Enabled             bool   `json:"enabled"`
@@ -189,14 +198,25 @@ func (s *Service) PaymentProviders(actor *model.User) ([]PaymentProviderView, er
 }
 
 func (s *Service) AdminPaymentProviders(actor *model.User) ([]AdminPaymentProviderView, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAnyAdminPermission(actor, model.AdminPermissionPaymentProviders, model.AdminPermissionPaymentOrders, model.AdminPermissionPaymentReconciliation); err != nil {
 		return nil, err
 	}
+	canManage := actor.AdminLevel == model.AdminLevelFull || actor.AdminLevel == "" || actor.HasAdminPermission(model.AdminPermissionPaymentProviders)
 	items := make([]AdminPaymentProviderView, 0)
 	for _, descriptor := range s.paymentRegistry.Descriptors() {
 		base, config, err := s.paymentProviderView(descriptor)
 		if err != nil {
 			return nil, err
+		}
+		if !canManage {
+			items = append(items, AdminPaymentProviderView{
+				PaymentProviderView: base,
+				ConfigEnabled:       base.Configured,
+				Values:              map[string]string{},
+				SecretConfigured:    map[string]bool{},
+				ConfigFields:        []protocol.ManifestField{},
+			})
+			continue
 		}
 		manifest, _ := s.paymentManifestForProvider(descriptor.ID)
 		view := AdminPaymentProviderView{PaymentProviderView: base, Values: map[string]string{}, SecretConfigured: map[string]bool{}, ConfigFields: manifest.Configuration.Fields}
@@ -223,7 +243,7 @@ func (s *Service) AdminPaymentProviders(actor *model.User) ([]AdminPaymentProvid
 }
 
 func (s *Service) UpdatePaymentProviderConfig(actor *model.User, providerID string, request UpdatePaymentProviderConfigRequest) (*AdminPaymentProviderView, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionPaymentProviders); err != nil {
 		return nil, err
 	}
 	provider, ok := s.paymentRegistry.Get(providerID)
@@ -449,25 +469,71 @@ func validatePaymentPublicBaseURL(value string) error {
 	return nil
 }
 
-func (s *Service) TopupProducts(actor *model.User) ([]model.TopupProduct, error) {
+type PaymentCatalog struct {
+	Products   []model.TopupProduct   `json:"products"`
+	Promotion  PublicPaymentPromotion `json:"promotion"`
+	ServerTime time.Time              `json:"serverTime"`
+}
+
+func (s *Service) TopupProducts(actor *model.User) (*PaymentCatalog, error) {
 	if actor == nil {
 		return nil, Unauthorized("请先登录")
 	}
 	if err := s.RequireFeature(FeatureCredits); err != nil {
 		return nil, err
 	}
-	return s.repo.TopupProducts(false)
+	products, err := s.repo.TopupProducts(false)
+	if err != nil {
+		return nil, err
+	}
+	setting, promotion, err := s.readPaymentPromotion()
+	if err != nil {
+		return nil, err
+	}
+	now := time.Now()
+	publicPromotion := s.publicPaymentPromotion(setting, promotion, now)
+	active := publicPromotion.Visible && paymentPromotionActive(promotion, now)
+	for index := range products {
+		products[index] = publicTopupProduct(products[index], active)
+	}
+	return &PaymentCatalog{Products: products, Promotion: publicPromotion, ServerTime: now}, nil
+}
+
+func publicTopupProduct(product model.TopupProduct, promotionActive bool) model.TopupProduct {
+	if product.CompareAmountFen <= 0 {
+		return product
+	}
+	if promotionActive {
+		return product
+	}
+	product.AmountFen = product.CompareAmountFen
+	product.CompareAmountFen = 0
+	return product
+}
+
+func (s *Service) effectiveTopupProductAmount(product model.TopupProduct, now time.Time) (int64, error) {
+	_, promotion, err := s.readPaymentPromotion()
+	if err != nil {
+		return 0, err
+	}
+	active := paymentPromotionActive(promotion, now)
+	if active {
+		if _, imageErr := s.paymentPromotionImageResource(promotion.ImageResourceID); imageErr != nil {
+			active = false
+		}
+	}
+	return publicTopupProduct(product, active).AmountFen, nil
 }
 
 func (s *Service) AdminTopupProducts(actor *model.User) ([]model.TopupProduct, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionProducts); err != nil {
 		return nil, err
 	}
 	return s.repo.TopupProducts(true)
 }
 
 func (s *Service) CreateTopupProduct(actor *model.User, request TopupProductRequest) (*model.TopupProduct, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionProducts); err != nil {
 		return nil, err
 	}
 	product, err := topupProductFromRequest(newID(), actor.ID, request)
@@ -484,7 +550,7 @@ func (s *Service) CreateTopupProduct(actor *model.User, request TopupProductRequ
 }
 
 func (s *Service) UpdateTopupProduct(actor *model.User, id string, request TopupProductRequest) (*model.TopupProduct, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionProducts); err != nil {
 		return nil, err
 	}
 	if _, err := s.repo.TopupProduct(id); err != nil {
@@ -517,8 +583,31 @@ func topupProductFromRequest(id, actorID string, request TopupProductRequest) (*
 	if !validCreditPrecision(request.CreditsMicrocredits) {
 		return nil, BadAuthRequest("充值积分最多保留 2 位小数")
 	}
+	if request.CompareAmountFen < 0 || request.CompareAmountFen > 100_000_000 || (request.CompareAmountFen > 0 && request.CompareAmountFen <= request.AmountFen) {
+		return nil, BadAuthRequest("对比价必须高于售价且不超过 100 万元")
+	}
+	for _, field := range []struct {
+		value string
+		limit int
+	}{{request.RibbonText, 120}, {request.BadgeText, 80}, {request.PriceCaption, 240}, {request.QuotaCaption, 120}, {request.QuotaDetail, 240}, {request.ActionText, 80}} {
+		if len([]rune(strings.TrimSpace(field.value))) > field.limit {
+			return nil, BadAuthRequest("套餐卡片文案超过长度限制")
+		}
+	}
+	accentColor := strings.ToUpper(strings.TrimSpace(request.AccentColor))
+	if accentColor == "" {
+		accentColor = "#D8FF4F"
+	}
+	if len(accentColor) != 7 || accentColor[0] != '#' || strings.IndexFunc(accentColor[1:], func(value rune) bool {
+		return !((value >= '0' && value <= '9') || (value >= 'A' && value <= 'F'))
+	}) >= 0 {
+		return nil, BadAuthRequest("套餐主题颜色必须为 6 位十六进制颜色")
+	}
 	return &model.TopupProduct{
 		ID: id, Name: name, Description: truncateRunes(strings.TrimSpace(request.Description), 500), Benefits: truncateRunes(strings.TrimSpace(request.Benefits), 1000),
+		RibbonText: strings.TrimSpace(request.RibbonText), BadgeText: strings.TrimSpace(request.BadgeText), CompareAmountFen: request.CompareAmountFen,
+		PriceCaption: strings.TrimSpace(request.PriceCaption), QuotaCaption: strings.TrimSpace(request.QuotaCaption), QuotaDetail: strings.TrimSpace(request.QuotaDetail),
+		ActionText: strings.TrimSpace(request.ActionText), AccentColor: accentColor, Featured: request.Featured,
 		AmountFen: request.AmountFen, CreditsMicrocredits: request.CreditsMicrocredits,
 		Enabled: request.Enabled, SortOrder: request.SortOrder, CreatedBy: actorID, UpdatedBy: actorID,
 	}, nil
@@ -572,11 +661,15 @@ func (s *Service) CreatePaymentOrder(ctx context.Context, actor *model.User, req
 		return nil, NewAppError(http.StatusConflict, "未支付订单过多，请先完成或关闭已有订单")
 	}
 	now := time.Now()
+	effectiveAmountFen, err := s.effectiveTopupProductAmount(*product, now)
+	if err != nil {
+		return nil, err
+	}
 	order := &model.PaymentOrder{
 		ID: newID(), UserID: actor.ID, IdempotencyKey: idempotencyKey, MerchantOrderNo: newID(),
 		ProductID: product.ID, ProductName: product.Name, ProviderID: provider.Descriptor().ID,
 		PluginID: provider.Descriptor().PluginID, PluginVersion: provider.Descriptor().PluginVersion, ProviderConfigID: config.ID, ProviderConfigVersion: config.Version,
-		AmountFen: product.AmountFen, Currency: "CNY", CreditsMicrocredits: product.CreditsMicrocredits,
+		AmountFen: effectiveAmountFen, Currency: "CNY", CreditsMicrocredits: product.CreditsMicrocredits,
 		Status: model.PaymentOrderCreated, CheckoutMode: provider.Descriptor().CheckoutMode,
 		ExpiresAt: now.Add(time.Duration(config.CloseAfterMinutes) * time.Minute),
 	}
@@ -957,7 +1050,7 @@ func (s *Service) applyPaymentResult(providerID string, result payment.Result) (
 		if result.AmountFen != order.AmountFen || result.Currency != order.Currency {
 			return nil, repository.ErrPaymentEvidenceMismatch
 		}
-		completed, _, err := s.repo.CompletePaymentOrder(providerID, result.MerchantOrderNo, repository.PaymentEvidence{
+		completed, _, err := s.completePaymentOrderWithReferral(providerID, result.MerchantOrderNo, repository.PaymentEvidence{
 			ProviderTradeNo: result.ProviderTradeNo, ProviderStatus: result.ProviderStatus,
 			AmountFen: result.AmountFen, Currency: result.Currency, PaidAt: result.PaidAt,
 		})
@@ -1015,7 +1108,7 @@ func paymentOrderView(order model.PaymentOrder) PaymentOrderView {
 }
 
 func (s *Service) AdminPaymentOrderPage(actor *model.User, query PaymentOrderQuery, page, limit int) (*AdminPaymentOrderPage, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionPaymentOrders); err != nil {
 		return nil, err
 	}
 	page, limit = normalizeAdminPage(page, limit)
@@ -1039,7 +1132,7 @@ func (s *Service) AdminPaymentOrderPage(actor *model.User, query PaymentOrderQue
 	for _, order := range orders {
 		view := AdminPaymentOrderView{PaymentOrderView: paymentOrderView(order)}
 		if user, ok := users[order.UserID]; ok {
-			view.User = &AdminPaymentOrderUser{ID: user.ID, Username: user.Username, DisplayName: user.DisplayName, Email: user.Email}
+			view.User = &AdminPaymentOrderUser{ID: user.ID, Username: user.Username, DisplayName: user.Username, Email: user.Email}
 		}
 		views = append(views, view)
 	}
@@ -1047,7 +1140,7 @@ func (s *Service) AdminPaymentOrderPage(actor *model.User, query PaymentOrderQue
 }
 
 func (s *Service) AdminQueryPaymentOrder(ctx context.Context, actor *model.User, id string) (*PaymentOrderView, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionPaymentOrders); err != nil {
 		return nil, err
 	}
 	order, err := s.repo.PaymentOrder(id)
@@ -1070,7 +1163,7 @@ func (s *Service) AdminQueryPaymentOrder(ctx context.Context, actor *model.User,
 }
 
 func (s *Service) AdminClosePaymentOrder(ctx context.Context, actor *model.User, id string) (*PaymentOrderView, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionPaymentOrders); err != nil {
 		return nil, err
 	}
 	order, err := s.repo.PaymentOrder(id)

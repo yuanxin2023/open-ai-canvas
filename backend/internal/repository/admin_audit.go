@@ -14,6 +14,7 @@ var (
 	ErrBulkUserNotFound    = errors.New("bulk user not found")
 	ErrBulkCurrentAdmin    = errors.New("bulk includes current admin")
 	ErrBulkLastActiveAdmin = errors.New("bulk removes last active admin")
+	ErrLastActiveFullAdmin = errors.New("operation removes last active full admin")
 )
 
 type AdminUserCounts struct {
@@ -21,6 +22,14 @@ type AdminUserCounts struct {
 	Tasks         int64 `json:"tasks"`
 	APICalls      int64 `json:"apiCalls"`
 	AuditEvents   int64 `json:"auditEvents"`
+	LoginEvents   int64 `json:"loginEvents"`
+}
+
+type AdminUserLoginEventFilter struct {
+	StartAt     *time.Time
+	EndAt       *time.Time
+	LoginMethod string
+	IP          string
 }
 
 func (r *Repository) AppendAdminAudit(event *model.AdminAuditEvent) error {
@@ -46,13 +55,27 @@ func (r *Repository) BulkDisableUsers(actorID string, userIDs []string, events [
 				return ErrBulkCurrentAdmin
 			}
 		}
-		var remainingAdmins int64
-		if err := tx.Model(&model.User{}).
-			Where("role = ? AND status = ? AND id NOT IN ?", model.UserRoleAdmin, model.UserStatusActive, userIDs).
-			Count(&remainingAdmins).Error; err != nil {
+		var activeFullAdminIDs []string
+		fullQuery := tx.Model(&model.User{}).
+			Where("role = ? AND status = ? AND (admin_level = ? OR admin_level = '')", model.UserRoleAdmin, model.UserStatusActive, model.AdminLevelFull).
+			Order("id")
+		if r.Dialect() == "postgres" {
+			fullQuery = fullQuery.Clauses(clause.Locking{Strength: "UPDATE"})
+		}
+		if err := fullQuery.Pluck("id", &activeFullAdminIDs).Error; err != nil {
 			return err
 		}
-		if remainingAdmins == 0 {
+		selected := make(map[string]struct{}, len(userIDs))
+		for _, id := range userIDs {
+			selected[id] = struct{}{}
+		}
+		remainingFullAdmins := 0
+		for _, id := range activeFullAdminIDs {
+			if _, disabling := selected[id]; !disabling {
+				remainingFullAdmins++
+			}
+		}
+		if remainingFullAdmins == 0 {
 			return ErrBulkLastActiveAdmin
 		}
 		if err := tx.Delete(&model.AuthSession{}, "user_id IN ?", userIDs).Error; err != nil {
@@ -106,6 +129,7 @@ func (r *Repository) AdminUserCounts(userID string) (AdminUserCounts, error) {
 		{&model.Task{}, "user_id = ?", &counts.Tasks},
 		{&model.ApiCallLog{}, "user_id = ?", &counts.APICalls},
 		{&model.AdminAuditEvent{}, "target_type = 'user' AND target_id = ?", &counts.AuditEvents},
+		{&model.UserLoginEvent{}, "user_id = ?", &counts.LoginEvents},
 	}
 	for _, query := range queries {
 		if err := r.db.Model(query.model).Where(query.where, userID).Count(query.value).Error; err != nil {
@@ -113,6 +137,29 @@ func (r *Repository) AdminUserCounts(userID string) (AdminUserCounts, error) {
 		}
 	}
 	return counts, nil
+}
+
+func (r *Repository) AdminUserLoginEvents(userID string, filter AdminUserLoginEventFilter, limit int, offset int) ([]model.UserLoginEvent, int64, error) {
+	query := r.db.Model(&model.UserLoginEvent{}).Where("user_id = ?", userID)
+	if filter.StartAt != nil {
+		query = query.Where("created_at >= ?", *filter.StartAt)
+	}
+	if filter.EndAt != nil {
+		query = query.Where("created_at <= ?", *filter.EndAt)
+	}
+	if filter.LoginMethod != "" {
+		query = query.Where("login_method = ?", filter.LoginMethod)
+	}
+	if filter.IP != "" {
+		query = query.Where("ip_address LIKE ?", "%"+filter.IP+"%")
+	}
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	var events []model.UserLoginEvent
+	err := query.Order("created_at desc").Limit(limit).Offset(offset).Find(&events).Error
+	return events, total, err
 }
 
 func (r *Repository) AdminUserTasks(userID string, limit int, offset int) ([]model.Task, int64, error) {
@@ -127,18 +174,49 @@ func (r *Repository) AdminUserTasks(userID string, limit int, offset int) ([]mod
 	return tasks, total, err
 }
 
-func (r *Repository) DisableRedeemBatch(batchID string, now time.Time) (int64, error) {
-	result := r.db.Model(&model.RedeemCode{}).
-		Where("batch_id = ? AND status = ? AND (expires_at IS NULL OR expires_at > ?)", batchID, model.RedeemCodeUnused, now).
-		Updates(map[string]any{"status": model.RedeemCodeDisabled, "updated_at": now})
-	return result.RowsAffected, result.Error
+func (r *Repository) DisableRedeemBatch(batchID string, now time.Time) (int64, int64, error) {
+	var disabled int64
+	var refunded int64
+	err := r.db.Transaction(func(tx *gorm.DB) error {
+		var batch model.RedeemBatch
+		if err := redeemBatchForUpdate(tx, &batch, batchID); err != nil {
+			return err
+		}
+		var codeIDs []string
+		if err := tx.Model(&model.RedeemCode{}).
+			Where("batch_id = ? AND status = ? AND (expires_at IS NULL OR expires_at > ?)", batchID, model.RedeemCodeUnused, now).
+			Pluck("id", &codeIDs).Error; err != nil {
+			return err
+		}
+		var err error
+		disabled, refunded, err = settleRedeemCodes(tx, &batch, codeIDs, model.RedeemCodeDisabled, now)
+		return err
+	})
+	return disabled, refunded, err
 }
 
-func (r *Repository) DisableRedeemCode(batchID string, codeID string, now time.Time) (bool, error) {
-	result := r.db.Model(&model.RedeemCode{}).
-		Where("id = ? AND batch_id = ? AND status = ? AND (expires_at IS NULL OR expires_at > ?)", codeID, batchID, model.RedeemCodeUnused, now).
-		Updates(map[string]any{"status": model.RedeemCodeDisabled, "updated_at": now})
-	return result.RowsAffected == 1, result.Error
+func (r *Repository) DisableRedeemCode(batchID string, codeID string, now time.Time) (bool, int64, error) {
+	var disabled int64
+	var refunded int64
+	err := r.db.Transaction(func(tx *gorm.DB) error {
+		var batch model.RedeemBatch
+		if err := redeemBatchForUpdate(tx, &batch, batchID); err != nil {
+			return err
+		}
+		var eligible int64
+		if err := tx.Model(&model.RedeemCode{}).
+			Where("id = ? AND batch_id = ? AND status = ? AND (expires_at IS NULL OR expires_at > ?)", codeID, batchID, model.RedeemCodeUnused, now).
+			Count(&eligible).Error; err != nil {
+			return err
+		}
+		if eligible == 0 {
+			return nil
+		}
+		var err error
+		disabled, refunded, err = settleRedeemCodes(tx, &batch, []string{codeID}, model.RedeemCodeDisabled, now)
+		return err
+	})
+	return disabled == 1, refunded, err
 }
 
 func (r *Repository) APICallLog(id string) (*model.ApiCallLog, error) {

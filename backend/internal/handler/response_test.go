@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -37,6 +38,35 @@ func TestFailServiceProjectsAppError(t *testing.T) {
 	response := decodeFailureEnvelope(t, recorder)
 	if recorder.Code != http.StatusTooManyRequests || response.Code != service.CodeRateLimited || response.Reason != string(service.ReasonRateLimited) || response.Msg != err.Message {
 		t.Fatalf("response = status %d, body %#v", recorder.Code, response)
+	}
+}
+
+func TestFailServiceProjectsUsernameChangeLimitRetryAfter(t *testing.T) {
+	recorder, context := responseTestContext()
+	err := &service.AppError{
+		Status: http.StatusTooManyRequests, Code: service.CodeUsernameChangeLimit,
+		Reason: service.ReasonUsernameChangeLimit, Message: "用户名修改次数已达上限", RetryAfterSeconds: 3600,
+	}
+
+	failService(context, err)
+
+	response := decodeFailureEnvelope(t, recorder)
+	if recorder.Code != http.StatusTooManyRequests || response.Code != service.CodeUsernameChangeLimit || response.Reason != string(service.ReasonUsernameChangeLimit) || recorder.Header().Get("Retry-After") != "3600" {
+		t.Fatalf("username limit response: status=%d header=%s body=%#v", recorder.Code, recorder.Header().Get("Retry-After"), response)
+	}
+}
+
+func TestFailServiceProjectsDNSFailureWithoutTransportDetails(t *testing.T) {
+	recorder, context := responseTestContext()
+	err := service.WrapAppError(http.StatusBadGateway, "外部服务域名解析失败，请检查渠道域名和后端 DNS 配置", errors.New("private-sentinel resolver failure"))
+	err.Reason = service.ReasonUpstreamDNSFailed
+	failService(context, &url.Error{Op: "Post", URL: "https://private-sentinel.invalid?token=private-sentinel", Err: err})
+	response := decodeFailureEnvelope(t, recorder)
+	if recorder.Code != http.StatusBadGateway || response.Code != service.CodeBadGateway || response.Reason != string(service.ReasonUpstreamDNSFailed) || response.Msg != err.Message {
+		t.Fatalf("DNS response contract lost: %d %#v", recorder.Code, response)
+	}
+	if strings.Contains(recorder.Body.String(), "private-sentinel") {
+		t.Fatal("raw transport details leaked into HTTP response")
 	}
 }
 

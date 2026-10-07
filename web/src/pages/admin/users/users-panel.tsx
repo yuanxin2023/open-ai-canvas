@@ -5,25 +5,30 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { PaginationBar } from "@/pages/admin/components/admin-ui";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
-import { bulkDisableAdminUsers, deleteAdminUser, listAdminUsers, updateAdminUser, type AdminUser, type LocalUser } from "@/services/api/auth";
+import { bulkDisableAdminUsers, listAdminUsers, purgeAdminUser, type AdminManagedUser, type AdminUser, type LocalUser } from "@/services/api/auth";
+import type { CreditAccount } from "@/services/api/wallet";
 import { useUserStore } from "@/stores/use-user-store";
 import { AdminBatchBar, AdminDataTable, AdminTableEmpty } from "../components/admin-ui";
 import { useTableUrlState } from "../lib/use-table-url-state";
-import { AdminUserDetailDrawer } from "../components/admin-user-detail-drawer";
+import { AdminUserDetailModal } from "../components/admin-user-detail-drawer";
 import { createUserColumns, userColumnOptions, type UserColumnKey } from "./users-columns";
-import { AdminUserCreateDrawer, AdminUserEditDrawer } from "./users-drawer";
+import { AdminUserCreateDrawer, AdminUserEditModal } from "./users-drawer";
 
-const columnStorageKey = "admin-users-visible-columns";
+const columnStorageKey = "admin-users-visible-columns-v2";
 const allColumnKeys = userColumnOptions.map((item) => item.key);
 
-export default function UsersPanel({ onUserChanged }: { onUserChanged?: (user: LocalUser) => void }) {
+export default function UsersPanel({ onUserChanged, onUserDeleted }: { onUserChanged?: (user: LocalUser) => void; onUserDeleted?: (userId: string) => void }) {
     const actor = useUserStore((state) => state.user);
     const { message, modal } = App.useApp();
     const { state, update } = useTableUrlState();
-    const debouncedFilter = useDebouncedValue(state.filter);
+    const [filterDraft, setFilterDraft] = useState(state.filter);
+    const [isFilterComposing, setIsFilterComposing] = useState(false);
+    const debouncedFilterDraft = useDebouncedValue(isFilterComposing ? state.filter : filterDraft);
     const [users, setUsers] = useState<AdminUser[]>([]);
     const [total, setTotal] = useState(0);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState("");
+    const [retry, setRetry] = useState(0);
     const [detailUserId, setDetailUserId] = useState<string | null>(null);
     const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
     const [createUserOpen, setCreateUserOpen] = useState(false);
@@ -34,13 +39,15 @@ export default function UsersPanel({ onUserChanged }: { onUserChanged?: (user: L
         try {
             const saved = JSON.parse(window.localStorage.getItem(columnStorageKey) || "[]") as UserColumnKey[];
             const valid = saved.filter((key) => allColumnKeys.includes(key));
-            return new Set(valid.length ? [...valid, "user", "actions"] : allColumnKeys);
+            return new Set(valid.length ? [...valid, "user", "remark", "actions"] : allColumnKeys);
         } catch {
             return new Set(allColumnKeys);
         }
     });
     const requestSequence = useRef(0);
-    const hasFilters = Boolean(state.filter || state.role !== "all" || state.status !== "all");
+    const pendingFilterUrlRef = useRef<string | null>(null);
+    const skipFilterUrlCommitRef = useRef(false);
+    const hasFilters = Boolean(filterDraft || state.status !== "all");
     const detailIndex = detailUserId ? users.findIndex((user) => user.id === detailUserId) : -1;
     const previousUserId = detailIndex > 0 ? users[detailIndex - 1]?.id : undefined;
     const nextUserId = detailIndex >= 0 && detailIndex < users.length - 1 ? users[detailIndex + 1]?.id : undefined;
@@ -50,11 +57,33 @@ export default function UsersPanel({ onUserChanged }: { onUserChanged?: (user: L
     }, [visibleColumns]);
 
     useEffect(() => {
+        if (pendingFilterUrlRef.current === state.filter) {
+            pendingFilterUrlRef.current = null;
+            return;
+        }
+        pendingFilterUrlRef.current = null;
+        skipFilterUrlCommitRef.current = true;
+        setFilterDraft(state.filter);
+    }, [state.filter]);
+
+    useEffect(() => {
+        if (skipFilterUrlCommitRef.current) {
+            skipFilterUrlCommitRef.current = false;
+            return;
+        }
+        if (isFilterComposing || debouncedFilterDraft === state.filter) return;
+        pendingFilterUrlRef.current = debouncedFilterDraft;
+        update({ filter: debouncedFilterDraft, page: 1 }, true);
+    }, [debouncedFilterDraft, isFilterComposing, state.filter, update]);
+
+    useEffect(() => {
         const sequence = ++requestSequence.current;
         setLoading(true);
+        setLoadError("");
+        setUsers([]);
+        setTotal(0);
         void listAdminUsers({
-            keyword: debouncedFilter || undefined,
-            role: state.role === "all" ? undefined : state.role,
+            keyword: state.filter || undefined,
             status: state.status === "all" ? undefined : state.status,
             page: state.page,
             pageSize: state.pageSize,
@@ -67,17 +96,28 @@ export default function UsersPanel({ onUserChanged }: { onUserChanged?: (user: L
                 if (result.total > 0 && result.users.length === 0 && state.page > 1) update({ page: 1 }, true);
             })
             .catch((error) => {
-                if (sequence === requestSequence.current) message.error(error instanceof Error ? error.message : "读取用户失败");
+                if (sequence !== requestSequence.current) return;
+                const text = error instanceof Error ? error.message : "读取用户失败";
+                setLoadError(text);
+                message.error(text);
             })
             .finally(() => {
                 if (sequence === requestSequence.current) setLoading(false);
             });
-    }, [debouncedFilter, message, state.page, state.pageSize, state.role, state.status, update]);
+    }, [message, retry, state.filter, state.page, state.pageSize, state.status, update]);
 
-    const replaceUser = useCallback((nextUser: LocalUser) => {
+    const replaceUser = useCallback((nextUser: LocalUser | AdminManagedUser) => {
         setUsers((items) => items.map((item) => item.id === nextUser.id ? { ...item, ...nextUser } : item));
         onUserChanged?.(nextUser);
     }, [onUserChanged]);
+
+    const replaceCreditAccount = useCallback((account: CreditAccount) => {
+        setUsers((items) => items.map((item) => item.id === account.userId ? {
+            ...item,
+            availableMicrocredits: account.availableMicrocredits,
+            reservedMicrocredits: account.reservedMicrocredits,
+        } : item));
+    }, []);
 
     const addUser = useCallback((user: AdminUser) => {
         setUsers((items) => [user, ...items].slice(0, state.pageSize));
@@ -86,31 +126,31 @@ export default function UsersPanel({ onUserChanged }: { onUserChanged?: (user: L
         setCreateUserOpen(false);
     }, [onUserChanged, state.pageSize]);
 
-    const toggleStatus = useCallback(async (user: AdminUser) => {
-        try {
-            if (user.status === "active") {
-                await deleteAdminUser(user.id);
-                replaceUser({ ...user, status: "disabled" });
-                message.success("用户已停用并清除登录状态");
-                return;
-            }
-            const result = await updateAdminUser(user.id, { status: "active" });
-            replaceUser(result.user);
-            message.success("用户已重新启用");
-        } catch (error) {
-            message.error(error instanceof Error ? error.message : "更新用户状态失败");
-        }
-    }, [message, replaceUser]);
-
     const columns = useMemo(() => createUserColumns({
         actorId: actor?.id,
         visibleColumns,
         onView: (user) => setDetailUserId(user.id),
         onEdit: (user) => { setCreateUserOpen(false); setEditingUser(user); },
-        onToggleStatus: toggleStatus,
-    }), [actor?.id, toggleStatus, visibleColumns]);
+        onPurge: async (user) => {
+            try {
+                await purgeAdminUser(user.id);
+                setUsers((items) => items.filter((item) => item.id !== user.id));
+                setTotal((value) => Math.max(0, value - 1));
+                setSelectedUserIds((ids) => ids.filter((id) => id !== user.id));
+                if (detailUserId === user.id) setDetailUserId(null);
+                if (editingUser?.id === user.id) setEditingUser(null);
+                onUserDeleted?.(user.id);
+                message.success("用户已注销，账号及关联数据已删除");
+            } catch (error) {
+                message.error(error instanceof Error ? error.message : "注销用户失败");
+            }
+        },
+    }), [actor?.id, detailUserId, editingUser?.id, message, onUserDeleted, visibleColumns]);
 
-    const resetFilters = () => update({ filter: "", role: "all", status: "all", page: 1 });
+    const resetFilters = () => {
+        setFilterDraft("");
+        update({ filter: "", status: "all", page: 1 });
+    };
 
     const bulkDisable = () => {
         modal.confirm({
@@ -142,12 +182,18 @@ export default function UsersPanel({ onUserChanged }: { onUserChanged?: (user: L
                     <>
                         <Input
                             allowClear
+                            autoComplete="off"
                             className="app-list-search"
                             prefix={<Search className="size-4 text-foreground/40" />}
-                            value={state.filter}
+                            value={filterDraft}
                             aria-label="搜索用户"
-                            placeholder="搜索用户名、名称或邮箱"
-                            onChange={(event) => update({ filter: event.target.value, page: 1 }, true)}
+                            placeholder="搜索用户名、邮箱或备注"
+                            onChange={(event) => setFilterDraft(event.target.value)}
+                            onCompositionStart={() => setIsFilterComposing(true)}
+                            onCompositionEnd={(event) => {
+                                setFilterDraft(event.currentTarget.value);
+                                setIsFilterComposing(false);
+                            }}
                         />
                     </>
                 }
@@ -155,13 +201,6 @@ export default function UsersPanel({ onUserChanged }: { onUserChanged?: (user: L
                 onReset={resetFilters}
                 toolbarFilters={
                     <>
-                        <Select
-                            aria-label="筛选用户角色"
-                            className="w-32"
-                            value={state.role}
-                            options={[{ value: "all", label: "全部角色" }, { value: "admin", label: "管理员" }, { value: "user", label: "普通用户" }]}
-                            onChange={(role) => update({ role, page: 1 })}
-                        />
                         <Select
                             aria-label="筛选用户状态"
                             className="w-32"
@@ -184,7 +223,7 @@ export default function UsersPanel({ onUserChanged }: { onUserChanged?: (user: L
                                             <label key={option.key} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-muted/60">
                                                 <Checkbox
                                                     bare
-                                                    checked={visibleColumns.has(option.key)}
+                                                    checked={option.locked || visibleColumns.has(option.key)}
                                                     disabled={option.locked}
                                                     onChange={(event) => setVisibleColumns((current) => {
                                                         const next = new Set(current);
@@ -207,7 +246,7 @@ export default function UsersPanel({ onUserChanged }: { onUserChanged?: (user: L
                 batchActions={<AdminBatchBar count={selectedUserIds.length} onClear={() => setSelectedUserIds([])}><Button danger size="small" icon={<Ban className="size-3.5" />} loading={bulkDisabling} onClick={bulkDisable}>批量停用</Button></AdminBatchBar>}
                 skeletonColumns={Math.max(4, columns.length)}
                 table={{
-                    className: "app-data-table",
+                    className: "app-data-table admin-users-table",
                     size: "small",
                     rowKey: "id",
                     loading,
@@ -215,20 +254,20 @@ export default function UsersPanel({ onUserChanged }: { onUserChanged?: (user: L
                         selectedRowKeys: selectedUserIds,
                         preserveSelectedRowKeys: false,
                         onChange: (keys) => setSelectedUserIds(keys.map(String)),
-                        getCheckboxProps: (user) => ({ disabled: user.id === actor?.id || user.status === "disabled", name: user.displayName || user.username }),
+                        getCheckboxProps: (user) => ({ disabled: user.id === actor?.id || user.status === "disabled", name: user.username }),
                     },
                     columns,
                     dataSource: users,
                     pagination: false,
-                    scroll: { x: 860 },
+                    scroll: { x: 1040 },
                 }}
-                empty={<AdminTableEmpty filtered={hasFilters} />}
+                empty={loadError ? <div className="admin-inline-load-error" role="status"><span>用户数据暂不可用：{loadError}</span><Button size="small" onClick={() => setRetry((value) => value + 1)}>重试</Button></div> : <AdminTableEmpty filtered={hasFilters} />}
                 footer={<PaginationBar alwaysShow current={state.page} pageSize={state.pageSize} total={total} onChange={(page, pageSize) => update({ page: pageSize !== state.pageSize ? 1 : page, pageSize })} />}
             />
 
-            <AdminUserDetailDrawer userId={detailUserId} previousUserId={previousUserId} nextUserId={nextUserId} onNavigate={setDetailUserId} onClose={() => setDetailUserId(null)} />
+            <AdminUserDetailModal userId={detailUserId} previousUserId={previousUserId} nextUserId={nextUserId} onNavigate={setDetailUserId} onClose={() => setDetailUserId(null)} />
             <AdminUserCreateDrawer open={createUserOpen} onClose={() => setCreateUserOpen(false)} onCreated={addUser} />
-            <AdminUserEditDrawer user={editingUser} actorId={actor?.id} onClose={() => setEditingUser(null)} onSaved={replaceUser} />
+            <AdminUserEditModal user={editingUser} actorId={actor?.id} onClose={() => setEditingUser(null)} onSaved={replaceUser} onCreditsAdjusted={replaceCreditAccount} />
         </>
     );
 }

@@ -12,14 +12,14 @@ const TaskWorkerConcurrency = 3
 
 // Host 由组合根注入，避免 platform → app 回环。
 type Host interface {
-	RequireAdmin(user *model.User) error
+	RequireAdminPermission(user *model.User, permission model.AdminPermission) error
 	AppendAudit(actor *model.User, action, targetType, targetID, summary string, metadata any) error
 	ChannelConcurrencyLimit(channelID string) (int, error)
 }
 
 type nopHost struct{}
 
-func (nopHost) RequireAdmin(*model.User) error { return nil }
+func (nopHost) RequireAdminPermission(*model.User, model.AdminPermission) error { return nil }
 func (nopHost) AppendAudit(*model.User, string, string, string, string, any) error {
 	return nil
 }
@@ -46,11 +46,11 @@ func New(repo *repository.Repository, coordinator *Coordinator, host Host) *Serv
 	}
 }
 
-func (s *Service) requireAdmin(user *model.User) error {
+func (s *Service) requireAdminPermission(user *model.User, permission model.AdminPermission) error {
 	if s == nil || s.host == nil {
 		return kernel.Unauthorized("请先登录")
 	}
-	return s.host.RequireAdmin(user)
+	return s.host.RequireAdminPermission(user, permission)
 }
 
 func (s *Service) appendAdminAudit(actor *model.User, action, targetType, targetID, summary string, metadata any) error {

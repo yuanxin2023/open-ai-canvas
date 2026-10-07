@@ -13,12 +13,16 @@ export function isVolcengineArkImageProtocol(protocol?: string) {
     return protocol === "volcengine-ark-image" || protocol === "volcengine-ark-agent-plan-image";
 }
 
+export function isGeminiImageProtocol(protocol?: string) {
+    return protocol === "gemini-image" || protocol === "subrouter-gemini-image";
+}
+
 export function isVolcengineArkVideoProtocol(protocol?: string) {
     return protocol === "volcengine-ark-video" || protocol === "volcengine-ark-agent-plan-video";
 }
 
-export function modelProtocolSupportsTokenBilling(capability?: string, protocol?: string) {
-    return capability === "text" || (capability === "video" && isVolcengineArkVideoProtocol(protocol));
+export function modelProtocolSupportsTokenBilling(capability?: string, _protocol?: string) {
+    return capability === "text" || capability === "video";
 }
 
 export function protocolForModelCatalog(_endpointTypes: string[] = []): ModelProtocol | undefined {

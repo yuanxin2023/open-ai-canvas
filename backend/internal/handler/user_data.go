@@ -18,6 +18,24 @@ import (
 )
 
 func RegisterUserDataRoutes(r *gin.RouterGroup, svc *service.Service) {
+	r.POST("/assets/batch-delete", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 256<<10)
+		var ids []string
+		if err := c.ShouldBindJSON(&ids); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		if err := svc.PurgeUserAssets(user.ID, ids); err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"ids": ids})
+	})
 	r.POST("/assets/batch", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {
@@ -78,6 +96,74 @@ func RegisterUserDataRoutes(r *gin.RouterGroup, svc *service.Service) {
 			return
 		}
 		if err := svc.ResetUserPromptCustomization(user, c.Param("operation")); err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"ok": true})
+	})
+	r.GET("/user-prompts", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		page, pageSize, err := parsePaginationQuery(c, 20)
+		if err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		result, err := svc.UserPromptPage(user, c.Query("keyword"), model.InspirationMode(c.Query("mode")), page, pageSize)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, result)
+	})
+	r.POST("/user-prompts", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 128<<10)
+		var req service.UserPromptRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		row, err := svc.CreateUserPrompt(user, req)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"prompt": row})
+	})
+	r.PUT("/user-prompts/:id", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 128<<10)
+		var req service.UserPromptRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		row, err := svc.UpdateUserPrompt(user, c.Param("id"), req)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"prompt": row})
+	})
+	r.DELETE("/user-prompts/:id", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		if err := svc.DeleteUserPrompt(user, c.Param("id")); err != nil {
 			failService(c, err)
 			return
 		}
@@ -295,8 +381,8 @@ func RegisterUserDataRoutes(r *gin.RouterGroup, svc *service.Service) {
 			return
 		}
 		if delivery.RedirectURL != "" {
-			// CDN 或对象存储直连地址允许安全短期缓存
-			c.Header("Cache-Control", "private, max-age=86400, stale-while-revalidate=3600")
+			// 签名链接仅有效 5 分钟；重定向缓存必须短于签名 TTL，避免命中过期地址。
+			c.Header("Cache-Control", "private, max-age=240")
 			c.Header("Referrer-Policy", "no-referrer")
 			c.Header("X-Content-Type-Options", "nosniff")
 			c.Redirect(http.StatusTemporaryRedirect, delivery.RedirectURL)
@@ -586,7 +672,7 @@ func RegisterUserDataRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
-		if err := svc.DeleteUserAsset(user.ID, c.Param("id")); err != nil {
+		if err := svc.PurgeUserAsset(user.ID, c.Param("id")); err != nil {
 			failService(c, err)
 			return
 		}

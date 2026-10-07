@@ -20,14 +20,14 @@ import (
 	"gorm.io/gorm"
 )
 
-func TestAppearanceDefaultsPreserveBuiltInBrand(t *testing.T) {
+func TestAppearanceDefaultsUseBuiltInNeutralIdentity(t *testing.T) {
 	svc, _, _, _ := newAppearanceTestService(t)
 
 	appearance, err := svc.Appearance()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if appearance.Configured || appearance.SchemaVersion != appearanceSchemaVersion || appearance.BrandName != defaultAppearanceBrandName || appearance.BrandSlug != defaultAppearanceBrandSlug || appearance.AuthHeroTitle != defaultAppearanceHeroTitle || appearance.AuthHeroDescription != "" || appearance.LogoURL != defaultAppearanceLogoURL || appearance.DarkLogoURL != defaultAppearanceLogoURL || !appearance.LogoFrameEnabled || appearance.AuthVideoURL != defaultAppearanceVideoURL || appearance.AuthVideoPosterURL != defaultAppearancePosterURL || !appearance.AuthVideoAutoplay || appearance.SEOTitle != defaultAppearanceBrandName || !strings.Contains(appearance.SEODescription, defaultAppearanceBrandName) || !strings.Contains(appearance.FooterCopyright, defaultAppearanceBrandName) || appearance.ICPFilingEnabled {
+	if appearance.Configured || appearance.SchemaVersion != appearanceSchemaVersion || appearance.BrandName != defaultAppearanceBrandName || appearance.BrandSlug != defaultAppearanceBrandSlug || appearance.AuthHeroTitle != defaultAppearanceHeroTitle || appearance.AuthHeroDescription != "" || appearance.LogoURL != defaultAppearanceLogoURL || appearance.DarkLogoURL != defaultAppearanceLogoURL || !appearance.LogoFrameEnabled || appearance.AuthVideoURL != defaultAppearanceVideoURL || appearance.AuthVideoPosterURL != defaultAppearancePosterURL || !appearance.AuthVideoAutoplay || appearance.ComposerGlowColor != defaultComposerGlowColor || !appearance.ComposerGlowEnabled || appearance.ComposerGlowIntensity != defaultComposerGlowIntensity || appearance.ComposerGlowSize != defaultComposerGlowSize || appearance.ComposerGlowPositionX != defaultComposerGlowX || appearance.ComposerGlowPositionY != defaultComposerGlowY || appearance.SEOTitle != defaultAppearanceBrandName || !strings.Contains(appearance.SEODescription, defaultAppearanceBrandName) || !strings.Contains(appearance.FooterCopyright, defaultAppearanceBrandName) || appearance.ICPFilingEnabled {
 		t.Fatalf("Appearance() = %#v", appearance)
 	}
 	if appearance.LogoConfigured || appearance.DarkLogoConfigured || appearance.AuthVideoConfigured || appearance.AuthVideoPosterConfigured || appearance.Revision != "builtin" {
@@ -55,8 +55,38 @@ func TestAppearanceContractsIgnoreLegacySkinFields(t *testing.T) {
 		if strings.Contains(string(encoded), "skinId") || strings.Contains(string(encoded), "skinThemes") || strings.Contains(string(encoded), "activeSkin") {
 			t.Fatalf("appearance response still exposes removed skin fields: %s", encoded)
 		}
-		if !strings.Contains(string(encoded), `"schemaVersion":8`) {
+		if !strings.Contains(string(encoded), `"schemaVersion":13`) {
 			t.Fatalf("appearance response schema version = %s", encoded)
+		}
+	}
+}
+
+func TestAppearanceComposerGlowValidation(t *testing.T) {
+	value := defaultAppearanceSetting()
+	value.ComposerGlowColor = "#C7C4FF"
+	value.ComposerGlowEnabled = true
+	value.ComposerGlowIntensity = 65
+	value.ComposerGlowSize = 150
+	value.ComposerGlowPositionX = 72
+	value.ComposerGlowPositionY = -32
+	if err := validateAppearanceSetting(value); err != nil {
+		t.Fatalf("validateAppearanceSetting(valid glow) = %v", err)
+	}
+	value.ComposerGlowColor = "red; background: url(javascript:alert(1))"
+	if err := validateAppearanceSetting(value); err == nil {
+		t.Fatal("validateAppearanceSetting(invalid color) unexpectedly succeeded")
+	}
+	value = defaultAppearanceSetting()
+	for _, mutate := range []func(*AppearanceSetting){
+		func(setting *AppearanceSetting) { setting.ComposerGlowIntensity = 101 },
+		func(setting *AppearanceSetting) { setting.ComposerGlowSize = 181 },
+		func(setting *AppearanceSetting) { setting.ComposerGlowPositionX = 9 },
+		func(setting *AppearanceSetting) { setting.ComposerGlowPositionY = 101 },
+	} {
+		candidate := value
+		mutate(&candidate)
+		if err := validateAppearanceSetting(candidate); err == nil {
+			t.Fatalf("validateAppearanceSetting(invalid geometry) unexpectedly succeeded: %#v", candidate)
 		}
 	}
 }
@@ -82,8 +112,41 @@ func TestAppearanceBackfillsVersionEightFieldsAndIgnoresLegacySkin(t *testing.T)
 	if err := db.Where("key = ?", appearanceSettingKey).First(&saved).Error; err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(saved.ValueJSON, "skinId") || strings.Contains(saved.ValueJSON, "skinThemes") || !strings.Contains(saved.ValueJSON, `"schemaVersion":8`) {
+	if strings.Contains(saved.ValueJSON, "skinId") || strings.Contains(saved.ValueJSON, "skinThemes") || !strings.Contains(saved.ValueJSON, `"schemaVersion":13`) {
 		t.Fatalf("saved appearance retained removed skin fields: %s", saved.ValueJSON)
+	}
+}
+
+func TestAppearanceMigratesEarlierBuiltInIdentity(t *testing.T) {
+	svc, db, _, _ := newAppearanceTestService(t)
+	earlierName := string([]rune{24433, 31574})
+	legacy := defaultAppearanceSetting()
+	legacy.SchemaVersion = appearanceSchemaVersion - 1
+	legacy.BrandName = earlierName
+	legacy.Canvas.AgentName = earlierName
+	legacy.SEOTitle = earlierName
+	legacy.FooterCopyright = "© 2026 " + earlierName + ". All rights reserved."
+	encoded, err := json.Marshal(legacy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&model.SystemSetting{Key: appearanceSettingKey, ValueJSON: string(encoded)}).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	appearance, err := svc.Appearance()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if appearance.SchemaVersion != appearanceSchemaVersion || appearance.BrandName != defaultAppearanceBrandName || appearance.Canvas.AgentName != defaultCanvasAppearance().AgentName || appearance.SEOTitle != defaultAppearanceBrandName || strings.Contains(appearance.FooterCopyright, earlierName) {
+		t.Fatalf("migrated appearance = %#v", appearance)
+	}
+	var saved model.SystemSetting
+	if err := db.Where("key = ?", appearanceSettingKey).First(&saved).Error; err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(saved.ValueJSON, earlierName) || !strings.Contains(saved.ValueJSON, `"schemaVersion":13`) {
+		t.Fatalf("persisted appearance was not migrated: %s", saved.ValueJSON)
 	}
 }
 

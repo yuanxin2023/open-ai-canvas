@@ -3,9 +3,12 @@ import type { BillingOrder, CreditLedgerEntry } from "@/services/api/wallet";
 import type { GenerationTask, TaskStatus } from "@/services/api/task-center";
 import type { CanvasDrawingEngineSetting } from "@/lib/canvas/canvas-drawing-engine";
 import type { FeatureAvailability } from "@/stores/use-user-store";
-import { http, apiBaseURL } from "@/services/api/request";
+import type { UsernameChangePolicy } from "@/stores/use-user-store";
+import { compactApiParams, http, apiBaseURL } from "@/services/api/request";
 import type { PublicLogicalModel } from "@/services/api/logical-models";
 import type { OSSConnectionTestInput, OSSConnectionTestResult, OSSProvider, S3Preset } from "@/lib/oss-settings";
+import { resourceFileUrl } from "@/services/api/resources";
+import type { AdminAccess } from "@/lib/admin-permissions";
 
 
 let authSessionRequest: Promise<AuthSessionPayload> | null = null;
@@ -20,11 +23,15 @@ export type LocalUser = {
     username: string;
     email?: string;
     displayName: string;
+    profileName?: string;
+    usernameChangePolicy: UsernameChangePolicy;
+    avatarResourceId?: string;
     avatarUrl?: string;
     identityProvider?: string;
     identityId?: string;
     identityUsername?: string;
     role: "admin" | "user";
+    adminAccess?: AdminAccess;
     status: "active" | "disabled";
     lastLoginAt?: string;
     createdAt: string;
@@ -32,8 +39,13 @@ export type LocalUser = {
 };
 
 export type AdminUser = LocalUser & {
+    remark: string;
     availableMicrocredits: number;
     reservedMicrocredits: number;
+};
+
+export type AdminManagedUser = LocalUser & {
+    remark: string;
 };
 
 export type AuthSessionPayload = {
@@ -87,6 +99,8 @@ export type ApiCallLog = {
     videoSeconds: number;
     providerRequestId?: string;
     estimatedCostMicros: number;
+    creditCostConfigured?: boolean;
+    creditCostMicrocredits?: number;
     costAvailable: boolean;
     currency?: string;
     errorCode?: string;
@@ -119,9 +133,10 @@ export type AdminAuditEvent = {
 };
 
 export type AdminUserDetail = {
-    user: LocalUser;
+    user: AdminManagedUser;
+    registrationIp?: string;
     account: { userId: string; availableMicrocredits: number; reservedMicrocredits: number; version: number };
-    counts: { ledgerEntries: number; tasks: number; apiCalls: number; auditEvents: number };
+    counts: { ledgerEntries: number; tasks: number; apiCalls: number; auditEvents: number; loginEvents: number };
     storageUsage: {
         assetCount: number;
         assetBytes: number;
@@ -134,6 +149,28 @@ export type AdminUserDetail = {
     storedFileBytes: number;
     dailyUploadBytes: number;
     quota: RuntimeResourcePolicy;
+};
+
+export type AdminUserLoginEvent = {
+    id: string;
+    loginMethod: "email_register" | "password" | "linuxdo" | string;
+    ipAddress?: string;
+    userAgent?: string;
+    deviceType?: string;
+    browser?: string;
+    browserVersion?: string;
+    os?: string;
+    osVersion?: string;
+    createdAt: string;
+};
+
+export type AdminUserLoginEventQuery = {
+    page?: number;
+    pageSize?: number;
+    startAt?: string;
+    endAt?: string;
+    loginMethod?: string;
+    ip?: string;
 };
 
 export type AdminUserTask = {
@@ -156,9 +193,26 @@ export type AnalyticsFilters = {
     capability?: string;
 };
 
+export type AdminUserReference = {
+    id: string;
+    username: string;
+    displayName: string;
+    availableMicrocredits?: number;
+    reservedMicrocredits?: number;
+};
+
 export type AdminReferenceData = {
-    users: Array<{ id: string; username: string; displayName: string }>;
-    channels: Array<{ id: string; name: string; enabled: boolean; models: string[] }>;
+    users: AdminUserReference[];
+    channels: Array<{ id: string; name: string; enabled: boolean; models: string[]; modelDisplayNames?: string[] }>;
+};
+
+export type AnalyticsFinance = {
+    settledOrders: number;
+    costedOrders: number;
+    revenueMicrocredits: number;
+    costMicrocredits: number;
+    profitMicrocredits: number | null;
+    profitMargin: number | null;
 };
 
 export type AdminAnalytics = {
@@ -174,9 +228,7 @@ export type AdminAnalytics = {
         successRate: number;
         p95DurationMs: number;
         currentQueuedTasks: number;
-        estimatedCostMicros: number;
-        costAvailable: boolean;
-        currency?: string;
+        finance?: AnalyticsFinance | null;
     };
     trend: Array<{ day: string; tasks: number; requests: number; activeUsers: number; requestSuccessRate: number }>;
     models: Array<{
@@ -195,9 +247,7 @@ export type AdminAnalytics = {
         usageAvailable: boolean;
         mediaCount: number;
         videoSeconds: number;
-        estimatedCostMicros: number;
-        costAvailable: boolean;
-        currency?: string;
+        finance?: AnalyticsFinance | null;
     }>;
     users: Array<{ userId: string; name: string; activeDays: number; tasks: number; agentMessages: number; canvasDays: number; assets: number; resources: number; commonModel?: string }>;
     failures: Array<{ type: string; model: string; count: number; lastError?: string; lastSeenAt: string }>;
@@ -361,7 +411,7 @@ export type RuntimePolicySetting = {
 };
 
 export function getAuthSettings() {
-    return http.get<{ firstUser: boolean; registrationEnabled: boolean; linuxdoEnabled: boolean; emailEnabled: boolean; emailCodeRequired: boolean }>("/auth/settings");
+    return http.get<{ firstUser: boolean; registrationEnabled: boolean; linuxdoEnabled: boolean; emailEnabled: boolean; emailCodeRequired: boolean; emailFirstRegistration?: boolean; referralEnabled?: boolean }>("/auth/settings");
 }
 
 export function linuxDOLoginURL(next: string) {
@@ -375,6 +425,7 @@ export function getAuthSession() {
     if (authSessionRequest) return authSessionRequest;
     authSessionRequest = http.get<AuthSessionPayload>("/auth/session")
         .then((payload) => {
+            payload = { ...payload, user: normalizeUserAvatar(payload.user) };
             authSessionCache = { payload, expiresAt: Date.now() + 5_000 };
             return payload;
         })
@@ -396,7 +447,7 @@ export function getAdminFeatureAvailability() {
     return http.get<{ features: FeatureAvailability }>("/admin/settings/features");
 }
 
-export function updateAdminFeatureAvailability(features: Partial<Pick<FeatureAvailability, "welcomeEnabled" | "shortDramaEnabled" | "taskCenterEnabled" | "creditsEnabled" | "customChannelsEnabled" | "frontendModelsEnabled" | "pluginCenterEnabled" | "systemPluginsVisibleToUsers">>) {
+export function updateAdminFeatureAvailability(features: Partial<Pick<FeatureAvailability, "welcomeEnabled" | "shortDramaEnabled" | "taskCenterEnabled" | "creditsEnabled" | "customChannelsEnabled" | "frontendModelsEnabled" | "skillLibraryEnabled" | "pluginCenterEnabled" | "systemPluginsVisibleToUsers">>) {
     return http.patch<{ features: FeatureAvailability }>("/admin/settings/features", features);
 }
 
@@ -404,7 +455,7 @@ export async function login(input: { username: string; password: string }) {
     const result = await http.post<{ user: LocalUser }>("/auth/login", input);
     // 登录会改变服务端会话身份，不能让登录前缓存的游客 session 污染后续恢复。
     invalidateAuthSessionCache();
-    return result;
+    return { ...result, user: normalizeUserAvatar(result.user)! };
 }
 
 export function sendRegistrationEmailCode(email: string) {
@@ -419,8 +470,10 @@ export function resetPassword(input: { email: string; emailCode: string; passwor
     return http.post<{ reset: boolean }>("/auth/password-reset", input);
 }
 
-export function register(input: { username: string; email?: string; emailCode?: string; displayName?: string; password: string }) {
-    return http.post<{ user: LocalUser }>("/auth/register", input);
+export async function register(input: { email: string; emailCode?: string; password: string; referralCode?: string }) {
+    const result = await http.post<{ user: LocalUser }>("/auth/register", input);
+    invalidateAuthSessionCache();
+    return { ...result, user: normalizeUserAvatar(result.user)! };
 }
 
 export async function logout() {
@@ -429,25 +482,69 @@ export async function logout() {
     return result;
 }
 
-export type AdminListParams = { keyword?: string; status?: string; role?: string; page?: number; pageSize?: number };
+export async function updateProfile(input: { username: string; avatarResourceId?: string }) {
+    const result = await http.patch<{ user: LocalUser }>("/auth/profile", input);
+    invalidateAuthSessionCache();
+    return { ...result, user: normalizeUserAvatar(result.user)! };
+}
 
-export function listAdminUsers(params: AdminListParams = {}) {
+export function changePassword(input: { currentPassword: string; newPassword: string }) {
+    return http.patch<{ changed: boolean }>("/auth/password", input);
+}
+
+function normalizeUserAvatar(user: LocalUser | null) {
+    if (!user?.avatarResourceId) return user;
+    return { ...user, avatarUrl: resourceFileUrl(user.avatarResourceId) };
+}
+
+export type AdminListParams = { keyword?: string; status?: string; role?: string; page?: number; pageSize?: number };
+export type AdminUserLedgerFilter = "all" | "increase" | "consume" | "admin";
+
+export function listAdminUsers(params: Omit<AdminListParams, "role"> = {}) {
     return http.get<{ users: AdminUser[]; total: number; page: number; pageSize: number }>("/admin/users", { params });
 }
 
-export function createAdminUser(input: { username: string; displayName: string; email?: string; password: string; role: LocalUser["role"]; status: LocalUser["status"] }) {
+export function createAdminUser(input: { username: string; email?: string; remark?: string; password: string; status: LocalUser["status"] }) {
     return http.post<{ user: AdminUser }>("/admin/users", input);
+}
+
+export function listAdministrators(params: Omit<AdminListParams, "role"> = {}) {
+    return http.get<{ users: AdminUser[]; total: number; page: number; pageSize: number }>("/admin/administrators", { params });
+}
+
+export function createAdministrator(input: { username: string; email?: string; remark?: string; password: string; status: LocalUser["status"]; adminAccess: AdminAccess }) {
+    return http.post<{ user: AdminUser }>("/admin/administrators", input);
+}
+
+export function promoteAdministrator(input: { userId: string; adminAccess: AdminAccess }) {
+    return http.post<{ user: AdminManagedUser }>("/admin/administrators/promote", input);
+}
+
+export function updateAdministrator(id: string, input: Partial<Pick<LocalUser, "email" | "status" | "adminAccess">> & { remark?: string; password?: string }) {
+    return http.patch<{ user: AdminManagedUser }>(`/admin/administrators/${encodeURIComponent(id)}`, input);
+}
+
+export function demoteAdministrator(id: string) {
+    return http.post<{ user: AdminManagedUser }>(`/admin/administrators/${encodeURIComponent(id)}/demote`);
+}
+
+export function purgeAdministrator(id: string) {
+    return http.delete<{ ok: boolean }>(`/admin/administrators/${encodeURIComponent(id)}/purge`);
 }
 
 export function getAdminReferences() {
     return http.get<AdminReferenceData>("/admin/references");
 }
 
+export function searchAdminUserReferences(params: { keyword?: string; limit?: number } = {}) {
+    return http.get<{ users: AdminUserReference[] }>("/admin/user-references", { params });
+}
+
 export function getAdminUserDetail(id: string) {
     return http.get<AdminUserDetail>(`/admin/users/${encodeURIComponent(id)}/detail`);
 }
 
-export function listAdminUserLedger(id: string, params: { page?: number; pageSize?: number; type?: string } = {}) {
+export function listAdminUserLedger(id: string, params: { page?: number; pageSize?: number; type?: AdminUserLedgerFilter } = {}) {
     return http.get<{ entries: CreditLedgerEntry[]; total: number; page: number; pageSize: number }>(`/admin/users/${encodeURIComponent(id)}/ledger`, { params });
 }
 
@@ -455,16 +552,24 @@ export function listAdminUserTasks(id: string, params: { page?: number; pageSize
     return http.get<{ tasks: AdminUserTask[]; total: number; page: number; pageSize: number }>(`/admin/users/${encodeURIComponent(id)}/tasks`, { params });
 }
 
+export function listAdminUserLoginEvents(id: string, params: AdminUserLoginEventQuery = {}, signal?: AbortSignal) {
+    return http.get<{ events: AdminUserLoginEvent[]; total: number; page: number; pageSize: number }>(`/admin/users/${encodeURIComponent(id)}/login-events`, { params: compactApiParams(params), signal });
+}
+
 export function listAdminUserAuditEvents(id: string, params: { page?: number; pageSize?: number } = {}) {
     return http.get<{ events: AdminAuditEvent[]; total: number; page: number; pageSize: number }>(`/admin/users/${encodeURIComponent(id)}/audit-events`, { params });
 }
 
-export function updateAdminUser(id: string, input: Partial<Pick<LocalUser, "displayName" | "email" | "role" | "status">> & { password?: string }) {
-    return http.patch<{ user: LocalUser }>(`/admin/users/${encodeURIComponent(id)}`, input);
+export function updateAdminUser(id: string, input: Partial<Pick<LocalUser, "email" | "status">> & { remark?: string; password?: string }) {
+    return http.patch<{ user: AdminManagedUser }>(`/admin/users/${encodeURIComponent(id)}`, input);
 }
 
 export function deleteAdminUser(id: string) {
     return http.delete<{ ok: boolean }>(`/admin/users/${encodeURIComponent(id)}`);
+}
+
+export function purgeAdminUser(id: string) {
+    return http.delete<{ ok: boolean }>(`/admin/users/${encodeURIComponent(id)}/purge`);
 }
 
 export function bulkDisableAdminUsers(userIds: string[]) {
@@ -571,6 +676,10 @@ export function listAdminApiLogs(params: AdminApiLogParams = {}) {
 
 export function getAdminApiLog(id: string) {
     return http.get<{ log: ApiCallLog }>(`/admin/api-logs/${encodeURIComponent(id)}`);
+}
+
+export function getAdminApiLogByBillingOrder(billingOrderId: string) {
+    return http.get<{ log: ApiCallLog }>(`/admin/billing-orders/${encodeURIComponent(billingOrderId)}/api-log`);
 }
 
 export function queryAdminApiLogTask(id: string) {

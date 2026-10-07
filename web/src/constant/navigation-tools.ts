@@ -1,4 +1,4 @@
-import { Blocks, CircleDollarSign, Clapperboard, Images, LibraryBig, ListTodo, PanelsTopLeft, Settings, WandSparkles } from "lucide-react";
+import { Blocks, CircleDollarSign, Clapperboard, Images, LibraryBig, ListTodo, MessageSquareText, PanelsTopLeft, Settings, WandSparkles } from "lucide-react";
 
 export const navigationTools = [
     {
@@ -30,6 +30,12 @@ export const navigationTools = [
         label: "素材",
         icon: Images,
         section: "创作空间",
+    },
+    {
+        slug: "prompts",
+        label: "提示词",
+        icon: MessageSquareText,
+        section: "工作台管理",
     },
     {
         slug: "skills",

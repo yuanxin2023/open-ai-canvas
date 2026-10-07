@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { agentLessonCategoryLabel, deleteAdminAgentLesson, listAdminAgentLessons, type AdminAgentLesson } from "@/services/api/admin-agent-lessons";
-import { listAdminUsers, type AdminUser } from "@/services/api/auth";
+import { searchAdminUserReferences, type AdminUserReference } from "@/services/api/auth";
 import { AdminDataTable, AdminStatusBadge, AdminTableEmpty } from "./admin-ui";
 
 function authorLabel(record: AdminAgentLesson) {
@@ -20,7 +20,7 @@ export default function AgentLessonsPanel() {
     const [status, setStatus] = useState<string>("all");
     const [keyword, setKeyword] = useState("");
     const [userId, setUserId] = useState<string | undefined>();
-    const [users, setUsers] = useState<AdminUser[]>([]);
+    const [users, setUsers] = useState<AdminUserReference[]>([]);
     const [userSearch, setUserSearch] = useState("");
     const [searchingUsers, setSearchingUsers] = useState(false);
     const debouncedKeyword = useDebouncedValue(keyword.trim(), 250);
@@ -54,7 +54,7 @@ export default function AgentLessonsPanel() {
     useEffect(() => {
         const requestId = ++userSearchRef.current;
         setSearchingUsers(true);
-        void listAdminUsers({ keyword: debouncedUserSearch || undefined, page: 1, pageSize: 50 })
+        void searchAdminUserReferences({ keyword: debouncedUserSearch || undefined, limit: 50 })
             .then((result) => {
                 if (requestId !== userSearchRef.current) return;
                 setUsers((current) => {
@@ -179,9 +179,7 @@ export default function AgentLessonsPanel() {
 
     return (
         <div className="flex flex-col gap-3">
-            <p className="text-xs text-foreground/60">
-                记忆归用户自己批准和管理。这里只做巡查：可按用户、状态、关键词筛选，必要时删除违规内容。批准入口在用户的「设置 → Agent 记忆」。
-            </p>
+            <p className="text-xs text-foreground/60">记忆归用户自己批准和管理。这里只做巡查：可按用户、状态、关键词筛选，必要时删除违规内容。批准入口在用户的「设置 → Agent 记忆」。</p>
             <AdminDataTable
                 toolbar={
                     <div className="flex flex-wrap items-center gap-2">
@@ -208,16 +206,10 @@ export default function AgentLessonsPanel() {
                             onChange={(value) => setUserId(value)}
                             options={users.map((user) => ({
                                 value: user.id,
-                                label: user.displayName ? `${user.displayName}（${user.username}）` : user.username,
+                                label: user.username,
                             }))}
                         />
-                        <Input.Search
-                            allowClear
-                            placeholder="主题、内容或用户名"
-                            className="w-[220px]"
-                            value={keyword}
-                            onChange={(event) => setKeyword(event.target.value)}
-                        />
+                        <Input.Search allowClear placeholder="主题、内容或用户名" className="w-[220px]" value={keyword} onChange={(event) => setKeyword(event.target.value)} />
                         <Button icon={<RefreshCw className="size-4" />} onClick={() => void load()}>
                             刷新
                         </Button>

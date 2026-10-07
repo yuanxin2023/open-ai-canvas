@@ -10,6 +10,7 @@ import (
 )
 
 func RegisterFinanceRoutes(r *gin.RouterGroup, svc *service.Service) {
+	registerReferralRoutes(r, svc)
 	r.GET("/wallet", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {
@@ -205,7 +206,11 @@ func RegisterFinanceRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
-		ok(c, gin.H{"models": items})
+		models := make([]adminChannelModelResponse, 0, len(items))
+		for _, item := range items {
+			models = append(models, adminChannelModel(item))
+		}
+		ok(c, gin.H{"models": models})
 	})
 	r.POST("/admin/channels/:id/models/fetch", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
@@ -292,6 +297,27 @@ func RegisterFinanceRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		ok(c, gin.H{"deleted": deleted})
 	})
+	r.POST("/admin/channels/:id/models/batch-reprice", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 2<<20)
+		var req struct {
+			Models []service.ChannelModelRepriceRequest `json:"models" binding:"required"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		updated, err := svc.RepriceAdminChannelModels(user, c.Param("id"), req.Models)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"updated": updated})
+	})
 	r.PATCH("/admin/channels/:id/models/:modelId", func(c *gin.Context) {
 		saveChannelModel(c, svc, c.Param("modelId"))
 	})
@@ -336,11 +362,39 @@ func RegisterFinanceRoutes(r *gin.RouterGroup, svc *service.Service) {
 			fail(c, http.StatusBadRequest, err)
 			return
 		}
-		items, err := svc.AdminRedeemBatchPage(user, service.AdminListQuery{Keyword: c.Query("keyword"), Status: c.Query("validity"), Page: page, Limit: limit})
+		items, err := svc.AdminRedeemBatchPage(user, service.AdminListQuery{Keyword: c.Query("keyword"), Status: c.Query("validity"), Lifecycle: c.Query("lifecycle"), FundingSource: c.Query("fundingSource"), CreatorID: c.Query("creatorId"), Page: page, Limit: limit})
 		if err != nil {
 			failService(c, err)
 			return
 		}
+		ok(c, items)
+	})
+	r.POST("/admin/redeem-batches/search", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 8<<10)
+		var req struct {
+			Keyword       string `json:"keyword"`
+			Validity      string `json:"validity"`
+			Lifecycle     string `json:"lifecycle"`
+			FundingSource string `json:"fundingSource"`
+			CreatorID     string `json:"creatorId"`
+			Page          int    `json:"page"`
+			PageSize      int    `json:"pageSize"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		items, err := svc.AdminRedeemBatchPage(user, service.AdminListQuery{Keyword: req.Keyword, Status: req.Validity, Lifecycle: req.Lifecycle, FundingSource: req.FundingSource, CreatorID: req.CreatorID, Page: req.Page, Limit: req.PageSize})
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		c.Header("Cache-Control", "no-store")
 		ok(c, items)
 	})
 	r.POST("/admin/redeem-batches", func(c *gin.Context) {
@@ -377,7 +431,47 @@ func RegisterFinanceRoutes(r *gin.RouterGroup, svc *service.Service) {
 			fail(c, http.StatusBadRequest, err)
 			return
 		}
-		result, err := svc.AdminRedeemCodePage(user, c.Param("id"), c.Query("status"), page, limit)
+		result, err := svc.AdminRedeemCodePage(user, c.Param("id"), c.Query("fundingSource"), c.Query("status"), page, limit)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		c.Header("Cache-Control", "no-store")
+		ok(c, result)
+	})
+	r.POST("/admin/redeem-codes/lookup", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 4<<10)
+		var req service.AdminRedeemCodeLookupRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		result, err := svc.AdminLookupRedeemCode(user, req)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		c.Header("Cache-Control", "no-store")
+		ok(c, result)
+	})
+	r.POST("/admin/redeem-codes/search", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 4<<10)
+		var req service.AdminRedeemCodeSearchRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		result, err := svc.AdminSearchRedeemCodes(user, req)
 		if err != nil {
 			failService(c, err)
 			return
@@ -391,12 +485,12 @@ func RegisterFinanceRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
-		count, err := svc.AdminDisableRedeemBatch(user, c.Param("id"))
+		result, err := svc.AdminDisableRedeemBatch(user, c.Param("id"), c.Query("fundingSource"))
 		if err != nil {
 			failService(c, err)
 			return
 		}
-		ok(c, gin.H{"disabledCount": count})
+		ok(c, result)
 	})
 	r.POST("/admin/redeem-batches/:id/codes/:codeId/disable", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
@@ -404,11 +498,12 @@ func RegisterFinanceRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
-		if err := svc.AdminDisableRedeemCode(user, c.Param("id"), c.Param("codeId")); err != nil {
+		result, err := svc.AdminDisableRedeemCode(user, c.Param("id"), c.Param("codeId"), c.Query("fundingSource"))
+		if err != nil {
 			failService(c, err)
 			return
 		}
-		ok(c, gin.H{"ok": true})
+		ok(c, result)
 	})
 	r.POST("/admin/users/:id/credits/adjust", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
@@ -445,6 +540,19 @@ func RegisterFinanceRoutes(r *gin.RouterGroup, svc *service.Service) {
 			return
 		}
 		ok(c, items)
+	})
+	r.GET("/admin/billing-orders/:id/api-log", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		log, err := svc.AdminAPICallLogByBillingOrder(user, c.Param("id"))
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"log": log})
 	})
 	r.POST("/admin/billing-orders/batch-resolve", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
@@ -501,5 +609,5 @@ func saveChannelModel(c *gin.Context, svc *service.Service, id string) {
 		failService(c, err)
 		return
 	}
-	ok(c, gin.H{"model": item})
+	ok(c, gin.H{"model": adminChannelModel(*item)})
 }

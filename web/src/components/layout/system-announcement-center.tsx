@@ -11,8 +11,8 @@ const AnnouncementTimelineModal = lazy(() => import("@/components/ui/aceternity/
 
 const ANNOUNCEMENT_REFRESH_INTERVAL_MS = 5 * 60_000;
 const ANNOUNCEMENT_CACHE_TTL_MS = 60_000;
-const ANNOUNCEMENT_DISMISS_TODAY_PREFIX = "yingce.announcements.dismiss-today";
-const ANNOUNCEMENT_DISMISS_SESSION_PREFIX = "yingce.announcements.dismiss-session";
+const ANNOUNCEMENT_DISMISS_TODAY_PREFIX = "open-ai-canvas.announcements.dismiss-today";
+const ANNOUNCEMENT_DISMISS_SESSION_PREFIX = "open-ai-canvas.announcements.dismiss-session";
 
 type AnnouncementFeed = Awaited<ReturnType<typeof getAnnouncementFeed>>;
 

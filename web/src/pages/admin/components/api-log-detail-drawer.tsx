@@ -1,30 +1,35 @@
 import { useEffect, useState } from "react";
-import { App, Button, Descriptions, Drawer, Skeleton, Tabs, Typography } from "antd";
+import { App, Button, Descriptions, Skeleton, Tabs, Typography } from "antd";
 import { AdminEmpty } from "@/pages/admin/components/admin-ui";
+import { AdminModal } from "@/pages/admin/ui/overlays";
 import { RefreshCw } from "lucide-react";
 
 import { formatCredits } from "@/constant/credits";
-import { getAdminApiLog, queryAdminApiLogTask, type ApiCallLog } from "@/services/api/auth";
+import { getAdminApiLog, getAdminApiLogByBillingOrder, queryAdminApiLogTask, type ApiCallLog } from "@/services/api/auth";
 import { AdminStatusBadge } from "./admin-ui";
 
-export function ApiLogDetailDrawer({ logId, onClose, onLogUpdated }: { logId: string | null; onClose: () => void; onLogUpdated?: (log: ApiCallLog) => void }) {
+export function ApiLogDetailModal({ logId = null, billingOrderId = null, onClose, onLogUpdated }: { logId?: string | null; billingOrderId?: string | null; onClose: () => void; onLogUpdated?: (log: ApiCallLog) => void }) {
     const { message } = App.useApp();
     const [log, setLog] = useState<ApiCallLog | null>(null);
     const [loading, setLoading] = useState(false);
     const [querying, setQuerying] = useState(false);
     useEffect(() => {
-        if (!logId) return;
+        if (!logId && !billingOrderId) {
+            setLog(null);
+            return;
+        }
         let active = true;
         setLoading(true);
         setLog(null);
-        void getAdminApiLog(logId)
+        const request = logId ? getAdminApiLog(logId) : getAdminApiLogByBillingOrder(billingOrderId!);
+        void request
             .then((result) => active && setLog(result.log))
             .catch((error) => active && message.error(error instanceof Error ? error.message : "读取请求详情失败"))
             .finally(() => active && setLoading(false));
         return () => {
             active = false;
         };
-    }, [logId, message]);
+    }, [billingOrderId, logId, message]);
 
     const queryProviderTask = async () => {
         if (!log) return;
@@ -49,9 +54,18 @@ export function ApiLogDetailDrawer({ logId, onClose, onLogUpdated }: { logId: st
     };
 
     return (
-        <Drawer title="请求详情" open={Boolean(logId)} onClose={onClose} width="min(1200px, 90vw)" destroyOnHidden rootClassName="admin-drawer">
+        <AdminModal
+            title="请求详情"
+            open={Boolean(logId || billingOrderId)}
+            centered
+            width="min(1200px, calc(100vw - 32px))"
+            onCancel={onClose}
+            footer={null}
+            rootClassName="admin-api-log-detail-modal"
+            styles={{ body: { maxHeight: "min(76vh, 760px)", overflowX: "hidden", overflowY: "auto" } }}
+        >
             {loading ? <Skeleton active paragraph={{ rows: 12 }} /> : log ? <LogDetail log={log} querying={querying} onQueryProviderTask={queryProviderTask} /> : <AdminEmpty size="compact" title="没有请求详情" />}
-        </Drawer>
+        </AdminModal>
     );
 }
 
@@ -103,7 +117,8 @@ function LogDetail({ log, querying, onQueryProviderTask }: { log: ApiCallLog; qu
                 <span className="text-foreground/35">未返回</span>
             ),
         ],
-        ["积分计费", billingText(log)],
+        ["销售价格（积分）", billingText(log)],
+        ["成本价格（积分）", log.creditCostMicrocredits !== undefined ? `${formatCredits(log.creditCostMicrocredits)} 积分` : log.creditCostConfigured ? "待核算" : "未配置"],
         ["上游成本", log.costAvailable ? <span className="font-mono tabular-nums">{log.currency || "USD"} {(log.estimatedCostMicros / 1_000_000).toFixed(6)}</span> : <span className="text-foreground/35">未配置成本</span>],
         [
             "错误信息",

@@ -3,6 +3,7 @@ package skills
 import (
 	"archive/zip"
 	"bytes"
+	"strings"
 	"testing"
 
 	"infinite-canvas/backend/internal/kernel"
@@ -23,6 +24,52 @@ func TestArchiveFromMarkdownInfersMetadata(t *testing.T) {
 	}
 	if string(archive.Files["SKILL.md"]) == "" || archive.ContentHash == "" {
 		t.Fatal("archive did not preserve the entry file or compute a hash")
+	}
+}
+
+func TestArchiveFromMarkdownTruncatesInferredDescriptionWithinLimit(t *testing.T) {
+	longDescription := bytes.Repeat([]byte("描述内容。"), 140)
+	data := append([]byte("# 风格库四级匹配序\n\n"), longDescription...)
+
+	archive, err := archiveFromMarkdown(data, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := len([]rune(archive.Metadata.Description)); got > 500 {
+		t.Fatalf("inferred description length = %d, want <= 500", got)
+	}
+	if archive.Metadata.Description == "" {
+		t.Fatal("inferred description is empty")
+	}
+	if !bytes.Equal(archive.Files["SKILL.md"], data) {
+		t.Fatal("metadata truncation changed the original instruction")
+	}
+}
+
+func TestSkillMetadataLengthBoundaries(t *testing.T) {
+	for _, length := range []int{499, 500, 501, 553} {
+		value := strings.Repeat("文", length)
+		markdown := []byte("# 技能\n\n" + value)
+		archive, err := archiveFromMarkdown(markdown, "", "")
+		if err != nil {
+			t.Fatalf("description length %d: %v", length, err)
+		}
+		want := value
+		if length > 500 {
+			want = strings.Repeat("文", 497) + "..."
+		}
+		if archive.Metadata.Description != want {
+			t.Fatalf("description length %d: unexpected truncation", length)
+		}
+	}
+	metadata := parseSkillPackageMetadata([]byte("---\nname: " + strings.Repeat("名", 81) + "\ndescription: " + strings.Repeat("文", 501) + "\nmetadata:\n  version: " + strings.Repeat("版", 65) + "\n---\n"))
+	if len([]rune(metadata.Name)) != 80 || len([]rune(metadata.Description)) != 500 || len([]rune(metadata.Version)) != 64 {
+		t.Fatalf("metadata exceeds bounds: %#v", metadata)
+	}
+	// Supplied metadata still goes through strict validation; no widening of
+	// the archive contract is needed to fix inferred display metadata.
+	if _, err := finalizeSkillArchive(map[string][]byte{"SKILL.md": []byte("# 技能")}, skillPackageMetadata{Name: "技能", Description: strings.Repeat("文", 501)}); err == nil {
+		t.Fatal("expected overlong archive metadata to be rejected")
 	}
 }
 
@@ -71,6 +118,66 @@ func TestParseGitHubSkillURL(t *testing.T) {
 	if _, err := parseGitHubSkillURL("https://github.com/ddcat-ai/open-ai-canvas/blob/main/SKILL.md", "", ""); err == nil {
 		t.Fatal("expected blob URL to be rejected")
 	}
+}
+
+func TestCreatePlatformSkillFromArchivePublishesToAllUsers(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open("file:"+kernel.NewID()+"?mode=memory&cache=shared"), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AutoMigrate(
+		&model.User{}, &model.UserIdentity{}, &model.Skill{}, &model.SkillVersion{}, &model.SkillFile{},
+		&model.UserSkillState{}, &model.SkillPlatformState{}, &model.SkillCategoryPlatformState{},
+	); err != nil {
+		t.Fatal(err)
+	}
+	admin := model.User{ID: kernel.NewID(), Username: "platform-admin", DisplayName: "平台运营", Role: model.UserRoleAdmin, Status: model.UserStatusActive}
+	if err := db.Create(&admin).Error; err != nil {
+		t.Fatal(err)
+	}
+	svc := New(repository.New(db), t.TempDir(), nil)
+	archive, err := finalizeSkillArchive(map[string][]byte{
+		"SKILL.md":            []byte("# 公共导演\n\n面向全部用户的导演技能。\n"),
+		"references/guide.md": []byte("# 导演参考\n"),
+	}, skillPackageMetadata{Name: "公共导演", Description: "面向全部用户的导演技能。"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	created, err := svc.createSkillFromArchive(admin.ID, archive, SkillInstallRequest{Tag: "drama", IsPrivate: true}, "zip", "", "", "", "", false, model.SkillSourcePlatform)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var stored model.Skill
+	if err := db.First(&stored, "id = ?", created.SkillID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if stored.Source != model.SkillSourcePlatform || stored.IsPrivate || stored.OwnerID != admin.ID {
+		t.Fatalf("platform skill = %#v", stored)
+	}
+	var ownerStateCount int64
+	if err := db.Model(&model.UserSkillState{}).Where("skill_id = ?", stored.ID).Count(&ownerStateCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if ownerStateCount != 0 {
+		t.Fatalf("platform install created %d owner states", ownerStateCount)
+	}
+	public, err := svc.Skills("ordinary-user", SkillListRequest{Scope: "public", Page: 1, PageSize: 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(public.Skills) != 1 || public.Skills[0].SkillID != stored.ID {
+		t.Fatalf("public skills = %#v", public.Skills)
+	}
+	if err := svc.EnsureSkillPackages(); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.First(&stored, "id = ?", created.SkillID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if stored.SourceType != "zip" || stored.FileCount != 2 {
+		t.Fatalf("package ensure rewrote admin-installed skill: %#v", stored)
+	}
+	assertSkillVersionCount(t, db, stored.ID, 1)
 }
 
 func TestEnsureSkillPackagesMigratesAndRefreshesBuiltinSkills(t *testing.T) {

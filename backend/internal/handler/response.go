@@ -48,6 +48,9 @@ func failService(c *gin.Context, err error) {
 }
 
 func writeAppError(c *gin.Context, appErr *service.AppError) {
+	if appErr.RetryAfterSeconds > 0 {
+		c.Header("Retry-After", strconv.Itoa(appErr.RetryAfterSeconds))
+	}
 	code := appErr.Code
 	if code == 0 {
 		code = appErr.Status

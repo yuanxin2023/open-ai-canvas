@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="web/public/logo.svg" width="88" alt="影策 logo">
+  <img src="web/public/logo.svg" width="88" alt="AI 创作工作台 logo">
 </p>
 
-<h1 align="center">影策</h1>
+<h1 align="center">AI 创作工作台</h1>
 
 <p align="center">让一个故事，从文字走向银幕</p>
 
@@ -13,7 +13,7 @@
   <a href="SECURITY.md">安全策略</a>
 </p>
 
-影策是一个开源的 AI 影视与短剧创作工作台：用自由画布组织创作，用结构化工作流管理剧本、角色、场景和分镜，并通过统一的任务系统完成图片、视频、音频与文本生成。
+AI 创作工作台是一个开源的 AI 影视与短剧创作工作台：用自由画布组织创作，用结构化工作流管理剧本、角色、场景和分镜，并通过统一的任务系统完成图片、视频、音频与文本生成。
 
 > 项目仍在快速开发，数据结构和外部接口可能调整。默认适合个人、本地或可信环境部署；未经安全配置，不要直接作为公网多人服务使用。
 
@@ -29,6 +29,7 @@
 - **任务与素材管理**：异步队列、进度与日志、取消/重试、素材库、资源引用校验和登录后的跨设备同步。
 - **时间线剪辑**：片段编排、拆分、修剪、字幕转写和服务端成片导出，并支持插件化编辑面板。
 - **云端 Agent**：支持持久化对话、画布摘要和流式事件回放；当前为只读阶段，真实环境能力以文档和验收清单为准。
+- **Agent 技能生态**：内置技能覆盖生产流程；社区技能库 [judian-skills](https://github.com/itsWyatt-K/judian-skills) 补充生成前方法论（短剧节奏校准、提示词组装与质检、图/视频反推、UGC 与广告链路、MiniMax H3 官方规范、FLUX.2 资产图与视觉决策转换层，共 72 个，MIT/Apache-2.0/CC-BY-4.0 许可蒸馏并逐卡署名）。安装：技能页 → 安装技能 → GitHub 标签 → 仓库地址填 `https://github.com/itsWyatt-K/judian-skills`，子目录填 `skills/drama/onlyshot-redfruit-7beats` 这类技能路径。
 - **管理与渠道**：系统渠道、逻辑模型、用量/积分、功能开关、对象存储、响应拦截和管理后台。
 
 完整功能以[功能清单](docs/content/docs/overview/features.mdx)为准。
@@ -181,21 +182,17 @@ cd docs && bun run types:check
 
 ## 交流与反馈
 
-Issue 反馈、技术讨论和产品升级建议可以在微信交流群中沟通；群内也会不定期组织 AI 学习与培训交流会。
-
-<p align="center">
-  <img src="assets/wx.jpg" alt="影策 微信交流群" width="100%">
-</p>
+问题反馈、技术讨论和产品升级建议请通过仓库的 [Issues](https://github.com/ddcat-ai/open-ai-canvas/issues) 提交。
 
 ## 许可证和上游
 
-本项目采用 [MIT](LICENSE) 协议。影策基于 [basketikun/infinite-canvas](https://github.com/basketikun/infinite-canvas) 的早期版本进行二次开发，上游作者和贡献者保留其对应代码的权利与署名。
+本项目采用 [MIT](LICENSE) 协议。AI 创作工作台基于 [basketikun/infinite-canvas](https://github.com/basketikun/infinite-canvas) 的早期版本进行二次开发，上游作者和贡献者保留其对应代码的权利与署名。
 
 ---
 
 ## 赞助商
 
-感谢以下赞助商对影策项目的支持：
+感谢以下赞助商对 AI 创作工作台项目的支持：
 
 | LOGO | 类型 | 赞助商名称 | 说明 | 网站 |
 | --- | --- | --- | --- | --- |

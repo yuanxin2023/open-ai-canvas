@@ -21,6 +21,9 @@ type ChannelModelRequest struct {
 	ModelKey                     string                         `json:"modelKey"`
 	ProviderModelKey             string                         `json:"providerModelKey"`
 	DisplayName                  string                         `json:"displayName"`
+	ChannelLabel                 string                         `json:"channelLabel"`
+	Tags                         []model.ChannelModelTag        `json:"tags"`
+	Description                  string                         `json:"description"`
 	Icon                         string                         `json:"icon"`
 	Capability                   string                         `json:"capability"`
 	Protocol                     string                         `json:"protocol"`
@@ -40,7 +43,8 @@ const maxAdminChannelModelBatchDeleteCount = 100
 // ChannelModelPriceTierRequest 是系统渠道内某个规格的上游 SKU 与结算价格。
 // Resolution="*"、VideoSeconds=0 分别表示任意分辨率和任意时长。
 type ChannelModelPriceTierRequest struct {
-	// Selector 是 SKU 的规范匹配条件。支持 operation、quality、size、vquality、videoSeconds、imageCount；
+	CostPricing model.CreditCostPricing `json:"costPricing"`
+	// Selector 是 SKU 的规范匹配条件。支持 operation、quality、size、vquality、videoSeconds、imageCount、videoGenerateAudio；
 	// operation 可区分文生/图生/视频生，避免同一分辨率下错误复用价格。
 	Selector                     map[string]string `json:"selector"`
 	Resolution                   string            `json:"resolution"`
@@ -89,10 +93,10 @@ func (s *Service) EnsureSystemChannelModels() error {
 }
 
 func (s *Service) AdminChannelModels(actor *model.User, channelID string) ([]model.ChannelModel, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAnyAdminPermission(actor, model.AdminPermissionChannels, model.AdminPermissionLogicalModels); err != nil {
 		return nil, err
 	}
-	if _, err := s.adminSystemChannel(channelID); err != nil {
+	if _, err := s.repo.AdminSystemChannel(channelID); err != nil {
 		return nil, err
 	}
 	items, err := s.ensureChannelModels(channelID, true)
@@ -140,7 +144,7 @@ func (s *Service) SystemChannelHasProtocol(channelID string, protocol model.Chan
 }
 
 func (s *Service) FetchAdminChannelModels(ctx context.Context, actor *model.User, channelID string) (*AdminChannelModelFetchResult, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionChannels); err != nil {
 		return nil, err
 	}
 	channel, err := s.adminSystemChannel(channelID)
@@ -192,7 +196,7 @@ func (s *Service) FetchAdminChannelModels(ctx context.Context, actor *model.User
 
 // PreviewAdminChannelModels 只读取上游模型目录，不修改渠道模型配置。
 func (s *Service) PreviewAdminChannelModels(ctx context.Context, actor *model.User, channelID string) ([]string, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionChannels); err != nil {
 		return nil, err
 	}
 	return s.fetchAdminChannelModelCatalog(ctx, actor, channelID)
@@ -200,7 +204,7 @@ func (s *Service) PreviewAdminChannelModels(ctx context.Context, actor *model.Us
 
 // ImportAdminChannelModels 只导入管理员明确选择、且仍存在于上游目录中的模型。
 func (s *Service) ImportAdminChannelModels(ctx context.Context, actor *model.User, channelID string, selected []string) (*AdminChannelModelFetchResult, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionChannels); err != nil {
 		return nil, err
 	}
 	channel, err := s.adminSystemChannel(channelID)
@@ -293,8 +297,20 @@ func (s *Service) fetchAdminChannelModelCatalog(ctx context.Context, actor *mode
 }
 
 func (s *Service) SaveAdminChannelModel(actor *model.User, channelID string, id string, req ChannelModelRequest) (*model.ChannelModel, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionChannels); err != nil {
 		return nil, err
+	}
+	channelLabel := strings.TrimSpace(req.ChannelLabel)
+	tags, err := normalizeChannelModelTags(req.Tags)
+	if err != nil {
+		return nil, err
+	}
+	description := strings.TrimSpace(req.Description)
+	if len([]rune(description)) > 500 {
+		return nil, BadAuthRequest("模型描述不能超过 500 字")
+	}
+	if len([]rune(channelLabel)) > 80 {
+		return nil, BadAuthRequest("渠道展示名不能超过 80 字")
 	}
 	channel, err := s.repo.AdminSystemChannel(channelID)
 	if err != nil {
@@ -347,6 +363,9 @@ func (s *Service) SaveAdminChannelModel(actor *model.User, channelID string, id 
 	item.ModelKey = modelKey
 	item.ProviderModelKey = providerModelKey
 	item.DisplayName = strings.TrimSpace(req.DisplayName)
+	item.ChannelLabel = channelLabel
+	item.Tags = tags
+	item.Description = description
 	if item.DisplayName == "" {
 		item.DisplayName = modelKey
 	}
@@ -437,8 +456,8 @@ func (s *Service) syncLogicalModelsFromChannelModel(actor *model.User, channelMo
 	return nil
 }
 
-func supportsTokenBilling(capability string, protocol model.ChannelInterfaceType) bool {
-	return capability == "text" || (capability == "video" && model.IsVolcengineArkVideoProtocol(protocol))
+func supportsTokenBilling(capability string, _ model.ChannelInterfaceType) bool {
+	return capability == "text" || capability == "video"
 }
 
 func (s *Service) normalizeChannelModelPriceTiers(req ChannelModelRequest, capability string, protocol model.ChannelInterfaceType, fallbackProviderModelKey string) ([]model.ChannelModelPriceTier, error) {
@@ -481,6 +500,7 @@ func (s *Service) normalizeChannelModelPriceTiers(req ChannelModelRequest, capab
 		}
 		enabled := input.Enabled == nil || *input.Enabled
 		result = append(result, model.ChannelModelPriceTier{
+			CostPricing:                  input.CostPricing,
 			ID:                           id,
 			SelectorKey:                  key,
 			SelectorJSON:                 key,
@@ -537,6 +557,17 @@ func normalizeChannelModelTierSelector(capability string, input ChannelModelPric
 				continue
 			}
 			value = strconv.Itoa(count)
+		case "videoGenerateAudio":
+			if capability != "video" {
+				return nil, "", 0, BadAuthRequest("只有视频模型可以按是否生成音频配置价格档")
+			}
+			value = strings.ToLower(value)
+			if value == "*" {
+				continue
+			}
+			if value != "true" && value != "false" {
+				return nil, "", 0, BadAuthRequest("视频价格档音频条件必须为 true、false 或 *")
+			}
 		default:
 			return nil, "", 0, BadAuthRequest("价格档不支持规格字段：" + key)
 		}
@@ -582,6 +613,9 @@ func normalizeChannelModelTierSelector(capability string, input ChannelModelPric
 }
 
 func validateChannelModelTierPricing(capability string, protocol model.ChannelInterfaceType, billingMode string, input ChannelModelPriceTierRequest) error {
+	if err := validateCreditCostPricing(capability, billingMode, input.CostPricing); err != nil {
+		return err
+	}
 	if billingMode != "fixed_request" && billingMode != "per_second" && billingMode != "token" {
 		return BadAuthRequest("模型计费方式仅支持按次、按秒或 Token")
 	}
@@ -589,7 +623,7 @@ func validateChannelModelTierPricing(capability string, protocol model.ChannelIn
 		return BadAuthRequest("只有视频模型可以按秒计费")
 	}
 	if billingMode == "token" && !supportsTokenBilling(capability, protocol) {
-		return BadAuthRequest("Token 计费仅支持文本模型和火山方舟视频协议")
+		return BadAuthRequest("Token 计费仅支持文本和视频模型")
 	}
 	if input.UnitPriceMicrocredits < 0 || input.InputTokenPriceMicrocredits < 0 || input.OutputTokenPriceMicrocredits < 0 || input.CachedTokenPriceMicrocredits < 0 {
 		return BadAuthRequest("模型积分价格不能小于 0")
@@ -597,14 +631,10 @@ func validateChannelModelTierPricing(capability string, protocol model.ChannelIn
 	if !validCreditPrecision(input.UnitPriceMicrocredits) || !validCreditPrecision(input.InputTokenPriceMicrocredits) || !validCreditPrecision(input.OutputTokenPriceMicrocredits) || !validCreditPrecision(input.CachedTokenPriceMicrocredits) {
 		return BadAuthRequest("模型积分价格最多保留 2 位小数")
 	}
-	if !input.PriceConfigured {
-		return nil
+	if billingMode == "token" {
+		return validateTokenPrices(capability, input.InputTokenPriceMicrocredits, input.OutputTokenPriceMicrocredits, input.CachedTokenPriceMicrocredits)
 	}
-	const maxTokenPriceMicrocredits = int64(1_000_000) * CreditScale
-	if input.InputTokenPriceMicrocredits > maxTokenPriceMicrocredits || input.OutputTokenPriceMicrocredits > maxTokenPriceMicrocredits || input.CachedTokenPriceMicrocredits > maxTokenPriceMicrocredits {
-		return BadAuthRequest("Token 每百万用量价格不能超过 1,000,000 积分")
-	}
-	return nil
+	return validateTokenPrices("", input.InputTokenPriceMicrocredits, input.OutputTokenPriceMicrocredits, input.CachedTokenPriceMicrocredits)
 }
 
 func normalizeChannelModelTierResolution(raw string) string {
@@ -644,7 +674,7 @@ func (s *Service) applyChannelModelPriceTierSummary(item *model.ChannelModel, ti
 }
 
 func (s *Service) TestAdminChannelModel(ctx context.Context, actor *model.User, channelID string, req ChannelModelRequest) (*AdminChannelModelTestResult, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionChannels); err != nil {
 		return nil, err
 	}
 	channel, err := s.adminSystemChannel(channelID)
@@ -849,7 +879,7 @@ func (s *Service) DeleteAdminChannelModel(actor *model.User, channelID string, i
 // repository to remove it atomically. This deliberately rejects partial success:
 // administrators can safely correct an in-use model and retry the same selection.
 func (s *Service) DeleteAdminChannelModels(actor *model.User, channelID string, ids []string) (int64, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionChannels); err != nil {
 		return 0, err
 	}
 	if _, err := s.repo.AdminSystemChannel(channelID); err != nil {

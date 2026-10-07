@@ -1,21 +1,35 @@
 import { create } from "zustand";
 
 import { DEFAULT_DRAWING_ENGINE, type CanvasDrawingEngineSetting } from "@/lib/canvas/canvas-drawing-engine";
+import type { AdminAccess } from "@/lib/admin-permissions";
 
 export type LocalUser = {
     id: string;
     username: string;
     email?: string;
     displayName: string;
+    profileName?: string;
+    usernameChangePolicy: UsernameChangePolicy;
+    avatarResourceId?: string;
     avatarUrl?: string;
     identityProvider?: string;
     identityId?: string;
     identityUsername?: string;
     role: "admin" | "user";
+    adminAccess?: AdminAccess;
     status: "active" | "disabled";
     lastLoginAt?: string;
     createdAt?: string;
     updatedAt?: string;
+};
+
+export type UsernameChangePolicy = {
+    customized: boolean;
+    limit: number | null;
+    used: number;
+    remaining: number | null;
+    windowDays: number;
+    nextAvailableAt?: string;
 };
 
 export type RuntimeLimits = {
@@ -31,6 +45,7 @@ export type FeatureAvailability = {
     creditsEnabled: boolean;
     customChannelsEnabled: boolean;
     frontendModelsEnabled: boolean;
+    skillLibraryEnabled: boolean;
     pluginCenterEnabled: boolean;
     systemPluginsVisibleToUsers: boolean;
     configured?: boolean;
@@ -45,6 +60,7 @@ export const defaultFeatureAvailability: FeatureAvailability = {
     creditsEnabled: true,
     customChannelsEnabled: true,
     frontendModelsEnabled: false,
+    skillLibraryEnabled: true,
     pluginCenterEnabled: true,
     systemPluginsVisibleToUsers: true,
 };

@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -41,7 +42,7 @@ func RegisterAuthRoutes(r *gin.RouterGroup, svc *service.Service) {
 		if !available || !enforceRateLimit(c, "register:"+c.ClientIP(), policy.Request.RegisterPerHour, time.Hour) {
 			return
 		}
-		result, err := svc.Register(req)
+		result, err := svc.RegisterWithEnvironment(req, loginEnvironment(c))
 		if err != nil {
 			failService(c, err)
 			return
@@ -127,7 +128,7 @@ func RegisterAuthRoutes(r *gin.RouterGroup, svc *service.Service) {
 		if !enforceRateLimit(c, "login:"+c.ClientIP()+":"+strings.ToLower(strings.TrimSpace(req.Username)), policy.Request.LoginAccountPerTenMinutes, 10*time.Minute) {
 			return
 		}
-		result, err := svc.Login(req)
+		result, err := svc.LoginWithEnvironment(req, loginEnvironment(c))
 		if err != nil {
 			failService(c, err)
 			return
@@ -185,13 +186,57 @@ func RegisterAuthRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		ok(c, gin.H{"user": publicUser, "logicalModels": logicalModels, "runtimeLimits": limits, "drawingEngine": drawingEngine, "features": features})
 	})
+	r.PATCH("/auth/profile", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 16<<10)
+		var req service.UpdateProfileRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		updated, err := svc.UpdateProfile(user, req)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"user": updated})
+	})
+	r.PATCH("/auth/password", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 16<<10)
+		var req service.ChangePasswordRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		policy, available := loadRuntimePolicy(c, svc)
+		if !available || !enforceRateLimit(c, "change-password-ip:"+c.ClientIP(), policy.Request.LoginIPPerTenMinutes, 10*time.Minute) {
+			return
+		}
+		if !enforceRateLimit(c, "change-password-user:"+user.ID, policy.Request.LoginAccountPerTenMinutes, 10*time.Minute) {
+			return
+		}
+		if err := svc.ChangePassword(user, sessionCookie(c), req); err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"changed": true})
+	})
 	r.GET("/channels/system", func(c *gin.Context) {
 		actor, err := currentUser(c, svc)
 		if err != nil {
 			failService(c, err)
 			return
 		}
-		if err := svc.RequireAdmin(actor); err != nil {
+		if err := svc.RequireAnyAdminPermission(actor, model.AdminPermissionChannels, model.AdminPermissionLogicalModels); err != nil {
 			failService(c, err)
 			return
 		}
@@ -214,7 +259,7 @@ func linuxDOCallbackHandler(svc *service.Service) gin.HandlerFunc {
 		if !enforceRateLimit(c, "linuxdo-callback:"+c.ClientIP(), 30, 10*time.Minute) {
 			return
 		}
-		result, err := svc.CompleteLinuxDOLogin(c.Query("state"), c.Query("code"))
+		result, err := svc.CompleteLinuxDOLoginWithEnvironment(c.Query("state"), c.Query("code"), loginEnvironment(c))
 		if err != nil {
 			c.Redirect(http.StatusFound, "/login?oauth_error="+url.QueryEscape(err.Error()))
 			return
@@ -236,7 +281,7 @@ func RegisterAdminRoutes(r *gin.RouterGroup, svc *service.Service) {
 			fail(c, http.StatusBadRequest, err)
 			return
 		}
-		users, err := svc.AdminUsers(user, service.AdminListQuery{Keyword: c.Query("keyword"), Type: c.Query("role"), Status: c.Query("status"), Page: page, Limit: limit})
+		users, err := svc.AdminUsers(user, service.AdminListQuery{Keyword: c.Query("keyword"), Status: c.Query("status"), Page: page, Limit: limit})
 		if err != nil {
 			failService(c, err)
 			return
@@ -250,17 +295,116 @@ func RegisterAdminRoutes(r *gin.RouterGroup, svc *service.Service) {
 			return
 		}
 		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 64<<10)
-		var req service.CreateAdminUserRequest
+		var req service.CreateOrdinaryUserRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
 			fail(c, http.StatusBadRequest, err)
 			return
 		}
-		created, err := svc.CreateAdminUser(user, req)
+		created, err := svc.CreateOrdinaryUser(user, req)
 		if err != nil {
 			failService(c, err)
 			return
 		}
 		ok(c, gin.H{"user": created})
+	})
+	r.GET("/admin/administrators", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		page, limit, err := parsePaginationQuery(c, 20)
+		if err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		users, err := svc.Administrators(user, service.AdminListQuery{Keyword: c.Query("keyword"), Status: c.Query("status"), Page: page, Limit: limit})
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, users)
+	})
+	r.POST("/admin/administrators", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 64<<10)
+		var req service.CreateAdministratorRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		created, err := svc.CreateAdministrator(user, req)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"user": created})
+	})
+	r.POST("/admin/administrators/promote", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 16<<10)
+		var req service.PromoteAdministratorRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		updated, err := svc.PromoteAdministrator(user, req)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"user": updated})
+	})
+	r.PATCH("/admin/administrators/:id", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		var req service.UpdateAdministratorRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		updated, err := svc.UpdateAdministrator(user, c.Param("id"), req)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"user": updated})
+	})
+	r.POST("/admin/administrators/:id/demote", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		updated, err := svc.DemoteAdministrator(user, c.Param("id"))
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"user": updated})
+	})
+	r.DELETE("/admin/administrators/:id/purge", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		if err := svc.PurgeAdministrator(user, c.Param("id")); err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"ok": true})
 	})
 	r.GET("/admin/references", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
@@ -274,6 +418,24 @@ func RegisterAdminRoutes(r *gin.RouterGroup, svc *service.Service) {
 			return
 		}
 		ok(c, data)
+	})
+	r.GET("/admin/user-references", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		limit, err := strconv.Atoi(c.DefaultQuery("limit", "50"))
+		if err != nil || limit <= 0 {
+			fail(c, http.StatusBadRequest, errors.New("limit 无效"))
+			return
+		}
+		users, err := svc.SearchAdminUserReferences(user, c.Query("keyword"), limit)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"users": users})
 	})
 	r.POST("/admin/users/bulk-disable", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
@@ -301,6 +463,28 @@ func RegisterAdminRoutes(r *gin.RouterGroup, svc *service.Service) {
 			return
 		}
 		result, err := svc.AdminUserDetail(user, c.Param("id"))
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, result)
+	})
+	r.GET("/admin/users/:id/login-events", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		page, limit, err := parsePaginationQuery(c, 20)
+		if err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		result, err := svc.AdminUserLoginEvents(user, c.Param("id"), service.AdminUserLoginEventQuery{
+			Page: page, Limit: limit,
+			StartAt: c.Query("startAt"), EndAt: c.Query("endAt"),
+			LoginMethod: c.Query("loginMethod"), IP: c.Query("ip"),
+		})
 		if err != nil {
 			failService(c, err)
 			return
@@ -367,12 +551,12 @@ func RegisterAdminRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
-		var req service.UpdateUserRequest
+		var req service.UpdateOrdinaryUserRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
 			fail(c, http.StatusBadRequest, err)
 			return
 		}
-		updated, err := svc.UpdateUser(user, c.Param("id"), req)
+		updated, err := svc.UpdateOrdinaryUser(user, c.Param("id"), req)
 		if err != nil {
 			failService(c, err)
 			return
@@ -385,7 +569,19 @@ func RegisterAdminRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
-		if err := svc.DeleteUser(user, c.Param("id")); err != nil {
+		if err := svc.DeleteOrdinaryUser(user, c.Param("id")); err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"ok": true})
+	})
+	r.DELETE("/admin/users/:id/purge", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		if err := svc.PurgeOrdinaryUser(user, c.Param("id")); err != nil {
 			failService(c, err)
 			return
 		}

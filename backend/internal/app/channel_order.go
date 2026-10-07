@@ -18,7 +18,7 @@ type ChannelOrderRequest struct {
 }
 
 func (s *Service) AdminChannelOrder(actor *model.User, channelID string) ([]ChannelOrderItem, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionChannels); err != nil {
 		return nil, err
 	}
 	result := []ChannelOrderItem{}
@@ -46,7 +46,7 @@ func (s *Service) AdminChannelOrder(actor *model.User, channelID string) ([]Chan
 }
 
 func (s *Service) SaveAdminChannelOrder(actor *model.User, channelID string, req ChannelOrderRequest) error {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionChannels); err != nil {
 		return err
 	}
 	if req.IDs == nil || req.ExpectedIDs == nil || len(req.IDs) > 10000 {

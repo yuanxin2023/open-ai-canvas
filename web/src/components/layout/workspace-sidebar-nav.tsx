@@ -14,7 +14,6 @@ import { preloadWorkspaceRoute } from "@/lib/workspace-route-modules";
 import { CUSTOMER_SERVICE_OPEN_EVENT, getPublicCustomerService, type PublicCustomerService } from "@/services/api/customer-service";
 import { useUserStore, type FeatureAvailability } from "@/stores/use-user-store";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
-import { WorkspaceSidebarCheckin } from "./workspace-sidebar-checkin";
 
 export type WorkspaceNavItem = {
     id: string;
@@ -41,14 +40,14 @@ function buildNav(features: FeatureAvailability): { groups: WorkspaceNavGroup[];
     const groups: WorkspaceNavGroup[] = [
         {
             items: [
-                { ...toolItem("create", "/"), id: "home", title: "创作" },
+                { ...toolItem("create", "/?home=1"), id: "home", title: "创作" },
                 ...(features.shortDramaEnabled ? [{ ...toolItem("projects", "/projects"), title: "短剧 Agent" }] : []),
                 { ...toolItem("canvas", "/canvas"), title: "自由画布" },
             ],
         },
         {
             heading: "资源与工具",
-            items: [{ ...toolItem("assets", "/assets"), title: "资产" }, { ...toolItem("skills", "/skills"), title: "技能" }, ...(features.pluginCenterEnabled ? [{ ...toolItem("plugins", "/plugins"), title: "插件" }] : [])],
+            items: [{ ...toolItem("assets", "/assets"), title: "资产" }, { ...toolItem("prompts", "/prompts"), title: "提示词" }, ...(features.skillLibraryEnabled ? [{ ...toolItem("skills", "/skills"), title: "技能" }] : []), ...(features.pluginCenterEnabled ? [{ ...toolItem("plugins", "/plugins"), title: "插件" }] : [])],
         },
         ...(features.taskCenterEnabled ? [{ items: [{ ...toolItem("tasks", "/tasks"), title: "创作历史", icon: HistoryIcon }] }] : []),
     ];
@@ -58,14 +57,6 @@ function buildNav(features: FeatureAvailability): { groups: WorkspaceNavGroup[];
     ];
 
     return { groups, footer };
-}
-
-function WorkspaceSidebarAccountUtilities({ collapsed }: { collapsed: boolean }) {
-    return (
-        <div className={cn("app-workspace-sidebar-account", collapsed && "is-collapsed")}>
-            <WorkspaceSidebarCheckin collapsed={collapsed} />
-        </div>
-    );
 }
 
 function WorkspaceSwitcher({ collapsed, onNavigate, onExpand, onCollapse }: { collapsed: boolean; onNavigate: () => void; onExpand: () => void; onCollapse: () => void }) {
@@ -83,13 +74,10 @@ function WorkspaceSwitcher({ collapsed, onNavigate, onExpand, onCollapse }: { co
 
     return (
         <div className="app-workspace-sidebar-brand-row relative shrink-0 px-3 pt-3">
-            <Link to="/" onClick={onNavigate} className="app-workspace-sidebar-brand-button group" aria-label={`${appearance.brandName}首页`}>
+            <Link to="/?home=1" onClick={onNavigate} className="app-workspace-sidebar-brand-button group" aria-label={`${appearance.brandName}首页`}>
                 <span className="flex min-w-0 items-center gap-2">
                     <BrandLogoFrame className="app-workspace-brand-mark grid size-8 shrink-0 place-items-center rounded-[var(--r-sm)] shadow-sm" logoClassName="size-5 object-contain" alt="" fallback={<InfinityIcon className="size-4" strokeWidth={2.2} />} />
-                    <span className="flex min-w-0 flex-col">
-                        <span className="app-workspace-brand-wordmark truncate text-[var(--fs-body)] leading-none font-semibold">{appearance.brandName}</span>
-                        <span className="mt-1 truncate text-[var(--fs-label)] leading-none text-foreground/60">创作工作台</span>
-                    </span>
+                    <span className="app-workspace-brand-wordmark truncate text-[var(--fs-body)] leading-none font-semibold">{appearance.brandName}</span>
                 </span>
             </Link>
             <button type="button" className="app-workspace-sidebar-collapse-button" aria-label="收起侧栏" title="收起侧栏" onClick={onCollapse}>
@@ -129,10 +117,9 @@ function NavItem({
     const Icon = item.icon;
     const rowStyle = {
         ...(collapsed ? {} : { paddingLeft: `${level * 12 + 10}px` }),
-        ...(isActive ? { background: "var(--workspace-nav-active-bg)" } : {}),
     } as CSSProperties;
 
-    const collapsedTitle = item.id === "home" ? "创作" : item.id === "projects" ? "短剧" : item.id === "canvas" ? "画布" : item.id === "assets" ? "资产" : item.id === "skills" ? "技能" : item.id === "plugins" ? "插件" : item.id === "tasks" ? "历史" : item.title.slice(0, 2);
+    const collapsedTitle = item.id === "home" ? "创作" : item.id === "projects" ? "短剧" : item.id === "canvas" ? "画布" : item.id === "assets" ? "资产" : item.id === "prompts" ? "提示" : item.id === "skills" ? "技能" : item.id === "plugins" ? "插件" : item.id === "tasks" ? "历史" : item.title.slice(0, 2);
     const rowContent = (
         <>
             <span className="app-workspace-nav-main flex min-w-0 items-center gap-2.5">
@@ -301,13 +288,13 @@ function WorkspaceHelpMenu({ collapsed, selected, onSelect, onNavigate }: { coll
             <button
                 type="button"
                 className={cn("app-workspace-nav-link group flex min-h-9 w-full items-center justify-between gap-2 rounded-[var(--r-sm)] px-2.5 py-2 text-[var(--fs-body)] text-foreground/62 transition-colors duration-200 select-none hover:bg-surface-hover hover:text-foreground", selected && "is-active font-medium", collapsed && "is-collapsed")}
-                style={selected ? { background: "var(--workspace-nav-active-bg)" } : undefined}
                 aria-label={collapsed ? "帮助" : undefined}
                 title={collapsed ? "帮助" : undefined}
                 aria-haspopup="menu"
                 aria-expanded={open}
                 onClick={onSelect}
             >
+                {selected ? <span className="app-workspace-nav-active-pill" aria-hidden /> : null}
                 <span className="app-workspace-nav-main flex min-w-0 items-center gap-2.5">
                     <CircleHelp className="size-4 shrink-0 text-foreground/60 group-hover:text-foreground/80" strokeWidth={1.6} />
                     <span className="app-workspace-nav-title truncate">帮助</span>
@@ -401,8 +388,7 @@ export function WorkspaceSidebarNav({ collapsed, onNavigate, onOpenSearch, onExp
             </LayoutGroup>
 
             <div className="app-workspace-sidebar-footer shrink-0 px-3 py-3">
-                <WorkspaceSidebarAccountUtilities collapsed={collapsed} />
-                {footer.length ? <div className="mt-2 flex flex-col gap-0.5">
+                {footer.length ? <div className="flex flex-col gap-0.5">
                     {footer.map((item) => (
                         item.id === "help"
                             ? <WorkspaceHelpMenu key={item.id} collapsed={collapsed} selected={selectedNavId === item.id} onSelect={() => setSelectedNavId(item.id)} onNavigate={onNavigate} />

@@ -55,7 +55,7 @@ type AdminStorageStats struct {
 }
 
 func (s *Service) AdminResourcePage(actor *model.User, query AdminResourceQuery) (*AdminResourcePage, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionStorageResources); err != nil {
 		return nil, err
 	}
 	filter, page, limit, err := normalizeAdminResourceQuery(query)
@@ -94,7 +94,7 @@ func (s *Service) AdminResourcePage(actor *model.User, query AdminResourceQuery)
 }
 
 func (s *Service) AdminStorageStats(actor *model.User) (*AdminStorageStats, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionStorageResources); err != nil {
 		return nil, err
 	}
 	summary, err := s.repo.ResourceStorageSummary()
@@ -113,7 +113,7 @@ func (s *Service) AdminStorageStats(actor *model.User) (*AdminStorageStats, erro
 }
 
 func (s *Service) OpenResourceRangeAsAdmin(actor *model.User, id string, rangeHeader string) (*ResourceStream, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionStorageResources); err != nil {
 		return nil, err
 	}
 	resource, err := s.repo.Resource(strings.TrimSpace(id))
@@ -138,7 +138,7 @@ func normalizeAdminResourceQuery(query AdminResourceQuery) (repository.AdminReso
 		Limit:    limit,
 		Offset:   (page - 1) * limit,
 	}
-	if filter.Kind != "" && !oneOf(filter.Kind, "image", "video", "audio", "file") {
+	if filter.Kind != "" && !oneOf(filter.Kind, "image", "video", "audio", "file", "live2d") {
 		return repository.AdminResourceFilter{}, 0, 0, BadAuthRequest("资源类型筛选无效")
 	}
 	if filter.Status != "" && !oneOf(filter.Status, string(model.ResourceStatusPending), string(model.ResourceStatusReady), string(model.ResourceStatusFailed), string(model.ResourceStatusDeleted)) {
@@ -169,9 +169,6 @@ func readyResourceBytes(resource model.Resource) int64 {
 }
 
 func adminResourceUserName(user model.User) string {
-	if value := strings.TrimSpace(user.DisplayName); value != "" {
-		return value
-	}
 	if value := strings.TrimSpace(user.Username); value != "" {
 		return value
 	}

@@ -8,6 +8,17 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+func TestConfigureTrustedProxies(t *testing.T) {
+	t.Setenv("CANVAS_TRUSTED_PROXIES", "127.0.0.1, 172.16.0.0/12")
+	if err := configureTrustedProxies(gin.New()); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("CANVAS_TRUSTED_PROXIES", "not-a-proxy")
+	if err := configureTrustedProxies(gin.New()); err == nil {
+		t.Fatal("invalid trusted proxy was accepted")
+	}
+}
+
 func TestAllowedOriginWildcard(t *testing.T) {
 	t.Setenv("CANVAS_CORS_ORIGINS", "*")
 	context, _ := gin.CreateTestContext(httptest.NewRecorder())

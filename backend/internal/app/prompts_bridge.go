@@ -11,6 +11,8 @@ type (
 	PromptTemplateRequest          = prompts.PromptTemplateRequest
 	UserPromptCustomizationRequest = prompts.UserPromptCustomizationRequest
 	UserPromptPreference           = prompts.UserPromptPreference
+	UserPromptRequest              = prompts.UserPromptRequest
+	UserPromptPage                 = prompts.UserPromptPage
 	CompiledPrompt                 = prompts.CompiledPrompt
 	StyleProfileRequest            = prompts.StyleProfileRequest
 	StyleProfileFavoriteRequest    = prompts.StyleProfileFavoriteRequest
@@ -36,7 +38,7 @@ func (g promptAdminGate) RequireAdmin(user *model.User) error {
 	if g.svc == nil {
 		return nil
 	}
-	return g.svc.RequireAdmin(user)
+	return g.svc.RequireAdminPermission(user, model.AdminPermissionPromptTemplates)
 }
 
 func (g promptAdminGate) AppendAudit(actor *model.User, action, targetType, targetID, summary string, metadata any) error {
@@ -110,6 +112,34 @@ func (s *Service) UpdateUserPromptCustomization(user *model.User, operation stri
 
 func (s *Service) ResetUserPromptCustomization(user *model.User, operation string) error {
 	return s.promptDomain().ResetUserPromptCustomization(user, operation)
+}
+
+func (s *Service) UserPromptPage(user *model.User, keyword string, mode model.InspirationMode, page, pageSize int) (*UserPromptPage, error) {
+	if user == nil {
+		return nil, Unauthorized("请先登录")
+	}
+	return s.promptDomain().ListUserPrompts(user.ID, keyword, mode, page, pageSize)
+}
+
+func (s *Service) CreateUserPrompt(user *model.User, req UserPromptRequest) (*model.UserPrompt, error) {
+	if user == nil {
+		return nil, Unauthorized("请先登录")
+	}
+	return s.promptDomain().CreateUserPrompt(user.ID, req)
+}
+
+func (s *Service) UpdateUserPrompt(user *model.User, id string, req UserPromptRequest) (*model.UserPrompt, error) {
+	if user == nil {
+		return nil, Unauthorized("请先登录")
+	}
+	return s.promptDomain().UpdateUserPrompt(user.ID, id, req)
+}
+
+func (s *Service) DeleteUserPrompt(user *model.User, id string) error {
+	if user == nil {
+		return Unauthorized("请先登录")
+	}
+	return s.promptDomain().DeleteUserPrompt(user.ID, id)
 }
 
 func (s *Service) compilePrompt(userID string, operation string, values map[string]string) (CompiledPrompt, error) {

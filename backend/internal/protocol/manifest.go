@@ -220,10 +220,34 @@ func decodeManifest(data []byte) (Manifest, error) {
 	if err := json.Unmarshal(data, &manifest); err != nil {
 		return Manifest{}, fmt.Errorf("decode plugin manifest: %w", err)
 	}
+	NormalizeManifestAPIVersion(&manifest)
 	if err := ValidateManifest(manifest); err != nil {
 		return Manifest{}, err
 	}
 	return manifest, nil
+}
+
+var earlierPluginProtocolNamespace = string([]byte{121, 105, 110, 103, 99, 101})
+
+// NormalizeManifestAPIVersion upgrades the one supported earlier namespace
+// while preserving the manifest generation.
+func NormalizeManifestAPIVersion(manifest *Manifest) bool {
+	if manifest == nil {
+		return false
+	}
+	version := strings.TrimSpace(manifest.APIVersion)
+	for _, generation := range []string{"v1", "v2"} {
+		target := "open-ai-canvas.plugin/" + generation
+		if version == target {
+			manifest.APIVersion = target
+			return false
+		}
+		if version == earlierPluginProtocolNamespace+".plugin/"+generation {
+			manifest.APIVersion = target
+			return true
+		}
+	}
+	return false
 }
 
 func loadDeclarativeManifest(manifest Manifest) (Adapter, error) {
@@ -243,7 +267,10 @@ func loadDeclarativeManifestProvider(manifest Manifest, index int) (Adapter, err
 }
 
 func ValidateManifest(manifest Manifest) error {
-	if version := strings.TrimSpace(manifest.APIVersion); version != "yingce.plugin/v1" && version != "yingce.plugin/v2" {
+	version := strings.TrimSpace(manifest.APIVersion)
+	compatibleV1 := earlierPluginProtocolNamespace + ".plugin/v1"
+	compatibleV2 := earlierPluginProtocolNamespace + ".plugin/v2"
+	if version != "open-ai-canvas.plugin/v1" && version != "open-ai-canvas.plugin/v2" && version != "lovwow.plugin/v1" && version != "lovwow.plugin/v2" && version != compatibleV1 && version != compatibleV2 {
 		return fmt.Errorf("unsupported protocol manifest apiVersion %q", manifest.APIVersion)
 	}
 	if strings.TrimSpace(manifest.Metadata.ID) == "" || strings.TrimSpace(manifest.Metadata.Version) == "" {
@@ -848,7 +875,11 @@ func buildManifestOperation(operation ManifestOperation, auth ManifestAuth, requ
 		return RequestSpec{}, fmt.Errorf("evaluate request path: %w", err)
 	}
 	path := strings.ReplaceAll(manifestString(evaluatedPath), "{{taskId}}", url.PathEscape(taskID))
-	path = strings.ReplaceAll(path, "{{model}}", url.PathEscape(request.Model))
+	// Model identifiers from async aggregators commonly contain path segments
+	// (for example openai/gpt-image/edit). Escape each segment while preserving
+	// the provider's intentional slash separators in the manifest path.
+	escapedModel := strings.ReplaceAll(url.PathEscape(request.Model), "%2F", "/")
+	path = strings.ReplaceAll(path, "{{model}}", escapedModel)
 	path = interpolateManifestString(path, env)
 	if !isRelativePath(path) {
 		return RequestSpec{}, fmt.Errorf("evaluated request path must be relative: %q", path)
@@ -1084,6 +1115,10 @@ func manifestRequestValues(request GenerationRequest) map[string]any {
 	output.GenerateAudio = output.GenerateAudio || request.GenerateAudio
 	output.Watermark = output.Watermark || request.Watermark
 	outputValue, _ := requestAsManifestValue(output)
+	providerOptionsValue, _ := requestAsManifestValue(request.ProviderOptions)
+	if providerOptionsValue == nil {
+		providerOptionsValue = map[string]any{}
+	}
 
 	return map[string]any{
 		"capability":      request.Capability,
@@ -1104,7 +1139,7 @@ func manifestRequestValues(request GenerationRequest) map[string]any {
 		"watermark":       request.Watermark,
 		"operation":       request.Operation,
 		"output":          outputValue,
-		"providerOptions": request.ProviderOptions,
+		"providerOptions": providerOptionsValue,
 		"extra":           request.Extra,
 	}
 }

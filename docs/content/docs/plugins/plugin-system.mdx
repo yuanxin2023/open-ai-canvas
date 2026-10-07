@@ -1,17 +1,17 @@
 ---
 title: 插件系统设计
-description: 影策统一插件系统的扩展边界、Manifest 合同与 Eagle 外部素材来源方案
+description: AI 创作工作台统一插件系统的扩展边界、Manifest 合同与 Eagle 外部素材来源方案
 ---
 
 # 插件系统设计
 
 > 状态：已实现首版（Eagle 外部素材来源 + AI 提示词优化器）
 >
-> 当前版本已经包含 Eagle 专属素材管理页面、后端本地桥接、原始文件树浏览、文件读取和写入，以及内置 `prompt-optimizer` AI 能力插件。第三方包统一使用 `.yingce-plugin`；远程 Web 入口仍必须经过沙箱运行时和宿主 RPC。
+> 当前版本已经包含 Eagle 专属素材管理页面、后端本地桥接、原始文件树浏览、文件读取和写入，以及内置 `prompt-optimizer` AI 能力插件。新插件统一使用 `.canvas-plugin`，宿主继续兼容已有 `.lovwow-plugin` 和 `.yingce-plugin`；远程 Web 入口仍必须经过沙箱运行时和宿主 RPC。
 
 ## 1. 背景与范围
 
-当前项目包含 Codex App 的 MCP 包和影策网页插件贡献。它们可以使用不同的运行时，但安装、权限、版本和能力发现都遵循同一个影策插件 Manifest；MCP 连接本身仍受独立 Agent 安全边界约束。
+当前项目包含 Codex App 的 MCP 包和 AI 创作工作台网页插件贡献。它们可以使用不同的运行时，但安装、权限、版本和能力发现都遵循同一个工作台插件 Manifest；MCP 连接本身仍受独立 Agent 安全边界约束。
 
 网页插件的第一目标不是开放所有页面代码，而是提供稳定、可审计、可逐步扩展的宿主 API，让第三方开发者能够在不修改主应用源码的情况下接入能力。
 
@@ -49,7 +49,7 @@ description: 影策统一插件系统的扩展边界、Manifest 合同与 Eagle 
 | --- | --- | --- | --- | --- |
 | 系统插件 | OpenAI、Gemini、即梦等协议 Provider | 管理员 | 不适用 | 管理员 |
 | 官方插件 | RunningHub、ComfyUI Bridge、Eagle、提示词优化器、肖像排查 | 管理员作为硬上限 | 每个用户独立 | 按插件为用户级或无配置 |
-| 自定义插件 | 管理员上传的 `.yingce-plugin` | 管理员 | 不适用 | 管理员 |
+| 自定义插件 | 管理员上传的 `.canvas-plugin`（兼容 `.lovwow-plugin`、`.yingce-plugin`） | 管理员 | 不适用 | 管理员 |
 
 `/plugins` 是用户发现、个人启用和个人配置入口；`/admin/plugins` 是平台可用性、上传、卸载和启用人数入口。普通用户是否能看到只读的系统/自定义插件由“向普通用户显示系统插件”功能开关控制，但官方应用插件始终保留个人开关。
 
@@ -87,12 +87,12 @@ Eagle 插件属于此类，具体方案见第 8 节。
 
 ## 5. 插件包与清单
 
-插件以一个统一的 `.yingce-plugin` 包作为入口。包内固定包含 `manifest.json`，也可以包含受沙箱约束的 Web 入口和静态资源。Manifest 负责描述插件能力、权限和运行时；包文件负责承载对应版本的实现，不能再把“协议 JSON”和“UI 插件源码”拆成两套安装系统。
+插件以一个统一的 `.canvas-plugin` 包作为入口；历史 `.lovwow-plugin` 和 `.yingce-plugin` 仍可加载。包内固定包含 `manifest.json`，也可以包含受沙箱约束的 Web 入口和静态资源。Manifest 负责描述插件能力、权限和运行时；包文件负责承载对应版本的实现，不能再把“协议 JSON”和“UI 插件源码”拆成两套安装系统。
 
 建议的最小包结构：
 
 ```text
-eagle-asset-connector.yingce-plugin
+eagle-asset-connector.canvas-plugin
 ├── manifest.json
 ├── web/entry.js       # 有 UI/功能代码时声明
 └── web/assets/...     # 可选静态资源
@@ -102,24 +102,24 @@ eagle-asset-connector.yingce-plugin
 
 ```json
 {
-  "apiVersion": "yingce.plugin/v1",
+  "apiVersion": "open-ai-canvas.plugin/v2",
   "id": "eagle-asset-connector",
   "name": "Eagle 素材库",
   "version": "0.3.0",
-  "author": "影策社区",
+  "author": "AI 创作工作台社区",
   "permissions": ["asset.read", "asset.search", "asset.upload"],
   "configuration": { "fields": [{ "name": "baseUrl", "type": "url", "required": true }] },
   "contributes": { "assetSources": ["eagle"] }
 }
 ```
 
-带 Web 功能的包增加 `entry: "web/entry.js"`、`runtime.web: "sandbox"` 或 `"worker"`。上传入口只接受 `.yingce-plugin`，服务端会校验 ZIP 路径、大小、重复文件、Manifest 和入口文件，不执行包内 JavaScript；当前版本先完成包校验、存储和入口合同，未授权的 Web 代码不会自动进入主页面。Provider 仍由后端声明式运行时执行；UI/功能代码通过隔离运行时和权限化宿主 API 接入。
+带 Web 功能的包增加 `entry: "web/entry.js"`、`runtime.web: "sandbox"` 或 `"worker"`。上传入口接受 `.canvas-plugin` 并兼容 `.lovwow-plugin` 和 `.yingce-plugin`，服务端会校验 ZIP 路径、大小、重复文件、Manifest 和入口文件，不执行包内 JavaScript；当前版本先完成包校验、存储和入口合同，未授权的 Web 代码不会自动进入主页面。Provider 仍由后端声明式运行时执行；UI/功能代码通过隔离运行时和权限化宿主 API 接入。
 
 字段约束：
 
 - `id`：全局唯一，使用小写 kebab-case；安装后不能随意变更。
 - `version`：遵循 SemVer，用于更新和回滚判断。
-- `apiVersion`：固定为 `yingce.plugin/v1`，不接受旧版本或平行 Manifest。
+- `apiVersion`：新包固定使用 `open-ai-canvas.plugin/v2`；运行时继续接受既有 `lovwow.plugin/v1|v2` 和 `yingce.plugin/v1|v2` 包。
 - `contributes`：声明 provider、workflow、canvasNodes、transforms、assetSources、agents 等能力。
 - `permissions`：最小权限集合，宿主在安装和首次使用时展示。
 - `dependencies`：插件依赖的其他插件或宿主能力。
@@ -133,7 +133,7 @@ eagle-asset-connector.yingce-plugin
 
 ```ts
 export interface CanvasPluginManifest {
-  apiVersion: "yingce.plugin/v1";
+  apiVersion: "open-ai-canvas.plugin/v2";
   id: string;
   name: string;
   version: string;
@@ -200,11 +200,11 @@ Eagle 插件的主分类是“素材与数据连接器”，可以附带一个 `
 ### 8.1 连接器职责
 
 - 使用 Eagle 本地 API（默认 `http://127.0.0.1:41595`）检查服务并读取当前素材库。
-- 在影策素材页进入 Eagle 专属素材管理页面，按 Eagle 的父子文件树浏览和搜索文件。
-- Eagle 文件仍由 Eagle 管理，影策只通过外部素材来源读取、下载和使用，不要求逐个选择或复制成本地素材。
+- 在AI 创作工作台素材页进入 Eagle 专属素材管理页面，按 Eagle 的父子文件树浏览和搜索文件。
+- Eagle 文件仍由 Eagle 管理，AI 创作工作台只通过外部素材来源读取、下载和使用，不要求逐个选择或复制成本地素材。
 - 在当前 Eagle 文件夹中新建文件夹，并把本地图片、视频和音频直接写入 Eagle。
-- 返回 Eagle 素材 ID、文件夹 ID、完整文件夹路径和来源信息，供影策项目保存外部引用。
-- 通过影策后端本地桥接读取 Eagle 文件，避免浏览器直接打开 Eagle 的本机文件路径。
+- 返回 Eagle 素材 ID、文件夹 ID、完整文件夹路径和来源信息，供AI 创作工作台项目保存外部引用。
+- 通过AI 创作工作台后端本地桥接读取 Eagle 文件，避免浏览器直接打开 Eagle 的本机文件路径。
 
 ### 8.2 画布节点
 
@@ -249,19 +249,19 @@ external.open
 首版提供外部素材库浏览和双向写入：
 
 ```text
-Eagle 文件树 / 搜索 → 打开素材 → 在影策中使用外部引用
-影策上传图片、视频或音频 → 选择 Eagle 目标文件夹 → 写入 Eagle
-影策生成图片、视频或音频 → 插件自动归档到 Eagle 目标文件夹
+Eagle 文件树 / 搜索 → 打开素材 → 在AI 创作工作台中使用外部引用
+AI 创作工作台上传图片、视频或音频 → 选择 Eagle 目标文件夹 → 写入 Eagle
+AI 创作工作台生成图片、视频或音频 → 插件自动归档到 Eagle 目标文件夹
 ```
 
 ### 8.5 当前实现边界
 
 - 素材页的“Eagle 素材库”进入插件专属页面，不使用抽屉，也不要求选择素材。
-- 左侧文件树直接继承 Eagle 的父子层级；影策保存外部引用时保留 Eagle 素材 ID、文件夹 ID 和路径信息。
-- 图片、视频、音频和模型可以从 Eagle 直接浏览、搜索和读取；当前不把文本类内容转换成影策文本素材。
-- 当前支持将本地图片、视频和音频写入 Eagle 当前文件夹；生成结果可以在插件设置中开启自动归档并指定 Eagle 文件夹。影策仍保留本地素材记录，外部写入成功或失败会记录到素材 metadata。实际可写入格式由本机 Eagle 版本/API 决定；如果 Eagle 拒绝某种媒体，影策保留本地结果并记录失败状态。删除、批量覆盖和冲突解决仍需后续权限设计。
+- 左侧文件树直接继承 Eagle 的父子层级；AI 创作工作台保存外部引用时保留 Eagle 素材 ID、文件夹 ID 和路径信息。
+- 图片、视频、音频和模型可以从 Eagle 直接浏览、搜索和读取；当前不把文本类内容转换成AI 创作工作台文本素材。
+- 当前支持将本地图片、视频和音频写入 Eagle 当前文件夹；生成结果可以在插件设置中开启自动归档并指定 Eagle 文件夹。AI 创作工作台仍保留本地素材记录，外部写入成功或失败会记录到素材 metadata。实际可写入格式由本机 Eagle 版本/API 决定；如果 Eagle 拒绝某种媒体，AI 创作工作台保留本地结果并记录失败状态。删除、批量覆盖和冲突解决仍需后续权限设计。
 - Eagle 地址只允许本机默认端口，后端会校验本机地址和文件路径，避免把连接器变成任意内网访问代理。
-- Eagle 文件夹不会复制成影策项目中的独立资产文件夹；页面以 Eagle 原始文件树作为外部来源视图。自动归档默认使用 Eagle 根目录，用户可以在插件设置中关闭或改用具体文件夹。
+- Eagle 文件夹不会复制成AI 创作工作台项目中的独立资产文件夹；页面以 Eagle 原始文件树作为外部来源视图。自动归档默认使用 Eagle 根目录，用户可以在插件设置中关闭或改用具体文件夹。
 
 ## 9. 安全边界
 
@@ -287,7 +287,7 @@ Eagle 文件树 / 搜索 → 打开素材 → 在影策中使用外部引用
 4. 使用宿主提供的模拟画布和测试数据验证插件。
 5. 生成插件清单和构建产物。
 6. 发布到静态地址或组织注册表。
-7. 在影策的插件管理器中通过 URL 安装。
+7. 在AI 创作工作台的插件管理器中通过 URL 安装。
 
 推荐目录：
 

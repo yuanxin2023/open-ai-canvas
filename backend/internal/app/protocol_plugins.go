@@ -1,6 +1,7 @@
 package app
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -109,6 +110,9 @@ func newPluginRuntime(dataDir string) (*pluginRuntime, error) {
 		return nil, fmt.Errorf("create plugin package directory: %w", err)
 	}
 	center := &pluginRuntime{registryPath: filepath.Join(dataDir, "plugin_registry.json"), packageDir: packageDir, plugins: make(map[string]pluginRecord)}
+	if err := center.migrateStoredPluginRegistry(); err != nil {
+		return nil, err
+	}
 	if err := center.bootstrapBuiltInPlugins(); err != nil {
 		return nil, err
 	}
@@ -116,6 +120,82 @@ func newPluginRuntime(dataDir string) (*pluginRuntime, error) {
 		return nil, err
 	}
 	return center, nil
+}
+
+func (c *pluginRuntime) migrateStoredPluginRegistry() error {
+	records, err := c.readRegistry()
+	if err != nil || len(records) == 0 {
+		return err
+	}
+	type stagedPackage struct {
+		oldPath string
+		newPath string
+		created bool
+	}
+	staged := make([]stagedPackage, 0)
+	changed := false
+	for index := range records {
+		record := &records[index]
+		var manifest protocol.Manifest
+		if json.Unmarshal(record.Raw, &manifest) == nil && protocol.NormalizeManifestAPIVersion(&manifest) {
+			normalized, marshalErr := json.Marshal(manifest)
+			if marshalErr != nil {
+				return marshalErr
+			}
+			record.Raw = normalized
+			changed = true
+		}
+		if strings.TrimSpace(record.PackagePath) == "" {
+			continue
+		}
+		oldName := filepath.Base(record.PackagePath)
+		extension := protocol.PluginPackageExtensionForAPIVersion(manifest.APIVersion)
+		if protocol.IsPluginPackageFileName(oldName) && strings.HasSuffix(strings.ToLower(oldName), extension) {
+			continue
+		}
+		oldPath := filepath.Join(c.packageDir, oldName)
+		data, readErr := os.ReadFile(oldPath)
+		if errors.Is(readErr, os.ErrNotExist) {
+			continue
+		}
+		if readErr != nil {
+			return fmt.Errorf("读取待迁移插件包 %s：%w", record.ID, readErr)
+		}
+		newName := strings.TrimSuffix(oldName, filepath.Ext(oldName)) + extension
+		newPath := filepath.Join(c.packageDir, newName)
+		created := false
+		if existing, readTargetErr := os.ReadFile(newPath); errors.Is(readTargetErr, os.ErrNotExist) {
+			if writeErr := writePluginFile(newPath, data); writeErr != nil {
+				return fmt.Errorf("写入迁移插件包 %s：%w", record.ID, writeErr)
+			}
+			created = true
+		} else if readTargetErr != nil {
+			return fmt.Errorf("检查迁移插件包 %s：%w", record.ID, readTargetErr)
+		} else if !bytes.Equal(existing, data) {
+			return fmt.Errorf("迁移插件包 %s 时目标文件冲突", record.ID)
+		}
+		record.PackagePath = newName
+		if strings.TrimSpace(record.FileName) != "" {
+			record.FileName = strings.TrimSuffix(record.FileName, filepath.Ext(record.FileName)) + extension
+		}
+		staged = append(staged, stagedPackage{oldPath: oldPath, newPath: newPath, created: created})
+		changed = true
+	}
+	if !changed {
+		return nil
+	}
+	if err := c.writeRegistry(records); err != nil {
+		for _, item := range staged {
+			if item.created {
+				_ = os.Remove(item.newPath)
+			}
+		}
+		return fmt.Errorf("保存插件注册表迁移失败：%w", err)
+	}
+	for _, item := range staged {
+		_ = os.Remove(item.oldPath)
+	}
+	return nil
 }
 
 func (c *pluginRuntime) bootstrapBuiltInPlugins() error {
@@ -137,7 +217,7 @@ func (c *pluginRuntime) bootstrapBuiltInPlugins() error {
 	}
 	builtInIDs := make(map[string]struct{}, len(entries)+2)
 	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(strings.ToLower(entry.Name()), ".yingce-plugin") {
+		if entry.IsDir() || !protocol.IsPluginPackageFileName(entry.Name()) {
 			continue
 		}
 		packageData, err := os.ReadFile(filepath.Join(officialDir, entry.Name()))
@@ -174,7 +254,7 @@ func (c *pluginRuntime) bootstrapBuiltInPlugins() error {
 			return fmt.Errorf("编码官方插件 %q：%w", id, err)
 		}
 		hash := pluginHash(packageData)
-		packageName := hash + ".yingce-plugin"
+		packageName := hash + protocol.PluginPackageExtensionForAPIVersion(manifest.APIVersion)
 		if err := writePluginFile(filepath.Join(c.packageDir, packageName), packageData); err != nil {
 			return fmt.Errorf("缓存官方插件 %q：%w", id, err)
 		}
@@ -291,7 +371,7 @@ func containsOfficialPluginPackage(dir string) bool {
 		return false
 	}
 	for _, entry := range entries {
-		if !entry.IsDir() && strings.HasSuffix(strings.ToLower(entry.Name()), ".yingce-plugin") {
+		if !entry.IsDir() && protocol.IsPluginPackageFileName(entry.Name()) {
 			return true
 		}
 	}
@@ -454,7 +534,7 @@ func (c *pluginRuntime) reload() error {
 			continue
 		}
 		for _, contribution := range manifest.Contributes.PaymentProviders {
-			provider, providerErr := payment.NewRPCProvider(payment.DescriptorFromManifest(manifest, contribution), runtimeDir, manifest.Runtime.BackendEntry)
+			provider, providerErr := payment.NewRPCProvider(payment.DescriptorFromManifest(manifest, contribution), runtimeDir, manifest.Runtime.BackendEntry, pkg.RPCVersion)
 			if providerErr != nil {
 				record.Status = "invalid"
 				record.Error = providerErr.Error()
@@ -617,10 +697,11 @@ func (c *pluginRuntime) install(data []byte, fileName string) (PluginView, error
 	}
 	hash := pluginHash(data)
 	packageName := filepath.Base(strings.TrimSpace(fileName))
+	packageExtension := protocol.PluginPackageExtensionForAPIVersion(manifest.APIVersion)
 	if packageName == "." || packageName == "" || packageName == string(filepath.Separator) {
-		packageName = manifest.Metadata.ID + ".yingce-plugin"
+		packageName = manifest.Metadata.ID + packageExtension
 	}
-	packagePath := filepath.Join(c.packageDir, hash+".yingce-plugin")
+	packagePath := filepath.Join(c.packageDir, hash+packageExtension)
 	if err := writePluginFile(packagePath, data); err != nil {
 		return PluginView{}, fmt.Errorf("保存插件包失败：%w", err)
 	}
@@ -718,7 +799,7 @@ func pluginManifestView(raw []byte, metadata protocol.Metadata, source string) P
 		manifest.Metadata = metadata
 	}
 	return PluginManifestView{
-		ID: metadata.ID, Name: metadata.Name, Version: metadata.Version, APIVersion: "yingce.plugin/v1", Entry: manifest.Entry, Surfaces: manifest.Surfaces,
+		ID: metadata.ID, Name: metadata.Name, Version: metadata.Version, APIVersion: "open-ai-canvas.plugin/v1", Entry: manifest.Entry, Surfaces: manifest.Surfaces,
 		Description: metadata.Description, Documentation: metadata.Documentation, Author: metadata.Vendor,
 		Permissions: manifest.Permissions, Trusted: isBuiltInPluginSource(source), Runtime: manifest.Runtime,
 		Configuration: manifest.Configuration, Contributes: manifest.Contributes,

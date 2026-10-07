@@ -141,7 +141,7 @@ func TestDuplicateSystemChannelCopiesSecretsModelsAndPriceTiers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DuplicateSystemChannel() error = %v", err)
 	}
-	if copied.Name != "方舟视频 - 副本" || copied.PublicAlias != source.PublicAlias || copied.Enabled != source.Enabled {
+	if copied.Name != "方舟视频 - 副本" || copied.Enabled != source.Enabled {
 		t.Fatalf("copied channel summary = %#v", copied)
 	}
 	var stored model.ModelChannel
@@ -169,7 +169,7 @@ func TestDuplicateSystemChannelCopiesSecretsModelsAndPriceTiers(t *testing.T) {
 
 func TestChannelFromRequestStoresAndClearsHeaders(t *testing.T) {
 	request := ChannelRequest{Name: "Headers", BaseURL: "https://example.com/v1", Headers: []OutboundHeader{{Name: "User-Agent", Value: "Custom Agent"}}}
-	channel, err := channelFromRequest(request, model.ModelChannel{})
+	channel, err := channelFromRequest(request, model.ModelChannel{BaseURL: request.BaseURL})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -217,7 +217,7 @@ func TestRuntimeConcurrencyUsesEnvironmentFallback(t *testing.T) {
 	}
 
 	useGlobal := true
-	channel, err := channelFromRequest(ChannelRequest{Name: "Global", BaseURL: "https://example.com/v1", UseGlobalConcurrency: &useGlobal}, model.ModelChannel{ConcurrencyLimit: 4})
+	channel, err := channelFromRequest(ChannelRequest{Name: "Global", BaseURL: "https://example.com/v1", UseGlobalConcurrency: &useGlobal}, model.ModelChannel{BaseURL: "https://example.com/v1", ConcurrencyLimit: 4})
 	if err != nil || channel.ConcurrencyLimit != 0 {
 		t.Fatalf("global concurrency channel = %#v, error = %v", channel, err)
 	}

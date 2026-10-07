@@ -12,12 +12,34 @@ import (
 )
 
 const (
-	PluginPackageFormat    = "yingce.plugin/package-v1"
-	PluginPackageMaxBytes  = 48 << 20
-	PluginManifestMaxBytes = 512 << 10
-	pluginPackageMaxFiles  = 256
-	pluginPackageMaxEntry  = 16 << 20
+	PluginPackageFormat        = "open-ai-canvas.plugin/package-v1"
+	PluginPackageExtension     = ".canvas-plugin"
+	CompatiblePackageExtension = ".yingce-plugin"
+	LovwowPackageExtension     = ".lovwow-plugin"
+	PluginPackageMaxBytes      = 48 << 20
+	PluginManifestMaxBytes     = 512 << 10
+	pluginPackageMaxFiles      = 256
+	pluginPackageMaxEntry      = 16 << 20
 )
+
+func IsPluginPackageFileName(name string) bool {
+	lower := strings.ToLower(strings.TrimSpace(name))
+	return strings.HasSuffix(lower, PluginPackageExtension) || strings.HasSuffix(lower, CompatiblePackageExtension) || strings.HasSuffix(lower, LovwowPackageExtension)
+}
+
+func PluginPackageExtensions() []string {
+	return []string{PluginPackageExtension, CompatiblePackageExtension, LovwowPackageExtension}
+}
+
+func PluginPackageExtensionForAPIVersion(apiVersion string) string {
+	if strings.HasPrefix(strings.TrimSpace(apiVersion), "yingce.plugin/") {
+		return CompatiblePackageExtension
+	}
+	if strings.HasPrefix(strings.TrimSpace(apiVersion), "lovwow.plugin/") {
+		return LovwowPackageExtension
+	}
+	return PluginPackageExtension
+}
 
 // PluginPackage is the transport envelope for every uploaded plugin. The
 // manifest remains the single capability contract; files are optional runtime
@@ -26,6 +48,7 @@ type PluginPackage struct {
 	Manifest    Manifest
 	ManifestRaw []byte
 	Files       map[string][]byte
+	RPCVersion  string
 }
 
 // ParsePluginPackage validates the package container and returns its manifest
@@ -90,13 +113,32 @@ func ParsePluginPackage(data []byte) (PluginPackage, error) {
 	if err := json.Unmarshal(manifestRaw, &manifest); err != nil {
 		return PluginPackage{}, fmt.Errorf("decode plugin manifest: %w", err)
 	}
+	originalAPIVersion := strings.TrimSpace(manifest.APIVersion)
+	if NormalizeManifestAPIVersion(&manifest) {
+		normalizedManifestRaw, err := json.Marshal(manifest)
+		if err != nil {
+			return PluginPackage{}, fmt.Errorf("encode normalized plugin manifest: %w", err)
+		}
+		manifestRaw = normalizedManifestRaw
+		files["manifest.json"] = normalizedManifestRaw
+	}
 	if err := ValidateManifest(manifest); err != nil {
 		return PluginPackage{}, err
 	}
 	if err := validatePluginPackageRuntime(manifest, files); err != nil {
 		return PluginPackage{}, err
 	}
-	return PluginPackage{Manifest: manifest, ManifestRaw: manifestRaw, Files: files}, nil
+	return PluginPackage{Manifest: manifest, ManifestRaw: manifestRaw, Files: files, RPCVersion: paymentRPCVersionForPluginAPI(originalAPIVersion)}, nil
+}
+
+func paymentRPCVersionForPluginAPI(apiVersion string) string {
+	apiVersion = strings.TrimSpace(apiVersion)
+	for _, generation := range []string{"v1", "v2"} {
+		if apiVersion == earlierPluginProtocolNamespace+".plugin/"+generation {
+			return earlierPluginProtocolNamespace + ".payment/v1"
+		}
+	}
+	return "open-ai-canvas.payment/v1"
 }
 
 func validatePluginPackagePath(name string) (string, error) {

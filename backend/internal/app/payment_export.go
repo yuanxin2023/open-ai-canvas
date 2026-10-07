@@ -85,7 +85,7 @@ func validatePaymentResult(result string) error {
 }
 
 func (s *Service) AdminPaymentOrdersCSV(ctx context.Context, actor *model.User, query PaymentOrderQuery) ([]byte, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionPaymentOrders); err != nil {
 		return nil, err
 	}
 	filter, err := query.filter()
@@ -106,13 +106,13 @@ func (s *Service) AdminPaymentOrdersCSV(ctx context.Context, actor *model.User, 
 		if order.ProviderTradeNo != nil {
 			trade = *order.ProviderTradeNo
 		}
-		rows = append(rows, []string{paymentCSVIdentifier(order.ID), paymentCSVIdentifier(order.MerchantOrderNo), paymentCSVIdentifier(trade), paymentCSVIdentifier(order.UserID), user.Username, user.DisplayName, user.Email, order.ProductName, s.paymentExportProviderName(order.ProviderID), paymentDecimal(order.AmountFen, 2, false), order.Currency, paymentDecimal(order.CreditsMicrocredits, 6, true), paymentExportLabel(string(order.Status)), order.ProviderStatus, paymentCSVTime(&order.CreatedAt), paymentCSVTime(order.ProviderPaidAt), paymentCSVTime(order.CreditedAt), paymentCSVTime(order.ClosedAt)})
+		rows = append(rows, []string{paymentCSVIdentifier(order.ID), paymentCSVIdentifier(order.MerchantOrderNo), paymentCSVIdentifier(trade), paymentCSVIdentifier(order.UserID), user.Username, user.Username, user.Email, order.ProductName, s.paymentExportProviderName(order.ProviderID), paymentDecimal(order.AmountFen, 2, false), order.Currency, paymentDecimal(order.CreditsMicrocredits, 6, true), paymentExportLabel(string(order.Status)), order.ProviderStatus, paymentCSVTime(&order.CreatedAt), paymentCSVTime(order.ProviderPaidAt), paymentCSVTime(order.CreditedAt), paymentCSVTime(order.ClosedAt)})
 	}
 	return paymentCSV(rows)
 }
 
 func (s *Service) AdminPaymentReconciliationsCSV(ctx context.Context, actor *model.User, query PaymentReconciliationQuery) ([]byte, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionPaymentReconciliation); err != nil {
 		return nil, err
 	}
 	filter, err := query.filter()
@@ -138,7 +138,7 @@ func (s *Service) AdminPaymentReconciliationsCSV(ctx context.Context, actor *mod
 }
 
 func (s *Service) AdminPaymentReconciliationItemsCSV(ctx context.Context, actor *model.User, runID, result string) ([]byte, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionPaymentReconciliation); err != nil {
 		return nil, err
 	}
 	if err := validatePaymentResult(result); err != nil {

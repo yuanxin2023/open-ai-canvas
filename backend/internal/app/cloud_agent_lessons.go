@@ -1062,7 +1062,7 @@ func (s *Service) AdminAgentLessons(status, userID, keyword string, limit int) (
 		view := agentLessonAdminViewOf(lesson)
 		if user, ok := users[lesson.AuthorUserID]; ok {
 			view.AuthorUsername = user.Username
-			view.AuthorDisplayName = user.DisplayName
+			view.AuthorDisplayName = user.Username
 		}
 		views = append(views, view)
 	}

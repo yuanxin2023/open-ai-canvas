@@ -30,7 +30,7 @@ func (s *Service) QueryFailedVideoTask(ctx context.Context, userID string, taskI
 }
 
 func (s *Service) AdminQueryFailedVideoTask(ctx context.Context, actor *model.User, logID string) (*ProviderTaskQueryResult, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionAPILogs); err != nil {
 		return nil, err
 	}
 	log, err := s.repo.APICallLog(strings.TrimSpace(logID))

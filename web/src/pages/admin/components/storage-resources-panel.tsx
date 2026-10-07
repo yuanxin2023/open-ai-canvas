@@ -7,7 +7,8 @@ import { useSearchParams } from "react-router";
 
 import { PaginationBar } from "@/pages/admin/components/admin-ui";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
-import { adminResourceFileUrl, deleteAdminResources, downloadAdminResource, getAdminStorageStats, listAdminResources, type AdminStorageResource, type AdminStorageStats } from "@/services/api/admin-storage";
+import { searchAdminUserReferences, type AdminUserReference } from "@/services/api/auth";
+import { adminResourceFileUrl, deleteAdminResources, downloadAdminResource, getAdminStorageStats, listAdminResources, previewAdminResourceDelete, type AdminStorageResource, type AdminStorageStats } from "@/services/api/admin-storage";
 import { AdminBatchBar, AdminDataTable, AdminFilterChip, AdminStatTile, AdminStatusBadge, AdminTableEmpty } from "./admin-ui";
 
 const pageSizes = [20, 50, 100];
@@ -16,7 +17,7 @@ export default function StorageResourcesPanel() {
     const { message, modal } = App.useApp();
     const [searchParams, setSearchParams] = useSearchParams();
     const keyword = searchParams.get("filter") || "";
-    const kind = normalizeOption(searchParams.get("kind"), ["image", "video", "audio", "file"]);
+    const kind = normalizeOption(searchParams.get("kind"), ["image", "video", "audio", "file", "live2d"]);
     const status = normalizeOption(searchParams.get("status"), ["pending", "ready", "failed", "deleted"]);
     const provider = normalizeOption(searchParams.get("provider"), ["local", "aliyun", "tencent", "qiniu", "s3"]);
     const userId = searchParams.get("userId") || "";
@@ -24,6 +25,10 @@ export default function StorageResourcesPanel() {
     const pageSize = normalizePageSize(searchParams.get("pageSize"));
     const debouncedKeyword = useDebouncedValue(keyword);
     const debouncedUserId = useDebouncedValue(userId);
+    const [userSearch, setUserSearch] = useState("");
+    const debouncedUserSearch = useDebouncedValue(userSearch.trim(), 250);
+    const [userOptions, setUserOptions] = useState<AdminUserReference[]>([]);
+    const [searchingUsers, setSearchingUsers] = useState(false);
     const [resources, setResources] = useState<AdminStorageResource[]>([]);
     const [stats, setStats] = useState<AdminStorageStats | null>(null);
     const [total, setTotal] = useState(0);
@@ -34,7 +39,9 @@ export default function StorageResourcesPanel() {
     const [deleting, setDeleting] = useState(false);
     const [refreshKey, setRefreshKey] = useState(0);
     const requestSequence = useRef(0);
+    const userSearchSequence = useRef(0);
     const hasFilters = Boolean(keyword || userId || kind !== "all" || status !== "all" || provider !== "all");
+    const selectedUser = userOptions.find((user) => user.id === userId);
 
     const updateUrl = (patch: Record<string, string | number>, replace = false) => {
         const next = new URLSearchParams(searchParams);
@@ -56,6 +63,26 @@ export default function StorageResourcesPanel() {
             });
         return () => controller.abort();
     }, [refreshKey]);
+
+    useEffect(() => {
+        const sequence = ++userSearchSequence.current;
+        setSearchingUsers(true);
+        void searchAdminUserReferences({ keyword: debouncedUserSearch || undefined, limit: 50 })
+            .then((result) => {
+                if (sequence !== userSearchSequence.current) return;
+                setUserOptions((current) => {
+                    const selected = current.find((user) => user.id === userId);
+                    if (selected && !result.users.some((user) => user.id === selected.id)) return [selected, ...result.users];
+                    return result.users;
+                });
+            })
+            .catch((error) => {
+                if (sequence === userSearchSequence.current) message.error(error instanceof Error ? error.message : "搜索用户失败");
+            })
+            .finally(() => {
+                if (sequence === userSearchSequence.current) setSearchingUsers(false);
+            });
+    }, [debouncedUserSearch, message, userId]);
 
     useEffect(() => {
         const sequence = ++requestSequence.current;
@@ -134,7 +161,7 @@ export default function StorageResourcesPanel() {
                         <Button type="text" size="small" icon={<Download className="size-3.5" />} loading={downloadingId === resource.id} disabled={resource.status !== "ready"} onClick={() => void download(resource)}>
                             下载
                         </Button>
-                        <Button type="text" danger size="small" icon={<Trash2 className="size-3.5" />} disabled={deleting} onClick={() => confirmDelete([resource.id])}>
+                        <Button type="text" danger size="small" icon={<Trash2 className="size-3.5" />} disabled={deleting} onClick={() => void confirmDelete([resource.id])}>
                             删除
                         </Button>
                     </div>
@@ -156,25 +183,46 @@ export default function StorageResourcesPanel() {
         }
     };
 
-    const confirmDelete = (resourceIds: string[]) => {
+    const confirmDelete = async (resourceIds: string[]) => {
         const uniqueIds = Array.from(new Set(resourceIds));
+        setDeleting(true);
+        let inspirationCovers;
+        try {
+            const preview = await previewAdminResourceDelete(uniqueIds);
+            inspirationCovers = preview.inspirationCovers;
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "读取资源引用失败");
+            return;
+        } finally {
+            setDeleting(false);
+        }
+        const hasInspirationCovers = inspirationCovers.length > 0;
+        const inspirationTitles = Array.from(new Set(inspirationCovers.flatMap((item) => item.references.map((reference) => reference.title).filter(Boolean))));
         modal.confirm({
-            title: uniqueIds.length > 1 ? `删除选中的 ${uniqueIds.length} 个资源？` : "删除这个资源？",
-            content: "系统会先批量检查公告、素材、画布、项目、工作流和镜头产物引用。仍被引用的资源会保留；无引用资源的记录、清理任务和审计事件会在同一事务提交。",
-            okText: uniqueIds.length > 1 ? "检查并删除" : "确认删除",
+            title: hasInspirationCovers ? "删除首页灵感提示词展示图？" : uniqueIds.length > 1 ? `删除选中的 ${uniqueIds.length} 个资源？` : "删除这个资源？",
+            content: hasInspirationCovers ? (
+                <div className="space-y-2">
+                    <p>这是上传的提示词图展示图，确认要删除么？删除后对应首页灵感卡片将不再显示封面，此操作不可恢复。</p>
+                    {inspirationTitles.length > 0 ? <p className="text-foreground/60">涉及：{inspirationTitles.join("、")}</p> : null}
+                    {uniqueIds.length > inspirationCovers.length ? <p className="text-foreground/60">确认后，本次选中的其他资源也会一并按原规则删除。</p> : null}
+                </div>
+            ) : (
+                "此操作不可恢复。系统会强制删除普通创作资源并清理结构化依赖，画布、项目和历史记录中的对应媒体将显示为已删除。用户头像、平台外观、客服资源及活动任务引用仍会受保护。"
+            ),
+            okText: hasInspirationCovers ? "确认删除" : "确认永久删除",
             cancelText: "取消",
             okButtonProps: { danger: true },
             onOk: async () => {
                 setDeleting(true);
                 try {
-                    const result = await deleteAdminResources(uniqueIds);
+                    const result = await deleteAdminResources(uniqueIds, hasInspirationCovers);
                     setSelectedIds([]);
                     setRefreshKey((value) => value + 1);
                     if (result.deleted.length > 0) message.success(`已删除 ${result.deleted.length} 个资源`);
-                    if (result.blocked.length > 0) {
+                    if (result.blocked.length > 0 || result.warnings.length > 0) {
                         modal.warning({
-                            title: result.deleted.length > 0 ? "部分资源未删除" : "资源未删除",
-                            content: <DeleteBlockedSummary blocked={result.blocked} />,
+                            title: result.blocked.length > 0 ? (result.deleted.length > 0 ? "部分资源未删除" : "资源未删除") : "资源记录已删除，但文件需手动清理",
+                            content: <DeleteResultSummary blocked={result.blocked} warnings={result.warnings} />,
                             okText: "知道了",
                         });
                     }
@@ -209,7 +257,22 @@ export default function StorageResourcesPanel() {
                             placeholder="资源 ID 或对象路径"
                             onChange={(event) => updateUrl({ filter: event.target.value, page: 1 }, true)}
                         />
-                        <Input aria-label="按用户 ID 筛选" autoComplete="off" allowClear className="w-48" value={userId} placeholder="用户" onChange={(event) => updateUrl({ userId: event.target.value, page: 1 }, true)} />
+                        <Select
+                            aria-label="按用户筛选"
+                            allowClear
+                            showSearch
+                            filterOption={false}
+                            loading={searchingUsers}
+                            className="w-48"
+                            value={userId || undefined}
+                            placeholder="搜索用户"
+                            onSearch={setUserSearch}
+                            onChange={(value) => {
+                                setUserSearch("");
+                                updateUrl({ userId: value || "", page: 1 }, true);
+                            }}
+                            options={userOptions.map((user) => ({ value: user.id, label: adminUserLabel(user) }))}
+                        />
                         <Select aria-label="筛选资源类型" className="w-32" value={kind} onChange={(value) => updateUrl({ kind: value, page: 1 })} options={kindOptions} />
                         <Select aria-label="筛选资源状态" className="w-32" value={status} onChange={(value) => updateUrl({ status: value, page: 1 })} options={statusOptions} />
                         <Select aria-label="筛选存储类型" className="w-36" value={provider} onChange={(value) => updateUrl({ provider: value, page: 1 })} options={providerOptions} />
@@ -218,7 +281,7 @@ export default function StorageResourcesPanel() {
                 toolbarActiveFilters={
                     <>
                         {keyword ? <AdminFilterChip label={`搜索：${keyword}`} onRemove={() => updateUrl({ filter: "", page: 1 })} /> : null}
-                        {userId ? <AdminFilterChip label={`用户：${userId}`} onRemove={() => updateUrl({ userId: "", page: 1 })} /> : null}
+                        {userId ? <AdminFilterChip label={`用户：${selectedUser ? adminUserLabel(selectedUser) : userId}`} onRemove={() => updateUrl({ userId: "", page: 1 })} /> : null}
                         {kind !== "all" ? <AdminFilterChip label={`类型：${kindLabel(kind)}`} onRemove={() => updateUrl({ kind: "all", page: 1 })} /> : null}
                         {status !== "all" ? <AdminFilterChip label={`状态：${statusLabel(status)}`} onRemove={() => updateUrl({ status: "all", page: 1 })} /> : null}
                         {provider !== "all" ? <AdminFilterChip label={`存储：${providerLabel(provider)}`} onRemove={() => updateUrl({ provider: "all", page: 1 })} /> : null}
@@ -228,7 +291,7 @@ export default function StorageResourcesPanel() {
                 onReset={() => updateUrl({ filter: "", userId: "", kind: "all", status: "all", provider: "all", page: 1 })}
                 batchActions={
                     <AdminBatchBar count={selectedIds.length} onClear={() => setSelectedIds([])}>
-                        <Button danger size="small" icon={<Trash2 className="size-3.5" />} loading={deleting} onClick={() => confirmDelete(selectedIds)}>
+                        <Button danger size="small" icon={<Trash2 className="size-3.5" />} loading={deleting} onClick={() => void confirmDelete(selectedIds)}>
                             批量删除
                         </Button>
                     </AdminBatchBar>
@@ -276,7 +339,7 @@ export default function StorageResourcesPanel() {
     );
 }
 
-function DeleteBlockedSummary({ blocked }: { blocked: Array<{ id: string; reason: string; references: Array<{ kind: string; id: string; title: string }> }> }) {
+function DeleteResultSummary({ blocked, warnings }: { blocked: Array<{ id: string; reason: string; references: Array<{ kind: string; id: string; title: string }> }>; warnings: Array<{ id: string; reason: string }> }) {
     return (
         <div className="max-h-72 space-y-3 overflow-y-auto pr-1 text-sm">
             {blocked.map((item) => (
@@ -292,6 +355,12 @@ function DeleteBlockedSummary({ blocked }: { blocked: Array<{ id: string; reason
                             {item.references.length > 4 ? ` 等 ${item.references.length} 处` : ""}
                         </div>
                     ) : null}
+                </div>
+            ))}
+            {warnings.map((item) => (
+                <div key={`warning-${item.id}`} className="rounded-md border border-status-warning/35 bg-status-warning/5 px-3 py-2">
+                    <div className="admin-monospace break-all text-foreground/75">{item.id}</div>
+                    <div className="mt-1 text-foreground/55">{item.reason}</div>
                 </div>
             ))}
         </div>
@@ -317,6 +386,7 @@ const kindOptions = [
     { label: "视频", value: "video" },
     { label: "音频", value: "audio" },
     { label: "文件", value: "file" },
+    { label: "Live2D 模型", value: "live2d" },
 ];
 const statusOptions = [
     { label: "全部状态", value: "all" },
@@ -349,7 +419,7 @@ function fileName(objectKey: string) {
     return objectKey.split("/").filter(Boolean).at(-1) || "";
 }
 function kindLabel(kind: string) {
-    return ({ image: "图片", video: "视频", audio: "音频", file: "文件" } as Record<string, string>)[kind] || kind || "未知";
+    return ({ image: "图片", video: "视频", audio: "音频", file: "文件", live2d: "Live2D" } as Record<string, string>)[kind] || kind || "未知";
 }
 function statusLabel(status: string) {
     return ({ pending: "待处理", ready: "已就绪", failed: "失败", deleted: "已删除" } as Record<string, string>)[status] || status || "未知";
@@ -380,6 +450,9 @@ function resourceDimensions(resource: AdminStorageResource) {
         );
     if (resource.durationMs > 0) return <span className="tabular-nums">{formatDuration(resource.durationMs)}</span>;
     return <span className="text-foreground/30">--</span>;
+}
+function adminUserLabel(user: Pick<AdminUserReference, "username">) {
+    return `@${user.username}`;
 }
 function formatDuration(durationMs: number) {
     const seconds = Math.round(durationMs / 1000);

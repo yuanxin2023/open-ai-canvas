@@ -1,17 +1,14 @@
-# 影策 · AI 文档索引
+# AI 创作工作台 · AI 文档索引
 
 面向 AI 的短索引。详细文档维护规则见 [AGENTS.md](../AGENTS.md) 第 10 节「文档同步」。
 
 ## 设计沉淀
 
-- [创作 Agent 第一期版本基线](design/creative-agent-phase-one-checkpoint.mdx)：用户基本体验验收反馈、已实现范围、执行与资源边界核对、待验收项及代码恢复说明。
+- [画布批量生成一致性治理](design/canvas-consistency-repair.mdx)：节点丢失、批次状态与引用解析的根因、已实施边界重构、回归证据和仍待验收的性能/同步场景。
 
-- [通用创作 Agent 动态规划与画布协作需求设计](design/creative-agent-dynamic-planning.mdx)：基于原会话的专业角色、动态问答与计划、创意方案和执行批次分离、统一画布与费用授权、历史恢复及分期验收（待审阅，未实施）。
+- [画布 Agent 外观与 Live2D](content/docs/backend/canvas-agent-appearance.mdx)：独立助手名称、文案模板、模型包边界、Core 部署和验收要求。
 
-- [通用创作 Agent 第一期体验与实现设计](design/creative-agent-phase-one.mdx)：复核两段录屏与六张截图，细化首页连续问答、可修改方案卡、确认后画布操作、按需步骤条、费用授权和真实单段短片交付，附[交互原型](design/creative-agent-phase-one-prototype.html)（第一期代码已接入，待联调验收）。
-- [智能创作会话与执行](content/docs/backend/creative-agent-runtime.mdx)：实际代码入口、API、审批与任务幂等、画布保存和恢复边界。
-
-- [通用创作 Agent 需求与设计](content/docs/overview/creative-agent-design.mdx)：复用现有在线助手、画布、Skills、插件与生成任务，涵盖动态问答、方案确认、按需计划、费用授权、已有节点辅助编辑、自定义业务节点、插件注册与执行绑定；包含分镜、拉片/抽帧、元素替换用例及分阶段验收；不接入 Harness、不建设服务端画布 MCP、不增加草稿节点（需求与设计评审稿，未实施）。
+- [云端 Agent 架构优化方案](design/cloud-agent-architecture-optimization.md)：跨端生成合同、引用绑定、审批依赖、报价预算、运行存储与工作上下文的现状审查、分阶段方案和验收门槛（提案，未实施）。
 
 - [插件平台与市场演进调研](design/plugin-platform-and-marketplace-research.md)：插件机制代码审计、对外回应、外部 SDK 与隔离运行时、独立插件验收、受控目录到公开市场的分阶段方案（调研建议，未实施）。
 
@@ -25,11 +22,9 @@
 
 - [用户诊断包设计](design/user-diagnostic-bundle.mdx)：面向普通用户的一键日志导出、前后端链路关联、脱敏、权限与排障方案。
 
-- [肖像权可识别性排查画布插件实施规格](design/portrait-clearance-canvas-plugin.mdx)：TypeScript 重写、画布节点与全屏工作台、项目模型复用、本机 ONNX/百度识图/候选去重、任务合同、报告和验收方案。
-
 - [AI 审美批改画布插件方案](design/ai-art-critique-solution.md)：云端视觉分析、并行 Reviewer、问题定位、AI 修改提示词与前端 SVG 标注的职责边界和交互设计。
 
-- [LLM、Image、Video 主流请求协议全景与影策兼容性调查](design/model-request-protocol-landscape.md)：主流原生协议、聚合网关、图片/视频异步任务、参考素材 role、当前插件映射缺口与 MiniMax H3 专项审计。
+- [LLM、Image、Video 主流请求协议全景与AI 创作工作台兼容性调查](design/model-request-protocol-landscape.md)：主流原生协议、聚合网关、图片/视频异步任务、参考素材 role、当前插件映射缺口与 MiniMax H3 专项审计。
 
 - [编辑器预设插件化实施规格](plans/editor-preset-plugin-implementation.md)：参考 open-vetta 万物皆可插件，把编辑器做成预设插件的分阶段实施计划（SDK v2、命令状态机、8 个 editor 预设插件（含 AI 助手）、后端转写/导出任务、权限执行校验、AI 对话式剪辑），含产品视图、接口草案与文件规划。
 - [编辑器实施 Runbook](plans/editor-implementation-runbook.md)：分步执行计划——M0~M6 里程碑 + 原子步明细（每步改动文件/验证/完成标准）、依赖关系、验证命令速查、高风险步与回退。解决「一次性实施效果差」：每步可验证、可回退、看得见进度。
@@ -45,13 +40,9 @@
 - [ADR-0007：AI 编辑交互](adr/0007-ai-editing-interaction.md)：对话式剪辑作为预设插件——AI 输出受约束命令 JSON（schema 校验 fail-closed），与手势命令同队列同撤销栈；≤3 条直接执行、批量改动 diff 预览待确认。
  - [ADR-0008：自研 UI 组件层与 AntD 替换](adr/0008-ui-component-layer-antd-replacement.md)：`components/ui` 重建为自研组件层（Celadon UI），吸收 dbx 契约形态（族目录+barrel）与 BoardUI 设计深度（语义状态矩阵/复合排版/RAC 原语/动效纪律/agentic 产品块），分阶段替换 AntD（依赖面 180 文件/41 导入）最终脱离；试点画布工具条/节点徽章，唯一实施计划见 [plans/ui-kit-rollout-plan.mdx](plans/ui-kit-rollout-plan.mdx)，活规范见 [plans/ui-design-system.mdx](plans/ui-design-system.mdx)。
 
-## 本地协作文档（不随仓库分发）
-
-- [beautifului 创作设计](beautifului-creation-design.md)：本地设计参考，未纳入版本控制。
-
 ## 按约定维护的文档（`docs/content/docs/`）
 
-功能、代码地图、待办、待测试分别维护在以下页面；尚未建立的专题会在对应任务中补齐：
+功能、代码地图和待测试分别维护在以下页面；尚未建立的专题会在对应任务中补齐：
 
 - [AI 审美批改画布插件](content/docs/plugins/ai-art-critique.mdx)
 - [功能](content/docs/overview/features.mdx)
@@ -59,5 +50,4 @@
 - [HTTP API 合同](content/docs/backend/http-api.mdx)
 - [后端数据库](content/docs/backend/backend-database.mdx)
 - [代码地图](content/docs/backend/code-map.mdx)
-- [待办](content/docs/progress/todo.mdx)
 - [待测试](content/docs/progress/pending-test.mdx)

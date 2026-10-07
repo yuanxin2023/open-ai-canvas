@@ -1,17 +1,24 @@
 package database
 
 import (
+	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
+	"infinite-canvas/backend/internal/kernel"
 	"infinite-canvas/backend/internal/model"
+	"infinite-canvas/backend/internal/referralcode"
 
 	"gorm.io/gorm"
 )
 
-const CurrentSchemaVersion int64 = 24
+const CurrentSchemaVersion int64 = 50
+
+//go:embed seed/inspirations.json
+var inspirationSeedJSON []byte
 
 const baselineSchemaChecksum = "sha256:open-ai-canvas-schema-v1-20260830"
 const schemaMigrationAppliedAtIndexChecksum = "sha256:schema-migrations-applied-at-index-v2-20260830"
@@ -96,6 +103,302 @@ var schemaMigrations = []migration{
 		}
 		return tx.Migrator().AddColumn(&model.TopupProduct{}, "Benefits")
 	}},
+	{version: 25, name: "featured_inspirations", checksum: "sha256:featured-inspirations-v25-20260920", apply: migrateSchemaV25},
+	{version: 26, name: "user_prompt_library", checksum: "sha256:user-prompt-library-v26-20260920", apply: func(tx *gorm.DB) error {
+		return tx.AutoMigrate(&model.UserPrompt{})
+	}},
+	{version: 27, name: "inspiration_cover_dimensions", checksum: "sha256:inspiration-cover-dimensions-v27-20260921", apply: func(tx *gorm.DB) error {
+		return tx.AutoMigrate(&model.Inspiration{})
+	}},
+	{version: 28, name: "channel_model_label", checksum: "sha256:channel-model-label-v24", apply: migrateChannelModelLabel},
+	{version: 29, name: "video_token_formula_snapshot", checksum: "sha256:video-token-formula-snapshot-v25", apply: migrateVideoTokenFormulaSnapshot},
+	{version: 30, name: "channel_model_description", checksum: "sha256:channel-model-description-v26", apply: migrateChannelModelDescription},
+	{version: 31, name: "channel_credit_cost", checksum: "sha256:channel-credit-cost-v27", apply: migrateChannelCreditCost},
+	{version: 32, name: "agent_execution_journal", checksum: "sha256:agent-execution-journal-v28", apply: func(tx *gorm.DB) error {
+		return tx.AutoMigrate(&model.CloudAgentExecution{}, &model.CloudAgentEventRecord{}, &model.CloudAgentMessageRecord{}, &model.Task{}, &model.BillingOrder{})
+	}},
+	{version: 33, name: "agent_resource_leases", checksum: "sha256:agent-resource-leases-v29-20260919", apply: func(tx *gorm.DB) error {
+		return tx.AutoMigrate(&model.CloudAgentResourceLease{})
+	}},
+	{version: 34, name: "builtin_tools", checksum: "sha256:builtin-tools-v30", apply: func(tx *gorm.DB) error {
+		return tx.AutoMigrate(&model.Tool{})
+	}},
+	{version: 35, name: "tool_favorites", checksum: "sha256:tool-favorites-v31", apply: func(tx *gorm.DB) error {
+		return tx.AutoMigrate(&model.ToolFavorite{})
+	}},
+	{version: 36, name: "channel_model_tags", checksum: "sha256:channel-model-tags-v32", apply: migrateChannelModelTags},
+	{version: 37, name: "user_profiles", checksum: "sha256:user-profiles-v37-20260927", apply: migrateUserProfiles},
+	{version: 38, name: "user_login_names", checksum: "sha256:user-login-names-v38-20260927", apply: migrateUserLoginNames},
+	{version: 39, name: "user_login_environment", checksum: "sha256:user-login-environment-v39-20260930", apply: migrateUserLoginEnvironment},
+	{version: 40, name: "platform_skill_availability", checksum: "sha256:platform-skill-availability-v40-20260930", apply: func(tx *gorm.DB) error {
+		return tx.AutoMigrate(&model.SkillPlatformState{}, &model.SkillCategoryPlatformState{})
+	}},
+	{version: 41, name: "short_login_usernames", checksum: "sha256:short-login-usernames-v41-20261001", apply: migrateShortLoginUsernames},
+	{version: 42, name: "user_admin_remarks", checksum: "sha256:user-admin-remarks-v42-20261002", apply: migrateUserAdminRemarks},
+	{version: 43, name: "topup_product_card_fields", checksum: "sha256:topup-product-card-fields-v43-20261002", apply: func(tx *gorm.DB) error {
+		return tx.AutoMigrate(&model.TopupProduct{})
+	}},
+	{version: 44, name: "topup_product_accent_color", checksum: "sha256:topup-product-accent-color-v44-20261002", apply: func(tx *gorm.DB) error {
+		return tx.AutoMigrate(&model.TopupProduct{})
+	}},
+	{version: 45, name: "scoped_admin_permissions", checksum: "sha256:scoped-admin-permissions-v45-20261002", apply: migrateScopedAdminPermissions},
+	{version: 46, name: "payment_promotion_image_drafts", checksum: "sha256:payment-promotion-image-drafts-v46-20261003", apply: func(tx *gorm.DB) error {
+		return tx.AutoMigrate(&model.PaymentPromotionImageDraft{})
+	}},
+	{version: 47, name: "scoped_redeem_funding", checksum: "sha256:scoped-redeem-funding-v47-20261003", apply: migrateScopedRedeemFunding},
+	{version: 48, name: "redeem_batch_lifecycle", checksum: "sha256:redeem-batch-lifecycle-v48-20261005", apply: migrateRedeemBatchLifecycle},
+	{version: 49, name: "referral_rewards", checksum: "sha256:referral-rewards-v49-20261006", apply: func(tx *gorm.DB) error {
+		return tx.AutoMigrate(&model.ReferralProfile{}, &model.ReferralReward{}, &model.CreditLedgerEntry{})
+	}},
+	{version: 50, name: "six_character_referral_codes", checksum: "sha256:six-character-referral-codes-v50-20261006", apply: migrateSixCharacterReferralCodes},
+}
+
+func migrateSixCharacterReferralCodes(tx *gorm.DB) error {
+	var profiles []model.ReferralProfile
+	if err := tx.Select("user_id", "code").Find(&profiles).Error; err != nil {
+		return err
+	}
+	reserved := make(map[string]struct{}, len(profiles)*2)
+	for _, profile := range profiles {
+		reserved[profile.Code] = struct{}{}
+	}
+	for _, profile := range profiles {
+		if referralcode.Valid(profile.Code) {
+			continue
+		}
+		var code string
+		for attempt := 0; attempt < 20; attempt++ {
+			candidate, err := referralcode.New()
+			if err != nil {
+				return err
+			}
+			if _, exists := reserved[candidate]; !exists {
+				code = candidate
+				reserved[code] = struct{}{}
+				break
+			}
+		}
+		if code == "" {
+			return fmt.Errorf("无法为用户 %s 生成唯一的六位邀请码", profile.UserID)
+		}
+		updated := tx.Model(&model.ReferralProfile{}).Where("user_id = ? AND code = ?", profile.UserID, profile.Code).UpdateColumn("code", code)
+		if updated.Error != nil {
+			return updated.Error
+		}
+		if updated.RowsAffected != 1 {
+			return fmt.Errorf("用户 %s 的邀请码在迁移时发生变化", profile.UserID)
+		}
+	}
+	return nil
+}
+
+func migrateRedeemBatchLifecycle(tx *gorm.DB) error {
+	if err := tx.AutoMigrate(&model.RedeemBatch{}); err != nil {
+		return err
+	}
+	return tx.Exec(`UPDATE redeem_batches
+		SET terminal_at = (
+			SELECT MAX(redeem_codes.updated_at)
+			FROM redeem_codes
+			WHERE redeem_codes.batch_id = redeem_batches.id
+		)
+		WHERE terminal_at IS NULL
+			AND EXISTS (SELECT 1 FROM redeem_codes WHERE redeem_codes.batch_id = redeem_batches.id)
+			AND NOT EXISTS (
+				SELECT 1 FROM redeem_codes
+				WHERE redeem_codes.batch_id = redeem_batches.id AND redeem_codes.status = ?
+			)`, model.RedeemCodeUnused).Error
+}
+
+func migrateScopedRedeemFunding(tx *gorm.DB) error {
+	if err := tx.AutoMigrate(&model.RedeemBatch{}, &model.RedeemCode{}, &model.CreditLedgerEntry{}); err != nil {
+		return err
+	}
+	return tx.Model(&model.RedeemBatch{}).
+		Where("funding_source IS NULL OR funding_source = ''").
+		Update("funding_source", model.RedeemBatchFundingPlatform).Error
+}
+
+func migrateScopedAdminPermissions(tx *gorm.DB) error {
+	if err := tx.AutoMigrate(&model.User{}, &model.AdminPermissionGrant{}); err != nil {
+		return err
+	}
+	return tx.Model(&model.User{}).
+		Where("role = ? AND (admin_level IS NULL OR admin_level = '')", model.UserRoleAdmin).
+		Update("admin_level", model.AdminLevelFull).Error
+}
+
+func migrateUserAdminRemarks(tx *gorm.DB) error {
+	if !tx.Migrator().HasTable(&model.User{}) {
+		return tx.AutoMigrate(&model.User{})
+	}
+	if tx.Migrator().HasColumn(&model.User{}, "AdminRemark") {
+		return nil
+	}
+	return tx.Migrator().AddColumn(&model.User{}, "AdminRemark")
+}
+
+func migrateShortLoginUsernames(tx *gorm.DB) error {
+	if err := tx.AutoMigrate(&model.User{}, &model.UserUsernameChange{}); err != nil {
+		return err
+	}
+	var users []model.User
+	if err := tx.Order("created_at asc").Find(&users).Error; err != nil {
+		return err
+	}
+	used := make(map[string]struct{}, len(users))
+	for _, user := range users {
+		if user.Username != user.ID || strings.TrimSpace(user.Email) == "" {
+			used[strings.ToLower(user.Username)] = struct{}{}
+		}
+	}
+	for _, user := range users {
+		if user.Username == user.ID && strings.TrimSpace(user.Email) != "" {
+			candidate := ""
+			for attempt := 0; attempt < 1024; attempt++ {
+				value := kernel.DefaultLoginUsernameCandidate(user.Email, user.ID, attempt)
+				if _, exists := used[strings.ToLower(value)]; !exists {
+					candidate = value
+					break
+				}
+			}
+			if candidate == "" {
+				return fmt.Errorf("为用户 %s 生成唯一短用户名失败", user.ID)
+			}
+			if err := tx.Model(&model.User{}).Where("id = ?", user.ID).Updates(map[string]any{
+				"username": candidate, "display_name": candidate, "profile_name": candidate,
+				"username_customized_at": nil,
+			}).Error; err != nil {
+				return err
+			}
+			used[strings.ToLower(candidate)] = struct{}{}
+			continue
+		}
+		if user.UsernameCustomizedAt == nil {
+			customizedAt := user.CreatedAt
+			if customizedAt.IsZero() {
+				customizedAt = time.Now()
+			}
+			if err := tx.Model(&model.User{}).Where("id = ?", user.ID).Updates(map[string]any{
+				"username_customized_at": customizedAt, "display_name": user.Username, "profile_name": user.Username,
+			}).Error; err != nil {
+				return err
+			}
+		} else if err := tx.Model(&model.User{}).Where("id = ?", user.ID).Updates(map[string]any{"display_name": user.Username, "profile_name": user.Username}).Error; err != nil {
+			return err
+		}
+	}
+	return migrateUserLoginNames(tx)
+}
+
+func migrateUserLoginEnvironment(tx *gorm.DB) error {
+	return tx.AutoMigrate(&model.User{}, &model.UserLoginEvent{})
+}
+
+func migrateUserProfiles(tx *gorm.DB) error {
+	if err := tx.AutoMigrate(&model.User{}); err != nil {
+		return err
+	}
+	// 旧账号首次打开个人资料时沿用原用户名；邮箱优先注册生成的内部用户名等于用户 ID，保持待填写状态。
+	return tx.Exec("UPDATE users SET profile_name = username WHERE COALESCE(profile_name, '') = '' AND username <> id").Error
+}
+
+func migrateUserLoginNames(tx *gorm.DB) error {
+	var duplicate struct {
+		NormalizedUsername string
+		Count              int64
+	}
+	if err := tx.Raw(`SELECT lower(username) AS normalized_username, COUNT(*) AS count FROM users GROUP BY lower(username) HAVING COUNT(*) > 1 LIMIT 1`).Scan(&duplicate).Error; err != nil {
+		return fmt.Errorf("检查重复登录用户名：%w", err)
+	}
+	if duplicate.Count > 1 {
+		return fmt.Errorf("存在大小写重复的登录用户名 %q，请先处理后再升级", duplicate.NormalizedUsername)
+	}
+	return tx.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username_ci ON users(lower(username))").Error
+}
+
+func migrateSchemaV25(tx *gorm.DB) error {
+	if err := tx.AutoMigrate(&model.Inspiration{}, &model.InspirationCoverDraft{}); err != nil {
+		return err
+	}
+	var count int64
+	if err := tx.Model(&model.Inspiration{}).Count(&count).Error; err != nil || count > 0 {
+		return err
+	}
+	var rows []model.Inspiration
+	if err := json.Unmarshal(inspirationSeedJSON, &rows); err != nil {
+		return fmt.Errorf("解析精选灵感种子数据：%w", err)
+	}
+	now := time.Now().UTC()
+	for index := range rows {
+		rows[index].SortOrder = int64(index + 1)
+		rows[index].Status = model.InspirationStatusActive
+		rows[index].CreatedBy = "system"
+		rows[index].UpdatedBy = "system"
+		rows[index].CreatedAt = now
+		rows[index].UpdatedAt = now
+		encoded, err := json.Marshal(rows[index].Tags)
+		if err != nil {
+			return err
+		}
+		rows[index].TagsJSON = string(encoded)
+	}
+	if len(rows) != 22 {
+		return fmt.Errorf("精选灵感种子数量异常：%d", len(rows))
+	}
+	return tx.Create(&rows).Error
+}
+
+func migrateChannelModelTags(tx *gorm.DB) error {
+	if tx.Migrator().HasColumn(&model.ChannelModel{}, "Tags") {
+		return nil
+	}
+	return tx.Migrator().AddColumn(&model.ChannelModel{}, "Tags")
+}
+
+func migrateChannelCreditCost(tx *gorm.DB) error {
+	for _, entity := range []any{&model.ChannelModelPriceTier{}, &model.BillingOrder{}} {
+		for _, column := range []string{"cost_configured", "cost_unit_price_microcredits", "cost_input_token_price_microcredits", "cost_output_token_price_microcredits", "cost_cached_token_price_microcredits"} {
+			if !tx.Migrator().HasColumn(entity, column) {
+				if err := tx.Migrator().AddColumn(entity, column); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	for _, column := range []string{"CostBillingMode", "CostQuantity", "CostVideoFormulaTokens"} {
+		if !tx.Migrator().HasColumn(&model.BillingOrder{}, column) {
+			if err := tx.Migrator().AddColumn(&model.BillingOrder{}, column); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func migrateChannelModelDescription(tx *gorm.DB) error {
+	if tx.Migrator().HasColumn(&model.ChannelModel{}, "Description") {
+		return nil
+	}
+	return tx.Migrator().AddColumn(&model.ChannelModel{}, "Description")
+}
+
+func migrateVideoTokenFormulaSnapshot(tx *gorm.DB) error {
+	for _, field := range []string{"VideoFormulaTokens", "UsageSource"} {
+		if !tx.Migrator().HasColumn(&model.BillingOrder{}, field) {
+			if err := tx.Migrator().AddColumn(&model.BillingOrder{}, field); err != nil {
+				return fmt.Errorf("增加视频 Token 结算字段 %s：%w", field, err)
+			}
+		}
+	}
+	return nil
+}
+
+func migrateChannelModelLabel(tx *gorm.DB) error {
+	if tx.Migrator().HasColumn(&model.ChannelModel{}, "ChannelLabel") {
+		return nil
+	}
+	return tx.Migrator().AddColumn(&model.ChannelModel{}, "ChannelLabel")
 }
 
 func migrateSchemaV14(tx *gorm.DB) error {
@@ -160,22 +463,39 @@ func migrateChannelPresentation(tx *gorm.DB) error {
 }
 
 func migrationsForDatabase(db *gorm.DB) ([]migration, error) {
+	plan := append([]migration(nil), schemaMigrations...)
+	var appliedV24 schemaMigration
+	err := db.First(&appliedV24, "version = ?", 24).Error
+	if err == nil {
+		localExpected := schemaMigrations[23]
+		upstreamPlan := upstreamFirstMigrationPlan()
+		upstreamExpected := upstreamPlan[23]
+		switch {
+		case migrationRecordMatches(appliedV24, localExpected):
+		case migrationRecordMatches(appliedV24, upstreamExpected):
+			plan = upstreamPlan
+		default:
+			return nil, fmt.Errorf("数据库迁移 24 不属于已知本地或官方谱系：记录为 %s（%s）", appliedV24.Name, appliedV24.Checksum)
+		}
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, fmt.Errorf("读取数据库迁移 24：%w", err)
+	}
+
 	var applied schemaMigration
-	err := db.First(&applied, "version = ?", 6).Error
+	err = db.First(&applied, "version = ?", 6).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return schemaMigrations, nil
+		return plan, nil
 	}
 	if err != nil {
 		return nil, fmt.Errorf("读取数据库迁移 6：%w", err)
 	}
 	if applied.Name != "asset_library_folders" {
-		return schemaMigrations, nil
+		return plan, nil
 	}
 	legacy := migration{version: 6, name: "asset_library_folders", checksum: assetLibraryFoldersChecksum, apply: migrateSchemaV7}
 	if err := validateMigrationRecord(applied, legacy); err != nil {
 		return nil, err
 	}
-	plan := append([]migration(nil), schemaMigrations...)
 	for index, item := range plan {
 		switch item.version {
 		case 6:
@@ -185,6 +505,32 @@ func migrationsForDatabase(db *gorm.DB) ([]migration, error) {
 		}
 	}
 	return plan, nil
+}
+
+func upstreamFirstMigrationPlan() []migration {
+	const sharedCount = 23
+	const localCount = 4
+	const commonTailCount = 14
+	plan := append([]migration(nil), schemaMigrations[:sharedCount]...)
+	middleEnd := len(schemaMigrations) - commonTailCount
+	for index, item := range schemaMigrations[sharedCount+localCount : middleEnd] {
+		item.version = int64(24 + index)
+		plan = append(plan, item)
+	}
+	nextVersion := int64(24 + middleEnd - sharedCount - localCount)
+	for index, item := range schemaMigrations[sharedCount : sharedCount+localCount] {
+		item.version = nextVersion + int64(index)
+		plan = append(plan, item)
+	}
+	for _, item := range schemaMigrations[middleEnd:] {
+		item.version = int64(len(plan) + 1)
+		plan = append(plan, item)
+	}
+	return plan
+}
+
+func migrationRecordMatches(applied schemaMigration, expected migration) bool {
+	return applied.Name == expected.name && applied.Checksum == expected.checksum
 }
 
 func migrateSchemaV2(tx *gorm.DB) error {

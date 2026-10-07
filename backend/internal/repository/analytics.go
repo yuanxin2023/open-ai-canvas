@@ -137,6 +137,18 @@ func (r *Repository) ExportAPICallLogs(filter APICallLogFilter, limit int) ([]mo
 	return logs, err
 }
 
+// APICallLogByBillingOrder returns the billable request that created the
+// billing decision. Polling and download records are operational details and
+// must not be presented as the request an administrator is reconciling.
+func (r *Repository) APICallLogByBillingOrder(orderID string, userID string) (*model.ApiCallLog, error) {
+	var log model.ApiCallLog
+	query := r.db.Where("billing_order_id = ? AND user_id = ? AND billable = ?", orderID, userID, true)
+	if err := visibleAPICallLogQuery(query).Where("COALESCE(request_kind, '') <> ?", "download").Order("created_at asc").First(&log).Error; err != nil {
+		return nil, err
+	}
+	return &log, nil
+}
+
 func (r *Repository) filteredAPICallLogQuery(filter APICallLogFilter) *gorm.DB {
 	query := r.apiCallLogQuery(filter.AnalyticsFilter)
 	switch filter.RecordType {
@@ -152,8 +164,8 @@ func (r *Repository) filteredAPICallLogQuery(filter APICallLogFilter) *gorm.DB {
 			Joins("LEFT JOIN users ON users.id = api_call_logs.user_id").
 			Joins("LEFT JOIN model_channels ON model_channels.id = api_call_logs.channel_id").
 			Where(
-				"lower(api_call_logs.user_id) LIKE ? OR lower(users.username) LIKE ? OR lower(users.display_name) LIKE ? OR lower(api_call_logs.channel_id) LIKE ? OR lower(model_channels.name) LIKE ? OR lower(api_call_logs.model) LIKE ? OR lower(api_call_logs.path) LIKE ? OR lower(api_call_logs.provider_request_id) LIKE ? OR lower(api_call_logs.error_code) LIKE ? OR lower(api_call_logs.error) LIKE ?",
-				pattern, pattern, pattern, pattern, pattern, pattern, pattern, pattern, pattern, pattern,
+				"lower(api_call_logs.user_id) LIKE ? OR lower(users.username) LIKE ? OR lower(api_call_logs.channel_id) LIKE ? OR lower(model_channels.name) LIKE ? OR lower(api_call_logs.model) LIKE ? OR lower(api_call_logs.path) LIKE ? OR lower(api_call_logs.provider_request_id) LIKE ? OR lower(api_call_logs.error_code) LIKE ? OR lower(api_call_logs.error) LIKE ?",
+				pattern, pattern, pattern, pattern, pattern, pattern, pattern, pattern, pattern,
 			)
 	}
 	if filter.Status != "" {

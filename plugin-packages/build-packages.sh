@@ -3,7 +3,7 @@ set -eu
 
 root_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 repo_dir=$(CDPATH= cd -- "$root_dir/.." && pwd)
-payment_plugins="official-payment-wechat-native official-payment-alipay-page official-payment-zpay official-payment-xunhupay"
+payment_plugins="official-payment-wechat-native official-payment-alipay-page official-payment-zpay official-payment-xunhupay official-payment-zhifufm official-payment-epay"
 payments_only=false
 default_payment_targets="linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64"
 
@@ -119,19 +119,33 @@ for target in $payment_targets; do
   build_payment_provider official-payment-alipay-page ./cmd/payment-alipay "$target_goos" "$target_goarch"
   build_payment_provider official-payment-zpay ./cmd/payment-zpay "$target_goos" "$target_goarch"
   build_payment_provider official-payment-xunhupay ./cmd/payment-xunhupay "$target_goos" "$target_goarch"
+  build_payment_provider official-payment-zhifufm ./cmd/payment-zhifufm "$target_goos" "$target_goarch"
+  build_payment_provider official-payment-epay ./cmd/payment-epay "$target_goos" "$target_goarch"
 done
 
 package_plugin() {
   package_id=$1
   package_dir="$root_dir/$package_id"
-  output_file="$root_dir/$package_id.yingce-plugin"
-  temporary_file="$root_dir/.$package_id.yingce-plugin.tmp"
+  if grep -q '"apiVersion"[[:space:]]*:[[:space:]]*"yingce\.plugin/' "$package_dir/manifest.json"; then
+    package_extension=.yingce-plugin
+  elif grep -q '"apiVersion"[[:space:]]*:[[:space:]]*"lovwow\.plugin/' "$package_dir/manifest.json"; then
+    package_extension=.lovwow-plugin
+  else
+    package_extension=.canvas-plugin
+  fi
+  output_file="$root_dir/$package_id$package_extension"
+  temporary_file="$root_dir/.$package_id$package_extension.tmp"
   rm -f "$temporary_file"
   (
     cd "$package_dir"
     find manifest.json README.md docs assets web backend LICENSE -type f 2>/dev/null | LC_ALL=C sort | zip -X -q "$temporary_file" -@
   )
   mv "$temporary_file" "$output_file"
+  for stale_extension in .yingce-plugin .lovwow-plugin .canvas-plugin; do
+    if [ "$stale_extension" != "$package_extension" ]; then
+      rm -f "$root_dir/$package_id$stale_extension"
+    fi
+  done
 }
 
 if [ "$payments_only" = true ]; then
@@ -148,5 +162,8 @@ done
 for manifest in "$root_dir"/*/manifest.json; do
   package_dir=${manifest%/manifest.json}
   package_id=${package_dir##*/}
+  case "$package_id" in
+    src-*) continue ;;
+  esac
   package_plugin "$package_id"
 done

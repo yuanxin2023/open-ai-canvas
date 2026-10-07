@@ -185,7 +185,7 @@ func (s *Service) InstallPlugin(data []byte, fileName string) (PluginView, error
 }
 
 func (s *Service) InstallPluginForAdmin(actor *model.User, data []byte, fileName string) (PluginView, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionPlugins); err != nil {
 		return PluginView{}, err
 	}
 	parsed, err := protocol.ParsePluginPackage(data)
@@ -325,7 +325,7 @@ func (s *Service) refreshPaymentRegistry() {
 }
 
 func (s *Service) UninstallPluginForAdmin(actor *model.User, id string) error {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionPlugins); err != nil {
 		return err
 	}
 	if err := s.UninstallPlugin(id); err != nil {

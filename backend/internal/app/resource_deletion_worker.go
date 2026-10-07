@@ -18,8 +18,11 @@ func (s *Service) startResourceDeletionWorker(ctx context.Context) {
 	s.runWorkerLoop(func(ctx context.Context) {
 		s.drainResourceDeletionJobs(32)
 		s.cleanupStaleAnnouncementImageDrafts()
+		s.cleanupStaleInspirationCoverDrafts()
+		s.cleanupStalePaymentPromotionImageDrafts()
 		s.cleanupExpiredArchivedAssets()
 		s.cleanupDetachedResources()
+		s.cleanupExpiredUserLoginEvents()
 		ticker := time.NewTicker(15 * time.Second)
 		defer ticker.Stop()
 		lastPeriodicCleanup := time.Now()
@@ -31,13 +34,22 @@ func (s *Service) startResourceDeletionWorker(ctx context.Context) {
 				s.drainResourceDeletionJobs(32)
 				if time.Since(lastPeriodicCleanup) >= time.Hour {
 					s.cleanupStaleAnnouncementImageDrafts()
+					s.cleanupStaleInspirationCoverDrafts()
+					s.cleanupStalePaymentPromotionImageDrafts()
 					s.cleanupExpiredArchivedAssets()
 					s.cleanupDetachedResources()
+					s.cleanupExpiredUserLoginEvents()
 					lastPeriodicCleanup = time.Now()
 				}
 			}
 		}
 	})
+}
+
+func (s *Service) cleanupExpiredUserLoginEvents() {
+	if err := s.repo.DeleteExpiredUserLoginEvents(time.Now().Add(-90 * 24 * time.Hour)); err != nil {
+		log.Printf("expired user login event cleanup failed: %v", err)
+	}
 }
 
 func (s *Service) cleanupDetachedResources() {
@@ -81,6 +93,9 @@ func (s *Service) cleanupDetachedUserResources(userID string, candidates []model
 		referenced[resourceID] = struct{}{}
 	}
 	for resourceID := range s.customerServiceResourceReferences(resourceIDs) {
+		referenced[resourceID] = struct{}{}
+	}
+	for resourceID := range s.paymentPromotionResourceReferences(resourceIDs) {
 		referenced[resourceID] = struct{}{}
 	}
 	for _, reference := range snapshot.Direct {
@@ -129,7 +144,7 @@ func (s *Service) cleanupDetachedUserResources(userID string, candidates []model
 	}
 	log.Printf("detached resource cleanup: removed %d resource rows for user %s", len(detached), userID)
 	if len(deletionJobs) > 0 {
-		go s.drainResourceDeletionJobs(len(deletionJobs))
+		s.runWorkerTask(func() { s.drainResourceDeletionJobs(len(deletionJobs)) })
 	}
 	return nil
 }

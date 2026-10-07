@@ -16,7 +16,7 @@ func TestTencentCOSConnectionTestUsesStorageEndpointInsteadOfCDN(t *testing.T) {
 	var storageMethods []string
 	storageServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		storageMethods = append(storageMethods, r.Method)
-		if !strings.HasPrefix(r.URL.Path, "/open-ai-canvas/.yingce-tests/platform/") {
+		if !strings.HasPrefix(r.URL.Path, "/open-ai-canvas/.open-ai-canvas-tests/platform/") {
 			t.Errorf("path = %q", r.URL.Path)
 		}
 		if !strings.Contains(r.Header.Get("Authorization"), "q-sign-algorithm=sha1") {
@@ -28,7 +28,7 @@ func TestTencentCOSConnectionTestUsesStorageEndpointInsteadOfCDN(t *testing.T) {
 			if err != nil {
 				t.Error(err)
 			}
-			if string(payload) != "yingce-storage-test" {
+			if string(payload) != "open-ai-canvas-storage-test" {
 				t.Errorf("payload = %q", payload)
 			}
 			w.Header().Set("ETag", `"cos-test-etag"`)
@@ -40,7 +40,7 @@ func TestTencentCOSConnectionTestUsesStorageEndpointInsteadOfCDN(t *testing.T) {
 			w.Header().Set("Accept-Ranges", "bytes")
 			w.Header().Set("Content-Range", "bytes 0-3/19")
 			w.WriteHeader(http.StatusPartialContent)
-			_, _ = io.WriteString(w, "ying")
+			_, _ = io.WriteString(w, "open")
 		case http.MethodDelete:
 			w.WriteHeader(http.StatusNoContent)
 		default:
@@ -65,7 +65,7 @@ func TestTencentCOSConnectionTestUsesStorageEndpointInsteadOfCDN(t *testing.T) {
 		AccessKeyID:     "secret-id",
 		AccessKeySecret: "secret-key",
 		PathPrefix:      defaultOSSPathPrefix,
-	}, defaultOSSPathPrefix+"/.yingce-tests/platform/test-id")
+	}, defaultOSSPathPrefix+"/.open-ai-canvas-tests/platform/test-id")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,7 +78,7 @@ func TestTencentCOSConnectionTestUsesStorageEndpointInsteadOfCDN(t *testing.T) {
 }
 
 func TestOSSConnectionReadAcceptsFullObjectWhenRangeIsIgnored(t *testing.T) {
-	payload := []byte("yingce-storage-test")
+	payload := []byte("open-ai-canvas-storage-test")
 	stream := &ossObjectStream{
 		body:          io.NopCloser(strings.NewReader(string(payload))),
 		statusCode:    http.StatusOK,
@@ -90,7 +90,7 @@ func TestOSSConnectionReadAcceptsFullObjectWhenRangeIsIgnored(t *testing.T) {
 }
 
 func TestOSSConnectionReadRejectsUnexpectedContent(t *testing.T) {
-	payload := []byte("yingce-storage-test")
+	payload := []byte("open-ai-canvas-storage-test")
 	stream := &ossObjectStream{
 		body:          io.NopCloser(strings.NewReader("error page")),
 		statusCode:    http.StatusOK,
@@ -127,7 +127,7 @@ func TestTencentCOSConnectionTestReturnsActionableAuthError(t *testing.T) {
 		AccessKeyID:     "secret-id",
 		AccessKeySecret: "secret-key",
 		PathPrefix:      defaultOSSPathPrefix,
-	}, defaultOSSPathPrefix+"/.yingce-tests/platform/test-id")
+	}, defaultOSSPathPrefix+"/.open-ai-canvas-tests/platform/test-id")
 	if err == nil {
 		t.Fatal("verifyOSSConnection() error = nil")
 	}

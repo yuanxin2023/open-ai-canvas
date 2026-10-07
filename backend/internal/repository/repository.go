@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
@@ -50,6 +51,9 @@ type UserStorageUsage struct {
 	TaskBytes    int64 `json:"taskBytes"`
 	APICallCount int64 `json:"apiCallCount"`
 }
+
+const userLoginEventRetention = 90 * 24 * time.Hour
+const userLoginEventLimit = 200
 
 func New(db *gorm.DB) *Repository {
 	return &Repository{db: db}
@@ -193,6 +197,100 @@ func (r *Repository) User(id string) (*model.User, error) {
 	return &user, nil
 }
 
+func (r *Repository) HydrateAdminAccess(user *model.User) error {
+	if user == nil || user.Role != model.UserRoleAdmin {
+		return nil
+	}
+	if user.AdminLevel == model.AdminLevelFull || user.AdminLevel == "" {
+		user.AdminLevel = model.AdminLevelFull
+		user.AdminPermissions = append([]model.AdminPermission(nil), model.AllAdminPermissions...)
+		return nil
+	}
+	var permissions []model.AdminPermission
+	if err := r.db.Model(&model.AdminPermissionGrant{}).
+		Where("user_id = ?", user.ID).Order("permission asc").Pluck("permission", &permissions).Error; err != nil {
+		return err
+	}
+	user.AdminPermissions = permissions
+	return nil
+}
+
+func (r *Repository) AdminPermissions(userID string) ([]model.AdminPermission, error) {
+	var permissions []model.AdminPermission
+	err := r.db.Model(&model.AdminPermissionGrant{}).
+		Where("user_id = ?", userID).Order("permission asc").Pluck("permission", &permissions).Error
+	return permissions, err
+}
+
+func (r *Repository) ReplaceAdminPermissions(userID string, permissions []model.AdminPermission, grantedBy string, now time.Time) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		return replaceAdminPermissions(tx, userID, permissions, grantedBy, now)
+	})
+}
+
+// SaveAdminManagedUser keeps the account, permission grants, and session
+// invalidation atomic so a failed grant write cannot leave partial access.
+func (r *Repository) SaveAdminManagedUser(user *model.User, permissions []model.AdminPermission, grantedBy string, revokeSessions bool, protectLastFull bool) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if protectLastFull {
+			var fullAdminIDs []string
+			query := tx.Model(&model.User{}).
+				Where("role = ? AND status = ? AND (admin_level = ? OR admin_level = '')", model.UserRoleAdmin, model.UserStatusActive, model.AdminLevelFull).
+				Order("id")
+			if r.Dialect() == "postgres" {
+				query = query.Clauses(clause.Locking{Strength: "UPDATE"})
+			}
+			if err := query.Pluck("id", &fullAdminIDs).Error; err != nil {
+				return err
+			}
+			remaining := 0
+			for _, id := range fullAdminIDs {
+				if id != user.ID {
+					remaining++
+				}
+			}
+			if remaining == 0 {
+				return ErrLastActiveFullAdmin
+			}
+		}
+		if err := tx.Save(user).Error; err != nil {
+			return err
+		}
+		if err := replaceAdminPermissions(tx, user.ID, permissions, grantedBy, user.UpdatedAt); err != nil {
+			return err
+		}
+		if revokeSessions {
+			if err := tx.Delete(&model.AuthSession{}, "user_id = ?", user.ID).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+func (r *Repository) CreateAdminManagedUser(user *model.User, permissions []model.AdminPermission, grantedBy string) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(user).Error; err != nil {
+			return err
+		}
+		return replaceAdminPermissions(tx, user.ID, permissions, grantedBy, user.CreatedAt)
+	})
+}
+
+func replaceAdminPermissions(tx *gorm.DB, userID string, permissions []model.AdminPermission, grantedBy string, now time.Time) error {
+	if err := tx.Delete(&model.AdminPermissionGrant{}, "user_id = ?", userID).Error; err != nil {
+		return err
+	}
+	if len(permissions) == 0 {
+		return nil
+	}
+	grants := make([]model.AdminPermissionGrant, 0, len(permissions))
+	for _, permission := range permissions {
+		grants = append(grants, model.AdminPermissionGrant{UserID: userID, Permission: permission, GrantedByUserID: grantedBy, CreatedAt: now, UpdatedAt: now})
+	}
+	return tx.Create(&grants).Error
+}
+
 func (r *Repository) UserByAccount(account string) (*model.User, error) {
 	var user model.User
 	if err := r.db.Where("lower(username) = lower(?) OR lower(email) = lower(?)", account, account).First(&user).Error; err != nil {
@@ -229,7 +327,7 @@ func (r *Repository) AdminUsers(keyword string, role model.UserRole, status mode
 	query := r.db.Model(&model.User{})
 	if value := strings.TrimSpace(keyword); value != "" {
 		pattern := "%" + strings.ToLower(value) + "%"
-		query = query.Where("lower(username) LIKE ? OR lower(display_name) LIKE ? OR lower(email) LIKE ?", pattern, pattern, pattern)
+		query = query.Where("lower(username) LIKE ? OR lower(email) LIKE ? OR lower(admin_remark) LIKE ?", pattern, pattern, pattern)
 	}
 	if role == model.UserRoleAdmin || role == model.UserRoleUser {
 		query = query.Where("role = ?", role)
@@ -246,15 +344,33 @@ func (r *Repository) AdminUsers(keyword string, role model.UserRole, status mode
 	return users, total, nil
 }
 
-func (r *Repository) AdminUserReferences() ([]model.User, error) {
+func (r *Repository) AdminUserReferences(keyword string, includeAdmins bool, limit int) ([]model.User, error) {
 	var users []model.User
-	err := r.db.Select("id", "username", "display_name").Order("created_at desc").Limit(100).Find(&users).Error
+	query := r.db.Select("id", "username", "role")
+	if value := strings.TrimSpace(keyword); value != "" {
+		pattern := "%" + strings.ToLower(value) + "%"
+		query = query.Where("lower(username) LIKE ? OR lower(email) LIKE ?", pattern, pattern)
+	}
+	if !includeAdmins {
+		query = query.Where("role = ?", model.UserRoleUser)
+	}
+	err := query.Order("created_at desc").Limit(limit).Find(&users).Error
 	return users, err
 }
 
 func (r *Repository) ActiveAdminCountExcluding(userID string) (int64, error) {
 	var count int64
 	query := r.db.Model(&model.User{}).Where("role = ? AND status = ?", model.UserRoleAdmin, model.UserStatusActive)
+	if userID != "" {
+		query = query.Where("id <> ?", userID)
+	}
+	err := query.Count(&count).Error
+	return count, err
+}
+
+func (r *Repository) ActiveFullAdminCountExcluding(userID string) (int64, error) {
+	var count int64
+	query := r.db.Model(&model.User{}).Where("role = ? AND (admin_level = ? OR admin_level = '') AND status = ?", model.UserRoleAdmin, model.AdminLevelFull, model.UserStatusActive)
 	if userID != "" {
 		query = query.Where("id <> ?", userID)
 	}
@@ -270,6 +386,29 @@ func (r *Repository) AuthSession(id string) (*model.AuthSession, error) {
 	return &session, nil
 }
 
+func (r *Repository) CreateAuthSessionWithLoginEvent(session *model.AuthSession, event *model.UserLoginEvent) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(session).Error; err != nil {
+			return err
+		}
+		if err := tx.Create(event).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("user_id = ? AND created_at < ?", event.UserID, event.CreatedAt.Add(-userLoginEventRetention)).Delete(&model.UserLoginEvent{}).Error; err != nil {
+			return err
+		}
+		var excessIDs []string
+		if err := tx.Model(&model.UserLoginEvent{}).Where("user_id = ?", event.UserID).
+			Order("created_at desc").Offset(userLoginEventLimit).Limit(10000).Pluck("id", &excessIDs).Error; err != nil {
+			return err
+		}
+		if len(excessIDs) > 0 {
+			return tx.Delete(&model.UserLoginEvent{}, "id IN ?", excessIDs).Error
+		}
+		return nil
+	})
+}
+
 func (r *Repository) DeleteAuthSession(id string) error {
 	return r.db.Delete(&model.AuthSession{}, "id = ?", id).Error
 }
@@ -278,8 +417,25 @@ func (r *Repository) DeleteExpiredAuthSessions() error {
 	return r.db.Delete(&model.AuthSession{}, "expires_at <= ?", time.Now()).Error
 }
 
+func (r *Repository) DeleteExpiredUserLoginEvents(cutoff time.Time) error {
+	return r.db.Delete(&model.UserLoginEvent{}, "created_at < ?", cutoff).Error
+}
+
 func (r *Repository) DeleteUserAuthSessions(userID string) error {
 	return r.db.Delete(&model.AuthSession{}, "user_id = ?", userID).Error
+}
+
+func (r *Repository) ChangeUserPassword(userID string, currentSessionID string, passwordHash string, updatedAt time.Time) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		result := tx.Model(&model.User{}).Where("id = ?", userID).Updates(map[string]any{"password_hash": passwordHash, "updated_at": updatedAt})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return gorm.ErrRecordNotFound
+		}
+		return tx.Delete(&model.AuthSession{}, "user_id = ? AND id <> ?", userID, currentSessionID).Error
+	})
 }
 
 func (r *Repository) LatestEmailVerificationCode(email string, purpose string) (*model.EmailVerificationCode, error) {
@@ -298,7 +454,7 @@ func (r *Repository) DeleteEmailVerificationCode(id string) error {
 	return r.db.Delete(&model.EmailVerificationCode{}, "id = ?", id).Error
 }
 
-func (r *Repository) CreateUserWithEmailVerification(user *model.User, verificationCodeID string, usedAt time.Time) error {
+func (r *Repository) CreateUserWithEmailVerification(user *model.User, verificationCodeID string, usedAt time.Time, referralCode ...string) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		result := tx.Model(&model.EmailVerificationCode{}).Where("id = ? AND used_at IS NULL AND expires_at > ?", verificationCodeID, usedAt).Update("used_at", usedAt)
 		if result.Error != nil {
@@ -307,7 +463,13 @@ func (r *Repository) CreateUserWithEmailVerification(user *model.User, verificat
 		if result.RowsAffected != 1 {
 			return errors.New("email verification code is no longer valid")
 		}
-		return tx.Create(user).Error
+		if err := tx.Create(user).Error; err != nil {
+			return err
+		}
+		if len(referralCode) > 0 {
+			return bindReferralTx(tx, user.ID, referralCode[0])
+		}
+		return nil
 	})
 }
 
@@ -564,13 +726,49 @@ func (r *Repository) UpdateTaskTerminalState(id string, owner string, expected m
 	return result.RowsAffected == 1, result.Error
 }
 
-func (r *Repository) CancelTaskIfStatus(userID string, id string, expected model.TaskStatus, now time.Time) (bool, error) {
+func (r *Repository) UpdateTaskTerminalDiagnostic(task *model.Task, completedAt time.Time) (bool, error) {
+	result := taskLeaseWriter(r.db.Model(&model.Task{}), task.LeaseOwner).
+		Where("id = ? AND status = ?", task.ID, model.TaskStatusRunning).
+		Updates(map[string]any{
+			"status": task.Status, "stage": task.Stage, "error": task.Error, "completed_at": &completedAt,
+			"execution_diagnostic_json": task.ExecutionDiagnosticJSON,
+			"cancellation_source":       task.CancellationSource, "cancellation_actor_id": task.CancellationActorID,
+			"cancellation_requested_at": task.CancellationRequestedAt,
+			"lease_owner":               "", "lease_expires_at": nil, "updated_at": completedAt,
+		})
+	return result.RowsAffected == 1, result.Error
+}
+
+func (r *Repository) UpdateTaskExecutionDiagnostic(userID, taskID, diagnosticJSON string) error {
+	result := r.db.Model(&model.Task{}).
+		Where("id = ? AND user_id = ?", taskID, userID).
+		Update("execution_diagnostic_json", diagnosticJSON)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected != 1 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
+}
+
+func (r *Repository) CancelTaskIfStatus(userID string, id string, expected model.TaskStatus, now time.Time, intents ...model.TaskCancellationIntent) (bool, error) {
+	updates := map[string]any{
+		"status": model.TaskStatusCancelled, "stage": "任务已取消", "error": "任务已取消", "completed_at": &now,
+		"lease_owner": "", "lease_expires_at": nil, "updated_at": now,
+	}
+	if len(intents) > 0 {
+		intent := intents[0]
+		diagnostic, err := json.Marshal(intent.Diagnostic)
+		if err != nil {
+			return false, err
+		}
+		updates["cancellation_source"], updates["cancellation_actor_id"], updates["cancellation_requested_at"] = intent.Source, intent.ActorID, intent.RequestedAt
+		updates["execution_diagnostic_json"] = string(diagnostic)
+	}
 	result := r.db.Model(&model.Task{}).
 		Where("id = ? AND user_id = ? AND status = ?", id, userID, expected).
-		Updates(map[string]any{
-			"status": model.TaskStatusCancelled, "stage": "任务已取消", "error": "任务已取消", "completed_at": &now,
-			"lease_owner": "", "lease_expires_at": nil, "updated_at": now,
-		})
+		Updates(updates)
 	return result.RowsAffected == 1, result.Error
 }
 
@@ -659,7 +857,7 @@ func (r *Repository) Tasks(userID string, limit int, projectID string, activeOnl
 	if limit <= 0 || limit > 100 {
 		limit = 50
 	}
-	query := r.db.Select("id", "project_id", "type", "status", "stage", "progress", "prompt", "operation", "provider", "model", "input_json", "result_json", "billing_order_id", "provider_request_id", "provider_cancel_status", "provider_cancel_error", "provider_cancel_attempts", "provider_cancel_requested_at", "provider_cancelled_at", "provider_cancel_next_check_at", "attempts", "started_at", "completed_at", "created_at", "updated_at").
+	query := r.db.Select("id", "project_id", "type", "status", "stage", "progress", "prompt", "operation", "provider", "model", "input_json", "result_json", "billing_order_id", "provider_request_id", "provider_cancel_status", "provider_cancel_error", "provider_cancel_attempts", "provider_cancel_requested_at", "provider_cancelled_at", "provider_cancel_next_check_at", "attempts", "started_at", "completed_at", "created_at", "updated_at", "agent_run_id", "generation_id", "approval_id", "authorized_charge_microcredits", "execution_diagnostic_json", "cancellation_source", "cancellation_actor_id", "cancellation_requested_at").
 		Where("user_id = ?", userID)
 	if strings.TrimSpace(projectID) != "" {
 		query = query.Where("project_id = ?", strings.TrimSpace(projectID))
@@ -708,7 +906,7 @@ func (r *Repository) AdminSystemChannels(keyword string, status string, limit in
 	query := r.db.Model(&model.ModelChannel{}).Where("scope = ?", model.ChannelScopeSystem)
 	if value := strings.TrimSpace(keyword); value != "" {
 		pattern := "%" + strings.ToLower(value) + "%"
-		query = query.Where("lower(name) LIKE ? OR lower(public_alias) LIKE ? OR lower(base_url) LIKE ?", pattern, pattern, pattern)
+		query = query.Where("lower(name) LIKE ? OR lower(base_url) LIKE ?", pattern, pattern)
 	}
 	if status == "enabled" {
 		query = query.Where("enabled = ?", true)
@@ -1119,7 +1317,7 @@ func (r *Repository) UpsertAsset(asset *model.Asset) error {
 }
 
 func (r *Repository) DeleteAsset(userID string, id string) error {
-	return r.DeleteAssetAndResources(userID, id, nil, nil)
+	return r.DeleteAssetAndResources(userID, id, nil, nil, false)
 }
 
 func (r *Repository) FindExpiredArchivedAssets(cutoff time.Time, limit int) ([]model.Asset, error) {

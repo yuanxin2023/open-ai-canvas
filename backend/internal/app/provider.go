@@ -347,11 +347,23 @@ func (s *Service) processCanvasGenerationTask(ctx context.Context, userID string
 	if strings.TrimSpace(input.Prompt) == "" {
 		return nil, errors.New("prompt is required")
 	}
+	// 将 @[tool:type:ID:label:icon] 令牌替换为对应工具的提示词文本
+	resolved, err := s.ResolveToolMentionTokens(userID, input.Mode, input.Prompt)
+	if err != nil {
+		return nil, err
+	}
+	input.Prompt = resolved
 	config, err := s.resolveProviderConfig(input.Config)
 	if err != nil {
 		return nil, err
 	}
 	input.Config = config
+	if input.Mode == "text" && input.Config.CapabilityConfig != nil && input.Config.CapabilityConfig.Text != nil {
+		// The same capability contract drives provider output limits, billing
+		// estimates and Agent context budgeting. Never silently fall back to a
+		// transport-specific fixed token count when the model declares one.
+		input.MaxOutputTokens = input.Config.CapabilityConfig.Text.MaxOutputTokens
+	}
 	var textPublisher *taskTextStreamPublisher
 	if input.Mode == "text" && strings.HasPrefix(taskType, "canvas_text") {
 		requestedStream := input.TextOptions.Stream == nil || *input.TextOptions.Stream
@@ -912,7 +924,7 @@ func (s *Service) resolveProviderConfig(config providerConfig) (providerConfig, 
 // 同一系统渠道可以挂载不同协议的模型，因此渠道级 APIFormat 只能作为协议缺失时的兼容值。
 func channelAPIFormatForProtocol(channelDefault string, protocol model.ChannelInterfaceType) string {
 	switch protocol {
-	case model.ChannelInterfaceGeminiVeo, model.ChannelInterfaceGeminiImage:
+	case model.ChannelInterfaceGeminiVeo, model.ChannelInterfaceGeminiImage, model.ChannelInterfaceSubRouterGeminiImage:
 		return "gemini"
 	case model.ChannelInterfaceClaudeAPI:
 		return "claude"

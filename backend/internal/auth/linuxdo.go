@@ -85,7 +85,7 @@ type LinuxDOCallbackResult struct {
 }
 
 func (s *Service) AdminLinuxDOSetting(actor *model.User) (*PublicLinuxDOSetting, error) {
-	if err := s.host.RequireAdmin(actor); err != nil {
+	if err := s.host.RequireAdminPermission(actor, model.AdminPermissionAccess); err != nil {
 		return nil, err
 	}
 	setting, value, err := s.readLinuxDOSetting()
@@ -96,7 +96,7 @@ func (s *Service) AdminLinuxDOSetting(actor *model.User) (*PublicLinuxDOSetting,
 }
 
 func (s *Service) UpdateLinuxDOSetting(actor *model.User, req LinuxDOSettingRequest) (*PublicLinuxDOSetting, error) {
-	if err := s.host.RequireAdmin(actor); err != nil {
+	if err := s.host.RequireAdminPermission(actor, model.AdminPermissionAccess); err != nil {
 		return nil, err
 	}
 	currentSetting, current, err := s.readLinuxDOSetting()
@@ -184,6 +184,11 @@ func (s *Service) BeginLinuxDOLogin(nextPath string) (string, error) {
 }
 
 func (s *Service) CompleteLinuxDOLogin(stateValue string, code string) (*LinuxDOCallbackResult, error) {
+	return s.CompleteLinuxDOLoginWithEnvironment(stateValue, code, LoginEnvironment{})
+}
+
+func (s *Service) CompleteLinuxDOLoginWithEnvironment(stateValue string, code string, environment LoginEnvironment) (*LinuxDOCallbackResult, error) {
+	environment = normalizeLoginEnvironment(environment)
 	if strings.TrimSpace(stateValue) == "" || strings.TrimSpace(code) == "" {
 		return nil, kernel.BadAuthRequest("Linux.do 登录回调缺少必要参数")
 	}
@@ -238,6 +243,7 @@ func (s *Service) CompleteLinuxDOLogin(stateValue string, code string) (*LinuxDO
 		if err != nil {
 			return nil, err
 		}
+		user.RegistrationIP = environment.IPAddress
 		if err := s.repo.CreateOAuthUser(user, identity); err != nil {
 			return nil, err
 		}
@@ -257,7 +263,7 @@ func (s *Service) CompleteLinuxDOLogin(stateValue string, code string) (*LinuxDO
 		return nil, err
 	}
 	s.host.RecordActivity(user.ID, "login", 1)
-	session, err := s.createAuthSession(user)
+	session, err := s.createAuthSession(user, "linuxdo", environment)
 	if err != nil {
 		return nil, err
 	}

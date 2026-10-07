@@ -39,6 +39,19 @@ export function readFileAsDataUrl(file: File) {
     });
 }
 
+export async function readImageFileSize(file: File): Promise<{ width: number; height: number }> {
+    const url = URL.createObjectURL(file);
+    const image = new Image();
+    try {
+        image.src = url;
+        await image.decode();
+        if (!image.naturalWidth || !image.naturalHeight) throw new Error("无法读取图片尺寸，请重新选择图片");
+        return { width: image.naturalWidth, height: image.naturalHeight };
+    } finally {
+        URL.revokeObjectURL(url);
+    }
+}
+
 export function readImageMeta(dataUrl: string, signal?: AbortSignal) {
     return new Promise<{ width: number; height: number; mimeType: string }>((resolve, reject) => {
         const image = new Image();

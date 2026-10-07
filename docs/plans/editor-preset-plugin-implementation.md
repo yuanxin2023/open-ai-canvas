@@ -85,7 +85,7 @@
 | 多轨编辑（视频/音频/字幕/文字） | ✅ | TimelineProject v2 轨道类型齐全 |
 | 剪切工具 split/trim/merge | ✅ | M2 命令集含分割/裁剪/移动/删除；merge 需在 M2 命令集确认补一条 |
 | 变速 speed control | ✅ | 命令集含 setSpeed |
-| 自动字幕 | ✅（形态不同） | Concat 本地 whisper；影策服务端任务（ADR-0004），浏览器不跑模型 |
+| 自动字幕 | ✅（形态不同） | Concat 本地 whisper；AI 创作工作台服务端任务（ADR-0004），浏览器不跑模型 |
 | 字幕高亮 | ✅（领先） | 已有 subtitle-highlight-* 库；Concat 尚在 roadmap |
 | 标题与样式文本 | 🟡 | text 轨道 + 字幕工具批量样式；复杂标题动画依赖画布文本节点 |
 | 转场 transitions | 🟡 | 单一滤镜图计划含转场降级；效果库是渲染器插槽扩展点，首版基础淡入淡出 |
@@ -98,11 +98,11 @@
 
 ### 1.1 目标
 
-把编辑器（时间线编辑、预览、导出、自动字幕）做成**预设插件（preset plugins）**，参考 astravia「万物皆可插件」理念：编辑器全部 UI 与能力都是插件贡献，宿主核心只保留协议层（时间线状态机、编辑命令、滤镜图计划、任务协议）。现有 `yingce.plugin/v1` 演进为 v2（UI 插槽 + 预设分发 + 权限执行校验），编辑器域是 v2 的第一个完整消费方。
+把编辑器（时间线编辑、预览、导出、自动字幕）做成**预设插件（preset plugins）**，参考 astravia「万物皆可插件」理念：编辑器全部 UI 与能力都是插件贡献，宿主核心只保留协议层（时间线状态机、编辑命令、滤镜图计划、任务协议）。现有 `open-ai-canvas.plugin/v1` 演进为 v2（UI 插槽 + 预设分发 + 权限执行校验），编辑器域是 v2 的第一个完整消费方。
 
 ### 1.2 首版必须交付
 
-- 插件 SDK v2：`yingce.plugin/v2` 清单类型、UI 插槽注册 API、预设分发字段、权限执行校验（首个校验点：编辑器宿主 API）。
+- 插件 SDK v2：`open-ai-canvas.plugin/v2` 清单类型、UI 插槽注册 API、预设分发字段、权限执行校验（首个校验点：编辑器宿主 API）。
 - 时间线命令状态机：可序列化编辑命令 + 单队列 + 有界快照撤销（200 层）+ 手势 echo。
 - editor 预设插件（`builtin/editor/`）：时间线面板、预览监视器、右侧检查器、素材入轨、字幕工具、自动字幕（转写）、导出、AI 助手，共 8 个（7 核心 + editor-ai-assistant，见 ADR-0007）。
 - 后端任务：转写任务（ASR 可插拔）+ ffmpeg 导出任务，复用现有任务队列与配额。
@@ -122,7 +122,7 @@
 
 ### 2.1 插件体系现状（`web/src/lib/plugins/`）
 
-- `plugin-types.ts`：`PLUGIN_API_VERSION = "yingce.plugin/v1"`；贡献类型 `provider | workflow | canvas-node | transform | command | asset-source | usage-observer | ai-capability | agent | import-export`；权限 `canvas.* / asset.* / generation.run / ai.text / media.read / usage.read / external.open`；`RegisteredPlugin` 提供 `activate/deactivate/createAssetSource/createPromptOptimizer`；`PluginManifest` 含 `surfaces`（仅声明字段，无插槽注册实现）。
+- `plugin-types.ts`：`PLUGIN_API_VERSION = "open-ai-canvas.plugin/v1"`；贡献类型 `provider | workflow | canvas-node | transform | command | asset-source | usage-observer | ai-capability | agent | import-export`；权限 `canvas.* / asset.* / generation.run / ai.text / media.read / usage.read / external.open`；`RegisteredPlugin` 提供 `activate/deactivate/createAssetSource/createPromptOptimizer`；`PluginManifest` 含 `surfaces`（仅声明字段，无插槽注册实现）。
 - `plugin-registry.ts`：`registerPlugin`（`assertManifest` 校验 kebab-case id、apiVersion 必须等于 v1、权限不重复、至少一种贡献）→ `Map` 存储；canvasNodes 会同步注册到 `@/lib/canvas/node-registry`。
 - `plugin-storage.ts`：启用态与配置持久化。
 - `builtin/`：`index.ts` 静态 import 5 个插件（eagle、prompt-optimizer、workflows、portrait-clearance），`application.tsx` 顶层 `import "@/lib/plugins/builtin"` 完成注册。
@@ -157,7 +157,7 @@
 │    ├─ 任务协议（转写/导出任务客户端）                         │
 │    └─ 插件宿主：editor-slot-registry 插槽渲染 + 权限执行校验  │
 ├──────────────────────────────────────────────────────────────┤
-│  插件 SDK v2（yingce.plugin/v2）                              │
+│  插件 SDK v2（open-ai-canvas.plugin/v2）                              │
 │    ├─ definePlugin 统一形态（v1 字段兼容）                    │
 │    ├─ UI 插槽注册 API（面板/渲染器/工具/快捷键域）            │
 │    ├─ 预设分发（preset: true, defaultEnabled）                │
@@ -202,7 +202,7 @@
 任务：
 
 1. `web/src/lib/plugins/plugin-types.ts`
-   - 新增 `PLUGIN_API_VERSION_V2 = "yingce.plugin/v2"`；`PluginManifest.apiVersion` 允许 v1 | v2。
+   - 新增 `PLUGIN_API_VERSION_V2 = "open-ai-canvas.plugin/v2"`；`PluginManifest.apiVersion` 允许 v1 | v2。
    - 新增 editor 贡献类型：`timeline-panel | preview-renderer | export-renderer | transcription-provider | subtitle-tool | inspector-panel | asset-ingest | shortcut-scope`（并入 `PluginContributionKind` 与 `PluginContributions`，v1 插件不声明即为空）。
    - 新增权限：`timeline.read / timeline.write / timeline.command / transcription.run / export.run`（并入 `PluginPermission` 联合类型）。
    - 新增预设分发字段：`preset?: boolean`、`defaultEnabled?: boolean`（默认 `preset: false`，v1 清单不设即保持现状）。
@@ -235,7 +235,7 @@
 
 目标：7 个核心预设插件全部以 v2 清单 + 插槽贡献形态实现（AI 助手插件在 M6，见 ADR-0007），宿主核心不再新增编辑器 UI 硬编码分支。
 
-任务（每个插件 = `builtin/editor/<name>.ts`，`manifest.apiVersion = "yingce.plugin/v2"`，`preset: true`，`defaultEnabled: true`）：
+任务（每个插件 = `builtin/editor/<name>.ts`，`manifest.apiVersion = "open-ai-canvas.plugin/v2"`，`preset: true`，`defaultEnabled: true`）：
 
 1. `editor-timeline-panel.ts`：`createTimelinePanel` → 注册 `timeline-panel` 插槽（dock: bottom）；轨道/片段渲染、拖拽移动、裁剪手柄、吸附复用 `timeline-snap`、右键菜单；组件只消费状态机视图并派发命令。
 2. `editor-preview-monitor.ts`：`createPreviewRenderer` → 注册 `preview-renderer`；`<video>` 裁剪/缩放/透明度/音量 + CSS 滤镜 + canvas 近似合成（ADR-0003 近似层）；交互真相非导出像素。
@@ -311,7 +311,7 @@
 ### 5.1 v2 清单扩展（`plugin-types.ts` 增量）
 
 ```ts
-export const PLUGIN_API_VERSION_V2 = "yingce.plugin/v2" as const;
+export const PLUGIN_API_VERSION_V2 = "open-ai-canvas.plugin/v2" as const;
 
 export type EditorContributionKind =
     | "timeline-panel" | "preview-renderer" | "export-renderer"
@@ -326,7 +326,7 @@ export type PluginPermissionV2 =
 // PluginManifest 增量字段（v2 可选）
 //   preset?: boolean            // 预设插件（随应用分发，默认启用，不可卸载删改）
 //   defaultEnabled?: boolean    // 默认启用（preset 时恒 true）
-//   apiVersion: "yingce.plugin/v1" | "yingce.plugin/v2"
+//   apiVersion: "open-ai-canvas.plugin/v1" | "open-ai-canvas.plugin/v2"
 ```
 
 ### 5.2 UI 插槽注册（新建 `web/src/lib/plugins/editor-slot-registry.ts`）

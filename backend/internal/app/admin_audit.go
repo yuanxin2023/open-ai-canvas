@@ -10,13 +10,30 @@ import (
 )
 
 type AdminUserDetail struct {
-	User             model.User                  `json:"user"`
+	User             AdminManagedUser            `json:"user"`
+	RegistrationIP   string                      `json:"registrationIp"`
 	Account          model.CreditAccount         `json:"account"`
 	Counts           repository.AdminUserCounts  `json:"counts"`
 	StorageUsage     repository.UserStorageUsage `json:"storageUsage"`
 	StoredFileBytes  int64                       `json:"storedFileBytes"`
 	DailyUploadBytes int64                       `json:"dailyUploadBytes"`
 	Quota            RuntimeResourcePolicy       `json:"quota"`
+}
+
+type AdminLoginEventPage struct {
+	Events []model.UserLoginEvent `json:"events"`
+	Total  int64                  `json:"total"`
+	Page   int                    `json:"page"`
+	Limit  int                    `json:"pageSize"`
+}
+
+type AdminUserLoginEventQuery struct {
+	Page        int
+	Limit       int
+	StartAt     string
+	EndAt       string
+	LoginMethod string
+	IP          string
 }
 
 type AdminTaskPage struct {
@@ -59,11 +76,27 @@ func newAdminAuditEvent(actor *model.User, action string, targetType string, tar
 	}, nil
 }
 
-func (s *Service) AdminUserDetail(actor *model.User, userID string) (*AdminUserDetail, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+func (s *Service) manageableAdminUser(actor *model.User, userID string) (*model.User, error) {
+	user, err := s.repo.User(strings.TrimSpace(userID))
+	if err != nil {
 		return nil, err
 	}
-	user, err := s.repo.User(strings.TrimSpace(userID))
+	if user.Role == model.UserRoleAdmin {
+		if err := s.RequireFullAdmin(actor); err != nil {
+			return nil, adminPermissionDenied("只有全权限管理员可以查看或管理其他管理员")
+		}
+		if err := s.repo.HydrateAdminAccess(user); err != nil {
+			return nil, err
+		}
+	}
+	return user, nil
+}
+
+func (s *Service) AdminUserDetail(actor *model.User, userID string) (*AdminUserDetail, error) {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionUsers); err != nil {
+		return nil, err
+	}
+	user, err := s.manageableAdminUser(actor, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -92,16 +125,60 @@ func (s *Service) AdminUserDetail(actor *model.User, userID string) (*AdminUserD
 		return nil, err
 	}
 	return &AdminUserDetail{
-		User: *user, Account: *account, Counts: counts, StorageUsage: usage,
+		User: AdminManagedUser{User: *user, Remark: user.AdminRemark, AdminAccess: adminAccessView(user)}, RegistrationIP: user.RegistrationIP, Account: *account, Counts: counts, StorageUsage: usage,
 		StoredFileBytes: storedFileBytes, DailyUploadBytes: dailyUploadBytes, Quota: policy.Resource,
 	}, nil
 }
 
-func (s *Service) AdminUserLedger(actor *model.User, userID string, entryType string, page int, limit int) (*WalletSummary, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+func (s *Service) AdminUserLoginEvents(actor *model.User, userID string, query AdminUserLoginEventQuery) (*AdminLoginEventPage, error) {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionUsers); err != nil {
 		return nil, err
 	}
-	if _, err := s.repo.User(userID); err != nil {
+	userID = strings.TrimSpace(userID)
+	if _, err := s.manageableAdminUser(actor, userID); err != nil {
+		return nil, err
+	}
+	filter, err := normalizeAdminUserLoginEventFilter(query)
+	if err != nil {
+		return nil, err
+	}
+	page, limit := normalizeAdminPage(query.Page, query.Limit)
+	events, total, err := s.repo.AdminUserLoginEvents(userID, filter, limit, (page-1)*limit)
+	return &AdminLoginEventPage{Events: events, Total: total, Page: page, Limit: limit}, err
+}
+
+func normalizeAdminUserLoginEventFilter(query AdminUserLoginEventQuery) (repository.AdminUserLoginEventFilter, error) {
+	filter := repository.AdminUserLoginEventFilter{
+		LoginMethod: strings.TrimSpace(query.LoginMethod),
+		IP:          strings.TrimSpace(query.IP),
+	}
+	if value := strings.TrimSpace(query.StartAt); value != "" {
+		parsed, err := time.Parse(time.RFC3339Nano, value)
+		if err != nil {
+			return repository.AdminUserLoginEventFilter{}, BadAuthRequest("startAt 必须是 RFC3339 时间")
+		}
+		parsed = parsed.UTC()
+		filter.StartAt = &parsed
+	}
+	if value := strings.TrimSpace(query.EndAt); value != "" {
+		parsed, err := time.Parse(time.RFC3339Nano, value)
+		if err != nil {
+			return repository.AdminUserLoginEventFilter{}, BadAuthRequest("endAt 必须是 RFC3339 时间")
+		}
+		parsed = parsed.UTC()
+		filter.EndAt = &parsed
+	}
+	if filter.StartAt != nil && filter.EndAt != nil && filter.StartAt.After(*filter.EndAt) {
+		return repository.AdminUserLoginEventFilter{}, BadAuthRequest("startAt 不能晚于 endAt")
+	}
+	return filter, nil
+}
+
+func (s *Service) AdminUserLedger(actor *model.User, userID string, entryType string, page int, limit int) (*WalletSummary, error) {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionUsers); err != nil {
+		return nil, err
+	}
+	if _, err := s.manageableAdminUser(actor, userID); err != nil {
 		return nil, err
 	}
 	page, limit = normalizeAdminPage(page, limit)
@@ -117,10 +194,10 @@ func (s *Service) AdminUserLedger(actor *model.User, userID string, entryType st
 }
 
 func (s *Service) AdminUserTasks(actor *model.User, userID string, page int, limit int) (*AdminTaskPage, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionUsers); err != nil {
 		return nil, err
 	}
-	if _, err := s.repo.User(userID); err != nil {
+	if _, err := s.manageableAdminUser(actor, userID); err != nil {
 		return nil, err
 	}
 	page, limit = normalizeAdminPage(page, limit)
@@ -129,10 +206,10 @@ func (s *Service) AdminUserTasks(actor *model.User, userID string, page int, lim
 }
 
 func (s *Service) AdminUserAuditEvents(actor *model.User, userID string, page int, limit int) (*AdminAuditPage, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionUsers); err != nil {
 		return nil, err
 	}
-	if _, err := s.repo.User(userID); err != nil {
+	if _, err := s.manageableAdminUser(actor, userID); err != nil {
 		return nil, err
 	}
 	page, limit = normalizeAdminPage(page, limit)

@@ -42,7 +42,7 @@ func TestRunRPCProvidersDispatchesProviderID(t *testing.T) {
 		"second": rpcDispatchProvider{descriptor: Descriptor{ID: "second"}, called: &secondCalled},
 	}
 	var output bytes.Buffer
-	input := strings.NewReader(`{"version":"yingce.payment/v1","providerId":"second","operation":"validate_config"}`)
+	input := strings.NewReader(`{"version":"open-ai-canvas.payment/v1","providerId":"second","operation":"validate_config"}`)
 	if err := RunRPCProviders(providers, input, &output); err != nil {
 		t.Fatal(err)
 	}
@@ -53,7 +53,7 @@ func TestRunRPCProvidersDispatchesProviderID(t *testing.T) {
 
 func TestRunRPCProvidersRejectsUnknownProvider(t *testing.T) {
 	var output bytes.Buffer
-	input := strings.NewReader(`{"version":"yingce.payment/v1","providerId":"missing","operation":"validate_config"}`)
+	input := strings.NewReader(`{"version":"open-ai-canvas.payment/v1","providerId":"missing","operation":"validate_config"}`)
 	if err := RunRPCProviders(map[string]Provider{}, input, &output); err != nil {
 		t.Fatal(err)
 	}

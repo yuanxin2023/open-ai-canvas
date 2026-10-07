@@ -3,6 +3,9 @@ package service
 import "infinite-canvas/backend/internal/app"
 
 type (
+	ReferralPolicy                         = app.ReferralPolicy
+	ReferralDashboard                      = app.ReferralDashboard
+	ReferralRewardPage                     = app.ReferralRewardPage
 	PaymentOrderQuery                      = app.PaymentOrderQuery
 	PaymentReconciliationQuery             = app.PaymentReconciliationQuery
 	CloudAgentRequest                      = app.CloudAgentRequest
@@ -32,9 +35,13 @@ type (
 	AdminChannelModelImportRequest         = app.AdminChannelModelImportRequest
 	AdminChannelModelTestResult            = app.AdminChannelModelTestResult
 	AdminChannelPage                       = app.AdminChannelPage
+	AdminSkillCatalog                      = app.AdminSkillCatalog
+	AdminSkillAvailabilityRequest          = app.AdminSkillAvailabilityRequest
 	AdminChannelReference                  = app.AdminChannelReference
 	AdminCreditAdjustmentRequest           = app.AdminCreditAdjustmentRequest
 	AdminListQuery                         = app.AdminListQuery
+	CreateAdministratorRequest             = app.CreateAdministratorRequest
+	CreateOrdinaryUserRequest              = app.CreateOrdinaryUserRequest
 	AdminLogicalModel                      = app.AdminLogicalModel
 	AdminLogicalRoute                      = app.AdminLogicalRoute
 	AdminPaymentOrderPage                  = app.AdminPaymentOrderPage
@@ -43,11 +50,18 @@ type (
 	AdminPaymentReconciliationPage         = app.AdminPaymentReconciliationPage
 	AdminPluginStateView                   = app.AdminPluginStateView
 	AdminRedeemCodeDetail                  = app.AdminRedeemCodeDetail
+	AdminRedeemCodeLookupRequest           = app.AdminRedeemCodeLookupRequest
+	AdminRedeemCodeLookupResult            = app.AdminRedeemCodeLookupResult
 	AdminRedeemCodePage                    = app.AdminRedeemCodePage
+	AdminRedeemCodeSearchRequest           = app.AdminRedeemCodeSearchRequest
+	AdminRedeemCodeSearchResult            = app.AdminRedeemCodeSearchResult
 	AdminReferenceData                     = app.AdminReferenceData
 	AdminResourceDeleteBlocked             = app.AdminResourceDeleteBlocked
+	AdminResourceDeleteConfirmation        = app.AdminResourceDeleteConfirmation
+	AdminResourceDeletePreview             = app.AdminResourceDeletePreview
 	AdminResourceDeleteRequest             = app.AdminResourceDeleteRequest
 	AdminResourceDeleteResult              = app.AdminResourceDeleteResult
+	AdminResourceDeleteWarning             = app.AdminResourceDeleteWarning
 	AdminResourcePage                      = app.AdminResourcePage
 	AdminResourceQuery                     = app.AdminResourceQuery
 	AdminResourceReferenceView             = app.AdminResourceReferenceView
@@ -55,8 +69,10 @@ type (
 	AdminStorageStats                      = app.AdminStorageStats
 	AdminSystemPerformance                 = app.AdminSystemPerformance
 	AdminTaskPage                          = app.AdminTaskPage
+	AdminManagedUser                       = app.AdminManagedUser
 	AdminUser                              = app.AdminUser
 	AdminUserDetail                        = app.AdminUserDetail
+	AdminUserLoginEventQuery               = app.AdminUserLoginEventQuery
 	AdminUserPage                          = app.AdminUserPage
 	AdminUserReference                     = app.AdminUserReference
 	AnalyticsFailureRow                    = app.AnalyticsFailureRow
@@ -67,6 +83,10 @@ type (
 	AnalyticsTrendPoint                    = app.AnalyticsTrendPoint
 	AnalyticsUserRow                       = app.AnalyticsUserRow
 	AnnouncementPage                       = app.AnnouncementPage
+	InspirationPage                        = app.InspirationPage
+	InspirationRequest                     = app.InspirationRequest
+	InspirationOrderItem                   = app.InspirationOrderItem
+	InspirationOrderRequest                = app.InspirationOrderRequest
 	AppError                               = app.AppError
 	AppearanceSetting                      = app.AppearanceSetting
 	CustomerServiceSetting                 = app.CustomerServiceSetting
@@ -94,6 +114,8 @@ type (
 	ChannelModelCatalogOptions             = app.ChannelModelCatalogOptions
 	ChannelModelPriceTierRequest           = app.ChannelModelPriceTierRequest
 	ChannelModelRequest                    = app.ChannelModelRequest
+	ChannelModelRepriceRequest             = app.ChannelModelRepriceRequest
+	ChannelModelQuoteRequest               = app.ChannelModelQuoteRequest
 	ChannelModelSortRequest                = app.ChannelModelSortRequest
 	ChannelModelsRequest                   = app.ChannelModelsRequest
 	ChannelOrderItem                       = app.ChannelOrderItem
@@ -169,6 +191,7 @@ type (
 	LogicalModelRequest                    = app.LogicalModelRequest
 	LogicalRouteRequest                    = app.LogicalRouteRequest
 	LoginRequest                           = app.LoginRequest
+	LoginEnvironment                       = app.LoginEnvironment
 	ModelCapabilityConfig                  = app.ModelCapabilityConfig
 	ModelCatalogResponse                   = app.ModelCatalogResponse
 	ModelCatalogSource                     = app.ModelCatalogSource
@@ -237,7 +260,10 @@ type (
 	PublicRuntimeLimits                    = app.PublicRuntimeLimits
 	PublicRuntimePolicySetting             = app.PublicRuntimePolicySetting
 	RedeemBatchPage                        = app.RedeemBatchPage
+	RedeemFundingSummary                   = app.RedeemFundingSummary
 	RegisterRequest                        = app.RegisterRequest
+	UpdateProfileRequest                   = app.UpdateProfileRequest
+	ChangePasswordRequest                  = app.ChangePasswordRequest
 	RegisterTaskOutputRequest              = app.RegisterTaskOutputRequest
 	RegistrationSettingRequest             = app.RegistrationSettingRequest
 	ReorderProjectUnitsRequest             = app.ReorderProjectUnitsRequest
@@ -281,6 +307,11 @@ type (
 	StorageMigrationSummary                = app.StorageMigrationSummary
 	StyleProfileFavoriteRequest            = app.StyleProfileFavoriteRequest
 	StyleProfileRequest                    = app.StyleProfileRequest
+	ToolItem                               = app.ToolItem
+	ToolList                               = app.ToolList
+	ToolListRequest                        = app.ToolListRequest
+	ToolMutationRequest                    = app.ToolMutationRequest
+	ToolSummary                            = app.ToolSummary
 	SystemPerformanceCacheGroup            = app.SystemPerformanceCacheGroup
 	SystemPerformanceDisk                  = app.SystemPerformanceDisk
 	SystemPerformanceHost                  = app.SystemPerformanceHost
@@ -304,6 +335,10 @@ type (
 	TimelineRenderCreateRequest            = app.TimelineRenderCreateRequest
 	TimelineTranscriptionCreateRequest     = app.TimelineTranscriptionCreateRequest
 	TopupProductRequest                    = app.TopupProductRequest
+	PaymentPromotionSetting                = app.PaymentPromotionSetting
+	PublicPaymentPromotion                 = app.PublicPaymentPromotion
+	AdminPaymentPromotion                  = app.AdminPaymentPromotion
+	PaymentCatalog                         = app.PaymentCatalog
 	UpdateAnnouncementRequest              = app.UpdateAnnouncementRequest
 	UpdateBannerAnnouncementRequest        = app.UpdateBannerAnnouncementRequest
 	UpdateAssetFolderRequest               = app.UpdateAssetFolderRequest
@@ -315,6 +350,9 @@ type (
 	UpdateProjectRequest                   = app.UpdateProjectRequest
 	UpdateProjectUnitRequest               = app.UpdateProjectUnitRequest
 	UpdateUserRequest                      = app.UpdateUserRequest
+	UpdateAdministratorRequest             = app.UpdateAdministratorRequest
+	UpdateOrdinaryUserRequest              = app.UpdateOrdinaryUserRequest
+	PromoteAdministratorRequest            = app.PromoteAdministratorRequest
 	UpdateWorkflowStepRequest              = app.UpdateWorkflowStepRequest
 	UserAnnouncementFeed                   = app.UserAnnouncementFeed
 	UserAssetPage                          = app.UserAssetPage
@@ -322,7 +360,9 @@ type (
 	UserDataSnapshot                       = app.UserDataSnapshot
 	UserDataSummary                        = app.UserDataSummary
 	UserPromptCustomizationRequest         = app.UserPromptCustomizationRequest
+	UserPromptPage                         = app.UserPromptPage
 	UserPromptPreference                   = app.UserPromptPreference
+	UserPromptRequest                      = app.UserPromptRequest
 	VideoBooleanConfig                     = app.VideoBooleanConfig
 	VideoCapabilityConfig                  = app.VideoCapabilityConfig
 	VideoDurationConfig                    = app.VideoDurationConfig

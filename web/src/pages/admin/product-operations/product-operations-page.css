@@ -1,0 +1,244 @@
+/* Product editor layout and responsive preview. */
+
+.admin-payment-product-modal .ant-modal-body {
+    max-height: min(72vh, 680px);
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding-right: 6px;
+}
+
+.admin-payment-product-editor-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(320px, 370px);
+    align-items: start;
+    gap: 28px;
+}
+
+.admin-payment-product-editor-fields {
+    min-width: 0;
+}
+
+.admin-payment-product-color-input.ant-input {
+    height: 34px;
+    padding: 4px 6px;
+    cursor: pointer;
+}
+
+.admin-payment-product-preview {
+    position: sticky;
+    top: 0;
+    min-width: 0;
+    border-left: 1px solid var(--admin-divider);
+    padding-left: 28px;
+}
+
+.admin-payment-product-preview > header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.admin-payment-product-preview > header > div {
+    display: grid;
+    min-width: 0;
+    gap: 4px;
+}
+
+.admin-payment-product-preview > header strong {
+    color: var(--admin-text);
+    font-size: 14px;
+    font-weight: 650;
+}
+
+.admin-payment-product-preview > header span,
+.admin-payment-product-preview > p {
+    color: var(--admin-text-muted);
+    font-size: 12px;
+    line-height: 1.55;
+}
+
+.admin-payment-product-preview-status {
+    flex: 0 0 auto;
+    border-radius: 999px;
+    padding: 3px 8px;
+    background: var(--admin-surface-2);
+}
+
+.admin-payment-product-preview-card {
+    pointer-events: none;
+}
+
+.admin-payment-product-preview-card .workspace-credit-product-card {
+    min-height: 0;
+    padding-top: 34px;
+    transform: none;
+}
+
+.admin-payment-product-preview-card .workspace-credit-product-surface {
+    border-radius: 16px;
+    box-shadow: none;
+}
+
+.admin-payment-product-preview-card .workspace-credit-product-card-heading h3 {
+    font-size: 21px;
+}
+
+.admin-payment-product-preview-card .workspace-credit-product-price-value {
+    font-size: 40px;
+}
+
+.admin-payment-product-preview > p {
+    margin-top: 12px;
+}
+
+@media (max-width: 900px) {
+    .admin-payment-product-editor-layout {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .admin-payment-product-preview {
+        position: static;
+        border-top: 1px solid var(--admin-divider);
+        border-left: 0;
+        padding-top: 24px;
+        padding-left: 0;
+    }
+
+    .admin-payment-product-preview-card {
+        max-width: 380px;
+    }
+}
+
+@media (max-width: 600px) {
+    .admin-payment-product-modal .grid.grid-cols-2 {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 0;
+    }
+
+    .admin-payment-product-preview-card {
+        max-width: none;
+    }
+}
+
+.admin-payment-promotion-panel {
+    display: grid;
+    grid-template-columns: minmax(360px, 0.8fr) minmax(520px, 1.2fr);
+    align-items: start;
+    gap: 28px;
+    padding: 20px 0 8px;
+}
+
+.admin-payment-promotion-form,
+.admin-payment-promotion-preview {
+    min-width: 0;
+    border: 1px solid var(--admin-divider);
+    border-radius: var(--admin-radius-lg);
+    padding: 22px;
+    background: var(--admin-surface);
+}
+
+.admin-payment-promotion-section-heading,
+.admin-payment-promotion-image-row,
+.admin-payment-promotion-preview > header,
+.admin-payment-promotion-actions {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.admin-payment-promotion-section-heading {
+    margin-bottom: 20px;
+}
+
+.admin-payment-promotion-section-heading > div,
+.admin-payment-promotion-image-copy,
+.admin-payment-promotion-preview > header > div {
+    display: grid;
+    gap: 4px;
+}
+
+.admin-payment-promotion-section-heading strong,
+.admin-payment-promotion-image-copy strong,
+.admin-payment-promotion-preview > header strong {
+    color: var(--admin-text);
+    font-size: 14px;
+    font-weight: 650;
+}
+
+.admin-payment-promotion-section-heading span,
+.admin-payment-promotion-image-copy span,
+.admin-payment-promotion-preview > header span {
+    color: var(--admin-text-muted);
+    font-size: 12px;
+    line-height: 1.55;
+}
+
+.admin-payment-promotion-divider {
+    height: 1px;
+    margin: 24px 0;
+    background: var(--admin-divider);
+}
+
+.admin-payment-promotion-actions {
+    justify-content: flex-end;
+    margin-top: 26px;
+}
+
+.admin-payment-promotion-preview {
+    position: sticky;
+    top: 0;
+}
+
+.admin-payment-promotion-preview > header {
+    align-items: center;
+    margin-bottom: 18px;
+}
+
+.admin-payment-promotion-preview .workspace-payment-promotion {
+    min-height: 210px;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 18px;
+    margin-bottom: 0;
+    border-radius: 20px;
+    padding: 24px;
+}
+
+.admin-payment-promotion-preview .workspace-payment-promotion-countdown {
+    min-width: 0;
+}
+
+.admin-payment-promotion-empty {
+    display: grid;
+    min-height: 260px;
+    place-items: center;
+    border: 1px dashed var(--admin-border-strong);
+    border-radius: var(--admin-radius-lg);
+    color: var(--admin-text-muted);
+    font-size: 13px;
+}
+
+@media (max-width: 1100px) {
+    .admin-payment-promotion-panel {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .admin-payment-promotion-preview {
+        position: static;
+    }
+}
+
+@media (max-width: 600px) {
+    .admin-payment-promotion-form,
+    .admin-payment-promotion-preview {
+        padding: 16px;
+    }
+
+    .admin-payment-promotion-image-row,
+    .admin-payment-promotion-preview > header {
+        align-items: stretch;
+        flex-direction: column;
+    }
+}

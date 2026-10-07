@@ -16,8 +16,11 @@ type ResourceDeletionStatus string
 type BillingStatus string
 type CreditLedgerType string
 type RedeemCodeStatus string
+type RedeemBatchFundingSource string
 type AnnouncementStatus string
 type AnnouncementLevel string
+type InspirationMode string
+type InspirationStatus string
 type ProjectStatus string
 type ProjectUnitKind string
 type ProjectUnitStatus string
@@ -55,34 +58,42 @@ const (
 	UserStatusActive   UserStatus = "active"
 	UserStatusDisabled UserStatus = "disabled"
 
+	InspirationModeText  InspirationMode = "text"
+	InspirationModeImage InspirationMode = "image"
+	InspirationModeVideo InspirationMode = "video"
+
+	InspirationStatusActive   InspirationStatus = "active"
+	InspirationStatusDisabled InspirationStatus = "disabled"
+
 	ChannelScopeSystem ChannelScope = "system"
 	ChannelScopeUser   ChannelScope = "user"
 
-	ChannelInterfaceChatCompletion        ChannelInterfaceType = "chat-completion"
-	ChannelInterfaceOpenAIResponse        ChannelInterfaceType = "openai-response"
-	ChannelInterfaceClaudeAPI             ChannelInterfaceType = "claude-api"
-	ChannelInterfaceOpenAIImage           ChannelInterfaceType = "openai-image"
-	ChannelInterfaceGrokImage             ChannelInterfaceType = "grok-image"
-	ChannelInterfaceVolcengineArkImage           ChannelInterfaceType = "volcengine-ark-image"
-	ChannelInterfaceVolcengineArkAgentPlanImage  ChannelInterfaceType = "volcengine-ark-agent-plan-image"
-	ChannelInterfaceVolcengineJiMengImage        ChannelInterfaceType = "volcengine-jimeng-image"
-	ChannelInterfaceGeminiImage                  ChannelInterfaceType = "gemini-image"
-	ChannelInterfaceOpenAIAudio                  ChannelInterfaceType = "openai-audio"
-	ChannelInterfaceAsyncAudio                   ChannelInterfaceType = "async-audio"
-	ChannelInterfaceNewAPIVideo                  ChannelInterfaceType = "newapi"
-	ChannelInterfaceNewAPIChannel1               ChannelInterfaceType = "newapi-channel-1"
-	ChannelInterfaceNewAPIChannel2               ChannelInterfaceType = "newapi-channel-2"
-	ChannelInterfaceXAIVideo                     ChannelInterfaceType = "xai-video"
-	ChannelInterfaceVolcengineArkVideo           ChannelInterfaceType = "volcengine-ark-video"
-	ChannelInterfaceVolcengineArkAgentPlanVideo  ChannelInterfaceType = "volcengine-ark-agent-plan-video"
-	ChannelInterfaceVolcengineJiMengVideo ChannelInterfaceType = "volcengine-jimeng-video"
-	ChannelInterfaceGeminiVeo             ChannelInterfaceType = "gemini-veo"
-	ChannelInterfaceNovitaVideo           ChannelInterfaceType = "novita-video"
-	ChannelInterfaceMiniMaxVideo          ChannelInterfaceType = "minimax-video"
-	ChannelInterfaceAgnesVideo            ChannelInterfaceType = "agnes-video"
-	ChannelInterfaceRunningHubImage       ChannelInterfaceType = "runninghub-workflow-image"
-	ChannelInterfaceRunningHubVideo       ChannelInterfaceType = "runninghub-workflow-video"
-	ChannelInterfaceRunningHubAudio       ChannelInterfaceType = "runninghub-workflow-audio"
+	ChannelInterfaceChatCompletion              ChannelInterfaceType = "chat-completion"
+	ChannelInterfaceOpenAIResponse              ChannelInterfaceType = "openai-response"
+	ChannelInterfaceClaudeAPI                   ChannelInterfaceType = "claude-api"
+	ChannelInterfaceOpenAIImage                 ChannelInterfaceType = "openai-image"
+	ChannelInterfaceGrokImage                   ChannelInterfaceType = "grok-image"
+	ChannelInterfaceVolcengineArkImage          ChannelInterfaceType = "volcengine-ark-image"
+	ChannelInterfaceVolcengineArkAgentPlanImage ChannelInterfaceType = "volcengine-ark-agent-plan-image"
+	ChannelInterfaceVolcengineJiMengImage       ChannelInterfaceType = "volcengine-jimeng-image"
+	ChannelInterfaceGeminiImage                 ChannelInterfaceType = "gemini-image"
+	ChannelInterfaceSubRouterGeminiImage        ChannelInterfaceType = "subrouter-gemini-image"
+	ChannelInterfaceOpenAIAudio                 ChannelInterfaceType = "openai-audio"
+	ChannelInterfaceAsyncAudio                  ChannelInterfaceType = "async-audio"
+	ChannelInterfaceNewAPIVideo                 ChannelInterfaceType = "newapi"
+	ChannelInterfaceNewAPIChannel1              ChannelInterfaceType = "newapi-channel-1"
+	ChannelInterfaceNewAPIChannel2              ChannelInterfaceType = "newapi-channel-2"
+	ChannelInterfaceXAIVideo                    ChannelInterfaceType = "xai-video"
+	ChannelInterfaceVolcengineArkVideo          ChannelInterfaceType = "volcengine-ark-video"
+	ChannelInterfaceVolcengineArkAgentPlanVideo ChannelInterfaceType = "volcengine-ark-agent-plan-video"
+	ChannelInterfaceVolcengineJiMengVideo       ChannelInterfaceType = "volcengine-jimeng-video"
+	ChannelInterfaceGeminiVeo                   ChannelInterfaceType = "gemini-veo"
+	ChannelInterfaceNovitaVideo                 ChannelInterfaceType = "novita-video"
+	ChannelInterfaceMiniMaxVideo                ChannelInterfaceType = "minimax-video"
+	ChannelInterfaceAgnesVideo                  ChannelInterfaceType = "agnes-video"
+	ChannelInterfaceRunningHubImage             ChannelInterfaceType = "runninghub-workflow-image"
+	ChannelInterfaceRunningHubVideo             ChannelInterfaceType = "runninghub-workflow-video"
+	ChannelInterfaceRunningHubAudio             ChannelInterfaceType = "runninghub-workflow-audio"
 
 	ApiCallStatusSucceeded ApiCallStatus = "succeeded"
 	ApiCallStatusFailed    ApiCallStatus = "failed"
@@ -120,10 +131,15 @@ const (
 	CreditLedgerSignupBonus  CreditLedgerType = "signup_bonus"
 	CreditLedgerCheckinBonus CreditLedgerType = "checkin_bonus"
 	CreditLedgerPaymentTopup CreditLedgerType = "payment_topup"
+	CreditLedgerReferral     CreditLedgerType = "referral"
 
 	RedeemCodeUnused   RedeemCodeStatus = "unused"
 	RedeemCodeRedeemed RedeemCodeStatus = "redeemed"
 	RedeemCodeDisabled RedeemCodeStatus = "disabled"
+	RedeemCodeExpired  RedeemCodeStatus = "expired"
+
+	RedeemBatchFundingPlatform    RedeemBatchFundingSource = "platform"
+	RedeemBatchFundingModuleAdmin RedeemBatchFundingSource = "module_admin"
 
 	AnnouncementStatusActive AnnouncementStatus = "active"
 	AnnouncementStatusClosed AnnouncementStatus = "closed"

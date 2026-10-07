@@ -141,7 +141,7 @@ func (s *Service) CleanupTaskTextReplay() (int64, error) {
 }
 
 func (s *Service) AdminTextReplayStats(actor *model.User) (repository.TextReplayStats, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionSystemPerformance); err != nil {
 		return repository.TextReplayStats{}, err
 	}
 	return s.repo.TextReplayStats()

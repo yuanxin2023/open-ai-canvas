@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"infinite-canvas/backend/internal/kernel"
 	"infinite-canvas/backend/internal/model"
 
 	"gorm.io/gorm"
@@ -22,6 +23,7 @@ var (
 	ErrTaskNotRetryable        = errors.New("task is not retryable")
 	ErrBillingStateConflict    = errors.New("billing state conflict")
 	ErrBillingUsageUnavailable = errors.New("billing usage unavailable")
+	ErrBillingChargeLimit      = errors.New("billing amount exceeds authorized charge limit")
 	ErrChannelModelInUse       = errors.New("channel model is in use")
 )
 
@@ -66,6 +68,12 @@ type AdminRedeemCodeRow struct {
 	model.RedeemCode
 	RedeemedUsername    string `json:"redeemedUsername" gorm:"column:redeemed_username"`
 	RedeemedDisplayName string `json:"redeemedDisplayName" gorm:"column:redeemed_display_name"`
+}
+
+type RedeemFundingSnapshot struct {
+	AvailableMicrocredits      int64 `gorm:"column:available_microcredits"`
+	TotalReservedMicrocredits  int64 `gorm:"column:total_reserved_microcredits"`
+	RedeemReservedMicrocredits int64 `gorm:"column:redeem_reserved_microcredits"`
 }
 
 func (r *Repository) ChannelModels(channelID string, includeDisabled bool) ([]model.ChannelModel, error) {
@@ -390,6 +398,31 @@ func (r *Repository) CreditAccounts(userIDs []string) ([]model.CreditAccount, er
 	return accounts, err
 }
 
+func (r *Repository) RedeemFundingSnapshot(userID string, now time.Time) (*RedeemFundingSnapshot, error) {
+	if _, err := r.CreditAccount(userID); err != nil {
+		return nil, err
+	}
+	var snapshot RedeemFundingSnapshot
+	err := r.db.Raw(`SELECT
+		accounts.available_microcredits AS available_microcredits,
+		accounts.reserved_microcredits AS total_reserved_microcredits,
+		COALESCE((
+			SELECT SUM(codes.amount_microcredits)
+			FROM redeem_codes AS codes
+			JOIN redeem_batches AS batches ON batches.id = codes.batch_id
+			WHERE batches.funding_source = ?
+				AND batches.created_by = ?
+				AND codes.status = ?
+				AND (codes.expires_at IS NULL OR codes.expires_at > ?)
+		), 0) AS redeem_reserved_microcredits
+	FROM credit_accounts AS accounts
+	WHERE accounts.user_id = ?`, model.RedeemBatchFundingModuleAdmin, userID, model.RedeemCodeUnused, now, userID).Scan(&snapshot).Error
+	if err != nil {
+		return nil, err
+	}
+	return &snapshot, nil
+}
+
 func (r *Repository) CreditLedger(userID string, entryType string, limit int, offset int) ([]model.CreditLedgerEntry, int64, error) {
 	return r.creditLedger(userID, entryType, limit, offset, false)
 }
@@ -412,11 +445,15 @@ func (r *Repository) creditLedger(userID string, entryType string, limit int, of
 	}
 	switch entryType {
 	case "income":
-		query = query.Where("type IN ?", []model.CreditLedgerType{model.CreditLedgerRedeem, model.CreditLedgerAdminGrant, model.CreditLedgerAdminAdjust, model.CreditLedgerSignupBonus, model.CreditLedgerCheckinBonus})
+		query = query.Where("type IN ?", []model.CreditLedgerType{model.CreditLedgerRedeem, model.CreditLedgerPaymentTopup, model.CreditLedgerAdminGrant, model.CreditLedgerAdminAdjust, model.CreditLedgerSignupBonus, model.CreditLedgerCheckinBonus, model.CreditLedgerReferral})
+	case "increase":
+		query = query.Where("type IN ?", []model.CreditLedgerType{model.CreditLedgerRedeem, model.CreditLedgerPaymentTopup, model.CreditLedgerRefund, model.CreditLedgerSignupBonus, model.CreditLedgerCheckinBonus, model.CreditLedgerReferral})
 	case "consume":
 		query = query.Where("type = ?", model.CreditLedgerConsume)
 	case "refund":
 		query = query.Where("type = ?", model.CreditLedgerRefund)
+	case "admin":
+		query = query.Where("type IN ?", []model.CreditLedgerType{model.CreditLedgerAdminGrant, model.CreditLedgerAdminAdjust})
 	}
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
@@ -526,6 +563,7 @@ func (r *Repository) RetryTaskWithBilling(userID string, prepared *model.Task, o
 		}
 		updates := map[string]any{
 			"status": model.TaskStatusQueued, "stage": "等待队列调度", "progress": 5, "error": "", "result_json": "",
+			"execution_diagnostic_json": "", "cancellation_source": "", "cancellation_actor_id": "", "cancellation_requested_at": nil,
 			"text_draft": "", "started_at": nil, "completed_at": nil,
 			"provider_request_id": "", "poll_stage": "", "next_poll_at": nil,
 			"provider_cancel_status": "", "provider_cancel_error": "", "provider_cancel_attempts": 0,
@@ -577,6 +615,9 @@ func (r *Repository) ReserveBillingOrder(order *model.BillingOrder) error {
 }
 
 func reserveBillingOrder(tx *gorm.DB, order *model.BillingOrder) error {
+	if err := validateBillingChargeLimit(*order, order.AmountMicrocredits); err != nil {
+		return err
+	}
 	if order.ReservedAmountMicrocredits <= 0 {
 		order.ReservedAmountMicrocredits = order.AmountMicrocredits
 	}
@@ -675,8 +716,8 @@ func (r *Repository) AdminBillingOrders(status string, keyword string, limit int
 	if value := strings.TrimSpace(keyword); value != "" {
 		pattern := "%" + strings.ToLower(value) + "%"
 		query = query.Joins("LEFT JOIN users ON users.id = billing_orders.user_id").Where(
-			"lower(billing_orders.model) LIKE ? OR lower(billing_orders.scene) LIKE ? OR lower(billing_orders.provider_request_id) LIKE ? OR lower(users.username) LIKE ? OR lower(users.display_name) LIKE ?",
-			pattern, pattern, pattern, pattern, pattern,
+			"lower(billing_orders.model) LIKE ? OR lower(billing_orders.scene) LIKE ? OR lower(billing_orders.provider_request_id) LIKE ? OR lower(users.username) LIKE ?",
+			pattern, pattern, pattern, pattern,
 		)
 	}
 	if err := query.Count(&total).Error; err != nil {
@@ -719,6 +760,29 @@ func billingUsage(db *gorm.DB, orderID string) (*BillingUsage, error) {
 		return nil, err
 	}
 	return &BillingUsage{InputTokens: log.InputTokens, OutputTokens: log.OutputTokens, CachedTokens: log.CachedTokens}, nil
+}
+
+const (
+	billingUsageSourceProvider     = "provider"
+	billingUsageSourceVideoFormula = "video_formula"
+)
+
+func tokenSettlementUsage(db *gorm.DB, order model.BillingOrder) (*BillingUsage, string, error) {
+	usage, err := billingUsage(db, order.ID)
+	if err != nil && !errors.Is(err, ErrBillingUsageUnavailable) {
+		return nil, "", err
+	}
+	if order.Capability != "video" {
+		return usage, billingUsageSourceProvider, err
+	}
+	if err == nil && usage.OutputTokens > 0 && usage.InputTokens >= 0 && usage.CachedTokens >= 0 {
+		return &BillingUsage{OutputTokens: usage.OutputTokens}, billingUsageSourceProvider, nil
+	}
+	// 只有提交时明确记录的公式用量可以结算，预授权 Quantity 含余量，不能用作最终用量。
+	if order.VideoFormulaTokens > 0 {
+		return &BillingUsage{OutputTokens: order.VideoFormulaTokens}, billingUsageSourceVideoFormula, nil
+	}
+	return usage, billingUsageSourceProvider, err
 }
 
 func (r *Repository) RecordBillingResolution(id string, actorUserID string, note string) error {
@@ -769,6 +833,7 @@ func (r *Repository) MarkBillingUncertain(id string, errorText string) error {
 
 func (r *Repository) SettleBillingOrder(id string, providerRequestID string) error {
 	var observedUsage *BillingUsage
+	var observedUsageSource string
 	var observedActual int64
 	observedActualAvailable := false
 	err := r.db.Transaction(func(tx *gorm.DB) error {
@@ -782,12 +847,18 @@ func (r *Repository) SettleBillingOrder(id string, providerRequestID string) err
 		if order.Status == model.BillingStatusRefunded {
 			return errors.New("billing order already refunded")
 		}
+		if order.BillingMode != "token" {
+			if err := validateBillingChargeLimit(order, order.AmountMicrocredits); err != nil {
+				return err
+			}
+		}
 		if order.BillingMode == "token" && !zeroPricedTokenOrder(order) {
-			usage, err := billingUsage(tx, id)
+			usage, usageSource, err := tokenSettlementUsage(tx, order)
 			if err != nil {
 				return err
 			}
 			observedUsage = usage
+			observedUsageSource = usageSource
 			reserved := order.ReservedAmountMicrocredits
 			if reserved <= 0 {
 				reserved = order.AmountMicrocredits
@@ -796,7 +867,7 @@ func (r *Repository) SettleBillingOrder(id string, providerRequestID string) err
 			if err != nil {
 				return err
 			}
-			chargeCapped := order.ChargeLimitMicrocredits > 0 && actual > order.ChargeLimitMicrocredits
+			chargeCapped := billingChargeLimitApplies(order) && actual > order.ChargeLimitMicrocredits
 			if chargeCapped {
 				actual = order.ChargeLimitMicrocredits
 			}
@@ -825,7 +896,7 @@ func (r *Repository) SettleBillingOrder(id string, providerRequestID string) err
 			updates := map[string]any{"status": model.BillingStatusSettled, "settled_at": &now, "updated_at": now,
 				"actual_amount_microcredits": actual, "refunded_amount_microcredits": refund,
 				"input_tokens": usage.InputTokens, "output_tokens": usage.OutputTokens, "cached_tokens": usage.CachedTokens,
-				"usage_available": true}
+				"usage_available": usageSource == billingUsageSourceProvider, "usage_source": usageSource}
 			if providerRequestID != "" {
 				updates["provider_request_id"] = providerRequestID
 			}
@@ -837,6 +908,9 @@ func (r *Repository) SettleBillingOrder(id string, providerRequestID string) err
 				consumeNote = "Token 实际用量超过 Agent 报价，已按本轮硬上限结算"
 			} else if supplement > 0 {
 				consumeNote = "Token 实际用量超过预授权，已补扣差额"
+			}
+			if usageSource == billingUsageSourceVideoFormula {
+				consumeNote = strings.TrimSpace("按提交时的视频 Token 公式快照结算；" + consumeNote)
 			}
 			if err := tx.Create(&model.CreditLedgerEntry{ID: newRepositoryID(), UserID: order.UserID, Type: model.CreditLedgerConsume,
 				AmountMicrocredits: -actual, AvailableDeltaMicrocredits: -supplement, ReservedDeltaMicrocredits: -reserved,
@@ -894,10 +968,11 @@ func (r *Repository) SettleBillingOrder(id string, providerRequestID string) err
 		}).Error
 	})
 	if err != nil && observedUsage != nil {
-		// usage 是上游已经确认的事实；即使结算因账户状态异常回滚，也要保留给用户和管理员核对。
+		// 即使账户状态异常导致回滚，也保留结算依据并标明来源，供用户和管理员核对。
 		updates := map[string]any{
 			"input_tokens": observedUsage.InputTokens, "output_tokens": observedUsage.OutputTokens,
-			"cached_tokens": observedUsage.CachedTokens, "usage_available": true, "updated_at": time.Now(),
+			"cached_tokens": observedUsage.CachedTokens, "usage_available": observedUsageSource == billingUsageSourceProvider,
+			"usage_source": observedUsageSource, "updated_at": time.Now(),
 		}
 		if observedActualAvailable {
 			updates["actual_amount_microcredits"] = observedActual
@@ -934,15 +1009,21 @@ func (r *Repository) RestoreRefundedBillingOrder(id string, providerRequestID st
 		if order.Status != model.BillingStatusRefunded {
 			return ErrBillingStateConflict
 		}
+		if order.BillingMode != "token" {
+			if err := validateBillingChargeLimit(order, order.AmountMicrocredits); err != nil {
+				return err
+			}
+		}
 
 		actual := order.AmountMicrocredits
 		var usage *BillingUsage
+		var usageSource string
 		if order.BillingMode == "token" {
 			if zeroPricedTokenOrder(order) {
 				actual = 0
 			} else {
 				var err error
-				usage, err = billingUsage(tx, id)
+				usage, usageSource, err = tokenSettlementUsage(tx, order)
 				if err != nil {
 					return err
 				}
@@ -951,6 +1032,10 @@ func (r *Repository) RestoreRefundedBillingOrder(id string, providerRequestID st
 					return err
 				}
 			}
+		}
+		chargeCapped := billingChargeLimitApplies(order) && actual > order.ChargeLimitMicrocredits
+		if chargeCapped {
+			actual = order.ChargeLimitMicrocredits
 		}
 		if actual < 0 {
 			return errors.New("invalid restored billing amount")
@@ -991,7 +1076,8 @@ func (r *Repository) RestoreRefundedBillingOrder(id string, providerRequestID st
 			orderUpdates["input_tokens"] = usage.InputTokens
 			orderUpdates["output_tokens"] = usage.OutputTokens
 			orderUpdates["cached_tokens"] = usage.CachedTokens
-			orderUpdates["usage_available"] = true
+			orderUpdates["usage_available"] = usageSource == billingUsageSourceProvider
+			orderUpdates["usage_source"] = usageSource
 		}
 		orderUpdate := tx.Model(&model.BillingOrder{}).
 			Where("id = ? AND status = ?", order.ID, model.BillingStatusRefunded).
@@ -1003,6 +1089,13 @@ func (r *Repository) RestoreRefundedBillingOrder(id string, providerRequestID st
 			return ErrBillingStateConflict
 		}
 
+		consumeNote := "人工查询确认上游成功，退款订单重新扣费"
+		if usageSource == billingUsageSourceVideoFormula {
+			consumeNote += "；按提交时的视频 Token 公式快照结算"
+		}
+		if chargeCapped {
+			consumeNote += "；已按本轮 Agent 硬上限结算"
+		}
 		return tx.Create(&model.CreditLedgerEntry{
 			ID:                         newRepositoryID(),
 			UserID:                     order.UserID,
@@ -1015,7 +1108,7 @@ func (r *Repository) RestoreRefundedBillingOrder(id string, providerRequestID st
 			Model:                      order.Model,
 			ChannelID:                  order.ChannelID,
 			Scene:                      order.Scene,
-			Note:                       "人工查询确认上游成功，退款订单重新扣费",
+			Note:                       consumeNote,
 		}).Error
 	})
 }
@@ -1084,43 +1177,37 @@ func tokenUsageAmount(order model.BillingOrder, usage *BillingUsage) (int64, err
 	if usage == nil {
 		return 0, ErrBillingUsageUnavailable
 	}
+	if usage.InputTokens < 0 || usage.OutputTokens < 0 || usage.CachedTokens < 0 {
+		return 0, errors.New("invalid token usage amount")
+	}
 	if order.Capability == "video" && usage.OutputTokens <= 0 {
 		return 0, ErrBillingUsageUnavailable
 	}
-	input := usage.InputTokens - usage.CachedTokens
-	if input < 0 {
-		input = 0
+	terms := []kernel.TokenBillingTerm{
+		{Tokens: usage.OutputTokens, PriceMicrocredits: order.OutputTokenPriceMicrocredits},
 	}
-	inputAmount, ok := safeTokenUsageProduct(input, order.InputTokenPriceMicrocredits)
-	if !ok {
+	// 视频 Token 总用量已由供应商 completion_tokens 表达，不再叠加文本输入和缓存费用。
+	if order.Capability != "video" {
+		input := max(usage.InputTokens-usage.CachedTokens, 0)
+		terms = append(terms,
+			kernel.TokenBillingTerm{Tokens: input, PriceMicrocredits: order.InputTokenPriceMicrocredits},
+			kernel.TokenBillingTerm{Tokens: usage.CachedTokens, PriceMicrocredits: order.CachedTokenPriceMicrocredits},
+		)
+	}
+	amount, err := kernel.TokenBillingAmount(order.MultiplierBasisPoints, terms...)
+	if err != nil {
 		return 0, errors.New("invalid token usage amount")
 	}
-	outputAmount, ok := safeTokenUsageProduct(usage.OutputTokens, order.OutputTokenPriceMicrocredits)
-	if !ok || inputAmount > 1<<63-1-outputAmount {
-		return 0, errors.New("invalid token usage amount")
-	}
-	cachedAmount, ok := safeTokenUsageProduct(usage.CachedTokens, order.CachedTokenPriceMicrocredits)
-	base := inputAmount + outputAmount
-	if !ok || base > 1<<63-1-cachedAmount {
-		return 0, errors.New("invalid token usage amount")
-	}
-	base += cachedAmount
-	if order.MultiplierBasisPoints <= 0 || base > (1<<63-1-9_999_999_999)/order.MultiplierBasisPoints {
-		return 0, errors.New("invalid token usage amount")
-	}
-	amount := (base*order.MultiplierBasisPoints + 9_999_999_999) / 10_000_000_000
 	const creditQuantumMicrocredits int64 = 10_000
-	if amount > (1<<63-1)-(creditQuantumMicrocredits-1) {
+	remainder := amount % creditQuantumMicrocredits
+	if remainder == 0 {
+		return amount, nil
+	}
+	increment := creditQuantumMicrocredits - remainder
+	if amount > (1<<63-1)-increment {
 		return 0, errors.New("invalid token usage amount")
 	}
-	return ((amount + creditQuantumMicrocredits - 1) / creditQuantumMicrocredits) * creditQuantumMicrocredits, nil
-}
-
-func safeTokenUsageProduct(tokens int64, price int64) (int64, bool) {
-	if tokens < 0 || price < 0 || (tokens > 0 && price > (1<<63-1)/tokens) {
-		return 0, false
-	}
-	return tokens * price, true
+	return amount + increment, nil
 }
 
 func (r *Repository) AdjustCredits(userID string, actorUserID string, amount int64, note string) (*model.CreditAccount, error) {
@@ -1168,19 +1255,70 @@ func (r *Repository) AdjustCredits(userID string, actorUserID string, amount int
 	return &account, err
 }
 
-func (r *Repository) CreateRedeemBatch(batch *model.RedeemBatch, codes []model.RedeemCode) error {
-	return r.db.Transaction(func(tx *gorm.DB) error {
+func (r *Repository) CreateRedeemBatch(batch *model.RedeemBatch, codes []model.RedeemCode, totalMicrocredits int64, audit *model.AdminAuditEvent) (*model.CreditAccount, error) {
+	var account *model.CreditAccount
+	err := r.db.Transaction(func(tx *gorm.DB) error {
+		if batch.FundingSource == model.RedeemBatchFundingModuleAdmin {
+			current := model.CreditAccount{UserID: batch.CreatedBy}
+			if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&current).Error; err != nil {
+				return err
+			}
+			updated := tx.Model(&model.CreditAccount{}).
+				Where("user_id = ? AND available_microcredits >= ?", batch.CreatedBy, totalMicrocredits).
+				Updates(map[string]any{
+					"available_microcredits": gorm.Expr("available_microcredits - ?", totalMicrocredits),
+					"reserved_microcredits":  gorm.Expr("reserved_microcredits + ?", totalMicrocredits),
+					"version":                gorm.Expr("version + 1"),
+					"updated_at":             time.Now(),
+				})
+			if updated.Error != nil {
+				return updated.Error
+			}
+			if updated.RowsAffected != 1 {
+				return ErrInsufficientCredits
+			}
+			if err := tx.First(&current, "user_id = ?", batch.CreatedBy).Error; err != nil {
+				return err
+			}
+			account = &current
+		}
 		if err := tx.Create(batch).Error; err != nil {
 			return err
 		}
-		return tx.CreateInBatches(&codes, 200).Error
+		if err := tx.CreateInBatches(&codes, 200).Error; err != nil {
+			return err
+		}
+		if audit != nil {
+			if err := tx.Create(audit).Error; err != nil {
+				return err
+			}
+		}
+		if account == nil {
+			return nil
+		}
+		return tx.Create(&model.CreditLedgerEntry{
+			ID:                         newRepositoryID(),
+			UserID:                     batch.CreatedBy,
+			Type:                       model.CreditLedgerReserve,
+			AvailableDeltaMicrocredits: -totalMicrocredits,
+			ReservedDeltaMicrocredits:  totalMicrocredits,
+			AvailableAfterMicrocredits: account.AvailableMicrocredits,
+			ReservedAfterMicrocredits:  account.ReservedMicrocredits,
+			RedeemBatchID:              batch.ID,
+			Scene:                      "redeem_code",
+			Note:                       "生成兑换码批次冻结积分",
+		}).Error
 	})
+	return account, err
 }
 
-func (r *Repository) AdminRedeemBatches(keyword string, validity string, limit int, offset int) ([]model.RedeemBatch, int64, error) {
+func (r *Repository) AdminRedeemBatches(keyword string, validity string, lifecycle string, fundingSource model.RedeemBatchFundingSource, creatorID string, limit int, offset int) ([]model.RedeemBatch, int64, error) {
 	var items []model.RedeemBatch
 	var total int64
-	query := r.db.Model(&model.RedeemBatch{})
+	query := r.db.Model(&model.RedeemBatch{}).Where("redeem_batches.funding_source = ?", fundingSource)
+	if creatorID != "" {
+		query = query.Where("redeem_batches.created_by = ?", creatorID)
+	}
 	if value := strings.TrimSpace(keyword); value != "" {
 		pattern := "%" + strings.ToLower(value) + "%"
 		query = query.Where("lower(note) LIKE ? OR CAST(amount_microcredits AS TEXT) LIKE ? OR CAST(count AS TEXT) LIKE ?", pattern, pattern, pattern)
@@ -1190,31 +1328,47 @@ func (r *Repository) AdminRedeemBatches(keyword string, validity string, limit i
 	} else if validity == "expired" {
 		query = query.Where("expires_at IS NOT NULL AND expires_at <= ?", time.Now())
 	}
+	if lifecycle == "ongoing" {
+		query = query.Where("redeem_batches.terminal_at IS NULL")
+	} else if lifecycle == "completed" {
+		query = query.Where("redeem_batches.terminal_at IS NOT NULL")
+	}
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 	now := time.Now()
 	listQuery := query.Select(`redeem_batches.id, redeem_batches.amount_microcredits, redeem_batches.count,
-		redeem_batches.note, redeem_batches.created_by, redeem_batches.expires_at, redeem_batches.created_at,
+		redeem_batches.note, redeem_batches.created_by, redeem_batches.funding_source, redeem_batches.expires_at,
+		redeem_batches.terminal_at, redeem_batches.code_secrets_cleared_at, redeem_batches.created_at,
+		users.username AS creator_username,
+		(redeem_batches.amount_microcredits * redeem_batches.count) AS total_microcredits,
 		(SELECT COUNT(*) FROM redeem_codes rc WHERE rc.batch_id = redeem_batches.id AND rc.status = 'unused' AND (rc.expires_at IS NULL OR rc.expires_at > ?)) AS available_count,
 		(SELECT COUNT(*) FROM redeem_codes rc WHERE rc.batch_id = redeem_batches.id AND rc.status = 'redeemed') AS redeemed_count,
 		(SELECT COUNT(*) FROM redeem_codes rc WHERE rc.batch_id = redeem_batches.id AND rc.status = 'disabled') AS disabled_count,
-		(SELECT COUNT(*) FROM redeem_codes rc WHERE rc.batch_id = redeem_batches.id AND rc.status = 'unused' AND rc.expires_at IS NOT NULL AND rc.expires_at <= ?) AS expired_count`, now, now)
-	if err := listQuery.Order("created_at desc").Limit(limit).Offset(offset).Find(&items).Error; err != nil {
+		(SELECT COUNT(*) FROM redeem_codes rc WHERE rc.batch_id = redeem_batches.id AND (rc.status = 'expired' OR (rc.status = 'unused' AND rc.expires_at IS NOT NULL AND rc.expires_at <= ?))) AS expired_count`, now, now).
+		Joins("LEFT JOIN users ON users.id = redeem_batches.created_by")
+	if err := listQuery.Order("redeem_batches.created_at desc").Limit(limit).Offset(offset).Find(&items).Error; err != nil {
 		return nil, 0, err
 	}
 	return items, total, nil
 }
 
-func (r *Repository) RedeemBatch(id string) (*model.RedeemBatch, error) {
+func (r *Repository) RedeemBatch(id string, fundingSource model.RedeemBatchFundingSource, creatorID string) (*model.RedeemBatch, error) {
 	var batch model.RedeemBatch
 	now := time.Now()
 	query := r.db.Model(&model.RedeemBatch{}).Select(`redeem_batches.*,
+		users.username AS creator_username,
+		(redeem_batches.amount_microcredits * redeem_batches.count) AS total_microcredits,
 		(SELECT COUNT(*) FROM redeem_codes rc WHERE rc.batch_id = redeem_batches.id AND rc.status = 'unused' AND (rc.expires_at IS NULL OR rc.expires_at > ?)) AS available_count,
 		(SELECT COUNT(*) FROM redeem_codes rc WHERE rc.batch_id = redeem_batches.id AND rc.status = 'redeemed') AS redeemed_count,
 		(SELECT COUNT(*) FROM redeem_codes rc WHERE rc.batch_id = redeem_batches.id AND rc.status = 'disabled') AS disabled_count,
-		(SELECT COUNT(*) FROM redeem_codes rc WHERE rc.batch_id = redeem_batches.id AND rc.status = 'unused' AND rc.expires_at IS NOT NULL AND rc.expires_at <= ?) AS expired_count`, now, now)
-	if err := query.First(&batch, "redeem_batches.id = ?", id).Error; err != nil {
+		(SELECT COUNT(*) FROM redeem_codes rc WHERE rc.batch_id = redeem_batches.id AND (rc.status = 'expired' OR (rc.status = 'unused' AND rc.expires_at IS NOT NULL AND rc.expires_at <= ?))) AS expired_count`, now, now).
+		Joins("LEFT JOIN users ON users.id = redeem_batches.created_by").
+		Where("redeem_batches.id = ? AND redeem_batches.funding_source = ?", id, fundingSource)
+	if creatorID != "" {
+		query = query.Where("redeem_batches.created_by = ?", creatorID)
+	}
+	if err := query.First(&batch).Error; err != nil {
 		return nil, err
 	}
 	return &batch, nil
@@ -1233,28 +1387,109 @@ func (r *Repository) AdminRedeemCodes(batchID string, status string, limit int, 
 	case "disabled":
 		query = query.Where("redeem_codes.status = ?", model.RedeemCodeDisabled)
 	case "expired":
-		query = query.Where("redeem_codes.status = ? AND redeem_codes.expires_at IS NOT NULL AND redeem_codes.expires_at <= ?", model.RedeemCodeUnused, now)
+		query = query.Where("redeem_codes.status = ? OR (redeem_codes.status = ? AND redeem_codes.expires_at IS NOT NULL AND redeem_codes.expires_at <= ?)", model.RedeemCodeExpired, model.RedeemCodeUnused, now)
 	}
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
-	err := query.Select("redeem_codes.*, users.username AS redeemed_username, users.display_name AS redeemed_display_name").
+	err := query.Select("redeem_codes.*, users.username AS redeemed_username, users.username AS redeemed_display_name").
 		Joins("LEFT JOIN users ON users.id = redeem_codes.redeemed_by").
 		Order("redeem_codes.created_at asc, redeem_codes.id asc").Limit(limit).Offset(offset).Scan(&items).Error
 	return items, total, err
 }
 
+func (r *Repository) AdminRedeemCodeByHash(codeHash string, fundingSource model.RedeemBatchFundingSource, creatorID string) (*AdminRedeemCodeRow, error) {
+	var item AdminRedeemCodeRow
+	result := r.db.Model(&model.RedeemCode{}).
+		Select("redeem_codes.*, users.username AS redeemed_username, users.username AS redeemed_display_name").
+		Joins("LEFT JOIN users ON users.id = redeem_codes.redeemed_by").
+		Joins("JOIN redeem_batches ON redeem_batches.id = redeem_codes.batch_id").
+		Where("redeem_codes.code_hash = ? AND redeem_batches.funding_source = ?", codeHash, fundingSource)
+	if creatorID != "" {
+		result = result.Where("redeem_batches.created_by = ?", creatorID)
+	}
+	result = result.
+		Limit(1).
+		Scan(&item)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	if result.RowsAffected == 0 {
+		return nil, gorm.ErrRecordNotFound
+	}
+	return &item, nil
+}
+
+func (r *Repository) AdminRedeemCodesByHashes(codeHashes []string, fundingSource model.RedeemBatchFundingSource, creatorID string) ([]AdminRedeemCodeRow, error) {
+	if len(codeHashes) == 0 {
+		return []AdminRedeemCodeRow{}, nil
+	}
+	var items []AdminRedeemCodeRow
+	query := r.db.Model(&model.RedeemCode{}).
+		Select("redeem_codes.*, users.username AS redeemed_username, users.username AS redeemed_display_name").
+		Joins("LEFT JOIN users ON users.id = redeem_codes.redeemed_by").
+		Joins("JOIN redeem_batches ON redeem_batches.id = redeem_codes.batch_id").
+		Where("redeem_codes.code_hash IN ? AND redeem_batches.funding_source = ?", codeHashes, fundingSource)
+	if creatorID != "" {
+		query = query.Where("redeem_batches.created_by = ?", creatorID)
+	}
+	err := query.Scan(&items).Error
+	return items, err
+}
+
+func (r *Repository) AdminRedeemBatchesWithCodeSecrets(fundingSource model.RedeemBatchFundingSource, creatorID string) ([]model.RedeemBatch, error) {
+	var items []model.RedeemBatch
+	now := time.Now()
+	query := r.db.Model(&model.RedeemBatch{}).Select(`redeem_batches.*,
+		users.username AS creator_username,
+		(redeem_batches.amount_microcredits * redeem_batches.count) AS total_microcredits,
+		(SELECT COUNT(*) FROM redeem_codes rc WHERE rc.batch_id = redeem_batches.id AND rc.status = 'unused' AND (rc.expires_at IS NULL OR rc.expires_at > ?)) AS available_count,
+		(SELECT COUNT(*) FROM redeem_codes rc WHERE rc.batch_id = redeem_batches.id AND rc.status = 'redeemed') AS redeemed_count,
+		(SELECT COUNT(*) FROM redeem_codes rc WHERE rc.batch_id = redeem_batches.id AND rc.status = 'disabled') AS disabled_count,
+		(SELECT COUNT(*) FROM redeem_codes rc WHERE rc.batch_id = redeem_batches.id AND (rc.status = 'expired' OR (rc.status = 'unused' AND rc.expires_at IS NOT NULL AND rc.expires_at <= ?))) AS expired_count`, now, now).
+		Joins("LEFT JOIN users ON users.id = redeem_batches.created_by").
+		Where("redeem_batches.codes_cipher <> '' AND redeem_batches.funding_source = ?", fundingSource)
+	if creatorID != "" {
+		query = query.Where("redeem_batches.created_by = ?", creatorID)
+	}
+	err := query.
+		Order("redeem_batches.created_at desc").
+		Find(&items).Error
+	return items, err
+}
+
 func (r *Repository) RedeemCode(userID string, codeHash string, redeemedIP string) (*model.CreditAccount, error) {
 	var account model.CreditAccount
+	invalid := false
 	err := r.db.Transaction(func(tx *gorm.DB) error {
 		var code model.RedeemCode
-		if err := tx.First(&code, "code_hash = ?", codeHash).Error; err != nil {
+		codeQuery := tx.Where("code_hash = ?", codeHash)
+		if tx.Dialector.Name() == "postgres" {
+			codeQuery = codeQuery.Clauses(clause.Locking{Strength: "UPDATE"})
+		}
+		if err := codeQuery.First(&code).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return ErrRedeemCodeInvalid
+				invalid = true
+				return nil
 			}
 			return err
 		}
 		now := time.Now()
+		var batch model.RedeemBatch
+		if err := redeemBatchForUpdate(tx, &batch, code.BatchID); err != nil {
+			return err
+		}
+		if code.Status != model.RedeemCodeUnused {
+			invalid = true
+			return nil
+		}
+		if code.ExpiresAt != nil && !code.ExpiresAt.After(now) {
+			if _, _, err := settleRedeemCodes(tx, &batch, []string{code.ID}, model.RedeemCodeExpired, now); err != nil {
+				return err
+			}
+			invalid = true
+			return nil
+		}
 		query := tx.Model(&model.RedeemCode{}).Where("id = ? AND status = ?", code.ID, model.RedeemCodeUnused)
 		if code.ExpiresAt != nil {
 			query = query.Where("expires_at > ?", now)
@@ -1264,7 +1499,35 @@ func (r *Repository) RedeemCode(userID string, codeHash string, redeemedIP strin
 			return updated.Error
 		}
 		if updated.RowsAffected != 1 {
-			return ErrRedeemCodeInvalid
+			invalid = true
+			return nil
+		}
+		if batch.FundingSource == model.RedeemBatchFundingModuleAdmin {
+			settled := tx.Model(&model.CreditAccount{}).
+				Where("user_id = ? AND reserved_microcredits >= ?", batch.CreatedBy, code.AmountMicrocredits).
+				Updates(map[string]any{
+					"reserved_microcredits": gorm.Expr("reserved_microcredits - ?", code.AmountMicrocredits),
+					"version":               gorm.Expr("version + 1"),
+					"updated_at":            now,
+				})
+			if settled.Error != nil {
+				return settled.Error
+			}
+			if settled.RowsAffected != 1 {
+				return errors.New("兑换码创建者冻结积分不一致")
+			}
+			var creatorAccount model.CreditAccount
+			if err := tx.First(&creatorAccount, "user_id = ?", batch.CreatedBy).Error; err != nil {
+				return err
+			}
+			if err := tx.Create(&model.CreditLedgerEntry{
+				ID: newRepositoryID(), UserID: batch.CreatedBy, Type: model.CreditLedgerConsume,
+				AmountMicrocredits: -code.AmountMicrocredits, ReservedDeltaMicrocredits: -code.AmountMicrocredits,
+				AvailableAfterMicrocredits: creatorAccount.AvailableMicrocredits, ReservedAfterMicrocredits: creatorAccount.ReservedMicrocredits,
+				RedeemBatchID: batch.ID, RedeemCodeID: code.ID, Scene: "redeem_code", Note: "兑换码已核销",
+			}).Error; err != nil {
+				return err
+			}
 		}
 		account = model.CreditAccount{UserID: userID}
 		if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&account).Error; err != nil {
@@ -1280,7 +1543,7 @@ func (r *Repository) RedeemCode(userID string, codeHash string, redeemedIP strin
 		if err := tx.First(&account, "user_id = ?", userID).Error; err != nil {
 			return err
 		}
-		return tx.Create(&model.CreditLedgerEntry{
+		if err := tx.Create(&model.CreditLedgerEntry{
 			ID:                         newRepositoryID(),
 			UserID:                     userID,
 			Type:                       model.CreditLedgerRedeem,
@@ -1289,10 +1552,185 @@ func (r *Repository) RedeemCode(userID string, codeHash string, redeemedIP strin
 			AvailableAfterMicrocredits: account.AvailableMicrocredits,
 			ReservedAfterMicrocredits:  account.ReservedMicrocredits,
 			RedeemCodeID:               code.ID,
+			RedeemBatchID:              batch.ID,
 			Note:                       "兑换码充值",
-		}).Error
+		}).Error; err != nil {
+			return err
+		}
+		return markRedeemBatchTerminalIfSettled(tx, &batch, now)
 	})
+	if err == nil && invalid {
+		return nil, ErrRedeemCodeInvalid
+	}
 	return &account, err
+}
+
+func settleRedeemCodes(tx *gorm.DB, batch *model.RedeemBatch, codeIDs []string, status model.RedeemCodeStatus, now time.Time) (int64, int64, error) {
+	if len(codeIDs) == 0 {
+		return 0, 0, nil
+	}
+	updated := tx.Model(&model.RedeemCode{}).
+		Where("id IN ? AND batch_id = ? AND status = ?", codeIDs, batch.ID, model.RedeemCodeUnused).
+		Updates(map[string]any{"status": status, "updated_at": now})
+	if updated.Error != nil || updated.RowsAffected == 0 {
+		return updated.RowsAffected, 0, updated.Error
+	}
+	if err := markRedeemBatchTerminalIfSettled(tx, batch, now); err != nil {
+		return 0, 0, err
+	}
+	if batch.FundingSource != model.RedeemBatchFundingModuleAdmin {
+		return updated.RowsAffected, 0, nil
+	}
+	if batch.AmountMicrocredits <= 0 || updated.RowsAffected > (1<<63-1)/batch.AmountMicrocredits {
+		return 0, 0, errors.New("兑换码退款金额无效")
+	}
+	refunded := updated.RowsAffected * batch.AmountMicrocredits
+	accountUpdate := tx.Model(&model.CreditAccount{}).
+		Where("user_id = ? AND reserved_microcredits >= ?", batch.CreatedBy, refunded).
+		Updates(map[string]any{
+			"available_microcredits": gorm.Expr("available_microcredits + ?", refunded),
+			"reserved_microcredits":  gorm.Expr("reserved_microcredits - ?", refunded),
+			"version":                gorm.Expr("version + 1"),
+			"updated_at":             now,
+		})
+	if accountUpdate.Error != nil {
+		return 0, 0, accountUpdate.Error
+	}
+	if accountUpdate.RowsAffected != 1 {
+		return 0, 0, errors.New("兑换码创建者冻结积分不一致")
+	}
+	var account model.CreditAccount
+	if err := tx.First(&account, "user_id = ?", batch.CreatedBy).Error; err != nil {
+		return 0, 0, err
+	}
+	note := "兑换码禁用退回"
+	if status == model.RedeemCodeExpired {
+		note = "兑换码过期退回"
+	}
+	entry := model.CreditLedgerEntry{
+		ID: newRepositoryID(), UserID: batch.CreatedBy, Type: model.CreditLedgerRefund,
+		AmountMicrocredits: refunded, AvailableDeltaMicrocredits: refunded, ReservedDeltaMicrocredits: -refunded,
+		AvailableAfterMicrocredits: account.AvailableMicrocredits, ReservedAfterMicrocredits: account.ReservedMicrocredits,
+		RedeemBatchID: batch.ID, Scene: "redeem_code", Note: note,
+	}
+	if updated.RowsAffected == 1 {
+		entry.RedeemCodeID = codeIDs[0]
+	}
+	if err := tx.Create(&entry).Error; err != nil {
+		return 0, 0, err
+	}
+	return updated.RowsAffected, refunded, nil
+}
+
+func markRedeemBatchTerminalIfSettled(tx *gorm.DB, batch *model.RedeemBatch, now time.Time) error {
+	var remaining int64
+	if err := tx.Model(&model.RedeemCode{}).
+		Where("batch_id = ? AND status = ?", batch.ID, model.RedeemCodeUnused).
+		Count(&remaining).Error; err != nil {
+		return err
+	}
+	if remaining > 0 {
+		return nil
+	}
+	terminalAt := now
+	if batch.ExpiresAt != nil && batch.ExpiresAt.Before(terminalAt) {
+		terminalAt = *batch.ExpiresAt
+	}
+	return tx.Model(&model.RedeemBatch{}).
+		Where("id = ? AND terminal_at IS NULL", batch.ID).
+		Update("terminal_at", terminalAt).Error
+}
+
+func redeemBatchForUpdate(tx *gorm.DB, batch *model.RedeemBatch, batchID string) error {
+	query := tx.Where("id = ?", batchID)
+	if tx.Dialector.Name() == "postgres" {
+		query = query.Clauses(clause.Locking{Strength: "UPDATE"})
+	}
+	return query.First(batch).Error
+}
+
+func (r *Repository) ClearTerminalRedeemBatchSecrets(cutoff time.Time, clearedAt time.Time, limit int) (int64, error) {
+	if limit <= 0 || limit > 1000 {
+		limit = 100
+	}
+	var ids []string
+	if err := r.db.Model(&model.RedeemBatch{}).
+		Where("terminal_at IS NOT NULL AND terminal_at <= ? AND codes_cipher <> ''", cutoff).
+		Order("terminal_at asc, id asc").
+		Limit(limit).
+		Pluck("id", &ids).Error; err != nil {
+		return 0, err
+	}
+	if len(ids) == 0 {
+		return 0, nil
+	}
+	result := r.db.Model(&model.RedeemBatch{}).
+		Where("id IN ? AND terminal_at IS NOT NULL AND terminal_at <= ? AND codes_cipher <> ''", ids, cutoff).
+		Updates(map[string]any{"codes_cipher": "", "code_secrets_cleared_at": clearedAt})
+	return result.RowsAffected, result.Error
+}
+
+func (r *Repository) SettleExpiredRedeemCodes(now time.Time, creatorID string, batchLimit int) (int64, int64, error) {
+	if batchLimit <= 0 || batchLimit > 500 {
+		batchLimit = 100
+	}
+	query := r.db.Model(&model.RedeemBatch{}).
+		Distinct("redeem_batches.id").
+		Joins("JOIN redeem_codes ON redeem_codes.batch_id = redeem_batches.id").
+		Where("redeem_codes.status = ? AND redeem_codes.expires_at IS NOT NULL AND redeem_codes.expires_at <= ?", model.RedeemCodeUnused, now)
+	if creatorID != "" {
+		query = query.Where("redeem_batches.funding_source = ? AND redeem_batches.created_by = ?", model.RedeemBatchFundingModuleAdmin, creatorID)
+	}
+	var batchIDs []string
+	if err := query.Order("redeem_batches.id").Limit(batchLimit).Pluck("redeem_batches.id", &batchIDs).Error; err != nil {
+		return 0, 0, err
+	}
+	var expiredTotal int64
+	var refundedTotal int64
+	for _, batchID := range batchIDs {
+		expired, refunded, err := r.settleExpiredRedeemBatch(batchID, now)
+		if err != nil {
+			return expiredTotal, refundedTotal, err
+		}
+		expiredTotal += expired
+		refundedTotal += refunded
+	}
+	return expiredTotal, refundedTotal, nil
+}
+
+func (r *Repository) settleExpiredRedeemBatch(batchID string, now time.Time) (int64, int64, error) {
+	var expired int64
+	var refunded int64
+	err := r.db.Transaction(func(tx *gorm.DB) error {
+		var batch model.RedeemBatch
+		batchQuery := tx.Where("id = ?", batchID)
+		if tx.Dialector.Name() == "postgres" {
+			batchQuery = batchQuery.Clauses(clause.Locking{Strength: "UPDATE"})
+		}
+		if err := batchQuery.First(&batch).Error; err != nil {
+			return err
+		}
+		var codeIDs []string
+		if err := tx.Model(&model.RedeemCode{}).
+			Where("batch_id = ? AND status = ? AND expires_at IS NOT NULL AND expires_at <= ?", batch.ID, model.RedeemCodeUnused, now).
+			Pluck("id", &codeIDs).Error; err != nil {
+			return err
+		}
+		var err error
+		expired, refunded, err = settleRedeemCodes(tx, &batch, codeIDs, model.RedeemCodeExpired, now)
+		return err
+	})
+	return expired, refunded, err
+}
+
+func (r *Repository) HasActiveFundedRedeemCodes(creatorID string, now time.Time) (bool, error) {
+	var count int64
+	err := r.db.Model(&model.RedeemCode{}).
+		Joins("JOIN redeem_batches ON redeem_batches.id = redeem_codes.batch_id").
+		Where("redeem_batches.funding_source = ? AND redeem_batches.created_by = ?", model.RedeemBatchFundingModuleAdmin, creatorID).
+		Where("redeem_codes.status = ? AND (redeem_codes.expires_at IS NULL OR redeem_codes.expires_at > ?)", model.RedeemCodeUnused, now).
+		Limit(1).Count(&count).Error
+	return count > 0, err
 }
 
 func newRepositoryID() string {

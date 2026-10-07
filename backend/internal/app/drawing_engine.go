@@ -48,14 +48,14 @@ func (s *Service) DrawingEngineSetting() (*PublicDrawingEngineSetting, error) {
 }
 
 func (s *Service) AdminDrawingEngineSetting(actor *model.User) (*PublicDrawingEngineSetting, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionDrawingEngine); err != nil {
 		return nil, err
 	}
 	return s.DrawingEngineSetting()
 }
 
 func (s *Service) UpdateDrawingEngineSetting(actor *model.User, value DrawingEngineSetting) (*PublicDrawingEngineSetting, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionDrawingEngine); err != nil {
 		return nil, err
 	}
 	if err := validateDrawingEngineSetting(value); err != nil {

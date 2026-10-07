@@ -142,6 +142,31 @@ func TestTopupProductCreditAmountStaysWithinSafeLimit(t *testing.T) {
 	}
 }
 
+func TestTopupProductCardFieldsAreValidatedAndStored(t *testing.T) {
+	request := TopupProductRequest{
+		Name: "创作套餐", AmountFen: 9900, CreditsMicrocredits: CreditScale * 100,
+		RibbonText: "限时加赠", BadgeText: "热门", CompareAmountFen: 12900,
+		PriceCaption: "购买后到账", QuotaCaption: "到账积分", QuotaDetail: "用于创作",
+		ActionText: "立即开通", AccentColor: "#d8ff4f", Featured: true,
+	}
+	product, err := topupProductFromRequest("product", "admin", request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if product.RibbonText != request.RibbonText || product.BadgeText != request.BadgeText || product.CompareAmountFen != request.CompareAmountFen || product.ActionText != request.ActionText || product.AccentColor != "#D8FF4F" || !product.Featured {
+		t.Fatalf("card fields were not preserved: %+v", product)
+	}
+	request.CompareAmountFen = request.AmountFen
+	if _, err := topupProductFromRequest("product", "admin", request); err == nil {
+		t.Fatal("compare price must exceed payable price")
+	}
+	request.CompareAmountFen = 12900
+	request.AccentColor = "red; color: transparent"
+	if _, err := topupProductFromRequest("product", "admin", request); err == nil {
+		t.Fatal("unsafe accent color must be rejected")
+	}
+}
+
 func TestXunHuPayOfficialPackageIsPaymentPlugin(t *testing.T) {
 	center, err := newPluginRuntime(t.TempDir())
 	if err != nil {
@@ -174,5 +199,81 @@ func TestXunHuPayOfficialPackageIsPaymentPlugin(t *testing.T) {
 	}
 	if _, ok := provider.(*payment.RPCProvider); !ok {
 		t.Fatalf("xunhupay provider type = %T", provider)
+	}
+}
+
+func TestZhiFuFMOfficialPackageIsPaymentPlugin(t *testing.T) {
+	center, err := newPluginRuntime(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var plugin PluginView
+	for _, item := range center.list() {
+		if item.Manifest.ID == "official-payment-zhifufm" {
+			plugin = item
+			plugin.Management = pluginManagementFromView(item)
+			break
+		}
+	}
+	if plugin.Manifest.ID == "" {
+		t.Fatal("official-payment-zhifufm is missing")
+	}
+	if plugin.Management.Kind != PluginKindPayment || plugin.Source != PluginOriginOfficial {
+		t.Fatalf("zhifufm plugin = %#v", plugin)
+	}
+	if len(plugin.Manifest.Contributes.PaymentProviders) != 1 || plugin.Manifest.Contributes.PaymentProviders[0].ID != "zhifufm-pay" {
+		t.Fatalf("zhifufm contributions = %#v", plugin.Manifest.Contributes.PaymentProviders)
+	}
+	registry := center.paymentRegistrySnapshot()
+	if registry == nil {
+		t.Fatal("payment registry is nil")
+	}
+	provider, ok := registry.Get("zhifufm-pay")
+	if !ok {
+		t.Fatal("zhifufm-pay provider is missing")
+	}
+	if _, ok := provider.(*payment.RPCProvider); !ok {
+		t.Fatalf("zhifufm provider type = %T", provider)
+	}
+}
+
+func TestEpayOfficialPackageIsPaymentPlugin(t *testing.T) {
+	center, err := newPluginRuntime(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var plugin PluginView
+	for _, item := range center.list() {
+		if item.Manifest.ID == "official-payment-epay" {
+			plugin = item
+			plugin.Management = pluginManagementFromView(item)
+			break
+		}
+	}
+	if plugin.Manifest.ID == "" {
+		t.Fatal("official-payment-epay is missing")
+	}
+	if plugin.Management.Kind != PluginKindPayment || plugin.Source != PluginOriginOfficial {
+		t.Fatalf("epay plugin = %#v", plugin)
+	}
+	if len(plugin.Manifest.Contributes.PaymentProviders) != 1 || plugin.Manifest.Contributes.PaymentProviders[0].ID != "epay" {
+		t.Fatalf("epay contributions = %#v", plugin.Manifest.Contributes.PaymentProviders)
+	}
+	registry := center.paymentRegistrySnapshot()
+	if registry == nil {
+		t.Fatal("payment registry is nil")
+	}
+	provider, ok := registry.Get("epay")
+	if !ok {
+		t.Fatal("epay provider is missing")
+	}
+	if _, ok := provider.(*payment.RPCProvider); !ok {
+		t.Fatalf("epay provider type = %T", provider)
+	}
+	if err := provider.ValidateConfig(payment.Config{"pid": "test-merchant", "key": "test-key"}); err == nil {
+		t.Fatal("packaged epay executable must reject a missing gateway")
+	}
+	if err := provider.ValidateConfig(payment.Config{"pid": "test-merchant", "key": "test-key", "gateway": "https://pay.example"}); err != nil {
+		t.Fatalf("packaged epay executable rejected explicit configuration: %v", err)
 	}
 }

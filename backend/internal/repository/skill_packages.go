@@ -19,7 +19,10 @@ func (r *Repository) CreateSkillWithPackage(skill *model.Skill, version *model.S
 				return err
 			}
 		}
-		return tx.Create(ownerState).Error
+		if ownerState != nil {
+			return tx.Create(ownerState).Error
+		}
+		return nil
 	})
 }
 
@@ -51,9 +54,9 @@ func (r *Repository) SkillFiles(versionID string) ([]model.SkillFile, error) {
 	return files, err
 }
 
-func (r *Repository) SkillsForPackageEnsure(userSource int) ([]model.Skill, error) {
+func (r *Repository) SkillsForPackageEnsure() ([]model.Skill, error) {
 	var skills []model.Skill
-	err := r.db.Where("status = ? AND (current_version_id = '' OR source <> ?)", 1, userSource).Find(&skills).Error
+	err := r.db.Where("status = ? AND (current_version_id = '' OR source_type = '' OR source_type = ?)", model.SkillStatusEnabled, "builtin").Find(&skills).Error
 	return skills, err
 }
 

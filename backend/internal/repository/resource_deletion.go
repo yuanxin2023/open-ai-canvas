@@ -50,7 +50,20 @@ func (r *Repository) ClaimNextResourceDeletionJob(owner string, leaseDuration ti
 }
 
 func (r *Repository) CompleteResourceDeletionJob(id string, owner string) error {
-	return r.db.Where("id = ? AND lease_owner = ?", id, owner).Delete(&model.ResourceDeletionJob{}).Error
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		var job model.ResourceDeletionJob
+		result := tx.Where("id = ? AND lease_owner = ?", id, owner).First(&job)
+		if result.Error != nil {
+			return result.Error
+		}
+		if err := tx.Delete(&model.ResourceDeletionJob{}, "id = ?", job.ID).Error; err != nil {
+			return err
+		}
+		if job.StorageSettingID == "" {
+			return nil
+		}
+		return tx.Where("id = ? AND owner_id = ? AND NOT EXISTS (SELECT 1 FROM resources WHERE resources.storage_setting_id = storage_locations.id) AND NOT EXISTS (SELECT 1 FROM resource_deletion_jobs WHERE resource_deletion_jobs.storage_setting_id = storage_locations.id)", job.StorageSettingID, job.UserID).Delete(&model.StorageLocation{}).Error
+	})
 }
 
 func (r *Repository) RetryResourceDeletionJob(id string, owner string, lastError string, nextAttemptAt time.Time) error {

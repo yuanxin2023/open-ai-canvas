@@ -304,6 +304,7 @@ export type AdminRowAction = {
     key: string;
     label: ReactNode;
     icon?: ReactNode;
+    iconOnly?: boolean;
     danger?: boolean;
     disabled?: boolean;
     onClick: () => void | Promise<void>;
@@ -314,7 +315,15 @@ export type AdminRowAction = {
     };
 };
 
-export function AdminRowActions({ primary, actions, visibleActionCount }: { primary?: { label: ReactNode; icon?: ReactNode; onClick: () => void | Promise<void>; disabled?: boolean }; actions: AdminRowAction[]; visibleActionCount?: number }) {
+type AdminPrimaryRowAction = {
+    label: ReactNode;
+    icon?: ReactNode;
+    iconOnly?: boolean;
+    onClick: () => void | Promise<void>;
+    disabled?: boolean;
+};
+
+export function AdminRowActions({ primary, actions, visibleActionCount }: { primary?: AdminPrimaryRowAction; actions: AdminRowAction[]; visibleActionCount?: number }) {
     const { modal } = App.useApp();
     const resolvedVisibleActionCount = visibleActionCount ?? (actions.length <= 1 ? actions.length : 1);
     const visibleActions = actions.slice(0, Math.max(0, resolvedVisibleActionCount));
@@ -343,16 +352,35 @@ export function AdminRowActions({ primary, actions, visibleActionCount }: { prim
     };
 
     const renderActionButton = (action: AdminRowAction) => (
-        <Button key={action.key} type="text" size="small" className={cn("admin-row-action", action.danger && "admin-row-action-danger")} icon={action.icon} disabled={action.disabled} onClick={() => runAction(action)}>
-            {action.label}
+        <Button
+            key={action.key}
+            type="text"
+            size="small"
+            className={cn("admin-row-action", action.iconOnly && "admin-row-action-icon-only", action.danger && "admin-row-action-danger")}
+            icon={action.icon}
+            aria-label={action.iconOnly && typeof action.label === "string" ? action.label : undefined}
+            title={action.iconOnly && typeof action.label === "string" ? action.label : undefined}
+            disabled={action.disabled}
+            onClick={() => runAction(action)}
+        >
+            {action.iconOnly ? null : action.label}
         </Button>
     );
 
     return (
         <div className="admin-row-actions">
             {primary ? (
-                <Button type="text" size="small" className="admin-row-action admin-row-action-primary" icon={primary.icon} disabled={primary.disabled} onClick={primary.onClick}>
-                    {primary.label}
+                <Button
+                    type="text"
+                    size="small"
+                    className={cn("admin-row-action admin-row-action-primary", primary.iconOnly && "admin-row-action-icon-only")}
+                    icon={primary.icon}
+                    aria-label={primary.iconOnly && typeof primary.label === "string" ? primary.label : undefined}
+                    title={primary.iconOnly && typeof primary.label === "string" ? primary.label : undefined}
+                    disabled={primary.disabled}
+                    onClick={primary.onClick}
+                >
+                    {primary.iconOnly ? null : primary.label}
                 </Button>
             ) : null}
             {visibleActions.map(renderActionButton)}

@@ -23,6 +23,7 @@ type CreditLedgerEntry struct {
 	BillingOrderID             string           `json:"billingOrderId,omitempty" gorm:"index;size:36"`
 	PaymentOrderID             string           `json:"paymentOrderId,omitempty" gorm:"index;size:36"`
 	RedeemCodeID               string           `json:"redeemCodeId,omitempty" gorm:"index;size:36"`
+	RedeemBatchID              string           `json:"redeemBatchId,omitempty" gorm:"index;size:36"`
 	ActorUserID                string           `json:"actorUserId,omitempty" gorm:"index;size:36"`
 	Model                      string           `json:"model,omitempty" gorm:"size:120;index"`
 	ChannelID                  string           `json:"channelId,omitempty" gorm:"size:36;index"`
@@ -41,12 +42,13 @@ type CreditLedgerEntry struct {
 }
 
 type BillingOrder struct {
-	ID             string `json:"id" gorm:"primaryKey;size:36"`
-	UserID         string `json:"userId" gorm:"size:36;index;uniqueIndex:idx_billing_user_idempotency,priority:1"`
-	IdempotencyKey string `json:"idempotencyKey" gorm:"size:160;uniqueIndex:idx_billing_user_idempotency,priority:2"`
-	TaskID         string `json:"taskId,omitempty" gorm:"index;size:36"`
-	ChannelID      string `json:"channelId" gorm:"index;size:36"`
-	ChannelModelID string `json:"channelModelId" gorm:"index;size:36"`
+	BillingCostSnapshot `json:"-" gorm:"embedded"`
+	ID                  string `json:"id" gorm:"primaryKey;size:36"`
+	UserID              string `json:"userId" gorm:"size:36;index;uniqueIndex:idx_billing_user_idempotency,priority:1"`
+	IdempotencyKey      string `json:"idempotencyKey" gorm:"size:160;uniqueIndex:idx_billing_user_idempotency,priority:2"`
+	TaskID              string `json:"taskId,omitempty" gorm:"index;size:36"`
+	ChannelID           string `json:"channelId" gorm:"index;size:36"`
+	ChannelModelID      string `json:"channelModelId" gorm:"index;size:36"`
 	// PriceTierID/Version 记录任务实际命中的规格档；金额字段仍是不可变结算快照。
 	PriceTierID                string `json:"priceTierId,omitempty" gorm:"index;size:36"`
 	PriceTierVersion           int64  `json:"priceTierVersion"`
@@ -61,42 +63,52 @@ type BillingOrder struct {
 	Quantity                   int64  `json:"quantity"`
 	AmountMicrocredits         int64  `json:"amountMicrocredits"`
 	ReservedAmountMicrocredits int64  `json:"reservedAmountMicrocredits"`
-	// ChargeLimitMicrocredits 非零时限制最终用户扣费；Agent 的 Token 报价用它把预授权金额固化为本轮硬上限。
-	ChargeLimitMicrocredits      int64         `json:"chargeLimitMicrocredits,omitempty"`
-	ActualAmountMicrocredits     int64         `json:"actualAmountMicrocredits"`
-	RefundedAmountMicrocredits   int64         `json:"refundedAmountMicrocredits"`
-	InputTokenPriceMicrocredits  int64         `json:"inputTokenPriceMicrocredits"`
-	OutputTokenPriceMicrocredits int64         `json:"outputTokenPriceMicrocredits"`
-	CachedTokenPriceMicrocredits int64         `json:"cachedTokenPriceMicrocredits"`
-	InputTokens                  int64         `json:"inputTokens"`
-	OutputTokens                 int64         `json:"outputTokens"`
-	CachedTokens                 int64         `json:"cachedTokens"`
-	UsageAvailable               bool          `json:"usageAvailable"`
-	Status                       BillingStatus `json:"status" gorm:"index;size:24"`
-	ProviderRequestID            string        `json:"providerRequestId,omitempty" gorm:"index;size:160"`
-	Error                        string        `json:"error,omitempty" gorm:"size:1000"`
-	ResolvedBy                   string        `json:"resolvedBy,omitempty" gorm:"index;size:36"`
-	ResolutionNote               string        `json:"resolutionNote,omitempty" gorm:"size:500"`
-	StartedAt                    *time.Time    `json:"startedAt"`
-	SettledAt                    *time.Time    `json:"settledAt"`
-	RefundedAt                   *time.Time    `json:"refundedAt"`
-	CreatedAt                    time.Time     `json:"createdAt" gorm:"index"`
-	UpdatedAt                    time.Time     `json:"updatedAt"`
+	// ChargeLimitSet distinguishes an authorized zero price from an uncapped order.
+	// All Agent prices remain capped across route changes and settlement.
+	ChargeLimitSet               bool  `json:"chargeLimitSet,omitempty" gorm:"not null;default:false"`
+	ChargeLimitMicrocredits      int64 `json:"chargeLimitMicrocredits,omitempty"`
+	ActualAmountMicrocredits     int64 `json:"actualAmountMicrocredits"`
+	RefundedAmountMicrocredits   int64 `json:"refundedAmountMicrocredits"`
+	InputTokenPriceMicrocredits  int64 `json:"inputTokenPriceMicrocredits"`
+	OutputTokenPriceMicrocredits int64 `json:"outputTokenPriceMicrocredits"`
+	CachedTokenPriceMicrocredits int64 `json:"cachedTokenPriceMicrocredits"`
+	InputTokens                  int64 `json:"inputTokens"`
+	OutputTokens                 int64 `json:"outputTokens"`
+	CachedTokens                 int64 `json:"cachedTokens"`
+	// VideoFormulaTokens 固化提交时的视频公式用量，不含预授权余量；旧订单保持 0，不反推历史用量。
+	VideoFormulaTokens int64         `json:"videoFormulaTokens" gorm:"not null;default:0"`
+	UsageSource        string        `json:"usageSource,omitempty" gorm:"size:32;not null;default:''"`
+	UsageAvailable     bool          `json:"usageAvailable"`
+	Status             BillingStatus `json:"status" gorm:"index;size:24"`
+	ProviderRequestID  string        `json:"providerRequestId,omitempty" gorm:"index;size:160"`
+	Error              string        `json:"error,omitempty" gorm:"size:1000"`
+	ResolvedBy         string        `json:"resolvedBy,omitempty" gorm:"index;size:36"`
+	ResolutionNote     string        `json:"resolutionNote,omitempty" gorm:"size:500"`
+	StartedAt          *time.Time    `json:"startedAt"`
+	SettledAt          *time.Time    `json:"settledAt"`
+	RefundedAt         *time.Time    `json:"refundedAt"`
+	CreatedAt          time.Time     `json:"createdAt" gorm:"index"`
+	UpdatedAt          time.Time     `json:"updatedAt"`
 }
 
 type RedeemBatch struct {
-	ID                 string     `json:"id" gorm:"primaryKey;size:36"`
-	AmountMicrocredits int64      `json:"amountMicrocredits"`
-	Count              int        `json:"count"`
-	Note               string     `json:"note" gorm:"size:500"`
-	CreatedBy          string     `json:"createdBy" gorm:"index;size:36"`
-	CodesCipher        string     `json:"-" gorm:"type:text"`
-	ExpiresAt          *time.Time `json:"expiresAt" gorm:"index"`
-	CreatedAt          time.Time  `json:"createdAt" gorm:"index"`
-	AvailableCount     int64      `json:"availableCount" gorm:"->;-:migration"`
-	RedeemedCount      int64      `json:"redeemedCount" gorm:"->;-:migration"`
-	DisabledCount      int64      `json:"disabledCount" gorm:"->;-:migration"`
-	ExpiredCount       int64      `json:"expiredCount" gorm:"->;-:migration"`
+	ID                   string                   `json:"id" gorm:"primaryKey;size:36"`
+	AmountMicrocredits   int64                    `json:"amountMicrocredits"`
+	Count                int                      `json:"count"`
+	Note                 string                   `json:"note" gorm:"size:500"`
+	CreatedBy            string                   `json:"createdBy" gorm:"index;size:36;index:idx_redeem_batches_funding_creator_created,priority:2"`
+	FundingSource        RedeemBatchFundingSource `json:"fundingSource" gorm:"size:24;not null;default:platform;index:idx_redeem_batches_funding_creator_created,priority:1;index:idx_redeem_batches_funding_terminal_created,priority:1"`
+	CodesCipher          string                   `json:"-" gorm:"type:text"`
+	ExpiresAt            *time.Time               `json:"expiresAt" gorm:"index"`
+	TerminalAt           *time.Time               `json:"terminalAt" gorm:"index;index:idx_redeem_batches_funding_terminal_created,priority:2"`
+	CodeSecretsClearedAt *time.Time               `json:"codeSecretsClearedAt"`
+	CreatedAt            time.Time                `json:"createdAt" gorm:"index;index:idx_redeem_batches_funding_creator_created,priority:3,sort:desc;index:idx_redeem_batches_funding_terminal_created,priority:3,sort:desc"`
+	CreatorUsername      string                   `json:"creatorUsername,omitempty" gorm:"->;-:migration"`
+	TotalMicrocredits    int64                    `json:"totalMicrocredits" gorm:"->;-:migration"`
+	AvailableCount       int64                    `json:"availableCount" gorm:"->;-:migration"`
+	RedeemedCount        int64                    `json:"redeemedCount" gorm:"->;-:migration"`
+	DisabledCount        int64                    `json:"disabledCount" gorm:"->;-:migration"`
+	ExpiredCount         int64                    `json:"expiredCount" gorm:"->;-:migration"`
 }
 
 type RedeemCode struct {

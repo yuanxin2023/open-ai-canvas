@@ -38,7 +38,7 @@ type AdminPaymentReconciliationItemPage struct {
 }
 
 func (s *Service) RunPaymentReconciliation(ctx context.Context, actor *model.User, request RunPaymentReconciliationRequest) (*model.PaymentReconciliationRun, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionPaymentReconciliation); err != nil {
 		return nil, err
 	}
 	return s.runPaymentReconciliation(ctx, actor, strings.TrimSpace(request.ProviderID), strings.TrimSpace(request.BillDate))
@@ -211,7 +211,7 @@ func (s *Service) comparePaymentReconciliation(ctx context.Context, provider pay
 		if paidAt.IsZero() {
 			paidAt = billDate.Add(12 * time.Hour)
 		}
-		_, _, creditErr := s.repo.CompletePaymentOrder(run.ProviderID, merchantOrderNo, repository.PaymentEvidence{
+		_, _, creditErr := s.completePaymentOrderWithReferral(run.ProviderID, merchantOrderNo, repository.PaymentEvidence{
 			ProviderTradeNo: confirmed.ProviderTradeNo, ProviderStatus: confirmed.ProviderStatus,
 			AmountFen: confirmed.AmountFen, Currency: confirmed.Currency, PaidAt: paidAt,
 		})
@@ -276,7 +276,7 @@ func safePaymentReconciliationError(err error) string {
 }
 
 func (s *Service) AdminPaymentReconciliationPage(actor *model.User, query PaymentReconciliationQuery, page, limit int) (*AdminPaymentReconciliationPage, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionPaymentReconciliation); err != nil {
 		return nil, err
 	}
 	page, limit = normalizeAdminPage(page, limit)
@@ -292,7 +292,7 @@ func (s *Service) AdminPaymentReconciliationPage(actor *model.User, query Paymen
 }
 
 func (s *Service) AdminPaymentReconciliationItems(actor *model.User, runID, result string, page, limit int) (*AdminPaymentReconciliationItemPage, error) {
-	if err := s.RequireAdmin(actor); err != nil {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionPaymentReconciliation); err != nil {
 		return nil, err
 	}
 	page, limit = normalizeAdminPage(page, limit)

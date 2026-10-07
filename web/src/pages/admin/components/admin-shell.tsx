@@ -5,9 +5,11 @@ import {
     ArrowLeft,
     BarChart3,
     BellRing,
+    BookOpenCheck,
     ChevronLeft,
     ChevronRight,
     ChevronDown,
+    ClipboardCheck,
     CloudUpload,
     Coins,
     CreditCard,
@@ -28,13 +30,17 @@ import {
     PlugZap,
     RadioTower,
     RefreshCw,
+    ReceiptText,
+    Rows3,
     Sparkles,
     Settings2,
     ShieldAlert,
     ShieldCheck,
+    ShoppingBag,
     Sun,
     TicketCheck,
     ToggleLeft,
+    UserCog,
     UsersRound,
 } from "lucide-react";
 import { Suspense, useEffect, useState, type ReactNode } from "react";
@@ -44,11 +50,14 @@ import { AppChangelogButton } from "@/components/layout/app-changelog-modal";
 import { BrandLogoFrame } from "@/components/brand/brand-logo";
 import { publishWorkspaceSidebarCollapsed, readWorkspaceSidebarCollapsed, subscribeWorkspaceSidebarCollapsed } from "@/components/layout/workspace-sidebar-state";
 import { cn } from "@/lib/utils";
+import { ADMIN_PERMISSION_GROUPS, hasAdminPermission, type AdminAccess } from "@/lib/admin-permissions";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { useUserStore } from "@/stores/use-user-store";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
+import { readAdminNavigationGroupState, writeAdminNavigationGroupState, type AdminNavigationGroupId } from "../lib/admin-navigation-state";
 import { getIsolatedAdminAntTheme } from "../theme/admin-ant-theme";
 import { AdminTooltip } from "../ui/controls";
+import { AdminDensityProvider, useAdminDensity } from "./admin-density";
 import "@/styles/admin-ui.css";
 import "../theme/admin-tokens.css";
 import "../theme/admin-chrome.css";
@@ -59,55 +68,119 @@ type AdminNavigationItem = {
     description: string;
     icon: ReactNode;
     requireFeature?: "frontendModelsEnabled";
+    fullAdminOnly?: boolean;
 };
 
-const adminNavigation: Array<{ label: string; items: AdminNavigationItem[] }> = [
+type AdminNavigationGroupBase = {
+    label: string;
+    items: AdminNavigationItem[];
+};
+
+type AdminNavigationGroup = AdminNavigationGroupBase & { id: AdminNavigationGroupId; collapsible: true };
+
+const adminNavigation: AdminNavigationGroup[] = [
     {
-        label: "概览",
-        items: [{ path: "/admin", label: "数据概览", description: "活跃、调用与成本趋势", icon: <BarChart3 className="size-4" /> }],
-    },
-    {
-        label: "平台资源",
+        id: "analytics",
+        label: "经营分析",
+        collapsible: true,
         items: [
-            { path: "/admin/users", label: "用户管理", description: "账号、角色与状态", icon: <UsersRound className="size-4" /> },
-            { path: "/admin/channels", label: "系统渠道", description: "渠道、模型与售价", icon: <RadioTower className="size-4" /> },
-            { path: "/admin/models", label: "前台模型", description: "展示、线路与用户价格", icon: <Layers3 className="size-4" />, requireFeature: "frontendModelsEnabled" },
-            { path: "/admin/plugins", label: "插件管理", description: "平台可用性、上传与卸载", icon: <PlugZap className="size-4" /> },
-            { path: "/admin/prompt-templates", label: "提示词模板", description: "平台创作策略版本", icon: <MessageSquareText className="size-4" /> },
-            { path: "/admin/resources", label: "存储资源", description: "资源列表、容量与预览", icon: <Database className="size-4" /> },
-        ],
-    },
-    {
-        label: "运营",
-        items: [
-            { path: "/admin/customer-service", label: "客服配置", description: "客服入口、样式与移动", icon: <Headphones className="size-4" /> },
-            { path: "/admin/announcements", label: "系统公告", description: "发布、关闭与历史公告", icon: <BellRing className="size-4" /> },
-            { path: "/admin/banner-announcements", label: "常驻通知", description: "首页顶部常驻滚动通知", icon: <Megaphone className="size-4" /> },
-            { path: "/admin/agent-lessons", label: "Agent 记忆", description: "按用户查看个人记忆", icon: <Sparkles className="size-4" /> },
-            { path: "/admin/payments", label: "支付充值", description: "支付渠道、订单与对账", icon: <CreditCard className="size-4" /> },
-            { path: "/admin/credit-operations", label: "积分运营", description: "人工调账与异常计费", icon: <Coins className="size-4" /> },
-            { path: "/admin/redemption-codes", label: "兑换码", description: "生成与查看兑换码批次", icon: <TicketCheck className="size-4" /> },
+            { path: "/admin", label: "数据概览", description: "活跃、调用与成本趋势", icon: <BarChart3 className="size-4" /> },
             { path: "/admin/logs", label: "请求明细", description: "上游调用与费用", icon: <FileClock className="size-4" /> },
         ],
     },
     {
-        label: "系统配置",
+        id: "platform",
+        label: "平台资源",
+        collapsible: true,
         items: [
-            { path: "/admin/settings/appearance", label: "站点及外观", description: "品牌、SEO 与备案", icon: <Palette className="size-4" /> },
+            { path: "/admin/channels", label: "系统渠道", description: "渠道、模型与售价", icon: <RadioTower className="size-4" /> },
+            { path: "/admin/models", label: "前台模型", description: "展示、线路与用户价格", icon: <Layers3 className="size-4" />, requireFeature: "frontendModelsEnabled" },
+            { path: "/admin/plugins", label: "插件管理", description: "平台可用性、上传与卸载", icon: <PlugZap className="size-4" /> },
+            { path: "/admin/skills", label: "技能管理", description: "公共技能与分类开放", icon: <BookOpenCheck className="size-4" /> },
+            { path: "/admin/prompt-templates", label: "提示词模板", description: "平台创作策略版本", icon: <MessageSquareText className="size-4" /> },
+        ],
+    },
+    {
+        id: "users",
+        label: "用户与服务",
+        collapsible: true,
+        items: [
+            { path: "/admin/users", label: "用户管理", description: "普通用户账号与状态", icon: <UsersRound className="size-4" /> },
+            { path: "/admin/administrators", label: "管理员配置", description: "管理员账号与模块权限", icon: <UserCog className="size-4" />, fullAdminOnly: true },
+            { path: "/admin/customer-service", label: "客服配置", description: "客服入口、样式与移动", icon: <Headphones className="size-4" /> },
+            { path: "/admin/agent-lessons", label: "Agent 记忆", description: "按用户查看个人记忆", icon: <Sparkles className="size-4" /> },
+        ],
+    },
+    {
+        id: "commerce",
+        label: "商品运营",
+        collapsible: true,
+        items: [
+            { path: "/admin/product-operations", label: "商品管理", description: "充值套餐与销售配置", icon: <ShoppingBag className="size-4" /> },
+            { path: "/admin/redemption-codes", label: "兑换码", description: "生成与查看兑换码批次", icon: <TicketCheck className="size-4" /> },
+        ],
+    },
+    {
+        id: "finance",
+        label: "财务管理",
+        collapsible: true,
+        items: [
+            { path: "/admin/payments", label: "支付渠道", description: "支付渠道配置", icon: <CreditCard className="size-4" /> },
+            { path: "/admin/payment-orders", label: "支付订单", description: "订单查询与状态同步", icon: <ReceiptText className="size-4" /> },
+            { path: "/admin/payment-reconciliation", label: "支付对账", description: "账单执行与异常核对", icon: <ClipboardCheck className="size-4" /> },
+            { path: "/admin/credit-operations", label: "积分运营", description: "人工调账与异常计费", icon: <Coins className="size-4" /> },
+            { path: "/admin/referrals", label: "邀请返利", description: "推广规则与逐笔审核", icon: <KeyRound className="size-4" /> },
+        ],
+    },
+    {
+        id: "content",
+        label: "内容与通知",
+        collapsible: true,
+        items: [
+            { path: "/admin/inspirations", label: "提示词运营", description: "维护首页精选灵感", icon: <MessageSquareText className="size-4" /> },
+            { path: "/admin/announcements", label: "系统公告", description: "发布、关闭与历史公告", icon: <BellRing className="size-4" /> },
+            { path: "/admin/banner-announcements", label: "常驻通知", description: "首页顶部常驻滚动通知", icon: <Megaphone className="size-4" /> },
+        ],
+    },
+    {
+        id: "settings",
+        label: "系统配置",
+        collapsible: true,
+        items: [
+            { path: "/admin/settings/appearance", label: "站点及外观", description: "品牌、Canvas/Live2D、SEO 与备案", icon: <Palette className="size-4" /> },
             { path: "/admin/settings/features", label: "功能开放", description: "工作台、插件与模型能力", icon: <ToggleLeft className="size-4" /> },
             { path: "/admin/settings/drawing-engine", label: "绘图工具", description: "画布绘图节点默认引擎", icon: <Paintbrush className="size-4" /> },
-            { path: "/admin/settings/runtime-policy", label: "资源与策略", description: "配额、并发、频控与超时", icon: <Settings2 className="size-4" /> },
             { path: "/admin/settings/system-performance", label: "系统性能", description: "主机、数据库与缓存状态", icon: <Activity className="size-4" /> },
             { path: "/admin/settings/access", label: "登录与注册", description: "账号创建与第三方登录", icon: <ShieldCheck className="size-4" /> },
             { path: "/admin/settings/email", label: "邮件服务", description: "注册验证码与 SMTP", icon: <Mail className="size-4" /> },
-            { path: "/admin/settings/storage", label: "存储服务", description: "对象存储与资源存储", icon: <HardDrive className="size-4" /> },
             { path: "/admin/settings/ark-private-assets", label: "方舟素材库", description: "Seedance 可信参考素材", icon: <CloudUpload className="size-4" /> },
             { path: "/admin/settings/response-interception", label: "模型响应拦截", description: "先启用策略，再配置替换规则", icon: <ShieldAlert className="size-4" /> },
             { path: "/admin/settings/third-party", label: "第三方参数配置", description: "先配置凭据，再开放用户入口", icon: <KeyRound className="size-4" /> },
             { path: "/admin/settings/system-update", label: "系统更新", description: "检查版本、备份与安全更新", icon: <RefreshCw className="size-4" /> },
         ],
     },
+    {
+        id: "storage",
+        label: "存储与备份",
+        collapsible: true,
+        items: [
+            { path: "/admin/resources", label: "存储资源", description: "资源列表、容量与预览", icon: <Database className="size-4" /> },
+            { path: "/admin/settings/runtime-policy", label: "资源与策略", description: "配额、并发、频控与超时", icon: <Settings2 className="size-4" /> },
+            { path: "/admin/settings/storage", label: "存储服务", description: "对象存储与资源存储", icon: <HardDrive className="size-4" /> },
+        ],
+    },
 ];
+
+const permissionByAdminPath = new Map<string, (typeof ADMIN_PERMISSION_GROUPS)[number]["items"][number]["permission"]>();
+for (const group of ADMIN_PERMISSION_GROUPS) {
+    for (const item of group.items) permissionByAdminPath.set(item.path, item.permission);
+}
+
+function canAccessAdminItem(item: AdminNavigationItem, access: AdminAccess | undefined) {
+    if (item.fullAdminOnly) return access?.level === "full";
+    const permission = permissionByAdminPath.get(item.path);
+    return Boolean(permission && hasAdminPermission(access, permission));
+}
 
 function isAdminNavigationPath(pathname: string, navigationPath: string) {
     if (navigationPath === "/admin") {
@@ -121,6 +194,16 @@ function adminPopupContainer(node?: HTMLElement) {
 }
 
 export function AdminShell() {
+    const userId = useUserStore((state) => state.user?.id);
+    return (
+        <AdminDensityProvider key={userId || "anonymous"} userId={userId}>
+            <AdminShellLayout />
+        </AdminDensityProvider>
+    );
+}
+
+function AdminShellLayout() {
+    const { density } = useAdminDensity();
     const appearance = useAppearanceStore((state) => state.appearance);
     const [collapsed, setCollapsed] = useState(readWorkspaceSidebarCollapsed);
     const dark = useThemeStore((state) => state.theme === "dark");
@@ -143,7 +226,7 @@ export function AdminShell() {
     return (
         <ConfigProvider theme={getIsolatedAdminAntTheme(dark)} getPopupContainer={(node) => adminPopupContainer(node)}>
             <App>
-                <main id="admin-root" data-admin-root className="admin-shell flex h-full min-h-0 overflow-hidden">
+                <main id="admin-root" data-admin-root data-admin-density={density} className="admin-shell flex h-full min-h-0 overflow-hidden">
                     <aside className={cn("admin-sidebar hidden shrink-0 flex-col overflow-hidden lg:flex", collapsed && "is-collapsed")}>
                         <div className="admin-sidebar-identity shrink-0">
                             <AdminTooltip title={collapsed ? "查看更新日志" : undefined} placement="right">
@@ -225,12 +308,25 @@ export function AdminPageFrame({ title, description, actions, back, scroll = fal
                     </div>
                     <div className="admin-page-actions flex shrink-0 flex-wrap items-center">
                         {actions}
+                        <AdminDensityButton />
                         <AdminThemeButton />
                     </div>
                 </header>
                 {children}
             </div>
         </div>
+    );
+}
+
+function AdminDensityButton() {
+    const { density, toggleDensity } = useAdminDensity();
+    return (
+        <AdminTooltip title={density === "compact" ? "切换为舒适行距" : "切换为紧凑行距"}>
+            <button type="button" className="admin-density-toggle" onClick={toggleDensity} aria-label="紧凑表格行距" aria-pressed={density === "compact"}>
+                <Rows3 className="size-4" aria-hidden="true" />
+                {density === "compact" ? "紧凑" : "舒适"}
+            </button>
+        </AdminTooltip>
     );
 }
 
@@ -250,8 +346,9 @@ function AdminThemeButton() {
 
 function MobileAdminNavigation() {
     const features = useUserStore((state) => state.features);
+    const adminAccess = useUserStore((state) => state.user?.adminAccess);
     const location = useLocation();
-    const visibleGroups = adminNavigation.map((group) => ({ ...group, items: group.items.filter((item) => !item.requireFeature || features[item.requireFeature]) })).filter((group) => group.items.length > 0);
+    const visibleGroups = adminNavigation.map((group) => ({ ...group, items: group.items.filter((item) => canAccessAdminItem(item, adminAccess) && (!item.requireFeature || features[item.requireFeature])) })).filter((group) => group.items.length > 0);
     const visibleItems = visibleGroups.flatMap((group) => group.items);
     const currentItem = visibleItems.find((item) => item.path === location.pathname) || visibleItems[0];
     const menuItems: MenuProps["items"] = visibleGroups.map((group) => ({
@@ -295,31 +392,59 @@ function MobileAdminNavigation() {
 
 function AdminNavigation({ collapsed }: { collapsed: boolean }) {
     const features = useUserStore((state) => state.features);
+    const adminAccess = useUserStore((state) => state.user?.adminAccess);
+    const location = useLocation();
+    const [openGroups, setOpenGroups] = useState(readAdminNavigationGroupState);
+
+    useEffect(() => {
+        const activeGroup = adminNavigation.find((group) => group.collapsible && group.items.some((item) => isAdminNavigationPath(location.pathname, item.path)));
+        if (!activeGroup || !activeGroup.collapsible) return;
+
+        setOpenGroups((current) => (current[activeGroup.id] ? current : { ...current, [activeGroup.id]: true }));
+    }, [location.pathname]);
+
+    useEffect(() => {
+        writeAdminNavigationGroupState(openGroups);
+    }, [openGroups]);
+
+    const toggleGroup = (groupId: AdminNavigationGroupId) => {
+        setOpenGroups((current) => ({ ...current, [groupId]: !current[groupId] }));
+    };
 
     return (
-        <nav className="admin-sidebar-nav thin-scrollbar flex-1 overflow-y-auto" aria-label="管理后台菜单">
-            {adminNavigation.map((group) => {
-                const visibleItems = group.items.filter((item) => !item.requireFeature || features[item.requireFeature]);
+        <nav className="admin-sidebar-nav flex-1 overflow-y-auto" aria-label="管理后台菜单">
+            {adminNavigation.map((group, groupIndex) => {
+                const visibleItems = group.items.filter((item) => canAccessAdminItem(item, adminAccess) && (!item.requireFeature || features[item.requireFeature]));
                 if (visibleItems.length === 0) return null;
 
+                const links = visibleItems.map((item) => (
+                    <AdminTooltip key={item.path} delay={100} title={collapsed ? item.label : undefined} placement="right">
+                        <NavLink to={item.path} end={item.path === "/admin"} aria-label={collapsed ? item.label : undefined} className={({ isActive }) => cn("admin-nav-link", collapsed && "is-collapsed", isActive && "is-active")}>
+                            {item.icon}
+                            {!collapsed ? <span className="truncate">{item.label}</span> : null}
+                        </NavLink>
+                    </AdminTooltip>
+                ));
+
+                if (collapsed) {
+                    return (
+                        <div key={group.id} className="admin-nav-group">
+                            {groupIndex > 0 ? <div className="admin-nav-collapsed-separator" /> : null}
+                            <div className="admin-nav-group-items is-collapsed">{links}</div>
+                        </div>
+                    );
+                }
+
+                const isOpen = openGroups[group.id];
+                const contentId = `admin-nav-group-${group.id}`;
                 return (
-                    <div key={group.label} className="admin-nav-group">
-                        {!collapsed ? (
-                            <div className="admin-nav-group-label">
-                                <span>{group.label}</span>
-                            </div>
-                        ) : (
-                            <div className="admin-nav-collapsed-separator" />
-                        )}
-                        <div className={cn("admin-nav-group-items", collapsed && "is-collapsed")}>
-                            {visibleItems.map((item) => (
-                                <AdminTooltip key={item.path} delay={100} title={collapsed ? item.label : undefined} placement="right">
-                                    <NavLink to={item.path} end={item.path === "/admin"} aria-label={collapsed ? item.label : undefined} className={({ isActive }) => cn("admin-nav-link", collapsed && "is-collapsed", isActive && "is-active")}>
-                                        {item.icon}
-                                        {!collapsed ? <span className="truncate">{item.label}</span> : null}
-                                    </NavLink>
-                                </AdminTooltip>
-                            ))}
+                    <div key={group.id} className="admin-nav-group">
+                        <button type="button" className="admin-nav-group-toggle" aria-expanded={isOpen} aria-controls={contentId} onClick={() => toggleGroup(group.id)}>
+                            <span className="admin-nav-group-label">{group.label}</span>
+                            <ChevronRight className={cn("admin-nav-group-chevron", isOpen && "is-open")} aria-hidden="true" />
+                        </button>
+                        <div id={contentId} className={cn("admin-nav-group-content", !isOpen && "is-folded")} aria-hidden={!isOpen} inert={!isOpen}>
+                            <div className="admin-nav-group-items">{links}</div>
                         </div>
                     </div>
                 );

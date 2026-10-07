@@ -1,6 +1,8 @@
 package app
 
 import (
+	"encoding/json"
+	"strings"
 	"testing"
 
 	"infinite-canvas/backend/internal/model"
@@ -19,7 +21,7 @@ func TestCreateAdminUserCreatesActiveUserWithPasswordAndAudit(t *testing.T) {
 	}
 
 	created, err := (&Service{repo: repository.New(db)}).CreateAdminUser(&actor, CreateAdminUserRequest{
-		Username:    "new-user",
+		Username:    "newusr",
 		DisplayName: "New User",
 		Email:       "new-user@example.com",
 		Password:    "strong-password",
@@ -29,7 +31,7 @@ func TestCreateAdminUserCreatesActiveUserWithPasswordAndAudit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if created.Username != "new-user" || created.DisplayName != "New User" || created.Email != "new-user@example.com" {
+	if created.Username != "newusr" || created.DisplayName != "newusr" || created.ProfileName != "newusr" || created.Email != "new-user@example.com" {
 		t.Fatalf("created user = %+v", created)
 	}
 	if created.Role != model.UserRoleUser || created.Status != model.UserStatusActive {
@@ -61,7 +63,7 @@ func TestCreateAdminUserRejectsDuplicateUsername(t *testing.T) {
 		t.Fatal(err)
 	}
 	svc := &Service{repo: repository.New(db)}
-	input := CreateAdminUserRequest{Username: "duplicate", DisplayName: "Duplicate", Password: "strong-password", Role: model.UserRoleUser, Status: model.UserStatusActive}
+	input := CreateAdminUserRequest{Username: "dupone", DisplayName: "Duplicate", Password: "strong-password", Role: model.UserRoleUser, Status: model.UserStatusActive}
 	if _, err := svc.CreateAdminUser(&actor, input); err != nil {
 		t.Fatal(err)
 	}
@@ -69,6 +71,153 @@ func TestCreateAdminUserRejectsDuplicateUsername(t *testing.T) {
 		t.Fatal("CreateAdminUser() duplicate username error = nil")
 	}
 }
+
+func TestUpdateUserAllowsAdminToResetPasswordAndRevokesTargetSessions(t *testing.T) {
+	db := newBulkUserTestDB(t)
+	oldHash, err := hashPassword("old-password")
+	if err != nil {
+		t.Fatal(err)
+	}
+	actor := model.User{ID: "admin-1", Username: "admin", Role: model.UserRoleAdmin, Status: model.UserStatusActive}
+	target := model.User{ID: "user-1", Username: "user-one", DisplayName: "User One", PasswordHash: oldHash, Role: model.UserRoleUser, Status: model.UserStatusActive}
+	if err := db.Create(&[]model.User{actor, target}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&[]model.AuthSession{{ID: "admin-session", UserID: actor.ID}, {ID: "user-session", UserID: target.ID}}).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	updated, err := (&Service{repo: repository.New(db)}).UpdateUser(&actor, target.ID, UpdateUserRequest{DisplayName: "Renamed User", Password: "new-password"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bcrypt.CompareHashAndPassword([]byte(updated.PasswordHash), []byte("new-password")) != nil {
+		t.Fatal("updated password hash does not match the new password")
+	}
+	if bcrypt.CompareHashAndPassword([]byte(updated.PasswordHash), []byte("old-password")) == nil {
+		t.Fatal("updated password still matches the old password")
+	}
+	if updated.DisplayName != target.Username || updated.ProfileName != target.Username {
+		t.Fatalf("updated public name = %q/%q", updated.DisplayName, updated.ProfileName)
+	}
+	var targetSessions int64
+	if err := db.Model(&model.AuthSession{}).Where("user_id = ?", target.ID).Count(&targetSessions).Error; err != nil {
+		t.Fatal(err)
+	}
+	if targetSessions != 0 {
+		t.Fatalf("target sessions = %d, want 0", targetSessions)
+	}
+	var actorSessions int64
+	if err := db.Model(&model.AuthSession{}).Where("user_id = ?", actor.ID).Count(&actorSessions).Error; err != nil {
+		t.Fatal(err)
+	}
+	if actorSessions != 1 {
+		t.Fatalf("actor sessions = %d, want 1", actorSessions)
+	}
+	var audit model.AdminAuditEvent
+	if err := db.Where("action = ? AND target_id = ?", "user.update", target.ID).First(&audit).Error; err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(audit.Summary, "重置密码") {
+		t.Fatalf("audit summary = %q", audit.Summary)
+	}
+	var metadata struct {
+		PasswordReset bool `json:"passwordReset"`
+	}
+	if err := json.Unmarshal([]byte(audit.MetadataJSON), &metadata); err != nil {
+		t.Fatal(err)
+	}
+	if !metadata.PasswordReset {
+		t.Fatalf("audit metadata = %s", audit.MetadataJSON)
+	}
+}
+
+func TestAdminUserRemarkCanBeUpdatedAndSearchedWithoutLeakingFromUserJSON(t *testing.T) {
+	db := newBulkUserTestDB(t)
+	actor := model.User{ID: "admin-1", Username: "admin", Role: model.UserRoleAdmin, Status: model.UserStatusActive}
+	target := model.User{ID: "user-1", Username: "user-one", Role: model.UserRoleUser, Status: model.UserStatusActive}
+	if err := db.Create(&[]model.User{actor, target}).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	remark := "重点客户 YC-2042"
+	svc := &Service{repo: repository.New(db)}
+	updated, err := svc.UpdateUser(&actor, target.ID, UpdateUserRequest{Remark: &remark})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.Remark != remark || updated.AdminRemark != remark {
+		t.Fatalf("updated remark = %q/%q, want %q", updated.Remark, updated.AdminRemark, remark)
+	}
+	page, err := svc.AdminUsers(&actor, AdminListQuery{Keyword: "yc-2042", Page: 1, Limit: 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if page.Total != 1 || len(page.Users) != 1 || page.Users[0].Remark != remark {
+		t.Fatalf("remark search result = %+v", page)
+	}
+	publicJSON, err := json.Marshal(updated.User)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(publicJSON), "重点客户") || strings.Contains(string(publicJSON), "adminRemark") {
+		t.Fatalf("ordinary user JSON leaked admin remark: %s", publicJSON)
+	}
+}
+
+func TestAdminRemarkNormalizationAndUserJSONPrivacy(t *testing.T) {
+	remark, err := normalizeAdminRemark("  跟进客户  ")
+	if err != nil || remark != "跟进客户" {
+		t.Fatalf("normalizeAdminRemark() = %q, %v", remark, err)
+	}
+	if _, err := normalizeAdminRemark(strings.Repeat("备", 501)); err == nil {
+		t.Fatal("normalizeAdminRemark() oversized remark error = nil")
+	}
+	encoded, err := json.Marshal(model.User{ID: "user-1", AdminRemark: "仅管理员可见"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(encoded), "仅管理员可见") || strings.Contains(string(encoded), "adminRemark") {
+		t.Fatalf("ordinary user JSON leaked admin remark: %s", encoded)
+	}
+}
+
+func TestUpdateUserRejectsOversizedRemark(t *testing.T) {
+	db := newBulkUserTestDB(t)
+	actor := model.User{ID: "admin-1", Username: "admin", Role: model.UserRoleAdmin, Status: model.UserStatusActive}
+	target := model.User{ID: "user-1", Username: "user-one", Role: model.UserRoleUser, Status: model.UserStatusActive}
+	if err := db.Create(&[]model.User{actor, target}).Error; err != nil {
+		t.Fatal(err)
+	}
+	remark := strings.Repeat("备", 501)
+	if _, err := (&Service{repo: repository.New(db)}).UpdateUser(&actor, target.ID, UpdateUserRequest{Remark: &remark}); err == nil {
+		t.Fatal("UpdateUser() oversized remark error = nil")
+	}
+}
+
+func TestUpdateUserPasswordRequiresAdmin(t *testing.T) {
+	db := newBulkUserTestDB(t)
+	oldHash, err := hashPassword("old-password")
+	if err != nil {
+		t.Fatal(err)
+	}
+	actor := model.User{ID: "user-1", Username: "user-one", Role: model.UserRoleUser, Status: model.UserStatusActive}
+	target := model.User{ID: "user-2", Username: "user-two", PasswordHash: oldHash, Role: model.UserRoleUser, Status: model.UserStatusActive}
+	if err := db.Create(&[]model.User{actor, target}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := (&Service{repo: repository.New(db)}).UpdateUser(&actor, target.ID, UpdateUserRequest{Password: "new-password"}); err == nil {
+		t.Fatal("UpdateUser() error = nil, want admin permission error")
+	}
+	var stored model.User
+	if err := db.First(&stored, "id = ?", target.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if bcrypt.CompareHashAndPassword([]byte(stored.PasswordHash), []byte("old-password")) != nil {
+		t.Fatal("password changed without admin permission")
+	}
+}
+
 func TestBulkDisableUsersDisablesUsersSessionsAndWritesAudits(t *testing.T) {
 	db := newBulkUserTestDB(t)
 	actor := model.User{ID: "admin-1", Username: "admin", Role: model.UserRoleAdmin, Status: model.UserStatusActive}
@@ -148,13 +297,199 @@ func TestBulkDisableUsersRejectsCurrentAdmin(t *testing.T) {
 	}
 }
 
+func TestAdminUsersAndAdministratorsAreSeparated(t *testing.T) {
+	db := newBulkUserTestDB(t)
+	actor := model.User{ID: "admin-1", Username: "root-admin", Role: model.UserRoleAdmin, AdminLevel: model.AdminLevelFull, Status: model.UserStatusActive}
+	ordinary := model.User{ID: "user-1", Username: "ordinary", Role: model.UserRoleUser, Status: model.UserStatusActive}
+	administrator := model.User{ID: "admin-2", Username: "module-admin", Role: model.UserRoleAdmin, AdminLevel: model.AdminLevelScoped, Status: model.UserStatusActive}
+	if err := db.Create(&[]model.User{actor, ordinary, administrator}).Error; err != nil {
+		t.Fatal(err)
+	}
+	svc := &Service{repo: repository.New(db)}
+
+	users, err := svc.AdminUsers(&actor, AdminListQuery{Type: string(model.UserRoleAdmin), Page: 1, Limit: 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if users.Total != 1 || len(users.Users) != 1 || users.Users[0].ID != ordinary.ID {
+		t.Fatalf("ordinary users page = %+v", users)
+	}
+
+	administrators, err := svc.Administrators(&actor, AdminListQuery{Type: string(model.UserRoleUser), Page: 1, Limit: 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if administrators.Total != 2 || len(administrators.Users) != 2 {
+		t.Fatalf("administrators page = %+v", administrators)
+	}
+	for _, user := range administrators.Users {
+		if user.Role != model.UserRoleAdmin || user.AdminAccess == nil {
+			t.Fatalf("administrator = %+v", user)
+		}
+	}
+}
+
+func TestAdministratorsRequireFullAdmin(t *testing.T) {
+	svc := &Service{}
+	scoped := &model.User{Role: model.UserRoleAdmin, AdminLevel: model.AdminLevelScoped, AdminPermissions: []model.AdminPermission{model.AdminPermissionUsers}}
+	if _, err := svc.Administrators(scoped, AdminListQuery{}); err == nil {
+		t.Fatal("Administrators(scoped) error = nil")
+	}
+	ordinary := &model.User{Role: model.UserRoleUser}
+	if _, err := svc.Administrators(ordinary, AdminListQuery{}); err == nil {
+		t.Fatal("Administrators(ordinary) error = nil")
+	}
+}
+
+func TestPromoteAndDemoteAdministratorPreservesAccountAndRevokesSession(t *testing.T) {
+	db := newBulkUserTestDB(t)
+	actor := model.User{ID: "admin-1", Username: "root-admin", Role: model.UserRoleAdmin, AdminLevel: model.AdminLevelFull, Status: model.UserStatusActive}
+	target := model.User{ID: "user-1", Username: "ordinary", Role: model.UserRoleUser, Status: model.UserStatusActive}
+	if err := db.Create(&[]model.User{actor, target}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&model.AuthSession{ID: "target-session", UserID: target.ID}).Error; err != nil {
+		t.Fatal(err)
+	}
+	svc := &Service{repo: repository.New(db)}
+
+	promoted, err := svc.PromoteAdministrator(&actor, PromoteAdministratorRequest{
+		UserID:      target.ID,
+		AdminAccess: &AdminAccessInput{Level: model.AdminLevelScoped, Permissions: []model.AdminPermission{model.AdminPermissionUsers}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if promoted.Role != model.UserRoleAdmin || promoted.AdminAccess == nil || promoted.AdminAccess.Level != model.AdminLevelScoped {
+		t.Fatalf("promoted user = %+v", promoted)
+	}
+	var sessions int64
+	if err := db.Model(&model.AuthSession{}).Where("user_id = ?", target.ID).Count(&sessions).Error; err != nil {
+		t.Fatal(err)
+	}
+	if sessions != 0 {
+		t.Fatalf("target sessions = %d, want 0", sessions)
+	}
+
+	demoted, err := svc.DemoteAdministrator(&actor, target.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if demoted.Role != model.UserRoleUser || demoted.AdminAccess != nil {
+		t.Fatalf("demoted user = %+v", demoted)
+	}
+}
+
+func TestOrdinaryUserWriteRejectsAdministratorTarget(t *testing.T) {
+	db := newBulkUserTestDB(t)
+	actor := model.User{ID: "admin-1", Username: "root-admin", Role: model.UserRoleAdmin, AdminLevel: model.AdminLevelFull, Status: model.UserStatusActive}
+	target := model.User{ID: "admin-2", Username: "module-admin", Role: model.UserRoleAdmin, AdminLevel: model.AdminLevelScoped, Status: model.UserStatusActive}
+	if err := db.Create(&[]model.User{actor, target}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := (&Service{repo: repository.New(db)}).UpdateOrdinaryUser(&actor, target.ID, UpdateOrdinaryUserRequest{Status: model.UserStatusDisabled}); err == nil {
+		t.Fatal("UpdateOrdinaryUser(admin target) error = nil")
+	}
+}
+
+func TestUpdateAdministratorSupportsIndependentPartialMutations(t *testing.T) {
+	db := newBulkUserTestDB(t)
+	oldHash, err := hashPassword("old-password")
+	if err != nil {
+		t.Fatal(err)
+	}
+	actor := model.User{ID: "admin-1", Username: "root-admin", Role: model.UserRoleAdmin, AdminLevel: model.AdminLevelFull, Status: model.UserStatusActive}
+	target := model.User{
+		ID: "admin-2", Username: "module-admin", Email: "old@example.com", AdminRemark: "原备注", PasswordHash: oldHash,
+		Role: model.UserRoleAdmin, AdminLevel: model.AdminLevelScoped, Status: model.UserStatusActive,
+	}
+	if err := db.Create(&[]model.User{actor, target}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&model.AdminPermissionGrant{UserID: target.ID, Permission: model.AdminPermissionUsers, GrantedByUserID: actor.ID}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&model.AuthSession{ID: "profile-session", UserID: target.ID}).Error; err != nil {
+		t.Fatal(err)
+	}
+	svc := &Service{repo: repository.New(db)}
+
+	remark := "新备注"
+	profile, err := svc.UpdateAdministrator(&actor, target.ID, UpdateAdministratorRequest{Email: "new@example.com", Remark: &remark})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if profile.Email != "new@example.com" || profile.Remark != remark || profile.Status != model.UserStatusActive {
+		t.Fatalf("profile update = %+v", profile)
+	}
+	if profile.AdminAccess == nil || profile.AdminAccess.Level != model.AdminLevelScoped || len(profile.AdminAccess.Permissions) != 1 || profile.AdminAccess.Permissions[0] != model.AdminPermissionUsers {
+		t.Fatalf("profile update changed access = %+v", profile.AdminAccess)
+	}
+	assertAdminSessionCount(t, db, target.ID, 1)
+
+	access, err := svc.UpdateAdministrator(&actor, target.ID, UpdateAdministratorRequest{
+		AdminAccess: &AdminAccessInput{Level: model.AdminLevelScoped, Permissions: []model.AdminPermission{model.AdminPermissionCredits}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if access.Email != "new@example.com" || access.Remark != remark || access.Status != model.UserStatusActive {
+		t.Fatalf("access update changed profile or status = %+v", access)
+	}
+	if access.AdminAccess == nil || len(access.AdminAccess.Permissions) != 1 || access.AdminAccess.Permissions[0] != model.AdminPermissionCredits {
+		t.Fatalf("access update = %+v", access.AdminAccess)
+	}
+	assertAdminSessionCount(t, db, target.ID, 0)
+
+	if err := db.Create(&model.AuthSession{ID: "password-session", UserID: target.ID}).Error; err != nil {
+		t.Fatal(err)
+	}
+	password, err := svc.UpdateAdministrator(&actor, target.ID, UpdateAdministratorRequest{Password: "new-password"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if password.Email != "new@example.com" || password.Remark != remark || password.Status != model.UserStatusActive {
+		t.Fatalf("password update changed other fields = %+v", password)
+	}
+	if bcrypt.CompareHashAndPassword([]byte(password.PasswordHash), []byte("new-password")) != nil {
+		t.Fatal("password update did not persist the new password")
+	}
+	assertAdminSessionCount(t, db, target.ID, 0)
+
+	if err := db.Create(&model.AuthSession{ID: "status-session", UserID: target.ID}).Error; err != nil {
+		t.Fatal(err)
+	}
+	status, err := svc.UpdateAdministrator(&actor, target.ID, UpdateAdministratorRequest{Status: model.UserStatusDisabled})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status.Status != model.UserStatusDisabled || status.Email != "new@example.com" || status.Remark != remark {
+		t.Fatalf("status update changed profile = %+v", status)
+	}
+	if status.AdminAccess == nil || len(status.AdminAccess.Permissions) != 1 || status.AdminAccess.Permissions[0] != model.AdminPermissionCredits {
+		t.Fatalf("status update changed access = %+v", status.AdminAccess)
+	}
+	assertAdminSessionCount(t, db, target.ID, 0)
+}
+
+func assertAdminSessionCount(t *testing.T, db *gorm.DB, userID string, want int64) {
+	t.Helper()
+	var count int64
+	if err := db.Model(&model.AuthSession{}).Where("user_id = ?", userID).Count(&count).Error; err != nil {
+		t.Fatal(err)
+	}
+	if count != want {
+		t.Fatalf("session count for %s = %d, want %d", userID, count, want)
+	}
+}
+
 func newBulkUserTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&model.User{}, &model.AuthSession{}, &model.AdminAuditEvent{}, &model.CreditAccount{}, &model.CreditLedgerEntry{}, &model.SystemSetting{}, &model.TaskTextDelta{}); err != nil {
+	if err := db.AutoMigrate(&model.User{}, &model.AdminPermissionGrant{}, &model.AuthSession{}, &model.AdminAuditEvent{}, &model.CreditAccount{}, &model.CreditLedgerEntry{}, &model.SystemSetting{}, &model.TaskTextDelta{}); err != nil {
 		t.Fatal(err)
 	}
 	return db
