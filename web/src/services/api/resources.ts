@@ -136,7 +136,7 @@ export function isResourceUrl(url?: string) {
     return path.startsWith(`${base}/resources/`) && path.endsWith("/file");
 }
 
-// 超过该阈值（与后端单请求 multipart 上限 50MB 一致）的本地媒体走分片上传，避免大视频导入失败。
+// 超过传输阈值的本地媒体走分片上传；完整文件大小仍由后端按用户生效配额校验。
 const CHUNK_UPLOAD_THRESHOLD = 50 << 20;
 const CHUNK_UPLOAD_RETRIES = 2;
 
@@ -175,7 +175,7 @@ export async function uploadResourceFile(
 }
 
 // 分片上传：POST 开始会话 → 逐片 PUT 原始二进制（每片 8MB）→ POST 合并落库。
-// 单请求体积小、可断点续传/失败重试；单文件不再受 50MB 限制（仅日/总量配额约束）。
+// 单请求体积小、可断点续传/失败重试；完整文件仍受用户单文件、每日和总存储配额约束。
 async function uploadFileInChunks(file: Blob, name: string, kind: "image" | "video" | "audio" | "file", meta: ResourceUploadMeta | undefined, onProgress?: (uploadedBytes: number, totalBytes: number) => void) {
     // 片级失败通常意味着会话过期/网络抖动：整体重开一次会话重传（整传重试）。
     for (let attempt = 0; attempt < CHUNK_UPLOAD_RETRIES; attempt++) {

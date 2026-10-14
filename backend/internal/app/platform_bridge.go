@@ -88,8 +88,12 @@ func (s *Service) runtimeConcurrencySetting() (RuntimeTaskPolicy, error) {
 	return s.platformDomain().RuntimeConcurrencySetting()
 }
 
-func (s *Service) PublicRuntimeLimits() (*PublicRuntimeLimits, error) {
-	return s.platformDomain().PublicRuntimeLimits()
+func (s *Service) PublicRuntimeLimits(userID string) (*PublicRuntimeLimits, error) {
+	policy, err := s.UserRuntimePolicy(userID)
+	if err != nil {
+		return nil, err
+	}
+	return &PublicRuntimeLimits{ActiveTaskLimit: policy.Task.ActiveTaskLimit, ResourceUploadMB: policy.Resource.ResourceUploadMB, RecycleBinRetentionDays: policy.Resource.RecycleBinRetentionDays}, nil
 }
 
 func (s *Service) AdminRuntimePolicySetting(actor *model.User) (*PublicRuntimePolicySetting, error) {

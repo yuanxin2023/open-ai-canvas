@@ -238,6 +238,9 @@ func doBinaryWithConsumer(req *http.Request, onChunk func(string, []byte)) ([]by
 		coordinator = metadata.Service.coordinator
 		channelID = metadata.ChannelID
 		policy, err := metadata.Service.RuntimePolicy()
+		if err == nil && metadata.UserID != "" {
+			policy, err = metadata.Service.UserRuntimePolicy(metadata.UserID)
+		}
 		if err != nil {
 			return nil, "", fmt.Errorf("读取生成资源限制失败：%w", err)
 		}

@@ -18,7 +18,7 @@ import (
 )
 
 // 分片上传会话：把“导入本地媒体”拆成 开始→逐片→合并 三段，单片上限 8MB，
-// 文件整体不再受 multipart 单请求大小限制（对齐 Concat 桌面端“任意大小直接入库”的体验）。
+// 完整文件仍受当前用户单文件、每日上传和总存储配额约束。
 // 会话状态只存在内存（重启即失效 → 前端整传重试），磁盘暂存在系统临时目录，随会话清理。
 const (
 	chunkUploadChunkSize   = 8 << 20
@@ -144,9 +144,8 @@ func RegisterChunkedUploadRoutes(r *gin.RouterGroup, svc *service.Service) {
 			fail(c, http.StatusBadRequest, fmt.Errorf("文件大小必须大于 0"))
 			return
 		}
-		// 超账号存储总量的文件无论如何都会失败，提前给出明确提示。
-		if policy.Resource.StoredFileGB > 0 && req.Size > int64(policy.Resource.StoredFileGB)<<30 {
-			fail(c, http.StatusBadRequest, fmt.Errorf("文件超过账号存储总量上限 %dGB", policy.Resource.StoredFileGB))
+		if err := svc.ValidateUserUploadSize(user.ID, req.Size); err != nil {
+			failService(c, err)
 			return
 		}
 		// 同一用户并发会话数兜底，防内存占用失控。

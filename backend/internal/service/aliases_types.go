@@ -3,6 +3,8 @@ package service
 import "infinite-canvas/backend/internal/app"
 
 type (
+	UserResourceQuotaRequest               = app.UserResourceQuotaRequest
+	UserResourceQuotaView                  = app.UserResourceQuotaView
 	ReferralPolicy                         = app.ReferralPolicy
 	ReferralDashboard                      = app.ReferralDashboard
 	ReferralRewardPage                     = app.ReferralRewardPage

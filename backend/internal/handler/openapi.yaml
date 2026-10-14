@@ -27,6 +27,60 @@ tags:
   - name: admin
   - name: inspirations
 paths:
+  /admin/users/{id}/resource-quota:
+    parameters:
+      - {in: path, name: id, required: true, schema: {type: string}}
+    get:
+      tags: [admin]
+      summary: 查询普通用户的资源配额与用量
+      description: 需要 admin.users.accounts；返回稀疏覆盖、全局默认、生效配额及现有分类用量。
+      responses:
+        "200":
+          description: 标准信封 data 为用户资源配额
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - {$ref: "#/components/schemas/Envelope"}
+                  - type: object
+                    properties:
+                      data: {$ref: "#/components/schemas/UserResourceQuotaView"}
+        "403": {$ref: "#/components/responses/Error"}
+        "404": {$ref: "#/components/responses/Error"}
+    patch:
+      tags: [admin]
+      summary: 独立更新普通用户资源配额
+      description: 需要 admin.users.accounts；只更新传入项目，null 恢复继承，省略保持。允许下调到已用量以下，不删除内容。更新与管理审计同事务执行。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [overrides]
+              properties:
+                overrides:
+                  type: object
+                  additionalProperties: false
+                  minProperties: 1
+                  properties:
+                    resourceUploadMB: {type: integer, nullable: true, minimum: 1, maximum: 999}
+                    generatedFileMB: {type: integer, nullable: true, minimum: 1, maximum: 999}
+                    dailyUploadMB: {type: integer, nullable: true, minimum: 1, maximum: 999999}
+                    storedFileGB: {type: integer, nullable: true, minimum: 1, maximum: 999}
+                    structuredDataMB: {type: integer, nullable: true, minimum: 1, maximum: 999999}
+                    taskDataGB: {type: integer, nullable: true, minimum: 1, maximum: 999}
+                    assetCount: {type: integer, nullable: true, minimum: 1, maximum: 999999999}
+                    canvasCount: {type: integer, nullable: true, minimum: 1, maximum: 999999999}
+                    taskCount: {type: integer, nullable: true, minimum: 1, maximum: 999999999}
+                    apiCallLogCount: {type: integer, nullable: true, minimum: 1, maximum: 999999999}
+                    recycleBinRetentionDays: {type: integer, nullable: true, minimum: 0, maximum: 365}
+      responses:
+        "200": {description: 标准信封 data 为最新 UserResourceQuotaView}
+        "400": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+        "404": {$ref: "#/components/responses/Error"}
   /referrals/me:
     get:
       tags: [auth]
@@ -1938,6 +1992,40 @@ components:
       in: cookie
       name: open_ai_canvas_session
   schemas:
+    ResourceQuota:
+      type: object
+      additionalProperties: false
+      properties:
+        resourceUploadMB: {type: integer, minimum: 1, maximum: 999}
+        generatedFileMB: {type: integer, minimum: 1, maximum: 999}
+        dailyUploadMB: {type: integer, minimum: 1, maximum: 999999}
+        storedFileGB: {type: integer, minimum: 1, maximum: 999}
+        structuredDataMB: {type: integer, minimum: 1, maximum: 999999}
+        taskDataGB: {type: integer, minimum: 1, maximum: 999}
+        assetCount: {type: integer, minimum: 1, maximum: 999999999}
+        canvasCount: {type: integer, minimum: 1, maximum: 999999999}
+        taskCount: {type: integer, minimum: 1, maximum: 999999999}
+        apiCallLogCount: {type: integer, minimum: 1, maximum: 999999999}
+        recycleBinRetentionDays: {type: integer, minimum: 0, maximum: 365}
+    UserResourceQuotaView:
+      type: object
+      required: [overrides, defaultQuota, effectiveQuota, storageUsage, storedFileBytes, dailyUploadBytes]
+      properties:
+        overrides: {$ref: "#/components/schemas/ResourceQuota"}
+        defaultQuota: {$ref: "#/components/schemas/ResourceQuota"}
+        effectiveQuota: {$ref: "#/components/schemas/ResourceQuota"}
+        storedFileBytes: {type: integer, format: int64}
+        dailyUploadBytes: {type: integer, format: int64}
+        storageUsage:
+          type: object
+          properties:
+            assetBytes: {type: integer, format: int64}
+            canvasBytes: {type: integer, format: int64}
+            taskBytes: {type: integer, format: int64}
+            assetCount: {type: integer, format: int64}
+            canvasCount: {type: integer, format: int64}
+            taskCount: {type: integer, format: int64}
+            apiCallCount: {type: integer, format: int64}
     AdminAccessInput:
       type: object
       additionalProperties: false

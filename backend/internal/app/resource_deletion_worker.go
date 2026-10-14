@@ -150,32 +150,39 @@ func (s *Service) cleanupDetachedUserResources(userID string, candidates []model
 }
 
 func (s *Service) cleanupExpiredArchivedAssets() {
-	policy, err := s.RuntimePolicy()
+	userIDs, err := s.repo.ArchivedAssetUserIDs()
 	if err != nil {
-		return
-	}
-	retentionDays := policy.Resource.RecycleBinRetentionDays
-	if retentionDays <= 0 {
-		return
-	}
-	cutoff := time.Now().Add(-time.Duration(retentionDays) * 24 * time.Hour)
-	expired, err := s.repo.FindExpiredArchivedAssets(cutoff, 100)
-	if err != nil {
-		log.Printf("expired archived assets query failed: %v", err)
 		return
 	}
 	deleted := 0
-	for _, asset := range expired {
-		// 自动清理与用户手动删除走同一条强校验路径：先检查业务引用，
-		// 再以事务 + Outbox 删除资源记录和物理对象，不能从 repository 旁路。
-		if err := s.DeleteUserAsset(asset.UserID, asset.ID); err != nil {
-			log.Printf("expired archived asset delete failed for %s: %v", asset.ID, err)
+	for _, userID := range userIDs {
+		policy, err := s.UserRuntimePolicy(userID)
+		if err != nil {
+			log.Printf("recycle bin quota read failed: %v", err)
 			continue
 		}
-		deleted++
+		retentionDays := policy.Resource.RecycleBinRetentionDays
+		if retentionDays <= 0 {
+			continue
+		}
+		cutoff := time.Now().Add(-time.Duration(retentionDays) * 24 * time.Hour)
+		expired, err := s.repo.ExpiredArchivedAssetsForUser(userID, cutoff, 100)
+		if err != nil {
+			log.Printf("expired archived assets query failed: %v", err)
+			continue
+		}
+		for _, asset := range expired {
+			// 自动清理与用户手动删除走同一条强校验路径：先检查业务引用，
+			// 再以事务 + Outbox 删除资源记录和物理对象，不能从 repository 旁路。
+			if err := s.DeleteUserAsset(asset.UserID, asset.ID); err != nil {
+				log.Printf("expired archived asset delete failed for %s: %v", asset.ID, err)
+				continue
+			}
+			deleted++
+		}
 	}
 	if deleted > 0 {
-		log.Printf("recycle bin cleanup: deleted %d expired assets (retention: %d days)", deleted, retentionDays)
+		log.Printf("recycle bin cleanup: deleted %d expired assets using user retention policies", deleted)
 	}
 }
 

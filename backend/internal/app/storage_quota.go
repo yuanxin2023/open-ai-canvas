@@ -14,7 +14,7 @@ type AccountFileStorageUsage struct {
 }
 
 func (s *Service) AccountFileStorageUsage(userID string) (*AccountFileStorageUsage, error) {
-	policy, err := s.RuntimePolicy()
+	policy, err := s.UserRuntimePolicy(userID)
 	if err != nil {
 		return nil, err
 	}
@@ -32,8 +32,16 @@ func structuredBytes(usage repository.UserStorageUsage) int64 {
 	return usage.AssetBytes + usage.CanvasBytes
 }
 
+func validateUserStructuredStorageQuota(repo *repository.Repository, userID string, usage repository.UserStorageUsage, kind string, creating bool, deltaBytes int64, defaults RuntimeResourcePolicy) error {
+	policy, err := userResourcePolicyWithRepository(repo, defaults, userID)
+	if err != nil {
+		return err
+	}
+	return validateStructuredStorageQuotaWithPolicy(usage, kind, creating, deltaBytes, policy)
+}
+
 func validateStructuredStorageQuotaWithPolicy(usage repository.UserStorageUsage, kind string, creating bool, deltaBytes int64, policy RuntimeResourcePolicy) error {
-	if structuredBytes(usage)+deltaBytes > megabytes(policy.StructuredDataMB) {
+	if deltaBytes > 0 && structuredBytes(usage)+deltaBytes > megabytes(policy.StructuredDataMB) {
 		return QuotaExceeded(fmt.Sprintf("账号画布和素材数据已达到 %dMB 上限，请先删除不需要的内容", policy.StructuredDataMB))
 	}
 	if !creating {
@@ -60,7 +68,7 @@ func validateTaskStorageQuotaWithPolicy(usage repository.UserStorageUsage, incom
 }
 
 func validateTaskDataGrowthQuotaWithPolicy(usage repository.UserStorageUsage, incomingBytes int64, policy RuntimeResourcePolicy) error {
-	if usage.TaskBytes+incomingBytes > gigabytes(policy.TaskDataGB) {
+	if incomingBytes > 0 && usage.TaskBytes+incomingBytes > gigabytes(policy.TaskDataGB) {
 		return QuotaExceeded(fmt.Sprintf("账号任务历史数据已达到 %dGB 上限，请联系管理员归档", policy.TaskDataGB))
 	}
 	return nil
@@ -77,12 +85,12 @@ func validateStructuredReplacementQuotaWithPolicy(usage repository.UserStorageUs
 	deltaBytes := bytes
 	switch kind {
 	case "asset":
-		if int64(count) > policy.AssetCount {
+		if int64(count) > policy.AssetCount && int64(count) > usage.AssetCount {
 			return QuotaExceeded(fmt.Sprintf("账号素材数量不能超过 %d 个", policy.AssetCount))
 		}
 		deltaBytes -= usage.AssetBytes
 	case "canvas":
-		if int64(count) > policy.CanvasCount {
+		if int64(count) > policy.CanvasCount && int64(count) > usage.CanvasCount {
 			return QuotaExceeded(fmt.Sprintf("账号画布数量不能超过 %d 个", policy.CanvasCount))
 		}
 		deltaBytes -= usage.CanvasBytes
@@ -97,6 +105,11 @@ func (s *Service) createTaskWithinStorageQuota(task *model.Task, billingOrder *m
 }
 
 func createTaskWithStorageQuotaRepository(repo *repository.Repository, task *model.Task, billingOrder *model.BillingOrder, policy RuntimePolicySetting) error {
+	resource, err := userResourcePolicyWithRepository(repo, policy.Resource, task.UserID)
+	if err != nil {
+		return err
+	}
+	policy.Resource = resource
 	usage, err := repo.UserStorageUsage(task.UserID)
 	if err != nil {
 		return err
@@ -113,7 +126,7 @@ func createTaskWithStorageQuotaRepository(repo *repository.Repository, task *mod
 
 // 任务完成会同时扩张任务历史和画布操作数据，必须在同一临界区核算并原子写入。
 func (s *Service) saveTaskCompletionWithinStorageQuota(task *model.Task, resultJSON []byte, opsJSON []byte, hasCanvasOps bool) error {
-	policy, err := s.RuntimePolicy()
+	policy, err := s.UserRuntimePolicy(task.UserID)
 	if err != nil {
 		return err
 	}

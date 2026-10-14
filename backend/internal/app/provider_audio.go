@@ -185,6 +185,9 @@ func providerGeneratedFileLimit(ctx context.Context) (int64, error) {
 		return maxProviderResponseBytes, nil
 	}
 	policy, err := metadata.Service.RuntimePolicy()
+	if err == nil && metadata.UserID != "" {
+		policy, err = metadata.Service.UserRuntimePolicy(metadata.UserID)
+	}
 	if err != nil {
 		return 0, fmt.Errorf("读取生成资源限制失败：%w", err)
 	}

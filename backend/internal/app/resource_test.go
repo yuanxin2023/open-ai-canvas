@@ -916,7 +916,7 @@ func newResourceTestService(t *testing.T) *Service {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&model.SystemSetting{}, &model.UserOSSSetting{}, &model.StorageLocation{}, &model.UserDailyUploadUsage{}, &model.Resource{}); err != nil {
+	if err := db.AutoMigrate(&model.SystemSetting{}, &model.UserResourceQuota{}, &model.UserOSSSetting{}, &model.StorageLocation{}, &model.UserDailyUploadUsage{}, &model.Resource{}); err != nil {
 		t.Fatal(err)
 	}
 	return &Service{repo: repository.New(db), dataDir: t.TempDir()}
@@ -981,6 +981,9 @@ func TestRetryStoredResourceKeepsOriginalObjectKey(t *testing.T) {
 	if usage != 7 {
 		t.Fatalf("daily upload usage = %d, want 7", usage)
 	}
+	if svc.pendingStorage["user-1"] != 0 {
+		t.Fatal("retry success leaked storage reservation")
+	}
 }
 
 func TestRetryStoredResourceReleasesDailyQuotaAfterFailure(t *testing.T) {
@@ -1005,6 +1008,30 @@ func TestRetryStoredResourceReleasesDailyQuotaAfterFailure(t *testing.T) {
 	}
 	if usage != 0 {
 		t.Fatalf("daily upload usage = %d, want 0", usage)
+	}
+	if svc.pendingStorage["user-1"] != 0 {
+		t.Fatal("retry failure leaked storage reservation")
+	}
+}
+
+func TestRetryStoredResourceRechecksReducedStorageQuota(t *testing.T) {
+	svc := newResourceTestService(t)
+	if err := svc.repo.Create(&model.UserResourceQuota{UserID: "user-1", OverridesJSON: `{"storedFileGB":1}`, UpdatedBy: "admin"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.repo.CreateResource(&model.Resource{ID: "full", UserID: "user-1", Provider: "local", ObjectKey: "full", Size: 1 << 30, Status: model.ResourceStatusReady}); err != nil {
+		t.Fatal(err)
+	}
+	failed := &model.Resource{ID: "retry", UserID: "user-1", Kind: "image", MimeType: "image/png", Provider: "local", ObjectKey: "retry.png", Size: 7, Status: model.ResourceStatusFailed}
+	if err := svc.repo.CreateResource(failed); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.retryStoredResource("user-1", failed, "image", "image/png", 7, bytes.NewReader([]byte("payload"))); err == nil {
+		t.Fatal("retry bypassed reduced storage quota")
+	}
+	stored, err := svc.repo.ResourceForUser("user-1", failed.ID)
+	if err != nil || stored.Status != model.ResourceStatusFailed {
+		t.Fatal("failed retry state lost", stored, err)
 	}
 }
 

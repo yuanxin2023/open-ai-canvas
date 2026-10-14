@@ -331,6 +331,14 @@ CSV 使用中文表头、UTF-8 BOM、CRLF；金额按整数分精确转换为两
 
 同一接口的账号状态字段只负责停用或重新启用普通账号。`DELETE /api/admin/users/:id` 仍是普通用户停用入口：保留用户及业务数据，只清除登录会话和文本流增量记录，不等同于注销。
 
+## 用户独立资源配额
+
+`GET/PATCH /api/admin/users/:id/resource-quota` 需要 `admin.users.accounts` 权限，目标必须是普通用户。GET 返回 `overrides`（稀疏个人覆盖）、`defaultQuota`（全局默认）、`effectiveQuota`（实际生效）、`storageUsage`（现有分类用量）、`storedFileBytes` 和 `dailyUploadBytes`。
+
+PATCH 请求为 `{ "overrides": { "resourceUploadMB": 80, "storedFileGB": null } }`：只更新传入项目，`null` 恢复全局继承，省略保持原状。未知字段、小数、越界、空更新或非普通用户目标均拒绝；成功返回最新 GET 投影并记录 `user.resource_quota.update` 审计。单位、范围、文件边界和统计规则见[用户资源配额](/docs/backend/user-resource-quotas)。
+
+登录态 `limits.resourceUploadMB`、`limits.recycleBinRetentionDays`，用户文件存储进度条及管理员详情 `quota` 返回个人生效值；后端写入仍重新核验。下调额度不删除已有内容；超额时允许读取、删除和缩减数据，拒绝继续增长。普通与分片上传均校验完整文件的个人单文件上限。
+
 ## 管理员用户积分流水
 
 `GET /api/admin/users/:id/ledger` 仅允许管理员访问，使用 `page`、`pageSize` 分页，并通过 `type` 筛选流水。管理后台使用 `all`（全部）、`increase`（兑换、在线充值、退款、注册奖励和签到奖励）、`consume`（消费）与 `admin`（管理员增加或扣减积分）；管理员赠送不会重复进入 `increase`，积分预占记录不对外展示。返回的 `total` 是当前筛选条件下的总数。

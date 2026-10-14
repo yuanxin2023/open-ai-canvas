@@ -63,6 +63,7 @@ func Models() []any {
 		&model.UserOSSSetting{},
 		&model.StorageLocation{},
 		&model.UserDailyUploadUsage{},
+		&model.UserResourceQuota{},
 		&model.Skill{},
 		&model.SkillPlatformState{},
 		&model.SkillCategoryPlatformState{},

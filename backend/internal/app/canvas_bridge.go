@@ -72,7 +72,7 @@ func (h canvasHost) StructuredQuota(userID, kind string, creating bool, deltaByt
 	if h.svc == nil {
 		return nil
 	}
-	policy, err := h.svc.RuntimePolicy()
+	policy, err := h.svc.UserRuntimePolicy(userID)
 	if err != nil {
 		return err
 	}
@@ -87,7 +87,7 @@ func (h canvasHost) StructuredReplacementQuota(userID, kind string, count int, b
 	if h.svc == nil {
 		return nil
 	}
-	policy, err := h.svc.RuntimePolicy()
+	policy, err := h.svc.UserRuntimePolicy(userID)
 	if err != nil {
 		return err
 	}

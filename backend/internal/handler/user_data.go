@@ -281,6 +281,12 @@ func RegisterUserDataRoutes(r *gin.RouterGroup, svc *service.Service) {
 		if !available || !enforceRateLimit(c, "resources-upload:"+user.ID, policy.Request.ResourceUploadPerMinute, time.Minute) {
 			return
 		}
+		userPolicy, err := svc.UserRuntimePolicy(user.ID)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		policy.Resource = userPolicy.Resource
 		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, (policy.Resource.ResourceUploadMB<<20)+(1<<20))
 		file, err := c.FormFile("file")
 		if err != nil {

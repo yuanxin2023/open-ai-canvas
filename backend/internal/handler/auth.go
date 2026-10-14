@@ -169,7 +169,7 @@ func RegisterAuthRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, logicalModelsErr)
 			return
 		}
-		limits, err := svc.PublicRuntimeLimits()
+		limits, err := svc.PublicRuntimeLimits(user.ID)
 		if err != nil {
 			failService(c, err)
 			return
@@ -270,6 +270,7 @@ func linuxDOCallbackHandler(svc *service.Service) gin.HandlerFunc {
 }
 
 func RegisterAdminRoutes(r *gin.RouterGroup, svc *service.Service) {
+	registerUserResourceQuotaRoutes(r, svc)
 	r.GET("/admin/users", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {

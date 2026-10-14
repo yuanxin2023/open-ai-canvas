@@ -366,6 +366,25 @@ export type RuntimeResourcePolicy = {
     recycleBinRetentionDays?: number;
 };
 
+export type UserResourceQuotaOverrides = Partial<Record<keyof RuntimeResourcePolicy, number>>;
+export type UserResourceQuotaPatch = Partial<Record<keyof RuntimeResourcePolicy, number | null>>;
+export type UserResourceQuotaView = {
+    overrides: UserResourceQuotaOverrides;
+    defaultQuota: RuntimeResourcePolicy;
+    effectiveQuota: RuntimeResourcePolicy;
+    storageUsage: AdminUserDetail["storageUsage"];
+    storedFileBytes: number;
+    dailyUploadBytes: number;
+};
+
+export function getAdminUserResourceQuota(userId: string, signal?: AbortSignal) {
+    return http.get<UserResourceQuotaView>(`/admin/users/${encodeURIComponent(userId)}/resource-quota`, { signal });
+}
+
+export function patchAdminUserResourceQuota(userId: string, overrides: UserResourceQuotaPatch) {
+    return http.patch<UserResourceQuotaView>(`/admin/users/${encodeURIComponent(userId)}/resource-quota`, { overrides });
+}
+
 export type RuntimeTaskPolicy = {
     workerConcurrency: number;
     channelConcurrency: number;

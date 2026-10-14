@@ -793,7 +793,7 @@ func (s *Service) hydrateProviderMedia(userID string, media *providerMedia, poli
 		return fmt.Errorf("读取任务参考资源失败：%w", err)
 	}
 	defer body.Close()
-	runtimePolicy, err := s.RuntimePolicy()
+	runtimePolicy, err := s.UserRuntimePolicy(userID)
 	if err != nil {
 		return err
 	}

@@ -259,6 +259,7 @@ func migrations() []tableMigration {
 		migrateTable[model.UserOSSSetting]("user_oss_settings"),
 		migrateTable[model.StorageLocation]("storage_locations"),
 		migrateTable[model.UserDailyUploadUsage]("user_daily_upload_usages"),
+		migrateTable[model.UserResourceQuota]("user_resource_quotas"),
 		migrateTable[model.Skill]("skills"),
 		migrateTable[model.SkillPlatformState]("skill_platform_states"),
 		migrateTable[model.SkillCategoryPlatformState]("skill_category_platform_states"),

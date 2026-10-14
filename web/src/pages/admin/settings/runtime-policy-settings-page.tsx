@@ -9,6 +9,7 @@ import { getAdminRuntimePolicySetting, getAdminSelfUseRuntimePolicy, resetAdminR
 import { useAdminContext } from "../admin-context";
 import { AdminPageFrame } from "../components/admin-shell";
 import { AdminStatusBadge, SettingsSectionCard } from "../components/admin-ui";
+import { resourcePolicyFields } from "../lib/resource-policy-fields";
 
 type PolicyGroup = "resource" | "task" | "request";
 type RuntimePolicyDraft = Pick<RuntimePolicySetting, "resource" | "task" | "request">;
@@ -46,19 +47,7 @@ type PolicyNumberControlProps = {
     onReset: () => void;
 };
 
-const resourceFields: PolicyField[] = [
-    { group: "resource", name: "resourceUploadMB", label: "普通资源单文件", extra: "素材上传和远程导入的单文件业务上限。", unit: "MB", max: 999 },
-    { group: "resource", name: "generatedFileMB", label: "单个生成资源", extra: "上游生成响应和落库资源的单文件上限。", unit: "MB", max: 999 },
-    { group: "resource", name: "dailyUploadMB", label: "每日上传总量", extra: "按 UTC 自然日累计资源与附件上传。", unit: "MB", max: 999_999 },
-    { group: "resource", name: "storedFileGB", label: "账号文件总量", extra: "资源文件与 Agent 会话附件合计。", unit: "GB", max: 999 },
-    { group: "resource", name: "structuredDataMB", label: "结构化数据总量", extra: "画布、素材和 Agent 会话结构化数据合计。", unit: "MB", max: 999_999 },
-    { group: "resource", name: "taskDataGB", label: "任务数据总量", extra: "任务历史、结果和上游请求日志合计。", unit: "GB", max: 999 },
-    { group: "resource", name: "assetCount", label: "素材数量", extra: "单账号可保存的素材记录数。", unit: "条", max: 999_999_999 },
-    { group: "resource", name: "canvasCount", label: "画布数量", extra: "单账号可保存的画布数量。", unit: "个", max: 999_999_999 },
-    { group: "resource", name: "taskCount", label: "任务历史数量", extra: "单账号保留的任务历史记录数。", unit: "条", max: 999_999_999 },
-    { group: "resource", name: "apiCallLogCount", label: "请求日志数量", extra: "单账号保留的上游请求日志数。", unit: "条", max: 999_999_999 },
-    { group: "resource", name: "recycleBinRetentionDays", label: "回收站自动清理时间", extra: "素材移入回收站后自动彻底删除的天数，0 表示不自动清理。", unit: "天", min: 0, max: 365 },
-];
+const resourceFields: PolicyField[] = resourcePolicyFields;
 
 const concurrencyFields: PolicyField[] = [
     { group: "task", name: "workerConcurrency", label: "Worker 并发", extra: "集群同时执行的后台任务数。", unit: "个", max: 999 },

@@ -23,19 +23,19 @@ func TestCurrentSchemaVersionMatchesMigrationPlan(t *testing.T) {
 			}
 		}
 		latest := plan[len(plan)-1]
-		if CurrentSchemaVersion != latest.version || latest.name != "six_character_referral_codes" {
-			t.Fatalf("%s latest migration = %d/%q, want %d/six_character_referral_codes", name, latest.version, latest.name, CurrentSchemaVersion)
+		if CurrentSchemaVersion != latest.version || latest.name != "user_resource_quotas" {
+			t.Fatalf("%s latest migration = %d/%q, want %d/user_resource_quotas", name, latest.version, latest.name, CurrentSchemaVersion)
 		}
 	}
 }
 
 func TestTopupProductAccentColorMigrationIsSharedTail(t *testing.T) {
 	for name, plan := range map[string][]migration{"local": schemaMigrations, "upstream": upstreamFirstMigrationPlan()} {
-		firstShared := plan[len(plan)-14]
+		firstShared := plan[36]
 		if firstShared.version != 37 || firstShared.name != "user_profiles" {
 			t.Fatalf("%s shared migration tail starts at %d/%s, want 37/user_profiles", name, firstShared.version, firstShared.name)
 		}
-		item := plan[len(plan)-7]
+		item := plan[43]
 		if item.version != 44 || item.name != "topup_product_accent_color" {
 			t.Fatalf("%s migration 44 = %d/%s", name, item.version, item.name)
 		}
@@ -264,8 +264,8 @@ func TestMigrateSchemaSupportsLocalAndUpstreamPost23Lineages(t *testing.T) {
 		expectedV24Name  string
 		expectedTailName string
 	}{
-		{name: "local", plan: schemaMigrations, appliedThrough: 27, expectedV24Name: "topup_product_benefits", expectedTailName: "six_character_referral_codes"},
-		{name: "upstream", plan: upstreamFirstMigrationPlan(), appliedThrough: 32, expectedV24Name: "channel_model_label", expectedTailName: "six_character_referral_codes"},
+		{name: "local", plan: schemaMigrations, appliedThrough: 27, expectedV24Name: "topup_product_benefits", expectedTailName: "user_resource_quotas"},
+		{name: "upstream", plan: upstreamFirstMigrationPlan(), appliedThrough: 32, expectedV24Name: "channel_model_label", expectedTailName: "user_resource_quotas"},
 	} {
 		t.Run(scenario.name, func(t *testing.T) {
 			db, err := Open(Config{Driver: "sqlite", DSN: "file:" + t.Name() + "?mode=memory&cache=shared"})

@@ -174,7 +174,7 @@ func (s *Service) CreateRunCanvas(userID, id string, req CreationRequest) (map[s
 		if err != nil {
 			return err
 		}
-		if err = validateStructuredStorageQuotaWithPolicy(usage, "canvas", true, int64(len(raw)), policy.Resource); err != nil {
+		if err = validateUserStructuredStorageQuota(repo, userID, usage, "canvas", true, int64(len(raw)), policy.Resource); err != nil {
 			return err
 		}
 		if err = repo.CreateCreationCanvas(&canvas); err != nil {
@@ -243,7 +243,7 @@ func (s *Service) CommitCreationCanvas(userID, id string, req CreationRequest) (
 		if err != nil {
 			return err
 		}
-		if err = validateStructuredStorageQuotaWithPolicy(usage, "canvas", false, int64(len(req.Document)-len(previous)), policy.Resource); err != nil {
+		if err = validateUserStructuredStorageQuota(repo, userID, usage, "canvas", false, int64(len(req.Document)-len(previous)), policy.Resource); err != nil {
 			return err
 		}
 		if err = saveCreationCanvasWithHistory(repo, canvas, previous); err != nil {

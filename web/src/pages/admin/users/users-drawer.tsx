@@ -14,8 +14,9 @@ import { useUserStore } from "@/stores/use-user-store";
 import { AdminCreditAdjustmentPanel, AdminPasswordField, type CreditAdjustmentState } from "./admin-user-editor-fields";
 import { AdminStatusBadge } from "../components/admin-ui";
 import { buildUserProfilePatch, type UserProfileValues } from "./user-profile-patch";
+import { UserResourceQuotaPanel, type ResourceQuotaEditorState } from "./user-resource-quota-panel";
 
-type UserEditorTab = "profile" | "security" | "credits";
+type UserEditorTab = "profile" | "security" | "credits" | "quota";
 const idleCreditState: CreditAdjustmentState = { dirty: false, busy: false, confirming: false };
 
 export function AdminUserEditModal({ user, actorId, onClose, onSaved, onCreditsAdjusted }: { user: AdminUser | null; actorId?: string; onClose: () => void; onSaved: (user: AdminManagedUser) => void; onCreditsAdjusted: (account: CreditAccount) => void }) {
@@ -28,6 +29,7 @@ export function AdminUserEditModal({ user, actorId, onClose, onSaved, onCreditsA
     const [pendingStatus, setPendingStatus] = useState<LocalUser["status"] | null>(null);
     const [closeConfirming, setCloseConfirming] = useState(false);
     const [creditState, setCreditState] = useState<CreditAdjustmentState>(idleCreditState);
+    const [quotaState, setQuotaState] = useState<ResourceQuotaEditorState>({ dirty: false, busy: false });
     const [profileForm] = Form.useForm<UserProfileValues>();
     const [passwordForm] = Form.useForm<{ password: string }>();
     const operationRef = useRef(false);
@@ -35,7 +37,7 @@ export function AdminUserEditModal({ user, actorId, onClose, onSaved, onCreditsA
     const actorAccess = useUserStore((state) => state.user?.adminAccess);
     const canAdjustCredits = hasAdminPermission(actorAccess, "admin.finance.credits");
     const editingSelf = currentUser?.id === actorId;
-    const interactionLocked = Boolean(saving || pendingStatus || closeConfirming || creditState.busy || creditState.confirming);
+    const interactionLocked = Boolean(saving || pendingStatus || closeConfirming || creditState.busy || creditState.confirming || quotaState.busy);
 
     useEffect(() => {
         if (!user) return;
@@ -46,6 +48,7 @@ export function AdminUserEditModal({ user, actorId, onClose, onSaved, onCreditsA
         setPendingStatus(null);
         setCloseConfirming(false);
         setCreditState(idleCreditState);
+        setQuotaState({ dirty: false, busy: false });
         profileForm.resetFields();
         profileForm.setFieldsValue({ email: user.email || "", remark: user.remark || "" });
         passwordForm.resetFields();
@@ -67,7 +70,7 @@ export function AdminUserEditModal({ user, actorId, onClose, onSaved, onCreditsA
 
     const close = () => {
         if (interactionLocked || operationRef.current) return;
-        const dirtySections = [profileDirty ? "账号资料" : "", passwordDirty ? "安全与状态" : "", canAdjustCredits && creditState.dirty ? "人工调账" : ""].filter(Boolean);
+        const dirtySections = [profileDirty ? "账号资料" : "", passwordDirty ? "安全与状态" : "", canAdjustCredits && creditState.dirty ? "人工调账" : "", quotaState.dirty ? "资源配额" : ""].filter(Boolean);
         if (!dirtySections.length) {
             onClose();
             return;
@@ -233,6 +236,13 @@ export function AdminUserEditModal({ user, actorId, onClose, onSaved, onCreditsA
                                         </section>
                                     </div>
                                 ),
+                            },
+                            {
+                                key: "quota",
+                                forceRender: true,
+                                disabled: interactionLocked,
+                                label: <UserEditorTabLabel label="资源配额" dirty={quotaState.dirty} />,
+                                children: <div className="admin-administrator-editor-pane"><UserResourceQuotaPanel userId={currentUser.id} disabled={interactionLocked} onStateChange={setQuotaState} /></div>,
                             },
                             ...(canAdjustCredits ? [{
                                 key: "credits",

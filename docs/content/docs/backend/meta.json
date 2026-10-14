@@ -8,6 +8,7 @@
     "http-api",
     "code-map",
     "backend-database",
+    "user-resource-quotas",
     "video-token-billing",
     "task-runtime-stability",
     "newapi-channel-2",

@@ -60,16 +60,36 @@ func (s *Service) CompleteTextReplayTask(userID string, taskID string, text stri
 	if len([]byte(text)) > textReplayMaxTaskBytes {
 		return nil, BadAuthRequest("文本内容过大")
 	}
-	if _, err := s.repo.TaskForUser(userID, taskID); err != nil {
-		return nil, err
-	}
-	resultJSON, _ := json.Marshal(map[string]any{"mode": "text", "text": text})
-	completed, err := s.repo.CompleteTextReplayTask(userID, taskID, string(resultJSON), time.Now())
+	task, err := s.repo.TaskForUser(userID, taskID)
 	if err != nil {
 		return nil, err
 	}
-	if !completed {
-		return nil, BadAuthRequest("该文本任务已结束或不属于你，无法完成")
+	resultJSON, _ := json.Marshal(map[string]any{"mode": "text", "text": text})
+	policy, err := s.UserRuntimePolicy(userID)
+	if err != nil {
+		return nil, err
+	}
+	err = func() error {
+		s.storageMu.Lock()
+		defer s.storageMu.Unlock()
+		usage, err := s.repo.UserStorageUsage(userID)
+		if err != nil {
+			return err
+		}
+		if err := validateTaskDataGrowthQuotaWithPolicy(usage, int64(len(resultJSON)-len(task.ResultJSON)), policy.Resource); err != nil {
+			return err
+		}
+		completed, err := s.repo.CompleteTextReplayTask(userID, taskID, string(resultJSON), time.Now())
+		if err != nil {
+			return err
+		}
+		if !completed {
+			return BadAuthRequest("该文本任务已结束或不属于你，无法完成")
+		}
+		return nil
+	}()
+	if err != nil {
+		return nil, err
 	}
 	if compactErr := s.finalizeTaskTextReplay(taskID, model.TaskStatusSucceeded); compactErr != nil {
 		_ = s.log(userID, taskID, "error", "文本回放窗口更新失败", compactErr.Error())
@@ -90,6 +110,19 @@ func (s *Service) AppendTaskTextDelta(userID string, taskID string, content stri
 	}
 	if len([]byte(content)) > textReplayMaxEventBytes {
 		return nil, BadAuthRequest("单条文本增量不能超过 64KB")
+	}
+	policy, err := s.UserRuntimePolicy(userID)
+	if err != nil {
+		return nil, err
+	}
+	s.storageMu.Lock()
+	defer s.storageMu.Unlock()
+	usage, err := s.repo.UserStorageUsage(userID)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateTaskDataGrowthQuotaWithPolicy(usage, int64(len(content)), policy.Resource); err != nil {
+		return nil, err
 	}
 	item, err := s.repo.AppendTaskTextDelta(userID, taskID, content, time.Now().Add(textReplayDraftRetention), repository.TextReplayLimits{
 		MaxTaskBytes: textReplayMaxTaskBytes, MaxUserBytes: textReplayMaxUserBytes, MaxTaskEvents: textReplayMaxTaskEvents,

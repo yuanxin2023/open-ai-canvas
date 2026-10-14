@@ -307,8 +307,8 @@ func (s *Service) uploadResource(userID string, header *multipart.FileHeader, ki
 }
 
 // UploadResourceFile 接收已完整落盘的本地文件（分片上传合并后调用）。
-// 它与 UploadResource 共享资源幂等、媒体探测、配额和持久化语义，唯一差异是分片会话已在 handler 校验单文件上限，
-// 因而此处不再重复该上限检查；uploadIdentity 用于跨请求重试时复用同一逻辑资源，避免重复对象。
+// 它与 UploadResource 共享资源幂等、媒体探测、配额和持久化语义，并重新校验完整文件的当前额度；
+// uploadIdentity 用于跨请求重试时复用同一逻辑资源，避免重复对象。
 func (s *Service) UploadResourceFile(userID string, fileName string, size int64, kind string, width int, height int, durationMs int64, file io.ReadSeeker, uploadIdentity ...string) (*model.Resource, error) {
 	if file == nil || size <= 0 {
 		return nil, BadAuthRequest("请选择要上传的文件")
@@ -372,7 +372,7 @@ func (s *Service) ImportResourceURL(userID string, rawURL string, kind string, w
 	if existing != nil && existing.Status == model.ResourceStatusPending {
 		return nil, resourceUploadInProgress()
 	}
-	policy, err := s.RuntimePolicy()
+	policy, err := s.UserRuntimePolicy(userID)
 	if err != nil {
 		return nil, err
 	}
@@ -689,6 +689,7 @@ func (s *Service) retryStoredResource(userID string, resource *model.Resource, k
 		}
 		return nil, fmt.Errorf("保存资源重试就绪状态失败：%w", err)
 	}
+	s.commitUserUploadQuota(userID, size)
 	s.recordActivity(userID, "resource", 1)
 	return resource, nil
 }
@@ -742,7 +743,7 @@ func (s *Service) persistGeneratedMediaValueMode(userID string, value interface{
 		return item, nil
 	case map[string]interface{}:
 		if raw := inlineMediaValue(item); raw != "" {
-			mimeType, data, err := s.decodeDataURL(raw)
+			mimeType, data, err := s.decodeDataURL(userID, raw)
 			if err != nil && !skipInvalidDataURL {
 				return nil, err
 			}
@@ -809,7 +810,7 @@ func inlineMediaValue(item map[string]interface{}) string {
 	return ""
 }
 
-func (s *Service) decodeDataURL(value string) (string, []byte, error) {
+func (s *Service) decodeDataURL(userID, value string) (string, []byte, error) {
 	header, encoded, ok := strings.Cut(value, ",")
 	if !ok || !strings.HasPrefix(header, "data:") || !strings.HasSuffix(strings.ToLower(header), ";base64") {
 		return "", nil, fmt.Errorf("%w：格式无效", errInvalidGeneratedDataURL)
@@ -819,7 +820,7 @@ func (s *Service) decodeDataURL(value string) (string, []byte, error) {
 	if err != nil {
 		return "", nil, fmt.Errorf("%w：base64 解码失败：%v", errInvalidGeneratedDataURL, err)
 	}
-	policy, err := s.RuntimePolicy()
+	policy, err := s.UserRuntimePolicy(userID)
 	if err != nil {
 		return "", nil, err
 	}

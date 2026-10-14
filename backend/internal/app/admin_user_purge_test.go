@@ -50,6 +50,8 @@ func TestPurgeUserDeletesAccountAndUserScopedData(t *testing.T) {
 		t.Fatal(err)
 	}
 	rows := []any{
+		&model.UserResourceQuota{UserID: target.ID, OverridesJSON: `{"storedFileGB":5}`, UpdatedBy: actor.ID},
+		&model.UserResourceQuota{UserID: other.ID, OverridesJSON: `{"storedFileGB":10}`, UpdatedBy: actor.ID},
 		&model.AuthSession{ID: "session-1", UserID: target.ID},
 		&model.UserLoginEvent{ID: "login-event-1", UserID: target.ID, SessionID: "session-1", LoginMethod: "password"},
 		&model.UserUsernameChange{ID: "username-change-1", UserID: target.ID, OldUsername: "oldone", NewUsername: target.Username, CountsTowardLimit: true},
@@ -81,10 +83,12 @@ func TestPurgeUserDeletesAccountAndUserScopedData(t *testing.T) {
 		{&model.CanvasProject{}, "user_id = ?"}, {&model.Task{}, "user_id = ?"},
 		{&model.TaskLog{}, "user_id = ?"}, {&model.Resource{}, "user_id = ?"},
 		{&model.Asset{}, "user_id = ?"}, {&model.UserPrompt{}, "user_id = ?"},
+		{&model.UserResourceQuota{}, "user_id = ?"},
 	} {
 		assertUserPurgeCount(t, db, check.model, check.query, target.ID, 0)
 	}
 	assertUserPurgeCount(t, db, &model.CreditAccount{}, "user_id = ?", other.ID, 1)
+	assertUserPurgeCount(t, db, &model.UserResourceQuota{}, "user_id = ?", other.ID, 1)
 	assertUserPurgeCount(t, db, &model.AdminAuditEvent{}, "action = ? AND target_id = ?", []any{"user.purge", target.ID}, 1)
 }
 

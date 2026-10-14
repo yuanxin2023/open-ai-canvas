@@ -1330,29 +1330,33 @@ func (s *Service) LogAPICall(log model.ApiCallLog) error {
 			stdlog.Printf("provider task state update failed: task_id=%s provider_request_id=%s error=%v", log.TaskID, log.ProviderRequestID, err)
 		}
 	}
-	if merged, err := s.mergeVideoAPICallLog(log); err != nil {
-		return err
-	} else if merged {
-		return nil
-	}
-	policy, err := s.RuntimePolicy()
+	policy, err := s.UserRuntimePolicy(log.UserID)
 	if err != nil {
 		return err
 	}
 	s.storageMu.Lock()
 	defer s.storageMu.Unlock()
+	if merged, err := s.mergeVideoAPICallLog(log, policy.Resource); err != nil {
+		return err
+	} else if merged {
+		return nil
+	}
 	usage, err := s.repo.UserStorageUsage(log.UserID)
 	if err != nil {
 		return err
 	}
-	incomingBytes := int64(len(log.Path) + len(log.Model) + len(log.ProviderRequestID) + len(log.ErrorCode) + len(log.Error) + len(log.UpstreamURL) + len(log.RequestContentType) + len(log.RequestBody) + len(log.ResponseBody))
+	incomingBytes := apiCallLogStorageBytes(log)
 	if err := validateAPICallLogQuotaWithPolicy(usage, incomingBytes, policy.Resource); err != nil {
 		return err
 	}
 	return s.repo.Create(&log)
 }
 
-func (s *Service) mergeVideoAPICallLog(log model.ApiCallLog) (bool, error) {
+func apiCallLogStorageBytes(log model.ApiCallLog) int64 {
+	return int64(len(log.Path) + len(log.Model) + len(log.ProviderRequestID) + len(log.ErrorCode) + len(log.Error) + len(log.UpstreamURL) + len(log.RequestBody) + len(log.ResponseBody))
+}
+
+func (s *Service) mergeVideoAPICallLog(log model.ApiCallLog, policy RuntimeResourcePolicy) (bool, error) {
 	if log.Capability != "video" || (log.RequestKind != "poll" && log.RequestKind != "download") {
 		return false, nil
 	}
@@ -1366,6 +1370,7 @@ func (s *Service) mergeVideoAPICallLog(log model.ApiCallLog) (bool, error) {
 	if err != nil {
 		return false, err
 	}
+	previousBytes := apiCallLogStorageBytes(*root)
 	if log.RequestKind == "poll" {
 		root.PollCount++
 		if log.ResponseBody != "" {
@@ -1400,6 +1405,13 @@ func (s *Service) mergeVideoAPICallLog(log model.ApiCallLog) (bool, error) {
 		root.InputTokens = log.InputTokens
 		root.OutputTokens = log.OutputTokens
 		root.CachedTokens = log.CachedTokens
+	}
+	usage, err := s.repo.UserStorageUsage(root.UserID)
+	if err != nil {
+		return true, err
+	}
+	if err := validateTaskDataGrowthQuotaWithPolicy(usage, apiCallLogStorageBytes(*root)-previousBytes, policy); err != nil {
+		return true, err
 	}
 	return true, s.repo.Save(root)
 }

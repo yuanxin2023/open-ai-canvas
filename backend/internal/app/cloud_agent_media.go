@@ -608,7 +608,7 @@ func saveCloudAgentDocument(repo *repository.Repository, canvas *model.CanvasPro
 	if err != nil {
 		return err
 	}
-	if err = validateStructuredStorageQuotaWithPolicy(usage, "canvas", false, int64(len(raw)-len(canvas.PayloadJSON)), policy.Resource); err != nil {
+	if err = validateUserStructuredStorageQuota(repo, canvas.UserID, usage, "canvas", false, int64(len(raw)-len(canvas.PayloadJSON)), policy.Resource); err != nil {
 		return err
 	}
 	before := canvas.PayloadJSON

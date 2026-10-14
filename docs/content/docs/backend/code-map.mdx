@@ -5,6 +5,12 @@ description: 从产品功能快速定位主要代码入口
 
 # 代码功能地图
 
+## 用户资源配额
+
+- 普通用户管理入口：`web/src/pages/admin/users/users-drawer.tsx`；独立编辑器 `user-resource-quota-panel.tsx`；共用字段与范围 `admin/lib/resource-policy-fields.ts`。
+- HTTP 合同：`backend/internal/handler/user_resource_quota.go`；权限、投影与统一解析：`app/user_resource_quota.go`；纯覆盖合并和验证：`platform/resource_quota.go`。
+- 持久化与审计事务：`repository/user_resource_quota.go`；写入和并发预留：`app/upload_quota.go`、`storage_quota.go`；回收站：`resource_deletion_worker.go`。统计继续使用 `repository.UserStorageUsage` 与 `UserStoredFileBytes`。
+
 ## 画布 Agent 配置与 Live2D
 
 - 后台入口：`web/src/pages/admin/settings/appearance-settings-page.tsx` 与 `components/canvas-appearance-editor.tsx`。

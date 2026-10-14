@@ -80,7 +80,7 @@ func TestSaveTaskCompletionPersistsRelatedRowsTogether(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&model.SystemSetting{}, &model.Asset{}, &model.CanvasProject{}, &model.Task{}, &model.TaskLog{}, &model.Result{}, &model.ApiCallLog{}, &model.TaskTextDelta{}); err != nil {
+	if err := db.AutoMigrate(&model.SystemSetting{}, &model.UserResourceQuota{}, &model.Asset{}, &model.CanvasProject{}, &model.Task{}, &model.TaskLog{}, &model.Result{}, &model.ApiCallLog{}, &model.TaskTextDelta{}); err != nil {
 		t.Fatal(err)
 	}
 	task := model.Task{ID: "task-1", UserID: "user-1", Status: model.TaskStatusRunning, InputJSON: `{"mode":"text"}`}

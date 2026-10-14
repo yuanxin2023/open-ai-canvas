@@ -15,7 +15,7 @@ import (
 	"gorm.io/gorm"
 )
 
-const CurrentSchemaVersion int64 = 50
+const CurrentSchemaVersion int64 = 51
 
 //go:embed seed/inspirations.json
 var inspirationSeedJSON []byte
@@ -151,6 +151,7 @@ var schemaMigrations = []migration{
 		return tx.AutoMigrate(&model.ReferralProfile{}, &model.ReferralReward{}, &model.CreditLedgerEntry{})
 	}},
 	{version: 50, name: "six_character_referral_codes", checksum: "sha256:six-character-referral-codes-v50-20261006", apply: migrateSixCharacterReferralCodes},
+	{version: 51, name: "user_resource_quotas", checksum: "sha256:user-resource-quotas-v51", apply: func(tx *gorm.DB) error { return tx.AutoMigrate(&model.UserResourceQuota{}) }},
 }
 
 func migrateSixCharacterReferralCodes(tx *gorm.DB) error {
@@ -510,7 +511,7 @@ func migrationsForDatabase(db *gorm.DB) ([]migration, error) {
 func upstreamFirstMigrationPlan() []migration {
 	const sharedCount = 23
 	const localCount = 4
-	const commonTailCount = 14
+	const commonTailCount = 15
 	plan := append([]migration(nil), schemaMigrations[:sharedCount]...)
 	middleEnd := len(schemaMigrations) - commonTailCount
 	for index, item := range schemaMigrations[sharedCount+localCount : middleEnd] {

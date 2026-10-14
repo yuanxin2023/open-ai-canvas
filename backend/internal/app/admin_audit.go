@@ -120,7 +120,7 @@ func (s *Service) AdminUserDetail(actor *model.User, userID string) (*AdminUserD
 	if err != nil {
 		return nil, err
 	}
-	policy, err := s.RuntimePolicy()
+	policy, err := s.UserRuntimePolicy(user.ID)
 	if err != nil {
 		return nil, err
 	}

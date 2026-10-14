@@ -293,6 +293,20 @@ func stringValue(value any) string {
 }
 
 func (s *Service) log(userID string, taskID string, level string, message string, payload string) error {
+	policy, err := s.UserRuntimePolicy(userID)
+	if err != nil {
+		return err
+	}
+	s.storageMu.Lock()
+	defer s.storageMu.Unlock()
+	payload = truncateTaskLogPayload(payload)
+	usage, err := s.repo.UserStorageUsage(userID)
+	if err != nil {
+		return err
+	}
+	if err := validateTaskDataGrowthQuotaWithPolicy(usage, int64(len(message)+len(payload)), policy.Resource); err != nil {
+		return err
+	}
 	traceID := ""
 	requestID := ""
 	if taskID != "" {
@@ -301,7 +315,7 @@ func (s *Service) log(userID string, taskID string, level string, message string
 			requestID = task.RequestID
 		}
 	}
-	return s.repo.Create(&model.TaskLog{ID: newID(), UserID: userID, TaskID: taskID, TraceID: traceID, RequestID: requestID, Level: level, Message: message, Payload: truncateTaskLogPayload(payload)})
+	return s.repo.Create(&model.TaskLog{ID: newID(), UserID: userID, TaskID: taskID, TraceID: traceID, RequestID: requestID, Level: level, Message: message, Payload: payload})
 }
 
 func truncateTaskLogPayload(payload string) string {

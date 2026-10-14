@@ -738,7 +738,8 @@ func (s *Service) validateCreationStorage(repo *repository.Repository, userID st
 	if err != nil {
 		return err
 	}
-	return validateStructuredStorageQuotaWithPolicy(usage, "canvas", creating, bytes+delta, policy.Resource)
+	usage.CanvasBytes += bytes
+	return validateUserStructuredStorageQuota(repo, userID, usage, "canvas", creating, delta, policy.Resource)
 }
 func (s *Service) ApproveCreationSubmissions(userID, id string, req CreationRequest) (map[string]any, error) {
 	if len(req.SubmissionIDs) == 0 || len(req.SubmissionIDs) > 20 {
