@@ -15,12 +15,14 @@ import { closePaymentOrder, createPaymentOrder, getPaymentOrder, listPaymentProv
 import { redeemCredits } from "@/services/api/wallet";
 
 const PAYMENT_CATALOG_STALE_TIME_MS = 5 * 60_000;
+const HOVER_POINTER_QUERY = "(hover: hover) and (pointer: fine)";
 const workspaceCreditTheme = getWorkspaceAntThemeConfig();
 
 export function WorkspaceCreditPopover({ userId }: { userId: string }) {
     const { message } = App.useApp();
     const { availableMicrocredits, policy } = useWalletBalance(userId);
     const [open, setOpen] = useState(false);
+    const [canHover, setCanHover] = useState(() => typeof window !== "undefined" && window.matchMedia(HOVER_POINTER_QUERY).matches);
     const [productsOpen, setProductsOpen] = useState(false);
     const [selectedProduct, setSelectedProduct] = useState<TopupProduct | null>(null);
     const [selectedProviderId, setSelectedProviderId] = useState("");
@@ -54,6 +56,16 @@ export function WorkspaceCreditPopover({ userId }: { userId: string }) {
         ? paymentCatalogQuery.error instanceof Error ? paymentCatalogQuery.error.message : "读取商品套餐失败"
         : "";
     const selectedProvider = useMemo(() => providers.find((provider) => provider.id === selectedProviderId), [providers, selectedProviderId]);
+
+    useEffect(() => {
+        const media = window.matchMedia(HOVER_POINTER_QUERY);
+        const updateCanHover = () => {
+            setCanHover(media.matches);
+            setOpen(false);
+        };
+        media.addEventListener("change", updateCanHover);
+        return () => media.removeEventListener("change", updateCanHover);
+    }, []);
 
     useEffect(() => {
         if (!productsOpen) return;
@@ -228,7 +240,7 @@ export function WorkspaceCreditPopover({ userId }: { userId: string }) {
     return (
         <ConfigProvider theme={workspaceCreditTheme}>
             <Popover
-            trigger="hover"
+            trigger={canHover ? "hover" : "click"}
             placement="bottomRight"
             rootClassName="workspace-credit-popover"
             open={open}
@@ -294,8 +306,10 @@ export function WorkspaceCreditPopover({ userId }: { userId: string }) {
             <button
                 type="button"
                 className="app-workspace-credit-button"
-                aria-label={availableMicrocredits === null ? "查看积分余额" : `积分余额 ${balance}`}
+                aria-label={canHover ? `购买积分与套餐，当前余额 ${balance}` : `查看积分与兑换码，当前余额 ${balance}`}
+                aria-expanded={canHover ? undefined : open}
                 onClick={() => {
+                    if (!canHover) return;
                     setOpen(false);
                     setProductsOpen(true);
                 }}
