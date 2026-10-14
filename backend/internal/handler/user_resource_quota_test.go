@@ -60,6 +60,32 @@ func TestUserResourceQuotaHTTPContract(t *testing.T) {
 		return w
 	}
 	path := "/api/admin/users/ordinary/resource-quota"
+	adminPath := "/api/admin/administrators/limited/resource-quota"
+	for _, tc := range []struct {
+		actor, method, path, body string
+		status                    int
+	}{
+		{"", "GET", adminPath, "", 401},
+		{"ordinary", "GET", adminPath, "", 403},
+		{"limited", "GET", adminPath, "", 403},
+		{"limited", "PATCH", adminPath, `{"overrides":{"storedFileGB":5}}`, 403},
+		{"admin", "GET", adminPath, "", 200},
+		{"admin", "PATCH", adminPath, `{"overrides":{"storedFileGB":5}}`, 200},
+		{"admin", "PATCH", adminPath, `{"overrides":{"storedFileGB":null}}`, 200},
+		{"admin", "PATCH", adminPath, `{"overrides":{"unknown":null}}`, 400},
+		{"admin", "PATCH", adminPath, `{"overrides":{"resourceUploadMB":1.5}}`, 400},
+		{"admin", "PATCH", adminPath, `{"overrides":{"storedFileGB":5},"extra":1}`, 400},
+		{"admin", "GET", "/api/admin/administrators/ordinary/resource-quota", "", 400},
+		{"admin", "PATCH", "/api/admin/administrators/ordinary/resource-quota", `{"overrides":{"storedFileGB":5}}`, 400},
+		{"admin", "GET", "/api/admin/users/admin/resource-quota", "", 400},
+		{"admin", "PATCH", "/api/admin/users/admin/resource-quota", `{"overrides":{"storedFileGB":5}}`, 400},
+		{"admin", "PATCH", "/api/admin/administrators/admin/resource-quota", `{"overrides":{"storedFileGB":7}}`, 200},
+	} {
+		w := request(tc.actor, tc.method, tc.path, tc.body)
+		if w.Code != tc.status {
+			t.Fatalf("%s %s %s = %d: %s", tc.actor, tc.method, tc.path, w.Code, w.Body.String())
+		}
+	}
 	for _, tc := range []struct {
 		actor, method, body string
 		status              int

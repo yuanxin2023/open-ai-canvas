@@ -27,6 +27,34 @@ tags:
   - name: admin
   - name: inspirations
 paths:
+  /admin/administrators/{id}/resource-quota:
+    parameters:
+      - {in: path, name: id, required: true, schema: {type: string}}
+    get:
+      tags: [admin]
+      summary: 查询管理员账号的资源配额与用量
+      description: 仅全权限管理员可操作，目标必须是管理员；响应合同与普通用户配额一致。
+      responses:
+        "200": {$ref: "#/components/responses/ResourceQuota"}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+        "404": {$ref: "#/components/responses/Error"}
+    patch:
+      tags: [admin]
+      summary: 独立更新管理员账号的资源配额
+      description: 仅全权限管理员可操作，可配置自身；null 恢复继承、省略保持。保存与 administrator.resource_quota.update 审计同事务执行。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/ResourceQuotaPatchRequest"}
+      responses:
+        "200": {$ref: "#/components/responses/ResourceQuota"}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+        "404": {$ref: "#/components/responses/Error"}
   /admin/users/{id}/resource-quota:
     parameters:
       - {in: path, name: id, required: true, schema: {type: string}}
@@ -35,16 +63,7 @@ paths:
       summary: 查询普通用户的资源配额与用量
       description: 需要 admin.users.accounts；返回稀疏覆盖、全局默认、生效配额及现有分类用量。
       responses:
-        "200":
-          description: 标准信封 data 为用户资源配额
-          content:
-            application/json:
-              schema:
-                allOf:
-                  - {$ref: "#/components/schemas/Envelope"}
-                  - type: object
-                    properties:
-                      data: {$ref: "#/components/schemas/UserResourceQuotaView"}
+        "200": {$ref: "#/components/responses/ResourceQuota"}
         "403": {$ref: "#/components/responses/Error"}
         "404": {$ref: "#/components/responses/Error"}
     patch:
@@ -55,29 +74,9 @@ paths:
         required: true
         content:
           application/json:
-            schema:
-              type: object
-              additionalProperties: false
-              required: [overrides]
-              properties:
-                overrides:
-                  type: object
-                  additionalProperties: false
-                  minProperties: 1
-                  properties:
-                    resourceUploadMB: {type: integer, nullable: true, minimum: 1, maximum: 999}
-                    generatedFileMB: {type: integer, nullable: true, minimum: 1, maximum: 999}
-                    dailyUploadMB: {type: integer, nullable: true, minimum: 1, maximum: 999999}
-                    storedFileGB: {type: integer, nullable: true, minimum: 1, maximum: 999}
-                    structuredDataMB: {type: integer, nullable: true, minimum: 1, maximum: 999999}
-                    taskDataGB: {type: integer, nullable: true, minimum: 1, maximum: 999}
-                    assetCount: {type: integer, nullable: true, minimum: 1, maximum: 999999999}
-                    canvasCount: {type: integer, nullable: true, minimum: 1, maximum: 999999999}
-                    taskCount: {type: integer, nullable: true, minimum: 1, maximum: 999999999}
-                    apiCallLogCount: {type: integer, nullable: true, minimum: 1, maximum: 999999999}
-                    recycleBinRetentionDays: {type: integer, nullable: true, minimum: 0, maximum: 365}
+            schema: {$ref: "#/components/schemas/ResourceQuotaPatchRequest"}
       responses:
-        "200": {description: 标准信封 data 为最新 UserResourceQuotaView}
+        "200": {$ref: "#/components/responses/ResourceQuota"}
         "400": {$ref: "#/components/responses/Error"}
         "403": {$ref: "#/components/responses/Error"}
         "404": {$ref: "#/components/responses/Error"}
@@ -1992,6 +1991,27 @@ components:
       in: cookie
       name: open_ai_canvas_session
   schemas:
+    ResourceQuotaPatchRequest:
+      type: object
+      additionalProperties: false
+      required: [overrides]
+      properties:
+        overrides:
+          type: object
+          additionalProperties: false
+          minProperties: 1
+          properties:
+            resourceUploadMB: {type: integer, nullable: true, minimum: 1, maximum: 999}
+            generatedFileMB: {type: integer, nullable: true, minimum: 1, maximum: 999}
+            dailyUploadMB: {type: integer, nullable: true, minimum: 1, maximum: 999999}
+            storedFileGB: {type: integer, nullable: true, minimum: 1, maximum: 999}
+            structuredDataMB: {type: integer, nullable: true, minimum: 1, maximum: 999999}
+            taskDataGB: {type: integer, nullable: true, minimum: 1, maximum: 999}
+            assetCount: {type: integer, nullable: true, minimum: 1, maximum: 999999999}
+            canvasCount: {type: integer, nullable: true, minimum: 1, maximum: 999999999}
+            taskCount: {type: integer, nullable: true, minimum: 1, maximum: 999999999}
+            apiCallLogCount: {type: integer, nullable: true, minimum: 1, maximum: 999999999}
+            recycleBinRetentionDays: {type: integer, nullable: true, minimum: 0, maximum: 365}
     ResourceQuota:
       type: object
       additionalProperties: false
@@ -2308,6 +2328,16 @@ components:
                 - model_catalog_mismatch
                 - invalid_model_selection
   responses:
+    ResourceQuota:
+      description: 业务成功信封，data 为当前用户或管理员的资源配额投影
+      content:
+        application/json:
+          schema:
+            allOf:
+              - {$ref: "#/components/schemas/Envelope"}
+              - type: object
+                properties:
+                  data: {$ref: "#/components/schemas/UserResourceQuotaView"}
     ModelQuote:
       description: 当前参数对应的费用报价，位于信封 data.quote
       content:

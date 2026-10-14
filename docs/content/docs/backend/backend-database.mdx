@@ -46,6 +46,8 @@ description: AI 创作工作台后端核心持久化表与状态边界
 
 个人覆盖合并与 `admin_audit_events` 的 `user.resource_quota.update` 记录同事务写入；并发 PATCH 按目标用户串行合并，省略字段不会丢失。全部恢复继承后删除该行；永久注销用户同事务清理。配置、统计和接口合同见[用户资源配额](/docs/backend/user-resource-quotas)。
 
+管理员账号复用同一表，不新增 schema 版本。修改管理员配额仅允许全权限管理员，事务内校验目标角色并记录 `administrator.resource_quota.update` 审计；账号升降级保留配置，注销管理员也同事务清理。
+
 ## 邀请返利
 
 | 表 | 用途 | 关键边界 |

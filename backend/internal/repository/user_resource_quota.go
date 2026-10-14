@@ -19,10 +19,10 @@ func (r *Repository) UserResourceQuota(userID string) (*model.UserResourceQuota,
 }
 
 // Serialize patches against the user row, including the first override write.
-func (r *Repository) PatchUserResourceQuota(userID string, apply func(*Repository) (*model.UserResourceQuota, *model.AdminAuditEvent, error)) error {
+func (r *Repository) PatchUserResourceQuota(userID string, expectedRole model.UserRole, apply func(*Repository) (*model.UserResourceQuota, *model.AdminAuditEvent, error)) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		var user model.User
-		query := tx.Where("id = ? AND role = ?", userID, model.UserRoleUser)
+		query := tx.Where("id = ? AND role = ?", userID, expectedRole)
 		if r.Dialect() == "postgres" {
 			query = query.Clauses(clause.Locking{Strength: "UPDATE"})
 		}

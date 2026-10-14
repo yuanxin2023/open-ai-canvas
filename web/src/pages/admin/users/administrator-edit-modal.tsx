@@ -1,6 +1,6 @@
-import { App, Button, Form, Input, Modal, Tabs, type FormInstance } from "antd";
+import { App, Button, Form, Grid, Input, Modal, Tabs, theme, type FormInstance } from "antd";
 import { KeyRound, ShieldCheck, UserCog } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useCopyText } from "@/hooks/use-copy-text";
 import { ADMIN_PERMISSION_GROUPS, ALL_ADMIN_PERMISSIONS, type AdminAccess, type AdminLevel, type AdminPermission } from "@/lib/admin-permissions";
@@ -10,8 +10,9 @@ import { updateAdministrator, type AdminManagedUser, type AdminUser, type LocalU
 import type { CreditAccount } from "@/services/api/wallet";
 import { generateAdminPassword } from "./admin-password";
 import { AdminAccessFields, AdminCreditAdjustmentPanel, AdminPasswordField, type CreditAdjustmentState } from "./admin-user-editor-fields";
+import { UserResourceQuotaPanel, type ResourceQuotaEditorState } from "./user-resource-quota-panel";
 
-type AdministratorEditorTab = "profile" | "access" | "security" | "credits";
+type AdministratorEditorTab = "profile" | "access" | "security" | "quota" | "credits";
 type ProfileFormValues = { email?: string; remark: string };
 type AccessFormValues = { adminLevel: AdminLevel; permissions?: AdminPermission[] };
 type PasswordFormValues = { password: string };
@@ -33,6 +34,8 @@ export function AdministratorEditModal({
     onCreditsAdjusted: (account: CreditAccount) => void;
 }) {
     const { message, modal } = App.useApp();
+    const screens = Grid.useBreakpoint();
+    const { token } = theme.useToken();
     const copyText = useCopyText();
     const [activeTab, setActiveTab] = useState<AdministratorEditorTab>("profile");
     const [currentUser, setCurrentUser] = useState<AdminUser | null>(null);
@@ -41,6 +44,9 @@ export function AdministratorEditModal({
     const [accessDirty, setAccessDirty] = useState(false);
     const [passwordDirty, setPasswordDirty] = useState(false);
     const [creditState, setCreditState] = useState<CreditAdjustmentState>(idleCreditState);
+    const [quotaState, setQuotaState] = useState<ResourceQuotaEditorState>({ dirty: false, busy: false });
+    const [closeConfirming, setCloseConfirming] = useState(false);
+    const operationRef = useRef(false);
     const [pendingAccess, setPendingAccess] = useState<AdminAccess | null>(null);
     const [pendingStatus, setPendingStatus] = useState<LocalUser["status"] | null>(null);
     const [profileForm] = Form.useForm<ProfileFormValues>();
@@ -56,7 +62,7 @@ export function AdministratorEditModal({
         }),
         [currentUser?.adminAccess],
     );
-    const interactionLocked = Boolean(saving || pendingAccess || pendingStatus || creditState.busy || creditState.confirming);
+    const interactionLocked = Boolean(saving || pendingAccess || pendingStatus || closeConfirming || creditState.busy || creditState.confirming || quotaState.busy);
     const syncAccessDirty = () => {
         const values = accessForm.getFieldsValue();
         setAccessDirty(
@@ -72,6 +78,9 @@ export function AdministratorEditModal({
         setCurrentUser(user);
         setActiveTab("profile");
         setSaving(null);
+        operationRef.current = false;
+        setCloseConfirming(false);
+        setQuotaState({ dirty: false, busy: false });
         setPendingAccess(null);
         setPendingStatus(null);
         setCreditState(idleCreditState);
@@ -89,12 +98,13 @@ export function AdministratorEditModal({
     };
 
     const close = () => {
-        if (interactionLocked) return;
-        const dirtySections = [profileDirty ? "账号资料" : "", accessDirty ? "权限配置" : "", passwordDirty ? "安全与状态" : "", creditState.dirty ? "人工调账" : ""].filter(Boolean);
+        if (interactionLocked || operationRef.current) return;
+        const dirtySections = [profileDirty ? "账号资料" : "", accessDirty ? "权限配置" : "", passwordDirty ? "安全与状态" : "", quotaState.dirty ? "资源配额" : "", creditState.dirty ? "人工调账" : ""].filter(Boolean);
         if (!dirtySections.length) {
             onClose();
             return;
         }
+        setCloseConfirming(true);
         modal.confirm({
             title: "放弃管理员修改？",
             content: `以下分栏还有未保存内容：${dirtySections.join("、")}。关闭后这些内容将丢失。`,
@@ -102,15 +112,18 @@ export function AdministratorEditModal({
             cancelText: "继续编辑",
             okButtonProps: { danger: true },
             onOk: onClose,
+            afterClose: () => setCloseConfirming(false),
         });
     };
 
     const saveProfile = async () => {
-        if (!currentUser) return;
+        if (!currentUser || interactionLocked || operationRef.current) return;
+        operationRef.current = true;
         let values: ProfileFormValues;
         try {
             values = await profileForm.validateFields();
         } catch {
+            operationRef.current = false;
             return;
         }
         setSaving("profile");
@@ -126,18 +139,22 @@ export function AdministratorEditModal({
         } catch (error) {
             message.error(error instanceof Error ? error.message : "保存管理员资料失败");
         } finally {
+            operationRef.current = false;
             setSaving(null);
         }
     };
 
     const previewAccess = async () => {
-        if (!currentUser || editingSelf) return;
+        if (!currentUser || editingSelf || interactionLocked || operationRef.current) return;
+        operationRef.current = true;
         let values: AccessFormValues;
         try {
             values = await accessForm.validateFields();
         } catch {
+            operationRef.current = false;
             return;
         }
+        operationRef.current = false;
         const next: AdminAccess = {
             level: values.adminLevel || "scoped",
             permissions: values.adminLevel === "full" ? [] : values.permissions || [],
@@ -152,7 +169,8 @@ export function AdministratorEditModal({
     };
 
     const saveAccess = async () => {
-        if (!currentUser || !pendingAccess) return;
+        if (!currentUser || !pendingAccess || saving || operationRef.current) return;
+        operationRef.current = true;
         setSaving("access");
         try {
             const result = await updateAdministrator(currentUser.id, { adminAccess: pendingAccess });
@@ -164,16 +182,19 @@ export function AdministratorEditModal({
         } catch (error) {
             message.error(error instanceof Error ? error.message : "更新管理员权限失败");
         } finally {
+            operationRef.current = false;
             setSaving(null);
         }
     };
 
     const savePassword = async () => {
-        if (!currentUser) return;
+        if (!currentUser || interactionLocked || operationRef.current) return;
+        operationRef.current = true;
         let values: PasswordFormValues;
         try {
             values = await passwordForm.validateFields();
         } catch {
+            operationRef.current = false;
             return;
         }
         setSaving("password");
@@ -186,12 +207,14 @@ export function AdministratorEditModal({
         } catch (error) {
             message.error(error instanceof Error ? error.message : "重置管理员密码失败");
         } finally {
+            operationRef.current = false;
             setSaving(null);
         }
     };
 
     const saveStatus = async () => {
-        if (!currentUser || !pendingStatus || editingSelf) return;
+        if (!currentUser || !pendingStatus || editingSelf || saving || operationRef.current) return;
+        operationRef.current = true;
         setSaving("status");
         try {
             const result = await updateAdministrator(currentUser.id, { status: pendingStatus });
@@ -201,6 +224,7 @@ export function AdministratorEditModal({
         } catch (error) {
             message.error(error instanceof Error ? error.message : "更新管理员状态失败");
         } finally {
+            operationRef.current = false;
             setSaving(null);
         }
     };
@@ -259,14 +283,16 @@ export function AdministratorEditModal({
                         </header>
 
                         <Tabs
+                            tabBarGutter={screens.sm ? undefined : token.marginXS}
                             activeKey={activeTab}
                             animated={false}
                             onChange={(key) => {
-                                if (!interactionLocked) setActiveTab(key as AdministratorEditorTab);
+                                if (!interactionLocked && !operationRef.current) setActiveTab(key as AdministratorEditorTab);
                             }}
                             items={[
                                 {
                                     key: "profile",
+                                    disabled: interactionLocked,
                                     label: <TabLabel label="账号资料" dirty={profileDirty} />,
                                     children: (
                                         <div className="admin-administrator-editor-pane">
@@ -278,7 +304,7 @@ export function AdministratorEditModal({
                                                 form={profileForm}
                                                 layout="vertical"
                                                 requiredMark={false}
-                                                disabled={Boolean(saving)}
+                                                disabled={interactionLocked}
                                                 onFieldsChange={() => {
                                                     const values = profileForm.getFieldsValue();
                                                     setProfileDirty(values.email !== (currentUser.email || "") || values.remark !== (currentUser.remark || ""));
@@ -299,6 +325,7 @@ export function AdministratorEditModal({
                                 },
                                 {
                                     key: "access",
+                                    disabled: interactionLocked,
                                     label: <TabLabel label="权限配置" dirty={accessDirty} />,
                                     children: (
                                         <div className="admin-administrator-editor-pane">
@@ -309,7 +336,7 @@ export function AdministratorEditModal({
                                             {editingSelf ? (
                                                 <ReadOnlyAccess access={currentAccess} />
                                             ) : (
-                                                <Form form={accessForm} layout="vertical" requiredMark={false} disabled={Boolean(saving)} onFieldsChange={syncAccessDirty}>
+                                                <Form form={accessForm} layout="vertical" requiredMark={false} disabled={interactionLocked} onFieldsChange={syncAccessDirty}>
                                                     <AdminAccessFields level={selectedAdminLevel} onChange={syncAccessDirty} />
                                                 </Form>
                                             )}
@@ -318,6 +345,7 @@ export function AdministratorEditModal({
                                 },
                                 {
                                     key: "security",
+                                    disabled: interactionLocked,
                                     label: <TabLabel label="安全与状态" dirty={passwordDirty} />,
                                     children: (
                                         <div className="admin-administrator-editor-pane admin-administrator-security-grid">
@@ -331,7 +359,7 @@ export function AdministratorEditModal({
                                                         <p>保存新密码后会撤销该账号当前的全部登录状态。</p>
                                                     </div>
                                                 </div>
-                                                <Form form={passwordForm} layout="vertical" requiredMark={false} disabled={Boolean(saving)} onFieldsChange={() => setPasswordDirty(Boolean(passwordForm.getFieldValue("password")))}>
+                                                <Form form={passwordForm} layout="vertical" requiredMark={false} disabled={interactionLocked} onFieldsChange={() => setPasswordDirty(Boolean(passwordForm.getFieldValue("password")))}>
                                                     <Form.Item
                                                         name="password"
                                                         label="新密码"
@@ -358,7 +386,7 @@ export function AdministratorEditModal({
                                                         />
                                                     </Form.Item>
                                                     <div className="flex justify-end">
-                                                        <Button type="primary" loading={saving === "password"} disabled={Boolean(saving) || !passwordDirty} onClick={() => void savePassword()}>
+                                                        <Button type="primary" loading={saving === "password"} disabled={interactionLocked || !passwordDirty} onClick={() => void savePassword()}>
                                                             重置密码
                                                         </Button>
                                                     </div>
@@ -380,7 +408,7 @@ export function AdministratorEditModal({
                                                         <span>当前状态</span>
                                                         <AdminStatusBadge label={currentUser.status === "active" ? "已启用" : "已停用"} tone={currentUser.status === "active" ? "success" : "neutral"} />
                                                     </div>
-                                                    <Button danger={currentUser.status === "active"} disabled={editingSelf || Boolean(saving)} onClick={() => setPendingStatus(currentUser.status === "active" ? "disabled" : "active")}>
+                                                    <Button danger={currentUser.status === "active"} disabled={editingSelf || interactionLocked} onClick={() => setPendingStatus(currentUser.status === "active" ? "disabled" : "active")}>
                                                         {currentUser.status === "active" ? "停用账号" : "重新启用"}
                                                     </Button>
                                                 </div>
@@ -390,7 +418,15 @@ export function AdministratorEditModal({
                                     ),
                                 },
                                 {
+                                    key: "quota",
+                                    forceRender: true,
+                                    disabled: interactionLocked,
+                                    label: <TabLabel label="资源配额" dirty={quotaState.dirty} />,
+                                    children: <div className="admin-administrator-editor-pane"><UserResourceQuotaPanel userId={currentUser.id} accountKind="administrator" disabled={interactionLocked} onStateChange={setQuotaState} /></div>,
+                                },
+                                {
                                     key: "credits",
+                                    disabled: interactionLocked,
                                     label: <TabLabel label="人工调账" dirty={creditState.dirty} />,
                                     children: (
                                         <div className="admin-administrator-editor-pane">
@@ -398,7 +434,7 @@ export function AdministratorEditModal({
                                                 <strong>账务写入操作</strong>
                                                 <p>调账独立提交，不会连带保存账号资料、权限或密码草稿。</p>
                                             </div>
-                                            <AdminCreditAdjustmentPanel user={currentUser} disabled={Boolean(saving)} onCreditsAdjusted={handleCreditsAdjusted} onStateChange={setCreditState} />
+                                            <AdminCreditAdjustmentPanel user={currentUser} disabled={interactionLocked} onCreditsAdjusted={handleCreditsAdjusted} onStateChange={setCreditState} />
                                         </div>
                                     ),
                                 },

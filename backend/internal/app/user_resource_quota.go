@@ -75,12 +75,32 @@ func (s *Service) ValidateUserUploadSize(userID string, size int64) error {
 }
 
 func (s *Service) AdminUserResourceQuota(actor *model.User, userID string) (*UserResourceQuotaView, error) {
-	if err := s.RequireAdminPermission(actor, model.AdminPermissionUsers); err != nil {
+	return s.adminAccountResourceQuota(actor, userID, model.UserRoleUser)
+}
+
+func (s *Service) AdminAdministratorResourceQuota(actor *model.User, userID string) (*UserResourceQuotaView, error) {
+	return s.adminAccountResourceQuota(actor, userID, model.UserRoleAdmin)
+}
+
+func (s *Service) requireResourceQuotaTarget(actor *model.User, userID string, role model.UserRole) (*model.User, error) {
+	var err error
+	if role == model.UserRoleAdmin {
+		err = s.RequireFullAdmin(actor)
+	} else {
+		err = s.RequireAdminPermission(actor, model.AdminPermissionUsers)
+	}
+	if err != nil {
 		return nil, err
 	}
-	if _, err := s.requireTargetRole(userID, model.UserRoleUser); err != nil {
+	return s.requireTargetRole(userID, role)
+}
+
+func (s *Service) adminAccountResourceQuota(actor *model.User, userID string, role model.UserRole) (*UserResourceQuotaView, error) {
+	user, err := s.requireResourceQuotaTarget(actor, userID, role)
+	if err != nil {
 		return nil, err
 	}
+	userID = user.ID
 	defaults, err := s.RuntimePolicy()
 	if err != nil {
 		return nil, err
@@ -109,12 +129,19 @@ func (s *Service) AdminUserResourceQuota(actor *model.User, userID string) (*Use
 }
 
 func (s *Service) PatchAdminUserResourceQuota(actor *model.User, userID string, request UserResourceQuotaRequest) (*UserResourceQuotaView, error) {
-	if err := s.RequireAdminPermission(actor, model.AdminPermissionUsers); err != nil {
+	return s.patchAdminAccountResourceQuota(actor, userID, model.UserRoleUser, request)
+}
+
+func (s *Service) PatchAdminAdministratorResourceQuota(actor *model.User, userID string, request UserResourceQuotaRequest) (*UserResourceQuotaView, error) {
+	return s.patchAdminAccountResourceQuota(actor, userID, model.UserRoleAdmin, request)
+}
+
+func (s *Service) patchAdminAccountResourceQuota(actor *model.User, userID string, role model.UserRole, request UserResourceQuotaRequest) (*UserResourceQuotaView, error) {
+	user, err := s.requireResourceQuotaTarget(actor, userID, role)
+	if err != nil {
 		return nil, err
 	}
-	if _, err := s.requireTargetRole(userID, model.UserRoleUser); err != nil {
-		return nil, err
-	}
+	userID = user.ID
 	if len(request.Overrides) == 0 {
 		return nil, BadAuthRequest("请选择需要更新的配额项目")
 	}
@@ -122,7 +149,7 @@ func (s *Service) PatchAdminUserResourceQuota(actor *model.User, userID string, 
 	if err != nil {
 		return nil, err
 	}
-	err = s.repo.PatchUserResourceQuota(userID, func(repo *repository.Repository) (*model.UserResourceQuota, *model.AdminAuditEvent, error) {
+	err = s.repo.PatchUserResourceQuota(userID, role, func(repo *repository.Repository) (*model.UserResourceQuota, *model.AdminAuditEvent, error) {
 		current, err := readUserResourceOverrides(repo, userID)
 		if err != nil {
 			return nil, nil, err
@@ -143,11 +170,15 @@ func (s *Service) PatchAdminUserResourceQuota(actor *model.User, userID string, 
 		if err != nil {
 			return nil, nil, err
 		}
-		audit := &model.AdminAuditEvent{ID: newID(), ActorUserID: actor.ID, Action: "user.resource_quota.update", TargetType: "user", TargetID: userID, Summary: "更新用户资源配额", MetadataJSON: string(metadata), CreatedAt: time.Now()}
+		action, summary := "user.resource_quota.update", "更新用户资源配额"
+		if role == model.UserRoleAdmin {
+			action, summary = "administrator.resource_quota.update", "更新管理员资源配额"
+		}
+		audit := &model.AdminAuditEvent{ID: newID(), ActorUserID: actor.ID, Action: action, TargetType: "user", TargetID: userID, Summary: summary, MetadataJSON: string(metadata), CreatedAt: time.Now()}
 		return row, audit, nil
 	})
 	if err != nil {
 		return nil, err
 	}
-	return s.AdminUserResourceQuota(actor, userID)
+	return s.adminAccountResourceQuota(actor, userID, role)
 }

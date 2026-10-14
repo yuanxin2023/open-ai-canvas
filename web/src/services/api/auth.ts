@@ -385,6 +385,14 @@ export function patchAdminUserResourceQuota(userId: string, overrides: UserResou
     return http.patch<UserResourceQuotaView>(`/admin/users/${encodeURIComponent(userId)}/resource-quota`, { overrides });
 }
 
+export function getAdministratorResourceQuota(userId: string, signal?: AbortSignal) {
+    return http.get<UserResourceQuotaView>(`/admin/administrators/${encodeURIComponent(userId)}/resource-quota`, { signal });
+}
+
+export function patchAdministratorResourceQuota(userId: string, overrides: UserResourceQuotaPatch) {
+    return http.patch<UserResourceQuotaView>(`/admin/administrators/${encodeURIComponent(userId)}/resource-quota`, { overrides });
+}
+
 export type RuntimeTaskPolicy = {
     workerConcurrency: number;
     channelConcurrency: number;

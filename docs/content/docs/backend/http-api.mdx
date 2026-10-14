@@ -337,6 +337,8 @@ CSV 使用中文表头、UTF-8 BOM、CRLF；金额按整数分精确转换为两
 
 PATCH 请求为 `{ "overrides": { "resourceUploadMB": 80, "storedFileGB": null } }`：只更新传入项目，`null` 恢复全局继承，省略保持原状。未知字段、小数、越界、空更新或非普通用户目标均拒绝；成功返回最新 GET 投影并记录 `user.resource_quota.update` 审计。单位、范围、文件边界和统计规则见[用户资源配额](/docs/backend/user-resource-quotas)。
 
+`GET/PATCH /api/admin/administrators/:id/resource-quota` 使用相同请求/响应合同，只允许全权限管理员操作管理员目标，包括自身账号。模块管理员即使具有用户管理权限，也不能读取或修改管理员配额。PATCH 在事务内重新核验目标角色并记录 `administrator.resource_quota.update` 审计；两类接口不能交叉操作目标。账号升降级保留同一用户 ID 的配额配置，注销同步清理。复用 schema 51 的表，本次无新增数据库迁移。
+
 登录态 `limits.resourceUploadMB`、`limits.recycleBinRetentionDays`，用户文件存储进度条及管理员详情 `quota` 返回个人生效值；后端写入仍重新核验。下调额度不删除已有内容；超额时允许读取、删除和缩减数据，拒绝继续增长。普通与分片上传均校验完整文件的个人单文件上限。
 
 ## 管理员用户积分流水

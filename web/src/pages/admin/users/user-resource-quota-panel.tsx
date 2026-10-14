@@ -1,12 +1,12 @@
 import { App, Button, InputNumber, Select, Spin } from "antd";
 import { useEffect, useRef, useState } from "react";
-import { getAdminUserResourceQuota, patchAdminUserResourceQuota, type RuntimeResourcePolicy, type UserResourceQuotaView } from "@/services/api/auth";
+import { getAdminUserResourceQuota, patchAdminUserResourceQuota, getAdministratorResourceQuota, patchAdministratorResourceQuota, type RuntimeResourcePolicy, type UserResourceQuotaView } from "@/services/api/auth";
 import { resourcePolicyFields } from "../lib/resource-policy-fields";
 import { buildResourceQuotaPatch, type ResourceQuotaDraft } from "./user-resource-quota-patch";
 
 export type ResourceQuotaEditorState = { dirty: boolean; busy: boolean };
 
-export function UserResourceQuotaPanel({ userId, disabled, onStateChange }: { userId: string; disabled: boolean; onStateChange: (state: ResourceQuotaEditorState) => void }) {
+export function UserResourceQuotaPanel({ userId, accountKind = "user", disabled, onStateChange }: { userId: string; accountKind?: "user" | "administrator"; disabled: boolean; onStateChange: (state: ResourceQuotaEditorState) => void }) {
     const { message } = App.useApp();
     const [view, setView] = useState<UserResourceQuotaView | null>(null);
     const [draft, setDraft] = useState<ResourceQuotaDraft>({});
@@ -24,12 +24,13 @@ export function UserResourceQuotaPanel({ userId, disabled, onStateChange }: { us
         setError("");
         setView(null);
         setDraft({});
-        void getAdminUserResourceQuota(userId, controller.signal)
+        const readQuota = accountKind === "administrator" ? getAdministratorResourceQuota : getAdminUserResourceQuota;
+        void readQuota(userId, controller.signal)
             .then((next) => { if (!controller.signal.aborted) { setView(next); setDraft({ ...next.overrides }); } })
             .catch((error) => { if (!controller.signal.aborted) setError(error instanceof Error ? error.message : "读取个人配额失败"); })
             .finally(() => { if (!controller.signal.aborted) setLoading(false); });
         return () => controller.abort();
-    }, [retry, userId]);
+    }, [accountKind, retry, userId]);
 
     useEffect(() => { onStateChange({ dirty, busy: saving }); }, [dirty, onStateChange, saving]);
 
@@ -46,10 +47,11 @@ export function UserResourceQuotaPanel({ userId, disabled, onStateChange }: { us
         savingRef.current = true;
         setSaving(true);
         try {
-            const next = await patchAdminUserResourceQuota(userId, patch);
+            const saveQuota = accountKind === "administrator" ? patchAdministratorResourceQuota : patchAdminUserResourceQuota;
+            const next = await saveQuota(userId, patch);
             setView(next);
             setDraft({ ...next.overrides });
-            message.success("用户资源配额已保存");
+            message.success(accountKind === "administrator" ? "管理员资源配额已保存" : "用户资源配额已保存");
         } catch (error) {
             message.error(error instanceof Error ? error.message : "保存个人配额失败");
         } finally { savingRef.current = false; setSaving(false); }
