@@ -241,7 +241,7 @@ export function WorkspaceCreditPopover({ userId }: { userId: string }) {
         <ConfigProvider theme={workspaceCreditTheme}>
             <Popover
             trigger={canHover ? "hover" : "click"}
-            placement="bottomRight"
+            placement={canHover ? "bottomRight" : "bottom"}
             rootClassName="workspace-credit-popover"
             open={open}
             onOpenChange={setOpen}
