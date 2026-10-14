@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { PaginationBar } from "@/pages/admin/components/admin-ui";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
-import { bulkDisableAdminUsers, listAdminUsers, purgeAdminUser, type AdminManagedUser, type AdminUser, type LocalUser } from "@/services/api/auth";
+import { bulkDisableAdminUsers, listAdminUsers, purgeAdminUser, updateAdminUser, type AdminManagedUser, type AdminUser, type LocalUser } from "@/services/api/auth";
 import type { CreditAccount } from "@/services/api/wallet";
 import { useUserStore } from "@/stores/use-user-store";
 import { AdminBatchBar, AdminDataTable, AdminTableEmpty } from "../components/admin-ui";
@@ -131,6 +131,10 @@ export default function UsersPanel({ onUserChanged, onUserDeleted }: { onUserCha
         visibleColumns,
         onView: (user) => setDetailUserId(user.id),
         onEdit: (user) => { setCreateUserOpen(false); setEditingUser(user); },
+        onSaveRemark: async (userId, remark) => {
+            const result = await updateAdminUser(userId, { remark });
+            replaceUser(result.user);
+        },
         onPurge: async (user) => {
             try {
                 await purgeAdminUser(user.id);
@@ -145,7 +149,7 @@ export default function UsersPanel({ onUserChanged, onUserDeleted }: { onUserCha
                 message.error(error instanceof Error ? error.message : "注销用户失败");
             }
         },
-    }), [actor?.id, detailUserId, editingUser?.id, message, onUserDeleted, visibleColumns]);
+    }), [actor?.id, detailUserId, editingUser?.id, message, onUserDeleted, replaceUser, visibleColumns]);
 
     const resetFilters = () => {
         setFilterDraft("");

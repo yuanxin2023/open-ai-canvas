@@ -1,5 +1,7 @@
+import { App, Input } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { Eye, SlidersHorizontal, UserRoundX } from "lucide-react";
+import { useState } from "react";
 
 import { formatCredits } from "@/constant/credits";
 import { IdentityProviderBadge } from "@/components/layout/identity-provider-badge";
@@ -23,12 +25,14 @@ export function createUserColumns({
     visibleColumns,
     onView,
     onEdit,
+    onSaveRemark,
     onPurge,
 }: {
     actorId?: string;
     visibleColumns: Set<UserColumnKey>;
     onView: (user: AdminUser) => void;
     onEdit: (user: AdminUser) => void;
+    onSaveRemark: (userId: string, remark: string) => Promise<void>;
     onPurge: (user: AdminUser) => Promise<void>;
 }): ColumnsType<AdminUser> {
     const columns: Array<ColumnsType<AdminUser>[number] & { key: UserColumnKey }> = [
@@ -49,7 +53,7 @@ export function createUserColumns({
             dataIndex: "remark",
             width: 180,
             ellipsis: true,
-            render: (remark) => remark || <span className="text-foreground/40">未备注</span>,
+            render: (_, user) => <UserRemarkCell key={user.id} user={user} onSave={onSaveRemark} />,
         },
         { key: "email", title: "邮箱", dataIndex: "email", align: "center", render: (email) => email || <span className="text-foreground/40">未填写</span> },
         {
@@ -92,6 +96,71 @@ export function createUserColumns({
         },
     ];
     return columns.filter((column) => column.key === "remark" || visibleColumns.has(column.key));
+}
+
+function UserRemarkCell({ user, onSave }: { user: AdminUser; onSave: (userId: string, remark: string) => Promise<void> }) {
+    const { message } = App.useApp();
+    const [editing, setEditing] = useState(false);
+    const [draft, setDraft] = useState(user.remark || "");
+    const [saving, setSaving] = useState(false);
+
+    const save = async () => {
+        if (saving) return;
+        const remark = draft.trim();
+        if (remark === (user.remark || "")) {
+            setEditing(false);
+            return;
+        }
+        setSaving(true);
+        try {
+            await onSave(user.id, remark);
+            setEditing(false);
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "保存备注失败");
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    if (editing) return (
+        <Input
+            autoFocus
+            variant="borderless"
+            size="small"
+            maxLength={500}
+            value={draft}
+            readOnly={saving}
+            aria-busy={saving}
+            aria-label={`编辑 ${user.username} 的备注`}
+            placeholder="未备注"
+            onClick={(event) => event.stopPropagation()}
+            onChange={(event) => setDraft(event.target.value)}
+            onBlur={() => void save()}
+            onKeyDown={(event) => {
+                if (event.nativeEvent.isComposing) return;
+                if (event.key === "Enter") {
+                    event.preventDefault();
+                    event.currentTarget.blur();
+                }
+            }}
+        />
+    );
+
+    return (
+        <button
+            type="button"
+            className="block w-full min-w-0 truncate rounded text-left hover:text-primary focus-visible:outline-2 focus-visible:outline-primary"
+            aria-label={`编辑 ${user.username} 的备注`}
+            title={user.remark || "点击添加备注"}
+            onClick={(event) => {
+                event.stopPropagation();
+                setDraft(user.remark || "");
+                setEditing(true);
+            }}
+        >
+            <span className={user.remark ? undefined : "text-foreground/40"}>{user.remark || "未备注"}</span>
+        </button>
+    );
 }
 
 function formatTime(value?: string) {
