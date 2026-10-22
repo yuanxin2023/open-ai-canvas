@@ -31,11 +31,14 @@ test("模型行只保留选中高亮，价格使用独立的彩色标签", async
     expect(styles).toContain("width: min(800px, calc(100vw - 24px))");
 });
 
-test("每次打开菜单仅展开具有二级菜单的当前选中目录", async () => {
+test("手机端从模型列表打开，桌面端定位当前选中目录", async () => {
     const component = await Bun.file(new URL("../src/components/model-picker.tsx", import.meta.url)).text();
     const opening = component.match(/const setPickerOpen = \(nextOpen: boolean\) => \{([\s\S]*?)\n    \};/)?.[1] || "";
+    expect(component).toContain('window.matchMedia("(max-width: 720px)").matches');
     expect(opening).toContain("const currentGroup = optionGroups.find((group) => group.models.some((item) => item.models.includes(current)))");
-    expect(opening).toContain("currentGroup && modelPickerGroupHasSubmenu(currentGroup) ? currentGroup.key : null");
+    expect(opening).toContain("!isMobileModelPicker() && currentGroup && modelPickerGroupHasSubmenu(currentGroup) ? currentGroup.key : null");
+    expect(component).toContain('aria-label="返回模型列表"');
+    expect(component).toContain("setActiveGroupKey(null); focusMenuOption()");
 });
 
 test("单渠道平台模型从一级目录直接选择并关闭菜单", async () => {
@@ -49,12 +52,13 @@ test("单渠道平台模型从一级目录直接选择并关闭菜单", async ()
     expect(component).toContain("disabledReason={directGroupDisabledReason(group)}");
 });
 
-test("选择模型保留菜单及行内焦点，仍可通过 Escape 和外部点击关闭", async () => {
+test("手机端选择后关闭并返回触发按钮，桌面端保留菜单", async () => {
     const component = await Bun.file(new URL("../src/components/model-picker.tsx", import.meta.url)).text();
     const selection = component.match(/onClick=\{\(\) => \{\s*if \(!model\) return;([\s\S]*?)\}\}/)?.[1] || "";
     expect(selection).toContain("onChange(model)");
-    expect(selection).not.toContain("setOpen(false)");
-    expect(selection).not.toContain("focus()");
+    expect(selection).toContain("if (isMobileModelPicker()) {");
+    expect(selection).toContain("setOpen(false)");
+    expect(selection).toContain("triggerRef.current?.focus()");
     expect(component).toContain('event.key === "Escape"');
     expect(component).toContain('window.addEventListener("pointerdown", closeOnOutsidePointer, true)');
 });
@@ -81,6 +85,8 @@ test("ModelPicker 样式独立加载，并保留模型列表的视口边界", as
     const modelList = pickerStyles.match(/\.creation-model-picker-surface \.creation-model-picker-menu\.is-model-list \{([\s\S]*?)\}/)?.[1] || "";
     expect(modelList).toContain("max-height: min(460px, calc(100vh - 24px)) !important;");
     expect(modelList).toContain("overflow-y: auto !important;");
+    expect(pickerStyles).toContain(".canvas-model-picker-menu.is-model-list .canvas-model-picker-secondary-head {");
+    expect(pickerStyles).toContain("max-height: min(460px, calc(100dvh - 24px)) !important;");
     expect(pickerStyles).not.toContain(".app-user-workspace .creation-model-picker-menu {");
     expect(pickerStyles).not.toContain(".creation-model-picker-surface .creation-model-picker-menu {");
 });

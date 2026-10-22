@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
-import { Check, ChevronDown, Coins } from "lucide-react";
+import { ArrowLeft, Check, ChevronDown, Coins } from "lucide-react";
 import { Popover } from "antd";
 
 import { canvasThemes, type CanvasTheme } from "@/lib/canvas-theme";
@@ -31,6 +31,8 @@ type ModelPickerProps = {
     requirements?: ModelRequirements;
     showConfiguredModelName?: boolean;
 };
+
+const isMobileModelPicker = () => window.matchMedia("(max-width: 720px)").matches;
 
 const ModelPickerGroupButton = memo(function ModelPickerGroupButton({ group, active, dataItem = false, disabledReason = "", onSelect }: { group: ModelPickerGroup; active: boolean; dataItem?: boolean; disabledReason?: string; onSelect: (group: ModelPickerGroup) => void }) {
     const hasSubmenu = modelPickerGroupHasSubmenu(group);
@@ -131,7 +133,7 @@ export function ModelPicker({
         if (nextOpen) window.dispatchEvent(new CustomEvent("model-picker-open", { detail: pickerId }));
         if (nextOpen) {
             const currentGroup = optionGroups.find((group) => group.models.some((item) => item.models.includes(current)));
-            setActiveGroupKey(currentGroup && modelPickerGroupHasSubmenu(currentGroup) ? currentGroup.key : null);
+            setActiveGroupKey(!isMobileModelPicker() && currentGroup && modelPickerGroupHasSubmenu(currentGroup) ? currentGroup.key : null);
         }
         setOpen(nextOpen);
     };
@@ -230,6 +232,12 @@ export function ModelPicker({
                         })}
                     </div>
                     {optionGroups.filter((group) => group.key === activeGroupKey).map((group) => <section key={group.key} className="canvas-model-picker-group canvas-model-picker-model-pane min-w-0 overflow-hidden">
+                        <div className="canvas-model-picker-secondary-head">
+                            <button type="button" className="canvas-model-picker-back" aria-label="返回模型列表" onClick={() => { setActiveGroupKey(null); focusMenuOption(); }}>
+                                <ArrowLeft aria-hidden="true" />
+                            </button>
+                            <span><strong>{group.label}</strong><small>{group.kind === "product" ? "选择渠道" : "选择模型"}</small></span>
+                        </div>
                         <div className="grid min-w-0 gap-1">
                             {group.models.map((modelGroup) => {
                                 const selected = modelGroup.models.includes(current);
@@ -250,6 +258,10 @@ export function ModelPicker({
                                         onClick={() => {
                                             if (!model) return;
                                             onChange(model);
+                                            if (isMobileModelPicker()) {
+                                                setOpen(false);
+                                                window.requestAnimationFrame(() => triggerRef.current?.focus());
+                                            }
                                         }}
                                     >
                                         <ModelLabel
