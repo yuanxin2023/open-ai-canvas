@@ -10,7 +10,7 @@ import { AppModal } from "@/components/ui/product/app-modal";
 import { formatCredits } from "@/constant/credits";
 import { useWalletBalance } from "@/hooks/use-wallet-balance";
 import { getWorkspaceAntThemeConfig } from "@/lib/app-theme";
-import { WORKSPACE_CREDIT_PRODUCTS_OPEN_EVENT } from "@/lib/workspace-wallet";
+import { WORKSPACE_CREDIT_PRODUCTS_OPEN_EVENT, rememberPaymentReturnPath, openWorkspaceWallet } from "@/lib/workspace-wallet";
 import { closePaymentOrder, createPaymentOrder, getPaymentOrder, listPaymentProviders, listTopupProducts, queryPaymentOrder, refreshPaymentCheckout, type PaymentOrder, type PaymentProvider, type TopupProduct } from "@/services/api/payments";
 import { redeemCredits } from "@/services/api/wallet";
 
@@ -157,6 +157,7 @@ export function WorkspaceCreditPopover({ userId }: { userId: string }) {
                 return;
             }
             if (result.order.checkout.mode === "redirect" && result.order.checkout.url) {
+                rememberPaymentReturnPath();
                 window.location.assign(result.order.checkout.url);
             }
         } catch (error) {
@@ -204,7 +205,7 @@ export function WorkspaceCreditPopover({ userId }: { userId: string }) {
             const result = await refreshPaymentCheckout(paymentOrder.id);
             setPaymentOrder(result.order);
             if (result.order.status === "credited") paymentCompleted(result.order.id);
-            else if (result.order.checkout.mode === "redirect" && result.order.checkout.url) window.location.assign(result.order.checkout.url);
+            else if (result.order.checkout.mode === "redirect" && result.order.checkout.url) { rememberPaymentReturnPath(); window.location.assign(result.order.checkout.url); }
         } catch (error) {
             message.error(error instanceof Error ? error.message : "重新生成支付信息失败");
         } finally {
@@ -363,6 +364,7 @@ export function WorkspaceCreditPopover({ userId }: { userId: string }) {
                     ) : (
                         <div className="workspace-credit-products-state"><strong>暂无可购买套餐</strong><span>管理员尚未上架积分商品，请稍后再试。</span></div>
                     )}
+                    {!productsLoading && (!products.length || !providers.length) ? <div className="workspace-credit-products-state"><Button onClick={() => { setProductsOpen(false); openWorkspaceWallet(); }}>使用兑换码</Button></div> : null}
                 </section>
             </AppModal>
 

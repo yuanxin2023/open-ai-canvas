@@ -3,6 +3,7 @@ import { applyCanvasOperations, type CanvasOperation, type CanvasSnapshot } from
 import { buildCanvasContext } from "@/lib/canvas/canvas-context-discovery";
 import { applyCreativeAnswers, creativeScenarioPrompt, normalizeCreativeQuestions, CREATIVE_SCENARIOS, type CreativeAnswers, type CreativeQuote } from "@/lib/creation/creative-agent-contract";
 import { assertCreativeBriefSpecifications, creativeNodeId, creativeProposalOps, initialCreativeState, mergeCreativeBrief, normalizeCreativeProposal, readCreativeState, type CreativeAgentState, type CreativeMediaState } from "@/lib/creation/creative-agent-state";
+import { isInsufficientCreditsError, notifyImageCreditsShortfall } from "@/lib/image-credit-guidance";
 import { CREATIVE_AGENT_SYSTEM_PROMPT, CREATIVE_AGENT_TOOLS, parseCreativeToolArguments } from "@/lib/creation/creative-agent-tools";
 import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
 import { getActiveUserScope } from "@/lib/user-scope";
@@ -290,9 +291,15 @@ export class CreativeAgentController {
             try {
                 const task = await this.api.execute(this.run!.id, { ...this.guard(), submissionId: id }, this.abort.signal);
                 this.upsertSubmission({ ...this.submissions.find((item) => item.id === id)!, taskId: task.id });
-                this.setMedia(media.ref, { taskId: task.id, status: task.status === "succeeded" ? "running" : "queued", error: undefined });
+                this.setMedia(media.ref, { taskId: task.id, status: task.status === "succeeded" ? "running" : "queued", error: undefined, generationErrorReason: undefined });
                 await this.save("waiting_task");
-            } catch (error) { this.assertLive(); errors.push(error instanceof Error ? error.message : "提交未确认"); }
+            } catch (error) {
+                this.assertLive();
+                const isImage = this.state.proposal?.generationItems.find((item) => item.ref === media.ref)?.mode === "image";
+                if (isImage) notifyImageCreditsShortfall(error);
+                this.setMedia(media.ref, { status: "failed", failureKind: "generation", error: error instanceof Error ? error.message : "提交未确认", generationErrorReason: isImage && isInsufficientCreditsError(error) ? "insufficient_credits" : undefined });
+                errors.push(error instanceof Error ? error.message : "提交未确认");
+            }
         }
         // 等待已提交项，不会因观察失败创建新的任务。
         for (const id of ids) {

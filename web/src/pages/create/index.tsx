@@ -8,6 +8,7 @@ import { useLocation, useNavigate } from "react-router";
 import type { AssetLibraryPickerItem } from "@/components/assets/asset-library-picker-modal";
 import { publishWorkspaceSidebarCollapsed } from "@/components/layout/workspace-sidebar-state";
 import { generationErrorCode, generationErrorMessage } from "@/lib/generation-error";
+import { isInsufficientCreditsError, INSUFFICIENT_CREDITS_REASON } from "@/lib/image-credit-guidance";
 import { creationResultAssetIds } from "@/lib/canvas/canvas-asset-handoff";
 import { getActiveUserScope } from "@/lib/user-scope";
 import { continueCreationConversationOnCanvas } from "@/services/creation-canvas-conversation";
@@ -774,7 +775,7 @@ export default function CreatePage() {
                     throw reason instanceof Error ? reason : new Error("后端任务没有返回图片");
                 }
                 if (failedCount) toast.warning(`${resultUrls.length} 张图片已生成，${failedCount} 张生成失败`);
-                updateOriginAssistant((item) => ({ ...item, content: failedCount ? `${resultUrls.length} 张图片已生成，${failedCount} 张失败` : "图片已生成" }));
+                updateOriginAssistant((item) => ({ ...item, content: failedCount ? `${resultUrls.length} 张图片已生成，${failedCount} 张失败` : "图片已生成", generationErrorReason: taskFailures.some((entry) => isInsufficientCreditsError(entry.reason)) ? INSUFFICIENT_CREDITS_REASON : undefined }));
             } else {
                 const result = await runtime.runGenerationOperationOnce(retryContext?.clientOperationId, () => runtime.runBackendGenerationTask({
                     mode: "video",
@@ -804,7 +805,7 @@ export default function CreatePage() {
                 return;
             }
             const message = generationErrorMessage(error);
-            updateOriginAssistant((item) => ({ ...item, status: "error", error: message, generationErrorCode: item.generationErrorCode || generationErrorCode(error), generationOperation: item.generationOperation || (mode === "video" ? videoOperation : mode), createdAt: assistantMessage.createdAt, content: "生成失败" }));
+            updateOriginAssistant((item) => ({ ...item, status: "error", error: message, generationErrorCode: item.generationErrorCode || generationErrorCode(error), generationErrorReason: mode === "image" && isInsufficientCreditsError(error) ? INSUFFICIENT_CREDITS_REASON : undefined, generationOperation: item.generationOperation || (mode === "video" ? videoOperation : mode), createdAt: assistantMessage.createdAt, content: "生成失败" }));
         } finally {
             for (const taskId of boundTaskIds) activeGenerationTaskIdsRef.current.delete(taskId);
             requestLifecycle.release();

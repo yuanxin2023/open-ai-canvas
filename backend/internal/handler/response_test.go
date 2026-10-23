@@ -80,6 +80,16 @@ func TestFailServiceQuotaExceeded(t *testing.T) {
 	}
 }
 
+func TestFailServiceInsufficientCredits(t *testing.T) {
+	recorder, context := responseTestContext()
+	failService(context, service.InsufficientCredits())
+
+	response := decodeFailureEnvelope(t, recorder)
+	if recorder.Code != http.StatusBadRequest || response.Code != service.CodeInsufficientCredits || response.Reason != string(service.ReasonInsufficientCredits) || response.Msg != "积分不足，请充值后重试" {
+		t.Fatalf("insufficient credits response = status %d, body %#v", recorder.Code, response)
+	}
+}
+
 func TestFailServiceHidesUnclassifiedInternalError(t *testing.T) {
 	recorder, context := responseTestContext()
 	failService(context, errors.New("database password=secret"))

@@ -13,6 +13,7 @@ export function resetGenerationTaskMetadata(metadata: CanvasNodeMetadata | undef
         status,
         errorDetails: undefined,
         generationErrorCode: undefined,
+        generationErrorReason: undefined,
         resourceReloadAvailable: undefined,
         failedPromptFingerprint: undefined,
     };

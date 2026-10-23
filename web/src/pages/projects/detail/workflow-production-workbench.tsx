@@ -18,6 +18,9 @@ import { modelCapabilityConfigFor, normalizeImageValue, normalizeVideoValue, vid
 import { modelQuoteDescription, modelQuoteRequest } from "@/lib/model-pricing";
 import { customShotTitle, formatShotOrdinal, normalizeDefaultShotTitle } from "@/lib/shot-label";
 import { modelCompatibilityError, resolveCompatibleModel, resolveModelVideoBooleanOptions, type ModelRequirements } from "@/lib/model-selection";
+import { isInsufficientCreditsError } from "@/lib/image-credit-guidance";
+import { openWorkspaceCreditProducts } from "@/lib/workspace-wallet";
+import { getActiveUserScope } from "@/lib/user-scope";
 import { formatVideoResolutionLabel } from "@/lib/video-generation-options";
 import { submitBackendGenerationTask } from "@/services/api/generation-task";
 import { quoteModel, type LogicalModelQuote } from "@/services/api/logical-models";
@@ -94,6 +97,8 @@ export default function WorkflowProductionWorkbench(props: Props) {
     const [imagePreviewArtifact, setImagePreviewArtifact] = useState<ShotArtifact | null>(null);
     const [editorDirty, setEditorDirty] = useState(false);
     const [submittingShotIds, setSubmittingShotIds] = useState<Set<string>>(() => new Set());
+    const creditShortfallKey = `short-drama:credit-shortfall:${getActiveUserScope()}`;
+    const [creditShortfallShot, setCreditShortfallShot] = useState(() => window.sessionStorage.getItem(creditShortfallKey) || "");
     const [taskClock, setTaskClock] = useState(() => Date.now());
     const activeShotIdRef = useRef(selectedShot?.id || "");
     activeShotIdRef.current = selectedShot?.id || "";
@@ -378,10 +383,17 @@ export default function WorkflowProductionWorkbench(props: Props) {
                     artifactMetadata: { model: routedModel, aspectRatio, resolution, durationSeconds: values.durationSeconds, ...skillExecution.metadata },
                 },
             });
+            setCreditShortfallShot("");
+            window.sessionStorage.removeItem(creditShortfallKey);
             if (activeShotIdRef.current === submittingShot.id) setEditorDirty(false);
             await onRefresh();
             message.success(`${productionStageCopy[activeStage as "storyboard" | "previz" | "video"].label}任务已提交`);
         } catch (error) {
+            if (generationCapability === "image" && isInsufficientCreditsError(error)) {
+                const failedShot = `${projectId}:${activeStage}:${submittingShot.id}`;
+                setCreditShortfallShot(failedShot);
+                window.sessionStorage.setItem(creditShortfallKey, failedShot);
+            }
             message.error(error instanceof Error ? error.message : "生成任务提交失败");
         } finally {
             setSubmittingShotIds((current) => {
@@ -573,7 +585,7 @@ export default function WorkflowProductionWorkbench(props: Props) {
                     <div className="workflow-preview-scroll thin-scrollbar">
                         {previewTab === "latest" ? <LatestPreview artifact={previewArtifact} emptyText={stageCopy.empty} onPreviewImage={setImagePreviewArtifact} /> : <ArtifactHistory artifacts={artifacts} activeId={previewArtifact?.id} onSelect={(artifact) => { setPreviewArtifactId(artifact.id); setPreviewTab("latest"); }} />}
                         <div className="workflow-preview-summary"><div className="flex items-center justify-between gap-2"><span className="text-xs font-medium">当前产物</span><ArtifactStatus artifact={newestArtifact} compact /></div><div className="mt-1 text-[var(--fs-micro)] text-foreground/45">{newestArtifact ? `${formatDuration(selectedShot.durationMs)} · ${resolution}p · v${newestArtifact.version}` : "当前镜头还没有生成产物"}</div></div>
-                        <div className="workflow-preview-actions"><Button icon={<RefreshCcw className="size-3.5" />} loading={selectedShotSubmitting || shotTask?.status === "queued" || shotTask?.status === "running"} onClick={() => void generateArtifact()}>重新生成</Button><Button icon={<Download className="size-3.5" />} disabled={!previewArtifact?.resourceId} onClick={() => previewArtifact?.resourceId && void downloadArtifact(previewArtifact, selectedShot.title, message.error)}>下载{activeStage === "video" ? "视频" : "图片"}</Button></div>
+                        <div className="workflow-preview-actions">{creditShortfallShot === `${projectId}:${activeStage}:${selectedShot.id}` ? <Button onClick={openWorkspaceCreditProducts}>购买积分</Button> : null}<Button icon={<RefreshCcw className="size-3.5" />} loading={selectedShotSubmitting || shotTask?.status === "queued" || shotTask?.status === "running"} onClick={() => void generateArtifact()}>重新生成</Button><Button icon={<Download className="size-3.5" />} disabled={!previewArtifact?.resourceId} onClick={() => previewArtifact?.resourceId && void downloadArtifact(previewArtifact, selectedShot.title, message.error)}>下载{activeStage === "video" ? "视频" : "图片"}</Button></div>
                         <ArtifactHistory artifacts={artifacts.slice(0, 4)} activeId={previewArtifact?.id} onSelect={(artifact) => setPreviewArtifactId(artifact.id)} compact />
                     </div>
                 </aside>

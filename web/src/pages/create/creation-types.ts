@@ -21,6 +21,7 @@ export type CreationMessage = {
     resultUrls?: string[];
     error?: string;
     generationErrorCode?: string;
+    generationErrorReason?: "insufficient_credits";
     generationOperation?: string;
     attachments?: CreationAttachment[];
     references?: CreationReference[];

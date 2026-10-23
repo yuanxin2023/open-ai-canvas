@@ -265,6 +265,7 @@ export type CanvasNodeMetadata = {
     locked?: boolean;
     errorDetails?: string;
     generationErrorCode?: string;
+    generationErrorReason?: "insufficient_credits";
     resourceReloadAvailable?: boolean;
     failedPromptFingerprint?: string;
     lastGenerationRequestFingerprint?: string;

@@ -1213,7 +1213,7 @@ func (s *Service) switchTaskToNextRoute(task *model.Task, attempts []model.Route
 	}
 	if err := s.repo.SwitchTaskLogicalRoute(task.ID, previousRouteID, selected.Route.ID, string(encoded), task.BillingOrderID, selected.ChannelModel.ChannelID, selected.ChannelModel.ID, replacement, costOrder.BillingCostSnapshot); err != nil {
 		if errors.Is(err, repository.ErrInsufficientCredits) {
-			return nil, BadAuthRequest("模型服务价格发生变化，当前积分余额不足")
+			return nil, InsufficientCredits()
 		}
 		if errors.Is(err, repository.ErrBillingChargeLimit) {
 			return nil, creationConflict("备用线路报价超过已批准费用上限，未切换线路；请重新确认生成报价")

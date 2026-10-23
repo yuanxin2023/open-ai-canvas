@@ -9,7 +9,7 @@ import { formatCredits } from "@/constant/credits";
 import { closePaymentOrder, createPaymentOrder, getPaymentOrder, listPaymentProviders, listTopupProducts, queryPaymentOrder, refreshPaymentCheckout, type PaymentOrder, type PaymentProvider, type TopupProduct } from "@/services/api/payments";
 import { getWallet, redeemCredits, type CreditLedgerEntry, type WalletSummary } from "@/services/api/wallet";
 import { cn } from "@/lib/utils";
-import { openWorkspaceWallet, WORKSPACE_WALLET_OPEN_EVENT, type WorkspaceWalletOpenDetail } from "@/lib/workspace-wallet";
+import { consumePaymentReturnPath, openWorkspaceWallet, rememberPaymentReturnPath, WORKSPACE_WALLET_OPEN_EVENT, type WorkspaceWalletOpenDetail } from "@/lib/workspace-wallet";
 import { useUserStore } from "@/stores/use-user-store";
 
 type WalletModalTab = "topup" | "history";
@@ -44,7 +44,7 @@ export function WorkspaceWalletHost() {
             paymentOrderId: params.get("paymentOrder") || undefined,
             paymentInvalid: params.get("payment") === "invalid",
         });
-        navigate("/", { replace: true });
+        navigate(consumePaymentReturnPath(), { replace: true });
     }, [navigate, pathname, search]);
 
     if (!creditsEnabled) return null;
@@ -202,6 +202,7 @@ export function WorkspaceWalletModal({
             setPaymentOrder(result.order);
             if (result.order.status === "credited") await announceWalletUpdated(result.order.id);
             if (result.order.checkout.mode === "redirect" && result.order.checkout.url) {
+                rememberPaymentReturnPath();
                 window.location.assign(result.order.checkout.url);
                 return;
             }
@@ -252,7 +253,7 @@ export function WorkspaceWalletModal({
         try {
             const result = await refreshPaymentCheckout(paymentOrder.id);
             setPaymentOrder(result.order);
-            if (result.order.checkout.mode === "redirect" && result.order.checkout.url) window.location.assign(result.order.checkout.url);
+            if (result.order.checkout.mode === "redirect" && result.order.checkout.url) { rememberPaymentReturnPath(); window.location.assign(result.order.checkout.url); }
         } catch (error) {
             message.error(error instanceof Error ? error.message : "刷新支付入口失败");
         } finally {

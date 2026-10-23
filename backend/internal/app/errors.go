@@ -21,6 +21,10 @@ func QuotaExceeded(message string) *AppError {
 	return kernel.QuotaExceeded(message)
 }
 
+func InsufficientCredits() *AppError {
+	return kernel.InsufficientCredits()
+}
+
 // AuthError 保留为兼容别名。
 type AuthError = AppError
 

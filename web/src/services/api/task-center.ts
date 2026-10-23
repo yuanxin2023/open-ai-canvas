@@ -1,4 +1,5 @@
 import { generationErrorMessage } from "@/lib/generation-error";
+import { notifyImageCreditsShortfall } from "@/lib/image-credit-guidance";
 import { http, apiBaseURL, type BackendEnvelope } from "@/services/api/request";
 import { consumeTaskTextStream, createTaskTextStreamParser, type TaskTextStreamEvent } from "@/services/api/task-text-stream";
 import { recordDiagnosticEvent } from "@/services/diagnostics/client-diagnostics";
@@ -131,6 +132,9 @@ export function createGenerationTask(input: CreateTaskInput) {
         // 创建任务时积分已被预占，不能等任务结束后才刷新可用余额。
         window.dispatchEvent(new CustomEvent("wallet:updated"));
         return task;
+    }).catch((error) => {
+        if (input.type === "canvas_image" || input.type?.startsWith("image_") || input.input?.mode === "image") notifyImageCreditsShortfall(error);
+        throw error;
     });
 }
 

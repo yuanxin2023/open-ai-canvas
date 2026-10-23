@@ -44,6 +44,10 @@ func QuotaExceeded(message string) *AppError {
 	return &AppError{Status: CodeForbidden, Code: CodeQuotaExceeded, Reason: ReasonQuotaExceeded, Message: message}
 }
 
+func InsufficientCredits() *AppError {
+	return &AppError{Status: CodeInvalidArgument, Code: CodeInsufficientCredits, Reason: ReasonInsufficientCredits, Message: "积分不足，请充值后重试"}
+}
+
 func BadAuthRequest(message string) *AppError {
 	return NewAppError(400, message)
 }

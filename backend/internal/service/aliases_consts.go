@@ -21,6 +21,7 @@ const (
 	CodeNotFound                       = app.CodeNotFound
 	CodeOK                             = app.CodeOK
 	CodeQuotaExceeded                  = app.CodeQuotaExceeded
+	CodeInsufficientCredits            = app.CodeInsufficientCredits
 	CodeRateLimited                    = app.CodeRateLimited
 	CodeUsernameChangeLimit            = app.CodeUsernameChangeLimit
 	CodeTimeout                        = app.CodeTimeout
@@ -78,6 +79,7 @@ const (
 	ReasonInvalidArgument              = app.ReasonInvalidArgument
 	ReasonNotFound                     = app.ReasonNotFound
 	ReasonQuotaExceeded                = app.ReasonQuotaExceeded
+	ReasonInsufficientCredits          = app.ReasonInsufficientCredits
 	ReasonRateLimited                  = app.ReasonRateLimited
 	ReasonUsernameChangeLimit          = app.ReasonUsernameChangeLimit
 	ReasonTimeout                      = app.ReasonTimeout

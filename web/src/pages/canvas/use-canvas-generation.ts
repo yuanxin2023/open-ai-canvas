@@ -265,7 +265,7 @@ export function useCanvasGeneration({ projectId, domainProjectId, projectLoaded,
                             ...node.metadata,
                             ...generationTaskMetadata(task),
                             status: failed ? NODE_STATUS_ERROR : hasCompletedContent ? NODE_STATUS_SUCCESS : NODE_STATUS_LOADING,
-                            ...(failure || { errorDetails: undefined, generationErrorCode: undefined, resourceReloadAvailable: undefined, failedPromptFingerprint: undefined }),
+                            ...(failure || { errorDetails: undefined, generationErrorCode: undefined, generationErrorReason: undefined, resourceReloadAvailable: undefined, failedPromptFingerprint: undefined }),
                         },
                     };
                 }),

@@ -8,6 +8,7 @@ import { readWorkspaceSidebarCollapsed, subscribeWorkspaceSidebarCollapsed, writ
 import { WorkspaceTopBar } from "@/components/layout/workspace-top-bar";
 import { WorkspaceTopBarExtensionProvider } from "@/components/layout/workspace-top-bar-extension";
 import { WorkspaceWalletHost } from "@/components/layout/workspace-wallet-modal";
+import { ImageCreditShortfallHost } from "@/components/layout/image-credit-shortfall-host";
 import { cn } from "@/lib/utils";
 import { isSpatialWorkbenchPath } from "@/lib/workspace-routes";
 
@@ -115,6 +116,7 @@ export function AppWorkspaceShell({ children }: { children: ReactNode }) {
                 </div>
             </WorkspaceTopBarExtensionProvider>
             <WorkspaceWalletHost />
+            <ImageCreditShortfallHost />
             <ModelSetupGuide hidden={pathname === "/login" || pathname === "/register" || pathname.startsWith("/admin")} />
         </>
     );

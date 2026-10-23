@@ -52,6 +52,7 @@ var (
 	PaymentNotificationResponseForWithRegistry = app.PaymentNotificationResponseForWithRegistry
 	ProviderRequestFailed                      = app.ProviderRequestFailed
 	QuotaExceeded                              = app.QuotaExceeded
+	InsufficientCredits                        = app.InsufficientCredits
 	RateLimited                                = app.RateLimited
 	ReasonForStatus                            = app.ReasonForStatus
 	SanitizeAPICallPayload                     = app.SanitizeAPICallPayload

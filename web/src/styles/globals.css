@@ -15973,6 +15973,8 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap { box-shadow: 0 
 
 .creation-home .creation-media-error svg { width: var(--space-4); height: var(--space-4); }
 
+.creation-home .creation-media-error button.is-purchase { background: var(--primary); color: var(--primary-foreground); }
+
 .creation-home .creation-chat-attachment-preview.is-file {
     width: min(220px, 100%);
     cursor: default;
@@ -17446,6 +17448,79 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap { box-shadow: 0 
 .creation-featured-copy em svg {
     width: 12px;
     height: 12px;
+}
+
+/* 生图积分不足：购买与兑换收敛在同一张轻量提示卡中。 */
+.image-credit-shortfall-modal .ant-modal-container {
+    overflow: hidden;
+    border: 1px solid var(--border-color);
+    border-radius: var(--r-3xl);
+    background: var(--workspace-surface-strong);
+    box-shadow: var(--elevation-overlay);
+}
+
+.image-credit-shortfall-modal .ant-modal-close {
+    top: var(--space-4);
+    inset-inline-end: var(--space-4);
+    border-radius: var(--r-full);
+    color: color-mix(in srgb, var(--foreground) 55%, transparent);
+}
+
+.image-credit-shortfall-shell {
+    max-height: min(80vh, 640px);
+    overflow-y: auto;
+    padding: var(--space-8);
+    color: var(--foreground);
+}
+
+.image-credit-shortfall-icon {
+    display: grid;
+    width: var(--space-12);
+    height: var(--space-12);
+    place-items: center;
+    border-radius: var(--r-lg);
+    background: color-mix(in srgb, var(--status-warning) 15%, var(--workspace-surface-strong));
+    color: color-mix(in srgb, var(--status-warning) 85%, var(--foreground));
+}
+
+.image-credit-shortfall-icon.is-success {
+    background: color-mix(in srgb, var(--status-success) 14%, var(--workspace-surface-strong));
+    color: var(--status-success);
+}
+
+.image-credit-shortfall-icon svg { width: var(--space-6); height: var(--space-6); }
+.image-credit-shortfall-copy { margin-top: var(--space-5); }
+.image-credit-shortfall-eyebrow { color: color-mix(in srgb, var(--foreground) 55%, transparent); font-size: var(--fs-caption); font-weight: 600; }
+.image-credit-shortfall-copy h2 { margin: var(--space-2) 0 var(--space-3); color: var(--foreground); font-size: var(--fs-title); font-weight: 680; line-height: 1.35; }
+.image-credit-shortfall-copy p { margin: 0; color: color-mix(in srgb, var(--foreground) 68%, transparent); font-size: var(--fs-body); line-height: 1.7; }
+.image-credit-shortfall-actions { display: grid; gap: var(--space-3); margin-top: var(--space-8); }
+.image-credit-shortfall-modal .image-credit-shortfall-main-action.ant-btn,
+.image-credit-shortfall-modal .image-credit-shortfall-redeem-toggle.ant-btn,
+.image-credit-shortfall-redeem .ant-btn { min-height: 44px; border-radius: var(--r-lg); font-weight: 600; }
+.image-credit-shortfall-shell > .image-credit-shortfall-main-action { margin-top: var(--space-8); }
+.image-credit-shortfall-redeem-toggle .is-expanded { transform: rotate(180deg); }
+
+.image-credit-shortfall-redeem {
+    display: grid;
+    gap: var(--space-2);
+    margin-top: var(--space-1);
+    padding: var(--space-4);
+    border: 1px solid var(--border-color);
+    border-radius: var(--r-lg);
+    background: color-mix(in srgb, var(--workspace-surface-strong) 93%, var(--foreground) 7%);
+}
+
+.image-credit-shortfall-redeem label { color: var(--foreground); font-size: var(--fs-caption); font-weight: 600; }
+.image-credit-shortfall-redeem .ant-input { min-height: 42px; border-radius: var(--r-md); }
+.image-credit-shortfall-redeem .ant-btn { margin-top: var(--space-1); }
+.image-credit-shortfall-hint,
+.image-credit-shortfall-error { margin: 0; font-size: var(--fs-caption); line-height: 1.5; }
+.image-credit-shortfall-hint { color: color-mix(in srgb, var(--foreground) 55%, transparent); }
+.image-credit-shortfall-error { color: var(--status-error); overflow-wrap: anywhere; }
+
+@media (max-width: 480px) {
+    .image-credit-shortfall-shell { padding: var(--space-6); }
+    .image-credit-shortfall-copy h2 { font-size: var(--fs-heading-lg); }
 }
 
 /* 顶栏积分中心：真实余额、充值、兑换与流水集中在一个消费型弹窗中。 */

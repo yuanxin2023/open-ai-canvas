@@ -303,3 +303,36 @@ func TestNegativeBalanceBlocksNewReservationsAndAcceptsRepayment(t *testing.T) {
 		t.Fatalf("available balance = %d", account.AvailableMicrocredits)
 	}
 }
+
+func TestInsufficientCreditsDoesNotCreateTaskOrReservation(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open("file:task-insufficient-credits?mode=memory&cache=shared"), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AutoMigrate(&model.CreditAccount{}, &model.BillingOrder{}, &model.CreditLedgerEntry{}, &model.Task{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&model.CreditAccount{UserID: "user-1", AvailableMicrocredits: 0}).Error; err != nil {
+		t.Fatal(err)
+	}
+	repo := &Repository{db: db}
+	task := &model.Task{ID: "task-1", UserID: "user-1", Type: "canvas_image", Status: model.TaskStatusQueued}
+	order := &model.BillingOrder{ID: "order-1", UserID: "user-1", IdempotencyKey: "task:task-1", AmountMicrocredits: 10_000, ReservedAmountMicrocredits: 10_000, Status: model.BillingStatusReserved}
+	if err := repo.CreateTaskWithCreditReservation(task, order, 10); !errors.Is(err, ErrInsufficientCredits) {
+		t.Fatalf("CreateTaskWithCreditReservation() error = %v", err)
+	}
+	for _, value := range []any{&model.Task{}, &model.BillingOrder{}, &model.CreditLedgerEntry{}} {
+		var count int64
+		if err := db.Model(value).Count(&count).Error; err != nil || count != 0 {
+			t.Fatalf("failed reservation persisted %T: count=%d error=%v", value, count, err)
+		}
+	}
+	freeTask := &model.Task{ID: "free-task", UserID: "user-1", Type: "canvas_image", Status: model.TaskStatusQueued}
+	if err := repo.CreateTaskWithActiveLimit(freeTask, 10); err != nil {
+		t.Fatalf("free task was blocked by zero balance: %v", err)
+	}
+	var count int64
+	if err := db.Model(&model.Task{}).Count(&count).Error; err != nil || count != 1 {
+		t.Fatalf("free task count=%d error=%v", count, err)
+	}
+}

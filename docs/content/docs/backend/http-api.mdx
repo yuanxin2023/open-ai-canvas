@@ -396,6 +396,7 @@ PATCH 请求为 `{ "overrides": { "resourceUploadMB": 80, "storedFileGB": null }
 | 502 | 502 | `bad_gateway` | 上游失败 |
 | 503 | 503 | `unavailable` | 暂时不可用 |
 | 504 | 504 | `timeout` | 超时 |
+| 40001 | 400 | `insufficient_credits` | 付费任务积分预留失败；充值后由用户手动重试 |
 | 40301 | 403 | `quota_exceeded` | 账号配额用尽（不自动重试） |
 | 40901 | 409 | `conflict` | 幂等冲突 |
 | 42901 | 429 | `rate_limited` | 请求限流（可带 Retry-After） |
@@ -403,7 +404,7 @@ PATCH 请求为 `{ "overrides": { "resourceUploadMB": 80, "storedFileGB": null }
 
 模型错误把已有字符串码放进 `reason`（如 `model_capability_not_supported`），`code` 仍为 400。
 
-常量：后端 `service/error_codes.go`，前端 `web/src/services/api/error-codes.ts`。
+常量：后端 `backend/internal/kernel/error_codes.go`；前端根据 `ApiError.reason` 判断积分不足，不解析 `msg`。
 
 ## 画布工具 API
 

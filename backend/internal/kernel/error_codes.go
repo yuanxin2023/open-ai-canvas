@@ -17,6 +17,7 @@ const (
 	CodeTimeout         = 504
 
 	CodeQuotaExceeded       = 40301
+	CodeInsufficientCredits = 40001
 	CodeIdempotencyConflict = 40901
 	CodeRateLimited         = 42901
 	CodeUsernameChangeLimit = 42902
@@ -33,6 +34,7 @@ const (
 	ReasonConflict            ErrorReason = "conflict"
 	ReasonFailedPrecondition  ErrorReason = "failed_precondition"
 	ReasonQuotaExceeded       ErrorReason = "quota_exceeded"
+	ReasonInsufficientCredits ErrorReason = "insufficient_credits"
 	ReasonRateLimited         ErrorReason = "rate_limited"
 	ReasonUsernameChangeLimit ErrorReason = "username_change_limit"
 	ReasonAdminPermission     ErrorReason = "admin_permission_denied"

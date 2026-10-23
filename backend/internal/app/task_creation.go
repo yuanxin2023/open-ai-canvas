@@ -34,7 +34,7 @@ func (s *Service) CreateTask(userID string, req CreateTaskRequest) (*model.Task,
 	}
 	prompt := strings.TrimSpace(req.Prompt)
 	if prompt == "" {
-		return nil, errors.New("prompt is required")
+		return nil, BadAuthRequest("请填写生成提示词")
 	}
 	taskType := strings.TrimSpace(req.Type)
 	if err := validateTaskType(taskType); err != nil {
@@ -89,9 +89,9 @@ func (s *Service) CreateTask(userID string, req CreateTaskRequest) (*model.Task,
 
 	if strings.HasPrefix(taskType, "video_") && !hasExecutableProviderVideoConfig(normalizedInput) {
 		if mode, _ := normalizedInput["mode"].(string); mode != "video" {
-			return nil, errors.New("视频任务必须使用 video 模式")
+			return nil, BadAuthRequest("视频任务必须使用 video 模式")
 		}
-		return nil, errors.New("视频任务缺少可执行的模型配置")
+		return nil, BadAuthRequest("视频任务缺少可执行的模型配置")
 	}
 	// 前端自管的文本持久化任务：直连模型生成、增量上报 text-deltas，不排入 worker 队列生成。
 	if isTextReplayTaskRequest(normalizedInput) {
@@ -178,7 +178,7 @@ func (s *Service) CreateTask(userID string, req CreateTaskRequest) (*model.Task,
 		return nil, BadAuthRequest(fmt.Sprintf("同时排队或运行的任务最多 %d 个，请等待已有任务完成", policy.Task.ActiveTaskLimit))
 	}
 	if errors.Is(err, repository.ErrInsufficientCredits) {
-		return nil, BadAuthRequest("积分不足，请先使用兑换码充值")
+		return nil, InsufficientCredits()
 	}
 	if errors.Is(err, repository.ErrLogicalModelUnavailable) {
 		return nil, BadAuthRequest("所选模型已停用、归档或配置已更新，请重新选择")
@@ -300,7 +300,7 @@ func (s *Service) createTextReplayTask(userID string, req CreateTaskRequest, nor
 		prompt = strings.TrimSpace(fmt.Sprint(normalizedInput["prompt"]))
 	}
 	if prompt == "" {
-		return nil, errors.New("prompt is required")
+		return nil, BadAuthRequest("请填写生成提示词")
 	}
 	taskType := strings.TrimSpace(req.Type)
 	if err := validateTaskType(taskType); err != nil {
@@ -338,9 +338,9 @@ func validateTaskType(taskType string) error {
 		return nil
 	}
 	if taskType == "" {
-		return errors.New("task type is required")
+		return BadAuthRequest("缺少任务类型")
 	}
-	return fmt.Errorf("不支持的任务类型：%s", taskType)
+	return BadAuthRequest(fmt.Sprintf("不支持的任务类型：%s", taskType))
 }
 
 func (s *Service) requireCustomChannelsForTaskInput(input map[string]any) error {

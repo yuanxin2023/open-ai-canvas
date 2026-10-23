@@ -3,6 +3,7 @@ import { AlertCircle, BookOpenCheck, Clock3, Download, FileText, Image as ImageI
 
 import { VideoPlayer } from "@/components/video-player";
 import { CONTENT_MODERATION_ERROR_CODE, generationErrorMessage, isContentModerationError } from "@/lib/generation-error";
+import { openWorkspaceCreditProducts } from "@/lib/workspace-wallet";
 import { generationTaskShowsProgress, generationTaskStageLabel, generationTaskStatusLabel, isGenerationTaskSubmissionUncertain } from "@/lib/generation-task-display";
 import { canvasRichTextHTML } from "@/lib/canvas/canvas-rich-text";
 import { fitNodeSize } from "@/lib/canvas/canvas-node-size";
@@ -252,6 +253,7 @@ function ErrorContent({ node, theme, onRetry, onReloadResource }: Pick<CanvasNod
     return (
         <div className="flex max-w-[260px] flex-col items-center gap-3 px-5 text-center">
             <div className="text-xs leading-5" style={{ color: submissionUncertain ? theme.node.text : theme.accent.danger }}>{submissionUncertain ? generationTaskStatusLabel(errorDisplayTask) : generationErrorMessage(node.metadata?.errorDetails)}</div>
+            {node.type === CanvasNodeType.Image && node.metadata?.generationErrorReason === "insufficient_credits" ? <button type="button" className="inline-flex h-8 items-center rounded-[var(--r-md)] px-3 text-xs font-medium" style={{ background: theme.accent.primary, color: theme.accent.onPrimary }} onClick={(event) => { event.stopPropagation(); openWorkspaceCreditProducts(); }} onMouseDown={(event) => event.stopPropagation()}>购买积分</button> : null}
             {submissionUncertain ? (
                 <div className="rounded-[var(--r-sm)] px-3 py-2 text-[var(--fs-label)] leading-4" style={{ background: theme.toolbar.itemHover, color: theme.node.muted }}>
                     {generationTaskStageLabel(errorDisplayTask)}

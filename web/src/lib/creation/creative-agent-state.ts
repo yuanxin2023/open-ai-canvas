@@ -10,7 +10,7 @@ import { CREATIVE_SCENARIOS, type CreativeAnswers, type CreativeBrief, type Crea
 
 export type CreativeReference = { id: string; title: string; kind: "image" | "text"; assetId?: string; storageKey?: string; text?: string; mimeType?: string; width?: number; height?: number };
 export type CreativeMessage = { id: string; role: "user" | "assistant"; text: string; question?: CreativeQuestionRequest; answers?: CreativeAnswers; proposal?: CreativeProposal };
-export type CreativeMediaState = { ref: string; nodeId: string; attempt: number; submissionId?: string; taskId?: string; status: "pending" | "queued" | "running" | "ready" | "failed" | "write_failed"; storageKey?: string; error?: string; failureKind?: "generation" | "observation" };
+export type CreativeMediaState = { ref: string; nodeId: string; attempt: number; submissionId?: string; taskId?: string; status: "pending" | "queued" | "running" | "ready" | "failed" | "write_failed"; storageKey?: string; error?: string; generationErrorReason?: "insufficient_credits"; failureKind?: "generation" | "observation" };
 export type CreativeAgentState = {
     schemaVersion: 1; scene: CreativeScenarioId; brief: CreativeBrief; messages: CreativeMessage[];
     references: CreativeReference[]; selectedSkillIds: string[]; textModel?: string;

@@ -16,6 +16,7 @@ const (
 	CodeUnavailable         = kernel.CodeUnavailable
 	CodeTimeout             = kernel.CodeTimeout
 	CodeQuotaExceeded       = kernel.CodeQuotaExceeded
+	CodeInsufficientCredits = kernel.CodeInsufficientCredits
 	CodeIdempotencyConflict = kernel.CodeIdempotencyConflict
 	CodeRateLimited         = kernel.CodeRateLimited
 	CodeUsernameChangeLimit = kernel.CodeUsernameChangeLimit
@@ -31,6 +32,7 @@ const (
 	ReasonConflict            = kernel.ReasonConflict
 	ReasonFailedPrecondition  = kernel.ReasonFailedPrecondition
 	ReasonQuotaExceeded       = kernel.ReasonQuotaExceeded
+	ReasonInsufficientCredits = kernel.ReasonInsufficientCredits
 	ReasonRateLimited         = kernel.ReasonRateLimited
 	ReasonUsernameChangeLimit = kernel.ReasonUsernameChangeLimit
 	ReasonUnavailable         = kernel.ReasonUnavailable

@@ -1,3 +1,5 @@
+import { isInsufficientCreditsError, INSUFFICIENT_CREDITS_REASON } from "@/lib/image-credit-guidance";
+
 export const CONTENT_MODERATION_ERROR_CODE = "sensitive_words_detected";
 
 export const CONTENT_MODERATION_MESSAGE = "内容审核未通过，本次平台积分未扣除或已退还。请修改提示词后重新生成。";
@@ -8,10 +10,12 @@ const NETWORK_ERROR_MESSAGE = "网络异常。";
 export type GenerationFailureMetadata = {
     errorDetails: string;
     generationErrorCode?: string;
+    generationErrorReason?: typeof INSUFFICIENT_CREDITS_REASON;
     failedPromptFingerprint?: string;
 };
 
 export function generationFailureMetadata(error: unknown, prompt: string): GenerationFailureMetadata {
+    if (isInsufficientCreditsError(error)) return { errorDetails: error.message, generationErrorReason: INSUFFICIENT_CREDITS_REASON };
     const raw = rawGenerationError(error);
     if (!isContentModerationError(raw)) return { errorDetails: generationErrorMessage(error) };
     return {

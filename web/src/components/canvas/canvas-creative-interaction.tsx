@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Button, Dropdown } from "antd";
+import { openWorkspaceCreditProducts } from "@/lib/workspace-wallet";
 import localforage from "localforage";
 import type { CanvasAssistantMessage } from "@/types/canvas";
 import type { AiConfig } from "@/stores/use-config-store";
@@ -163,6 +164,7 @@ export function CanvasCreativeInteraction(props: Props) {
                 {url && (video ? <video className="w-full max-h-80 object-contain" src={url} controls preload="metadata" /> : <img className="w-full max-h-80 object-contain" src={url} alt={item.ref} />)}
                 {item.error && <p className="creative-agent-muted">这项作品还需要处理，已有结果会保留。</p>}
                 {item.error && <details className="creative-agent-receipt"><summary>查看失败原因</summary><p>{item.error}</p></details>}
+                {item.generationErrorReason === "insufficient_credits" && <Button onClick={openWorkspaceCreditProducts}>购买积分</Button>}
                 {props.active && item.status === "failed" && item.failureKind !== "observation" && <Button type="primary" disabled={blocked} onClick={() => invoke(controller.current?.redo(item.ref))}>重新生成此项 · 先确认费用</Button>}
                 <div className="creative-agent-actions">{url && <a href={url} target="_blank" rel="noreferrer">查看作品</a>}{props.active && <Dropdown trigger={["click"]} disabled={blocked} menu={{ items: [{ key: "adjust", label: "调整作品" }, { key: "redo", label: "重新生成（费用另行确认）" }], onClick: ({ key }) => key === "redo" ? invoke(controller.current?.redo(item.ref)) : modify(`请调整《${view.state.proposal?.workflow.nodes.find((entry) => entry.ref === item.ref)?.title || item.ref}》，保留其他作品：`) }}><Button type="text" disabled={blocked}>更多</Button></Dropdown>}</div>
             </div>;
