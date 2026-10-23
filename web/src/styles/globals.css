@@ -15973,7 +15973,14 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap { box-shadow: 0 
 
 .creation-home .creation-media-error svg { width: var(--space-4); height: var(--space-4); }
 
-.creation-home .creation-media-error button.is-purchase { background: var(--primary); color: var(--primary-foreground); }
+.creation-home .creation-media-error button.is-purchase {
+    border: 1px solid var(--creation-border-strong);
+    background: color-mix(in srgb, var(--creation-surface) 74%, transparent);
+    color: var(--creation-text);
+    font-weight: 600;
+}
+.creation-home .creation-media-error button.is-purchase:hover { background: var(--creation-surface-hover); }
+.creation-home .creation-media-error button:focus-visible { outline: 2px solid var(--creation-text); outline-offset: 2px; }
 
 .creation-home .creation-chat-attachment-preview.is-file {
     width: min(220px, 100%);
