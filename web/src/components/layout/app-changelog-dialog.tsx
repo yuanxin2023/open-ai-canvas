@@ -4,6 +4,7 @@ import ReactMarkdown from "react-markdown";
 
 import { AppModal } from "@/components/ui/product/app-modal/app-modal";
 import { aceternityMotion } from "@/lib/aceternity-motion";
+import "./app-changelog-dialog.css";
 
 export function AppChangelogDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
     const reducedMotion = useReducedMotion();
