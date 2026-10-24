@@ -5,15 +5,22 @@ import { AdminModal } from "@/pages/admin/ui/overlays";
 import { RefreshCw } from "lucide-react";
 
 import { formatCredits } from "@/constant/credits";
+import { hasAdminPermission } from "@/lib/admin-permissions";
 import { getAdminApiLog, getAdminApiLogByBillingOrder, queryAdminApiLogTask, type ApiCallLog } from "@/services/api/auth";
+import { useUserStore } from "@/stores/use-user-store";
 import { AdminStatusBadge } from "./admin-ui";
+import { AdminUserDetailModal } from "./admin-user-detail-drawer";
 
 export function ApiLogDetailModal({ logId = null, billingOrderId = null, onClose, onLogUpdated }: { logId?: string | null; billingOrderId?: string | null; onClose: () => void; onLogUpdated?: (log: ApiCallLog) => void }) {
     const { message } = App.useApp();
+    const adminAccess = useUserStore((state) => state.user?.adminAccess);
+    const canViewUserDetails = hasAdminPermission(adminAccess, "admin.users.accounts");
     const [log, setLog] = useState<ApiCallLog | null>(null);
+    const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
     const [querying, setQuerying] = useState(false);
     useEffect(() => {
+        setSelectedUserId(null);
         if (!logId && !billingOrderId) {
             setLog(null);
             return;
@@ -54,34 +61,53 @@ export function ApiLogDetailModal({ logId = null, billingOrderId = null, onClose
     };
 
     return (
-        <AdminModal
-            title="请求详情"
-            open={Boolean(logId || billingOrderId)}
-            centered
-            width="min(1200px, calc(100vw - 32px))"
-            onCancel={onClose}
-            footer={null}
-            rootClassName="admin-api-log-detail-modal"
-            styles={{ body: { maxHeight: "min(76vh, 760px)", overflowX: "hidden", overflowY: "auto" } }}
-        >
-            {loading ? <Skeleton active paragraph={{ rows: 12 }} /> : log ? <LogDetail log={log} querying={querying} onQueryProviderTask={queryProviderTask} /> : <AdminEmpty size="compact" title="没有请求详情" />}
-        </AdminModal>
+        <>
+            <AdminModal
+                title="请求详情"
+                open={Boolean(logId || billingOrderId)}
+                centered
+                width="min(1200px, calc(100vw - 32px))"
+                onCancel={() => {
+                    setSelectedUserId(null);
+                    onClose();
+                }}
+                footer={null}
+                rootClassName="admin-api-log-detail-modal"
+                styles={{ body: { maxHeight: "min(76vh, 760px)", overflowX: "hidden", overflowY: "auto" } }}
+            >
+                {loading ? <Skeleton active paragraph={{ rows: 12 }} /> : log ? <LogDetail log={log} querying={querying} onQueryProviderTask={queryProviderTask} onViewUser={canViewUserDetails ? setSelectedUserId : undefined} /> : <AdminEmpty size="compact" title="没有请求详情" />}
+            </AdminModal>
+            <AdminUserDetailModal userId={canViewUserDetails ? selectedUserId : null} onClose={() => setSelectedUserId(null)} />
+        </>
     );
 }
 
-function LogDetail({ log, querying, onQueryProviderTask }: { log: ApiCallLog; querying: boolean; onQueryProviderTask: () => void }) {
+function LogDetail({ log, querying, onQueryProviderTask, onViewUser }: { log: ApiCallLog; querying: boolean; onQueryProviderTask: () => void; onViewUser?: (userId: string) => void }) {
     const providerStatus = log.providerStatus?.toLowerCase();
     const processing = ["queued", "pending", "processing", "running", "in_progress"].includes(providerStatus || "");
     const failed = log.status === "failed" || ["failed", "cancelled", "expired"].includes(providerStatus || "");
+    const userLabel = log.userDisplayName || log.userAccount || "未知用户";
+    const userContent = (
+        <div>
+            <div className="font-medium text-foreground/90 group-hover:underline group-hover:underline-offset-2">{userLabel}</div>
+            {log.userAccount ? <div className="mt-0.5 text-xs text-foreground/50">@{log.userAccount}</div> : null}
+        </div>
+    );
     const items = [
         ["时间", new Date(log.startedAt || log.createdAt).toLocaleString("zh-CN", { hour12: false })],
         ["状态", <AdminStatusBadge label={failed ? "失败" : processing ? "处理中" : "成功"} tone={failed ? "error" : processing ? "warning" : "success"} />],
         [
             "用户",
-            <div>
-                <div className="font-medium text-foreground/90">{log.userDisplayName || log.userAccount || "未知用户"}</div>
-                {log.userAccount ? <div className="mt-0.5 text-xs text-foreground/50">@{log.userAccount}</div> : null}
-            </div>,
+            onViewUser && log.userId?.trim() ? (
+                <button
+                    type="button"
+                    className="group block cursor-pointer rounded-sm text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--admin-accent)]"
+                    aria-label={`查看用户 ${userLabel} 详情`}
+                    onClick={() => onViewUser(log.userId)}
+                >
+                    {userContent}
+                </button>
+            ) : userContent,
         ],
         [
             "渠道 / 模型",
