@@ -10,9 +10,10 @@ test("后台默认紧凑，密度偏好按账号隔离且拒绝无效值", () =>
     expect(adminDensityStorageKey("ops:a")).toContain("ops%3Aa");
 });
 
-test("请求视图默认排障，全部字段和账务仍可单独读取", () => {
-    expect(normalizeLogView(null)).toBe("troubleshoot");
-    expect(normalizeLogView("unknown")).toBe("troubleshoot");
+test("请求视图默认全部字段，排障和账务仍可单独读取", () => {
+    expect(normalizeLogView(null)).toBe("all");
+    expect(normalizeLogView("unknown")).toBe("all");
+    expect(normalizeLogView("troubleshoot")).toBe("troubleshoot");
     expect(normalizeLogView("billing")).toBe("billing");
     expect(normalizeLogView("all")).toBe("all");
 });

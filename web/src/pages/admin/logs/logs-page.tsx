@@ -279,7 +279,7 @@ export default function LogsPage() {
             {loadError ? <Alert type="error" showIcon title="请求明细读取失败" description={loadError} action={<Button size="small" onClick={() => setRetry((value) => value + 1)}>重试</Button>} /> : null}
             <AdminDataTable
                 className={view === "all" ? "admin-logs-full" : "admin-logs-compact"}
-                trailing={<Segmented aria-label="请求明细视图" value={view} onChange={(value) => updateUrl({ view: value })} options={[{ label: "排障", value: "troubleshoot" }, { label: "计费", value: "billing" }, { label: "全部字段", value: "all" }]} />}
+                trailing={<Segmented aria-label="请求明细视图" value={view} onChange={(value) => updateUrl({ view: value })} options={[{ label: "全部字段", value: "all" }, { label: "排障", value: "troubleshoot" }, { label: "计费", value: "billing" }]} />}
                 toolbar={
                     <Input
                         allowClear

@@ -3,7 +3,7 @@ import type { ApiCallLog } from "@/services/api/auth";
 export type LogView = "troubleshoot" | "billing" | "all";
 
 export function normalizeLogView(value: string | null): LogView {
-    return value === "billing" || value === "all" ? value : "troubleshoot";
+    return value === "troubleshoot" || value === "billing" ? value : "all";
 }
 
 export function logStatus(log: Pick<ApiCallLog, "status" | "providerStatus">) {
