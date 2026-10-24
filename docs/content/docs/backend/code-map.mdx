@@ -5,6 +5,12 @@ description: 从产品功能快速定位主要代码入口
 
 # 代码功能地图
 
+## 管理后台控制预览
+
+- 页面及私有组件：`web/src/pages/admin/control-preview/`；API 类型和调用：`web/src/services/api/control-preview.ts`；路由和导航复用现有后台外壳。
+- HTTP 入口：`backend/internal/handler/admin_control_preview.go`，由经营分析路由注册；service 别名转入 `app/control_preview.go`，负责独立权限、周期、趋势补零和五秒有界缓存。
+- 数据投影：`backend/internal/repository/control_preview.go`，在数据库聚合积分、充值和按逻辑生成去重的请求；主快照采用只读可重复读事务，用户排行和结算明细分页读取，无新增业务表。
+
 ## 用户资源配额
 
 - 普通用户管理入口：`web/src/pages/admin/users/users-drawer.tsx`；独立编辑器 `user-resource-quota-panel.tsx`；共用字段与范围 `admin/lib/resource-policy-fields.ts`。

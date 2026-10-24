@@ -10,6 +10,7 @@ const (
 
 const (
 	AdminPermissionAnalyticsOverview     AdminPermission = "admin.analytics.overview"
+	AdminPermissionControlPreview        AdminPermission = "admin.analytics.control_preview"
 	AdminPermissionAPILogs               AdminPermission = "admin.analytics.api_logs"
 	AdminPermissionChannels              AdminPermission = "admin.platform.channels"
 	AdminPermissionLogicalModels         AdminPermission = "admin.platform.logical_models"
@@ -45,7 +46,7 @@ const (
 )
 
 var AllAdminPermissions = []AdminPermission{
-	AdminPermissionAnalyticsOverview, AdminPermissionAPILogs,
+	AdminPermissionAnalyticsOverview, AdminPermissionControlPreview, AdminPermissionAPILogs,
 	AdminPermissionChannels, AdminPermissionLogicalModels, AdminPermissionPlugins, AdminPermissionSkills, AdminPermissionPromptTemplates,
 	AdminPermissionUsers, AdminPermissionCustomerService, AdminPermissionAgentLessons,
 	AdminPermissionProducts, AdminPermissionRedeemCodes,

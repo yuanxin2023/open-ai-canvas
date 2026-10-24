@@ -11,6 +11,7 @@ import (
 )
 
 func RegisterAdminAnalyticsRoutes(r *gin.RouterGroup, svc *service.Service) {
+	registerAdminControlPreviewRoutes(r, svc)
 	r.GET("/admin/analytics/overview", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {

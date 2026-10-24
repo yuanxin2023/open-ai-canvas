@@ -85,6 +85,7 @@ const adminNavigation: AdminNavigationGroup[] = [
         collapsible: true,
         items: [
             { path: "/admin", label: "数据概览", description: "活跃、调用与成本趋势", icon: <BarChart3 className="size-4" /> },
+            { path: "/admin/control-preview", label: "控制预览", description: "积分流向、消费排行与模型使用", icon: <Activity className="size-4" /> },
             { path: "/admin/logs", label: "请求明细", description: "上游调用与费用", icon: <FileClock className="size-4" /> },
         ],
     },

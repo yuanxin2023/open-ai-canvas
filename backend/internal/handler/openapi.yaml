@@ -1977,8 +1977,106 @@ paths:
       summary: 放弃封面草稿
       responses:
         "200": { $ref: "#/components/responses/Envelope" }
+  /admin/analytics/control-preview:
+    get:
+      tags: [admin]
+      summary: 控制预览指标、排行、模型与积分趋势
+      description: 需要 admin.analytics.control_preview。仅统计当前保留的普通用户；北京时间自然周期，主看板缓存最长五秒。
+      parameters:
+        - {$ref: "#/components/parameters/ControlPreviewPeriod"}
+      responses:
+        "200":
+          description: 成功信封，data 为控制预览快照
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - {$ref: "#/components/schemas/Envelope"}
+                  - type: object
+                    properties:
+                      data: {$ref: "#/components/schemas/ControlPreviewOverview"}
+        "403": {$ref: "#/components/responses/Error"}
+  /admin/analytics/control-preview/users:
+    get:
+      tags: [admin]
+      summary: 控制预览完整消费排行
+      description: 需要 admin.analytics.control_preview。搜索和分页不改变全体用户消费占比分母及原始排名。
+      parameters:
+        - {$ref: "#/components/parameters/ControlPreviewPeriod"}
+        - {$ref: "#/components/parameters/ControlPreviewPage"}
+        - {$ref: "#/components/parameters/ControlPreviewPageSize"}
+        - {in: query, name: keyword, schema: {type: string}, description: 用户名或用户 ID}
+      responses:
+        "200":
+          description: 成功信封，data 含快照元数据、users、total、page、pageSize
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - {$ref: "#/components/schemas/Envelope"}
+                  - type: object
+                    properties:
+                      data: {$ref: "#/components/schemas/ControlPreviewUsers"}
+  /admin/analytics/control-preview/model-users:
+    get:
+      tags: [admin]
+      summary: 指定模型的用户调用与消费统计
+      description: 需要 admin.analytics.control_preview。包括有调用但零消费的用户；消费占比分母为该模型全体用户消费。
+      parameters:
+        - {$ref: "#/components/parameters/ControlPreviewPeriod"}
+        - {$ref: "#/components/parameters/ControlPreviewPage"}
+        - {$ref: "#/components/parameters/ControlPreviewPageSize"}
+        - {in: query, name: model, required: true, schema: {type: string}}
+        - {in: query, name: capability, required: true, schema: {type: string, enum: [text, image, video, audio]}}
+        - {in: query, name: keyword, schema: {type: string}}
+      responses:
+        "200":
+          description: 成功信封，data 与完整排行相同
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - {$ref: "#/components/schemas/Envelope"}
+                  - type: object
+                    properties:
+                      data: {$ref: "#/components/schemas/ControlPreviewUsers"}
+  /admin/analytics/control-preview/users/{id}:
+    get:
+      tags: [admin]
+      summary: 普通用户的周期消费与模型明细
+      description: 需要 admin.analytics.control_preview。管理员或已注销账户返回 404；不返回提示词、原始报文或密钥。
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: string}}
+        - {$ref: "#/components/parameters/ControlPreviewPeriod"}
+        - {$ref: "#/components/parameters/ControlPreviewPage"}
+        - {$ref: "#/components/parameters/ControlPreviewPageSize"}
+      responses:
+        "200":
+          description: 成功信封，data 为用户汇总、模型和分页结算记录
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - {$ref: "#/components/schemas/Envelope"}
+                  - type: object
+                    properties:
+                      data: {$ref: "#/components/schemas/ControlPreviewUserDetail"}
+        "404": {$ref: "#/components/responses/Error"}
 components:
   parameters:
+    ControlPreviewPeriod:
+      in: query
+      name: period
+      schema: {type: string, enum: [day, week, month], default: day}
+      description: 北京时间今日、本周（周一开始）、本月至当前，左闭右开
+    ControlPreviewPage:
+      in: query
+      name: page
+      schema: {type: integer, minimum: 1, maximum: 1000000, default: 1}
+    ControlPreviewPageSize:
+      in: query
+      name: pageSize
+      schema: {type: integer, minimum: 1, maximum: 100, default: 20}
     AgentRunID:
       name: id
       in: path
@@ -1991,6 +2089,105 @@ components:
       in: cookie
       name: open_ai_canvas_session
   schemas:
+    ControlPreviewMeta:
+      type: object
+      properties:
+        period: {type: string, enum: [day, week, month]}
+        from: {type: string, format: date-time}
+        to: {type: string, format: date-time}
+        asOf: {type: string, format: date-time}
+        timezone: {type: string, enum: [Asia/Shanghai]}
+    ControlPreviewKPI:
+      type: object
+      description: 积分字段为整数微积分，paidAmountFen 为人民币分；无已结束生成时成功率不可计算。
+      properties:
+        availableMicrocredits: {type: integer, format: int64}
+        reservedMicrocredits: {type: integer, format: int64}
+        consumedMicrocredits: {type: integer, format: int64}
+        lifetimeConsumedMicrocredits: {type: integer, format: int64}
+        inflowMicrocredits: {type: integer, format: int64}
+        paidAmountFen: {type: integer, format: int64}
+        payingUsers: {type: integer, format: int64}
+        paidOrders: {type: integer, format: int64}
+        consumingUsers: {type: integer, format: int64}
+        generations: {type: integer, format: int64}
+        succeeded: {type: integer, format: int64}
+        failed: {type: integer, format: int64}
+        pending: {type: integer, format: int64}
+        unlinkedGenerations: {type: integer, format: int64}
+    ControlPreviewModel:
+      type: object
+      properties:
+        model: {type: string}
+        capability: {type: string, enum: [text, image, video, audio]}
+        generations: {type: integer, format: int64}
+        succeeded: {type: integer, format: int64}
+        failed: {type: integer, format: int64}
+        pending: {type: integer, format: int64}
+        consumedMicrocredits: {type: integer, format: int64}
+    ControlPreviewUser:
+      type: object
+      properties:
+        rank: {type: integer, format: int64}
+        userId: {type: string}
+        username: {type: string}
+        consumedMicrocredits: {type: integer, format: int64}
+        generations: {type: integer, format: int64}
+        share: {type: number, description: 消费占比，0 到 1}
+    ControlPreviewOverview:
+      allOf:
+        - {$ref: "#/components/schemas/ControlPreviewMeta"}
+        - type: object
+          properties:
+            kpi: {$ref: "#/components/schemas/ControlPreviewKPI"}
+            ranking: {type: array, maxItems: 20, items: {$ref: "#/components/schemas/ControlPreviewUser"}}
+            models: {type: array, items: {$ref: "#/components/schemas/ControlPreviewModel"}}
+            inflowSources:
+              type: array
+              items:
+                type: object
+                properties:
+                  source: {type: string, enum: [redeem, payment, admin, reward]}
+                  amountMicrocredits: {type: integer, format: int64}
+            trend:
+              type: array
+              items:
+                type: object
+                properties:
+                  time: {type: string, format: date-time}
+                  label: {type: string}
+                  inflowMicrocredits: {type: integer, format: int64}
+                  consumedMicrocredits: {type: integer, format: int64}
+    ControlPreviewUsers:
+      allOf:
+        - {$ref: "#/components/schemas/ControlPreviewMeta"}
+        - type: object
+          properties:
+            users: {type: array, items: {$ref: "#/components/schemas/ControlPreviewUser"}}
+            total: {type: integer, format: int64}
+            page: {type: integer}
+            pageSize: {type: integer}
+    ControlPreviewUserDetail:
+      allOf:
+        - {$ref: "#/components/schemas/ControlPreviewMeta"}
+        - type: object
+          properties:
+            user: {$ref: "#/components/schemas/ControlPreviewUser"}
+            models: {type: array, items: {$ref: "#/components/schemas/ControlPreviewModel"}}
+            total: {type: integer, format: int64}
+            page: {type: integer}
+            pageSize: {type: integer}
+            entries:
+              type: array
+              items:
+                type: object
+                properties:
+                  id: {type: string}
+                  model: {type: string}
+                  capability: {type: string}
+                  billingOrderId: {type: string}
+                  consumedMicrocredits: {type: integer, format: int64}
+                  createdAt: {type: string, format: date-time}
     ResourceQuotaPatchRequest:
       type: object
       additionalProperties: false

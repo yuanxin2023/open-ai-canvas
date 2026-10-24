@@ -62,6 +62,7 @@ type Service struct {
 	workers                  *platform.Worker
 	updateManager            UpdateManager
 	readCachesOnce           sync.Once
+	controlPreviewReadCache  *platform.BoundedReadCache[string, *ControlPreviewOverview]
 	concurrencyReadCache     *platform.BoundedReadCache[string, platform.RuntimeTaskPolicy]
 	textReplayReadCache      *platform.BoundedReadCache[textReplayCacheKey, *TextReplayResult]
 	routeVersionReadCache    *platform.BoundedReadCache[string, int64]

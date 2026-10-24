@@ -5,6 +5,7 @@ export const ADMIN_PERMISSION_GROUPS = [
         label: "经营分析",
         items: [
             { permission: "admin.analytics.overview", label: "数据概览", path: "/admin" },
+            { permission: "admin.analytics.control_preview", label: "控制预览", path: "/admin/control-preview" },
             { permission: "admin.analytics.api_logs", label: "请求明细", path: "/admin/logs" },
         ],
     },

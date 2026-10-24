@@ -13,6 +13,7 @@ import RouteErrorPage from "@/pages/route-error";
 
 const AdminPage = lazy(() => import("@/pages/admin"));
 const AnalyticsPage = lazy(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.AnalyticsPage })));
+const ControlPreviewPage = lazy(() => import("@/pages/admin/control-preview/control-preview-page"));
 const AnnouncementsPage = lazy(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.AnnouncementsPage })));
 const BannerAnnouncementsPage = lazy(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.BannerAnnouncementsPage })));
 const StorageResourcesPage = lazy(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.StorageResourcesPage })));
@@ -209,6 +210,7 @@ export const router = createBrowserRouter([
                 element: <RequireAuth>{deferred(<AdminPage />)}</RequireAuth>,
                 children: [
                     { index: true, element: <AdminLanding>{adminRoute("admin.analytics.overview", <AnalyticsPage />)}</AdminLanding> },
+                    { path: "control-preview", element: adminRoute("admin.analytics.control_preview", <ControlPreviewPage />) },
                     { path: "users", element: adminRoute("admin.users.accounts", <UsersPage />) },
                     { path: "administrators", element: <RequireFullAdmin><AdministratorsPage /></RequireFullAdmin> },
                     { path: "channels", element: adminRoute("admin.platform.channels", <ChannelsPage />) },

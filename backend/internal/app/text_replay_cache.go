@@ -16,6 +16,7 @@ type textReplayCacheKey struct {
 
 func (s *Service) initReadCaches() {
 	s.readCachesOnce.Do(func() {
+		s.controlPreviewReadCache = platform.NewBoundedReadCache[string, *ControlPreviewOverview](6, 8<<20, 3, 5*time.Second)
 		s.concurrencyReadCache = platform.NewBoundedReadCache[string, platform.RuntimeTaskPolicy](1, 1024, 1, 2*time.Second)
 		s.textReplayReadCache = platform.NewBoundedReadCache[textReplayCacheKey, *TextReplayResult](256, 8<<20, 8, 750*time.Millisecond)
 		s.routeVersionReadCache = platform.NewBoundedReadCache[string, int64](1, 1024, 1, 250*time.Millisecond)

@@ -260,6 +260,7 @@ func (s *Service) ClearAdminRuntimeCache(ctx context.Context, actor *model.User,
 	result.MemoryEntries += s.concurrencyReadCache.ClearAndCount()
 	result.MemoryEntries += s.textReplayReadCache.ClearAndCount()
 	result.MemoryEntries += s.routeVersionReadCache.ClearAndCount()
+	result.MemoryEntries += s.controlPreviewReadCache.ClearAndCount()
 	s.routeHealthMu.Lock()
 	result.MemoryEntries += len(s.routeHealthBlocked)
 	s.routeHealthBlocked = make(map[string]time.Time)
