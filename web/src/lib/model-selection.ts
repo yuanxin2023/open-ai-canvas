@@ -1,11 +1,13 @@
 import { defaultImageCapabilityConfig, modelCapabilityConfigFor, normalizeImageValue, normalizeVideoValue, STANDARD_IMAGE_SIZE_VALUES, videoDurationAllowed, type ImageCapabilityConfig } from "@/lib/model-capabilities";
 import { videoResolutionComparisonKey } from "@/lib/video-generation-options";
+import { imageParameterRequest, imageParameterDefaults, imageParameterAccepts } from "./image-parameters";
 import { imageSizePresets } from "@/lib/image-size-presets";
 import { modelOptionName, PUBLIC_MODEL_CATALOG_ID, resolveModelChannel, selectableModelsByCapability, type AiConfig, type ModelCapability } from "@/stores/use-config-store";
 
 export type ModelInputSummary = {
     textCount: number;
     imageCount: number;
+    referenceImageCount?: number;
     videoCount: number;
     audioCount: number;
     characterCount: number;
@@ -31,6 +33,54 @@ export type ModelReferenceLimits = {
     maxVideos: number;
     maxAudios: number;
 };
+
+/**
+ * 普通音频模型只接受文本或音色 ID。豆包音频生成可以连接最多 3 段参考音频，
+ * 或 1 张参考图片，两者不能同时使用。
+ */
+export function audioReferenceCapacity(config: AiConfig, model: string) {
+    return selectedModelProtocol(config, model) === "doubao-streaming-tts" ? 3 : 0;
+}
+
+export function isDoubaoAudioModel(config: AiConfig, model: string) {
+    if (!String(model || "").trim()) return false;
+    if (selectedModelProtocol(config, model) === "doubao-streaming-tts") return true;
+    // seed-audio-1.0 与 seed-audio-1.0-multilingual 共用同一套 references 合同。
+    return modelOptionName(model).toLowerCase().startsWith("seed-audio");
+}
+
+export function audioModelForConnection(config: AiConfig, explicit = "") {
+    const selected = String(explicit || "").trim();
+    if (selected) return selected;
+    if (String(config.audioModel || "").trim()) return config.audioModel;
+    return (config.audioModels || []).find((item) => isDoubaoAudioModel(config, item)) || "";
+}
+
+/**
+ * 从连线新建音频节点时选模型：默认音频模型接得住当前输入就用它，
+ * 否则改用第一个接得住的音频模型（例如图片连过来时改用豆包音频）。
+ */
+export function audioModelForConnectionInput(config: AiConfig, input: ModelInputSummary) {
+    const preferred = audioModelForConnection(config);
+    const requirements: ModelRequirements = { capability: "audio", input };
+    if (preferred && !modelCompatibilityError(config, preferred, requirements)) return preferred;
+    const candidates = config.audioModels?.length ? config.audioModels : selectableModelsByCapability(config, "audio");
+    return candidates.find((model) => !modelCompatibilityError(config, model, requirements)) || preferred;
+}
+
+export function doubaoAudioInputError(input: ModelInputSummary) {
+    if (input.videoCount > 0) return "音频生成不能连接参考视频";
+    if (input.imageCount > 0 && input.audioCount > 0) return "参考图片和参考音频不能同时连接";
+    if (input.imageCount > 1) return "最多连接 1 张参考图片";
+    if (input.audioCount > 3) return "最多连接 3 段参考音频";
+    return "";
+}
+
+function selectedModelProtocol(config: AiConfig, model: string) {
+    const channel = resolveModelChannel(config, model);
+    const cost = channel.modelCosts?.find((item) => item.model === modelOptionName(model));
+    return cost?.protocol || channel.interfaceType;
+}
 
 export function isDirectSystemModel(config: AiConfig, value: string) {
     if (!value) return false;
@@ -110,8 +160,14 @@ export function modelCompatibilityError(config: AiConfig, model: string, require
         return "";
     }
 
+    if (isDoubaoAudioModel(config, model)) return doubaoAudioInputError(input);
+    if (input.imageCount > 0 || input.videoCount > 0) return "音频模型不能连接参考图片或参考视频";
     if (input.characterCount > 1) return "角色配音一次只能引用一个角色卡";
-    return input.imageCount > 0 || input.videoCount > 0 || input.audioCount > 0 ? "音频模型只接受文本或单个角色卡输入" : "";
+    const maxAudios = audioReferenceCapacity(config, model);
+    if (input.audioCount > maxAudios) {
+        return maxAudios > 0 ? `当前音频模型最多支持 ${maxAudios} 个参考音频` : "当前音频模型不支持参考音频";
+    }
+    return "";
 }
 
 export function modelPromptLengthError(config: AiConfig, model: string, capability: ModelCapability, prompt: string) {
@@ -127,14 +183,22 @@ export function modelPromptLengthError(config: AiConfig, model: string, capabili
     return `当前${label}模型提示词最多 ${maxChars} 个字符，完整提示词为 ${actualChars} 个字符。系统不会自动截断，请精简当前输入、连线内容或技能上下文后重试`;
 }
 
-export function modelRequestOptions(config: AiConfig, capability: ModelCapability) {
+export function modelRequestOptions(config: AiConfig, capability: ModelCapability): Record<string, unknown> {
     switch (capability) {
         case "image":
-            return { size: config.size, quality: config.quality, transparentBackground: config.transparentBackground === "true", count: Number(config.count) };
+            return (
+                imageParameterRequest(modelCapabilityConfigFor(config, config.model || config.imageModel).image!, config, true, selectedModelProtocol(config, config.model || config.imageModel)) ?? {
+                    size: config.size,
+                    imageResolution: config.imageResolution,
+                    quality: config.quality,
+                    transparentBackground: config.transparentBackground === "true",
+                    count: Number(config.count),
+                }
+            );
         case "video":
             return { size: config.size, videoSeconds: Number(config.videoSeconds), vquality: config.vquality, videoGenerateAudio: config.videoGenerateAudio === "true", videoWatermark: config.videoWatermark === "true" };
         case "audio":
-            return { audioVoice: config.audioVoice, audioFormat: config.audioFormat, audioSpeed: Number(config.audioSpeed) };
+            return { audioVoice: config.audioVoice, audioFormat: config.audioFormat, audioSpeed: Number(config.audioSpeed), audioEmotionControlMethod: config.audioEmotionControlMethod, audioEmotionRandom: config.audioEmotionRandom === "true", audioEmotionHappy: Number(config.audioEmotionHappy), audioEmotionAngry: Number(config.audioEmotionAngry), audioEmotionSad: Number(config.audioEmotionSad), audioEmotionAfraid: Number(config.audioEmotionAfraid), audioEmotionDisgusted: Number(config.audioEmotionDisgusted), audioEmotionMelancholic: Number(config.audioEmotionMelancholic), audioEmotionSurprised: Number(config.audioEmotionSurprised), audioEmotionCalm: Number(config.audioEmotionCalm) };
         default:
             return {};
     }
@@ -165,6 +229,9 @@ function logicalModelCompatibilityError(spec: NonNullable<NonNullable<AiConfig["
     };
     for (const [name, value] of Object.entries(options)) {
         if (value === undefined || value === null || value === "") continue;
+        const field = spec.imageParameters?.find((p) => p.name === name);
+        if (field && name !== "size" && !imageParameterAccepts(field, value)) return `不支持当前${field.label}`;
+        if ((name === "quality" || name === "imageResolution") && /^(auto|any)$/i.test(String(value).trim())) continue;
         const constraint = spec.options?.[name];
         if (!constraint || !logicalOptionMatches(name, constraint, value)) return logicalOptionError(name);
     }
@@ -173,6 +240,7 @@ function logicalModelCompatibilityError(spec: NonNullable<NonNullable<AiConfig["
 
 function logicalOptionMatches(name: string, constraint: { values?: unknown[]; min?: number; max?: number; step?: number }, value: unknown) {
     if (constraint.values?.length) {
+        if (constraint.values.includes("*")) return true;
         const requested = normalizeLogicalOptionValue(name, value);
         return constraint.values.some((candidate) => normalizeLogicalOptionValue(name, candidate) === requested);
     }
@@ -247,20 +315,21 @@ export function mergedImageCapabilityConfig(config: AiConfig, selected: string):
 }
 
 // 切换模型后初始化图片参数为该模型能力默认值，避免旧参数在目标模型族不兼容导致无法切换。
-export function defaultImageParamsForModel(config: AiConfig, model: string): Pick<AiConfig, "size" | "quality" | "transparentBackground"> {
+export function defaultImageParamsForModel(config: AiConfig, model: string): Pick<AiConfig, "size" | "imageResolution" | "quality" | "transparentBackground" | "imageParameters"> {
     const image = modelCapabilityConfigFor(config, model).image;
-    if (!image) return { size: "1:1", quality: "auto", transparentBackground: "false" };
+    if (!image) return { size: "1:1", imageResolution: "auto", quality: "auto", transparentBackground: "false" };
     const sizeValues = image.size.values.filter((value) => value !== "*");
     const sizeDefault = image.size.default !== "*" && image.size.default ? image.size.default : sizeValues[0] || "1:1";
     return {
         size: sizeDefault,
+        imageParameters: JSON.stringify(imageParameterDefaults(image.parameters)),
+        imageResolution: image.resolution.supported ? image.resolution.default || "auto" : "auto",
         quality: image.quality.default || "auto",
         transparentBackground: String(image.transparentBackground.default ?? false),
     };
 }
 
-
-export type ModelGenerationDefaults = Pick<AiConfig, "size" | "quality" | "transparentBackground" | "count" | "videoSeconds" | "vquality" | "videoGenerateAudio" | "videoWatermark">;
+export type ModelGenerationDefaults = Pick<AiConfig, "size" | "imageResolution" | "quality" | "transparentBackground" | "count" | "imageParameters" | "videoSeconds" | "vquality" | "videoGenerateAudio" | "videoWatermark">;
 
 type ModelVideoBooleanOptions = Pick<AiConfig, "videoGenerateAudio" | "videoWatermark">;
 
@@ -283,12 +352,18 @@ export function resolveModelGenerationDefaults(
     const profile = modelCapabilityConfigFor(config, model);
 
     if (capability === "image" && profile.image) {
-        const normalized = normalizeImageValue(profile.image, {
-            size: source("size"),
-            quality: source("quality"),
-            count: source("count"),
-            transparentBackground: source("transparentBackground"),
-        });
+        const normalized = normalizeImageValue(
+            profile.image,
+            {
+                size: source("size"),
+                imageResolution: source("imageResolution"),
+                imageParameters: source("imageParameters"),
+                quality: source("quality"),
+                count: source("count"),
+                transparentBackground: source("transparentBackground"),
+            },
+            cost?.protocol,
+        );
         return normalized;
     }
 
@@ -362,9 +437,10 @@ export function modelGroupReferenceLimits(config: AiConfig, selected: string, ca
 
 export function inferVideoOperation(input: ModelInputSummary) {
     const visualInputCount = input.imageCount + input.characterCount;
-    // 图片或角色决定图生视频主模式，音频只作为附加参考，不应把组合请求
+    // 显式普通参考图使用参考模式；未提供角色统计的入口沿用原有数量语义。
+    // 首尾帧图片或角色决定图生视频主模式，音频只作为附加参考，不应把组合请求
     // 提升为全模态参考；纯音频输入才使用独立的 audio_to_video 能力。
-    if (input.videoCount > 0 || visualInputCount > 2) return "reference_to_video";
+    if (input.videoCount > 0 || (input.referenceImageCount ?? 0) > 0 || visualInputCount > 2) return "reference_to_video";
     if (visualInputCount > 0) return "image_to_video";
     if (input.audioCount > 0) return "audio_to_video";
     return "text_to_video";

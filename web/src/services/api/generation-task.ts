@@ -1,3 +1,6 @@
+import { createClientUUID } from "@/lib/client-id";
+import { normalizeAudioFormatForConfig, normalizeAudioVoiceForConfig } from "@/lib/audio-generation";
+import { imageParameterRequest } from "@/lib/image-parameters";
 import { getMediaBlob } from "@/services/file-storage";
 import { getImageBlob } from "@/services/image-storage";
 import { resourceIdFromStorageKey, resourceStorageKey, uploadResourceFile } from "@/services/api/resources";
@@ -18,10 +21,12 @@ export { logicalModelIDForConfig };
 export type BackendGenerationMode = "text" | "image" | "video" | "audio";
 
 export type BackendGenerationResult = {
+    projectAssetImageStatus?: "bound" | "stale";
     mode?: BackendGenerationMode;
     images?: Array<{ dataUrl: string; storageKey?: string; width?: number; height?: number; bytes?: number; mimeType?: string }>;
     video?: { dataUrl: string; storageKey?: string; width?: number; height?: number; durationMs?: number; bytes?: number; mimeType?: string };
     audio?: { dataUrl: string; storageKey?: string; durationMs?: number; bytes?: number; mimeType?: string; format?: string };
+    audios?: Array<{ dataUrl: string; storageKey?: string; durationMs?: number; bytes?: number; mimeType?: string; format?: string }>;
     text?: string;
     toolCalls?: Array<{ id: string; type: "function"; function: { name: string; arguments: string }; thoughtSignature?: string }>;
     reasoning?: string;
@@ -58,7 +63,7 @@ export type GenerationTaskDependencies = {
 const defaultDependencies: GenerationTaskDependencies = {
     createTask: createGenerationTask,
     waitTask: waitForGenerationTask,
-    createId: () => crypto.randomUUID(),
+    createId: () => createClientUUID(),
 };
 
 type PreparedGenerationReferences = {
@@ -319,15 +324,20 @@ function generationMetadata(config: AiConfig, metadata?: Record<string, unknown>
     const channel = resolveModelChannel(config, config.model);
     const model = modelOptionName(config.model);
     const modelCost = channel.modelCosts?.find((item) => item.model === model);
+    if (modelCost?.capability === "image" && modelCost.capabilityConfig?.image?.parameters) {
+        const { providerOptions: _providerOptions, ...rest } = metadata || {};
+        return rest;
+    }
     const protocol = modelCost?.protocol || channel.interfaceType;
-    const defaults = modelCost?.defaultOptions;
-    if (!protocol || !defaults || !Object.keys(defaults).length) return metadata;
+    if (!protocol) return metadata;
     const existing = metadata?.providerOptions && typeof metadata.providerOptions === "object" && !Array.isArray(metadata.providerOptions)
         ? metadata.providerOptions as Record<string, unknown>
         : {};
     const namespace = existing[protocol] && typeof existing[protocol] === "object" && !Array.isArray(existing[protocol])
         ? existing[protocol] as Record<string, unknown>
         : {};
+    const defaults = modelCost?.defaultOptions && typeof modelCost.defaultOptions === "object" ? modelCost.defaultOptions : {};
+    if (!Object.keys(defaults).length && !Object.keys(namespace).length) return metadata;
     return { ...metadata, providerOptions: { ...existing, [protocol]: { ...defaults, ...namespace } } };
 }
 
@@ -375,6 +385,8 @@ function backendImageReference(image: ReferenceImage, override: Partial<Referenc
         ...(image.bytes ? { bytes: image.bytes } : {}),
         ...(image.width ? { width: image.width } : {}),
         ...(image.height ? { height: image.height } : {}),
+        ...(image.role ? { role: image.role } : {}),
+        ...(image.slotKey ? { slotKey: image.slotKey } : {}),
     };
 }
 
@@ -385,10 +397,12 @@ function backendMediaReference<T extends ReferenceVideo | ReferenceAudio>(media:
         type: override.type || media.type,
         url: override.url || "",
         storageKey: override.storageKey,
-        ...("bytes" in media && media.bytes ? { bytes: media.bytes } : {}),
+        ...(media.bytes ? { bytes: media.bytes } : {}),
         ...("width" in media && media.width ? { width: media.width } : {}),
         ...("height" in media && media.height ? { height: media.height } : {}),
         ...(media.durationMs ? { durationMs: media.durationMs } : {}),
+        ...(media.role ? { role: media.role } : {}),
+        ...(media.slotKey ? { slotKey: media.slotKey } : {}),
     } as T;
 }
 
@@ -397,7 +411,9 @@ export function backendProviderConfig(config: AiConfig, mode: BackendGenerationM
     const workflow = resolveGenerationWorkflowExecution(config, mode);
     if (workflow) return workflowProviderConfig(config, requestConfig, workflow);
     const generationOptions = {
+        ...(mode === "image" ? { imageParameters: imageParameterRequest(modelCapabilityConfigFor(config, config.model).image!, config, true, resolveModelRequestConfig(config, config.model).interfaceType) } : {}),
         size: config.size,
+        imageResolution: omittedImageQuality(config.imageResolution),
         quality: omittedImageQuality(config.quality),
         transparentBackground: config.transparentBackground,
         count: config.count,
@@ -406,9 +422,11 @@ export function backendProviderConfig(config: AiConfig, mode: BackendGenerationM
         videoGenerateAudio: config.videoGenerateAudio,
         videoWatermark: config.videoWatermark,
         videoArkPrivateAssetUpload: config.videoArkPrivateAssetUpload,
-        audioVoice: config.audioVoice,
-        audioFormat: config.audioFormat,
+        audioVoice: normalizeAudioVoiceForConfig(config, config.audioVoice),
+        audioFormat: normalizeAudioFormatForConfig(config, config.audioFormat),
         audioSpeed: config.audioSpeed,
+        audioLanguage: config.audioLanguage,
+        audioDialect: config.audioDialect,
         audioInstructions: config.audioInstructions,
         systemPrompt: config.systemPrompt,
     };
@@ -448,9 +466,11 @@ function workflowProviderConfig(config: AiConfig, requestConfig: ReturnType<type
         videoGenerateAudio: config.videoGenerateAudio,
         videoWatermark: config.videoWatermark,
         videoArkPrivateAssetUpload: config.videoArkPrivateAssetUpload,
-        audioVoice: config.audioVoice,
-        audioFormat: config.audioFormat,
+        audioVoice: normalizeAudioVoiceForConfig(config, config.audioVoice),
+        audioFormat: normalizeAudioFormatForConfig(config, config.audioFormat),
         audioSpeed: config.audioSpeed,
+        audioLanguage: config.audioLanguage,
+        audioDialect: config.audioDialect,
         audioInstructions: config.audioInstructions,
         workflowId: workflow.workflowId,
         webappId: workflow.webappId,
@@ -476,6 +496,10 @@ function workflowPublicExecution(workflow: GenerationWorkflowExecution) {
 }
 
 function logicalCapabilityOptions(config: AiConfig, mode: BackendGenerationMode) {
+    if (mode === "image") {
+        const values = imageParameterRequest(modelCapabilityConfigFor(config, config.model).image!, config, true, resolveModelRequestConfig(config, config.model).interfaceType);
+        if (values) return values;
+    }
     const channel = resolveModelChannel(config, config.model);
     const spec = channel.modelCosts?.find((item) => item.model === modelOptionName(config.model))?.logicalCapabilitySpec;
     const candidates: Record<string, unknown> = mode === "image"
@@ -483,7 +507,7 @@ function logicalCapabilityOptions(config: AiConfig, mode: BackendGenerationMode)
         : mode === "video"
             ? { size: config.size, videoSeconds: Number(config.videoSeconds), vquality: config.vquality, videoGenerateAudio: config.videoGenerateAudio === "true", videoWatermark: config.videoWatermark === "true" }
             : mode === "audio"
-                ? { audioVoice: config.audioVoice, audioFormat: config.audioFormat, audioSpeed: Number(config.audioSpeed) }
+                ? { audioVoice: config.audioVoice, audioFormat: config.audioFormat, audioSpeed: Number(config.audioSpeed), audioLanguage: config.audioLanguage, audioDialect: config.audioDialect }
                 : {};
     const filtered = Object.fromEntries(Object.entries(candidates).filter(([key]) => Boolean(spec?.options?.[key])));
     // 只把前台模型声明过的参数送进能力匹配。未声明的 quality 不能因为画布选了 4K 档位
@@ -498,7 +522,27 @@ function omittedImageQuality(value: string | undefined) {
 
 export function parseBackendGenerationResult(task: GenerationTask): BackendGenerationResult {
     if (!task.resultJson) throw new Error("后端任务没有返回结果");
-    const result = JSON.parse(task.resultJson) as BackendGenerationResult;
+    const result = JSON.parse(task.resultJson) as BackendGenerationResult & { text?: unknown };
     if (!result || typeof result !== "object") throw new Error("后端任务结果格式错误");
-    return result;
+    return { ...result, text: normalizeBackendText(result.text) };
+}
+
+function normalizeBackendText(value: unknown): string | undefined {
+    if (typeof value === "string") return value;
+    if (value === null || value === undefined) return undefined;
+    if (Array.isArray(value)) {
+        const text = value.map((item) => normalizeBackendText(item)).filter((item): item is string => Boolean(item)).join("");
+        return text || undefined;
+    }
+    if (typeof value === "object") {
+        const record = value as Record<string, unknown>;
+        for (const key of ["text", "content", "output_text", "value"]) {
+            if (!(key in record)) continue;
+            const nested = normalizeBackendText(record[key]);
+            if (nested !== undefined) return nested;
+        }
+        // 某些结构化文本任务直接把 JSON 载荷放进 text 对象，保留 JSON 供上层契约解析。
+        return JSON.stringify(value);
+    }
+    return String(value);
 }

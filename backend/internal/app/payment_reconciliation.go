@@ -49,7 +49,7 @@ func (s *Service) runPaymentReconciliation(ctx context.Context, actor *model.Use
 	if !ok {
 		return nil, BadAuthRequest("未知支付渠道")
 	}
-	if !paymentProviderSupports(providerID, "payment.reconcile") {
+	if !s.paymentProviderSupports(providerID, "payment.reconcile") {
 		return nil, BadAuthRequest("该支付渠道不支持账单对账")
 	}
 	billDate, err := parsePaymentBillDate(billDateValue)
@@ -333,7 +333,7 @@ func (s *Service) maybeRunDailyPaymentReconciliation(ctx context.Context) {
 	}
 	billDate := now.AddDate(0, 0, -1).Format("2006-01-02")
 	for _, descriptor := range s.paymentRegistry.Descriptors() {
-		if !paymentProviderSupports(descriptor.ID, "payment.reconcile") {
+		if !s.paymentProviderSupports(descriptor.ID, "payment.reconcile") {
 			continue
 		}
 		config, err := s.repo.LatestPaymentProviderConfig(descriptor.ID)

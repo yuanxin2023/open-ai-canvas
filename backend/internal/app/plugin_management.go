@@ -15,6 +15,7 @@ const (
 	PluginAIArtCritique       = "ai-art-critique"
 	PluginMediaConversion     = "media-conversion"
 	PluginEditorShell         = "editor-shell"
+	PluginUserFeedback        = "user-feedback"
 
 	PluginOriginOfficial = "official"
 	PluginOriginSystem   = "system"
@@ -23,6 +24,7 @@ const (
 	PluginKindProtocol    = "protocol"
 	PluginKindApplication = "application"
 	PluginKindPayment     = "payment"
+	PluginKindSMS         = "sms"
 
 	PluginScopeSystem = "system"
 	PluginScopeUser   = "user"
@@ -86,6 +88,10 @@ var officialApplicationPolicies = map[string]PluginManagementView{
 		Origin: PluginOriginOfficial, Kind: PluginKindApplication,
 		ActivationScope: PluginScopeUser, ConfigurationScope: PluginConfigurationNone,
 	},
+	PluginUserFeedback: {
+		Origin: PluginOriginOfficial, Kind: PluginKindApplication,
+		ActivationScope: PluginScopeUser, ConfigurationScope: PluginConfigurationNone,
+	},
 }
 
 var systemPaymentPolicies = map[string]PluginManagementView{
@@ -114,6 +120,9 @@ func pluginManagement(pluginID string, source string) PluginManagementView {
 		return policy
 	}
 	if policy, ok := systemPaymentPolicies[strings.TrimSpace(pluginID)]; ok {
+		return policy
+	}
+	if policy, ok := systemSMSPolicies[strings.TrimSpace(pluginID)]; ok {
 		return policy
 	}
 	return PluginManagementView{
@@ -148,6 +157,10 @@ func knownPluginIDs(items []PluginView) []string {
 		if _, exists := seen[id]; exists {
 			continue
 		}
+		seen[id] = struct{}{}
+		ids = append(ids, id)
+	}
+	for id := range systemSMSPolicies {
 		seen[id] = struct{}{}
 		ids = append(ids, id)
 	}
@@ -222,7 +235,7 @@ func (s *Service) pluginStateForUser(actor *model.User, pluginID string, items [
 		// explicitly saves a personal choice. Other official applications were
 		// already controlled by each user's local installation state.
 		if !userConfigured {
-			if pluginID == PluginMediaConversion {
+			if pluginID == PluginMediaConversion || pluginID == PluginUserFeedback {
 				userEnabled = true
 			} else if hasRuntime && pluginID == WorkflowPluginRunningHub {
 				userEnabled = runtimePlugin.Status == "enabled"
@@ -311,6 +324,9 @@ func (s *Service) SetPluginPlatformAvailability(actor *model.User, pluginID stri
 		return AdminPluginStateView{}, fmt.Errorf("插件 %q 不存在", pluginID)
 	}
 	policy := pluginManagement(pluginID, source)
+	if hasRuntime {
+		policy = pluginManagementFromView(runtimePlugin)
+	}
 	previousRuntimeEnabled := false
 	runtimeChanged := false
 	if policy.ActivationScope == PluginScopeSystem {
@@ -318,10 +334,18 @@ func (s *Service) SetPluginPlatformAvailability(actor *model.User, pluginID stri
 			return AdminPluginStateView{}, fmt.Errorf("插件 %q 缺少运行时", pluginID)
 		}
 		previousRuntimeEnabled = runtimePlugin.Status == "enabled"
-		if _, err := s.SetPluginEnabled(pluginID, available); err != nil {
-			return AdminPluginStateView{}, err
+		runtimeEnabled := available
+		// Payment availability controls new orders. Historical queries and
+		// verified notifications still require the installed runtime after pause.
+		if policy.Kind == PluginKindPayment {
+			runtimeEnabled = true
 		}
-		runtimeChanged = previousRuntimeEnabled != available
+		if previousRuntimeEnabled != runtimeEnabled || policy.Kind != PluginKindPayment {
+			if _, err := s.SetPluginEnabled(pluginID, runtimeEnabled); err != nil {
+				return AdminPluginStateView{}, err
+			}
+		}
+		runtimeChanged = previousRuntimeEnabled != runtimeEnabled
 	}
 	now := time.Now()
 	platformState := &model.PluginPlatformState{PluginID: pluginID, Available: available, UpdatedBy: actor.ID, CreatedAt: now, UpdatedAt: now}
@@ -342,6 +366,9 @@ func (s *Service) SetPluginPlatformAvailability(actor *model.User, pluginID stri
 }
 
 func isKnownRuntimeOptionalPlugin(pluginID string) bool {
+	if isSystemSMSPluginID(pluginID) {
+		return true
+	}
 	if _, known := officialApplicationPolicies[pluginID]; known {
 		return true
 	}

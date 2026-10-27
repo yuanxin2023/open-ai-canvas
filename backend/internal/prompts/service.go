@@ -12,8 +12,10 @@ type AdminGate interface {
 }
 
 type Service struct {
-	repo  *repository.Repository
-	admin AdminGate
+	repo            *repository.Repository
+	admin           AdminGate
+	libraryState    *InspirationLibraryData
+	libraryRevision int64
 }
 
 func New(repo *repository.Repository, admin AdminGate) *Service {

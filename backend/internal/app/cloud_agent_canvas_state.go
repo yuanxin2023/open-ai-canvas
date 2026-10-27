@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"infinite-canvas/backend/internal/assets"
 	"infinite-canvas/backend/internal/canvas/capability"
 	"infinite-canvas/backend/internal/repository"
 )
@@ -28,15 +29,91 @@ var cloudAgentStructuredProjectors = map[string]cloudAgentStructuredProjector{
 	},
 }
 
+// cloudAgentNodeHash 是单个节点内容的版本号。分镜/批量表的读写只作用在一个节点上，
+// 用它做并发校验：用户删改其它节点不会让 Agent 对这个节点的修改失效；
+// 这个节点本身被改过（或被删掉）时才拒绝写入。
+func cloudAgentNodeHash(doc map[string]any, nodeID string) string {
+	for _, node := range creationMaps(doc["nodes"]) {
+		if stringValue(node["id"]) == nodeID {
+			return creationHash(node)
+		}
+	}
+	return ""
+}
+
+// cloudAgentNodeSnapshotMatches 接受两种版本号：旧的整画布哈希（画布完全未变）或
+// 目标节点哈希（只有目标节点未变）。前者兼容已经发出、带整画布哈希的调用。
+func cloudAgentNodeSnapshotMatches(doc map[string]any, nodeID, snapshotHash string) bool {
+	if snapshotHash == "" {
+		return false
+	}
+	if snapshotHash == cloudAgentCanvasHash(doc) {
+		return true
+	}
+	node := cloudAgentNodeHash(doc, nodeID)
+	return node != "" && node == snapshotHash
+}
+
 // Viewport autosaves must not invalidate approved content; node edits still do.
 func cloudAgentCanvasHash(doc map[string]any) string {
 	content := make(map[string]any, len(doc))
 	for key, value := range doc {
-		if key != "viewport" && key != "updatedAt" {
-			content[key] = value
+		switch key {
+		case "id", "viewport", "updatedAt", "revision", "createdAt":
+			continue
+		case "title", "projectId":
+			if text, ok := value.(string); ok && strings.TrimSpace(text) == "" {
+				continue
+			}
+		}
+		content[key] = value
+	}
+	for _, key := range []string{"nodes", "connections"} {
+		if value, exists := content[key]; !exists || value == nil {
+			content[key] = []any{}
 		}
 	}
+	content["nodes"] = cloudAgentNodesWithoutTimestamps(content["nodes"])
 	return creationHash(content)
+}
+
+// cloudAgentNodesWithoutTimestamps 去掉节点层的 createdAt/updatedAt。前端会给 Agent 新建或
+// 修改过的节点补写时间戳并自动保存，单纯的时间戳变化不代表内容被改，不应让模型手上的
+// 快照失效；节点其他字段（含未知字段）仍全部参与哈希。没有时间戳的节点原样保留，哈希不变。
+func cloudAgentNodesWithoutTimestamps(value any) any {
+	items, ok := value.([]any)
+	if !ok {
+		if typed, isMaps := value.([]map[string]any); isMaps {
+			items = make([]any, len(typed))
+			for index, node := range typed {
+				items[index] = node
+			}
+		} else {
+			return value
+		}
+	}
+	projected := make([]any, len(items))
+	for index, item := range items {
+		node, isMap := item.(map[string]any)
+		if !isMap {
+			projected[index] = item
+			continue
+		}
+		_, hasCreated := node["createdAt"]
+		_, hasUpdated := node["updatedAt"]
+		if !hasCreated && !hasUpdated {
+			projected[index] = node
+			continue
+		}
+		copied := make(map[string]any, len(node))
+		for key, field := range node {
+			if key != "createdAt" && key != "updatedAt" {
+				copied[key] = field
+			}
+		}
+		projected[index] = copied
+	}
+	return projected
 }
 
 // Generation uses the graph, not canvas presentation or autosave bookkeeping.
@@ -63,9 +140,36 @@ func cloudAgentMediaContentHash(doc map[string]any) string {
 
 const cloudAgentReadPageBytes = 64 << 10
 
+// A full related-component read is useful for answering questions such as
+// "what feeds this shot and what does it feed?", but it must remain bounded so
+// a densely connected canvas cannot turn one tool call into an unbounded
+// context dump.
+const cloudAgentRelatedNodeLimit = 256
+
 func cloudAgentCanvasState(repo *repository.Repository, userID, canvasID string, doc map[string]any, offset int, ids []string, storyboardOffset int, connectionOffsets ...int) (any, error) {
-	if offset < 0 || storyboardOffset < 0 || len(ids) > 8 {
+	return cloudAgentCanvasStateSelected(repo, userID, canvasID, doc, offset, ids, nil, 0, false, storyboardOffset, connectionOffsets...)
+}
+
+// cloudAgentCanvasStateWithFocus returns a bounded graph neighborhood around
+// the requested nodes. It is deliberately separate from the legacy paginated
+// reader so existing callers keep their exact pagination semantics.
+func cloudAgentCanvasStateWithFocus(repo *repository.Repository, userID, canvasID string, doc map[string]any, offset int, focusNodeIDs []string, depth, storyboardOffset int, connectionOffsets ...int) (any, error) {
+	return cloudAgentCanvasStateSelected(repo, userID, canvasID, doc, offset, nil, focusNodeIDs, depth, false, storyboardOffset, connectionOffsets...)
+}
+
+func cloudAgentCanvasStateWithRelated(repo *repository.Repository, userID, canvasID string, doc map[string]any, offset int, focusNodeIDs []string, storyboardOffset int, connectionOffsets ...int) (any, error) {
+	return cloudAgentCanvasStateSelected(repo, userID, canvasID, doc, offset, nil, focusNodeIDs, 0, true, storyboardOffset, connectionOffsets...)
+}
+
+func cloudAgentCanvasStateSelected(repo *repository.Repository, userID, canvasID string, doc map[string]any, offset int, ids, focusNodeIDs []string, depth int, includeRelated bool, storyboardOffset int, connectionOffsets ...int) (any, error) {
+	if offset < 0 || storyboardOffset < 0 || len(ids) > 8 || len(focusNodeIDs) > 8 || (len(ids) > 0 && len(focusNodeIDs) > 0) {
 		return nil, BadAuthRequest("画布读取分页参数无效")
+	}
+	if len(focusNodeIDs) > 0 && !includeRelated && (depth < 0 || depth > 3) {
+		return nil, BadAuthRequest("关联子图 depth 必须在 0 到 3 之间")
+	}
+	if includeRelated && len(focusNodeIDs) == 0 {
+		return nil, BadAuthRequest("includeRelated 只能与 focusNodeIds 一起使用")
 	}
 	all := creationMaps(doc["nodes"])
 	connectionOffset := 0
@@ -79,44 +183,101 @@ func cloudAgentCanvasState(repo *repository.Repository, userID, canvasID string,
 	for _, id := range ids {
 		wanted[id] = true
 	}
-	for id := range wanted {
-		found := false
-		for _, node := range all {
-			if stringValue(node["id"]) == id {
-				found = true
-				break
-			}
+	focus := map[string]bool{}
+	for _, id := range focusNodeIDs {
+		if id == "" || focus[id] {
+			return nil, BadAuthRequest("关联子图 focusNodeIds 不能包含空值或重复节点")
 		}
-		if !found {
+		focus[id] = true
+	}
+	nodeByID := make(map[string]map[string]any, len(all))
+	for _, node := range all {
+		if id := stringValue(node["id"]); id != "" {
+			nodeByID[id] = node
+		}
+	}
+	for id := range wanted {
+		if nodeByID[id] == nil {
 			return nil, BadAuthRequest("指定节点不在当前画布")
 		}
 	}
-	limit := 2000
-	if len(ids) > 0 {
+	for id := range focus {
+		if nodeByID[id] == nil {
+			return nil, BadAuthRequest("关联子图 focusNodeIds 中存在不在当前画布的节点")
+		}
+	}
+	selected := map[string]bool{}
+	selectionTruncated := false
+	if len(focus) > 0 {
+		adjacency := make(map[string][]string, len(all))
+		for _, edge := range creationMaps(doc["connections"]) {
+			from, to := stringValue(edge["fromNodeId"]), stringValue(edge["toNodeId"])
+			if nodeByID[from] == nil || nodeByID[to] == nil {
+				continue
+			}
+			adjacency[from] = append(adjacency[from], to)
+			adjacency[to] = append(adjacency[to], from)
+		}
+		frontier := make([]string, 0, len(focus))
+		// Preserve the caller's focus order. This makes bounded results stable
+		// and keeps the selected node itself ahead of its neighbours.
+		for _, id := range focusNodeIDs {
+			selected[id] = true
+			frontier = append(frontier, id)
+		}
+		levels := depth
+		if includeRelated {
+			levels = len(all) + 1
+		}
+		for level := 0; level < levels && len(frontier) > 0; level++ {
+			next := make([]string, 0)
+			for _, id := range frontier {
+				for _, neighbor := range adjacency[id] {
+					if selected[neighbor] {
+						continue
+					}
+					if includeRelated && len(selected) >= cloudAgentRelatedNodeLimit {
+						selectionTruncated = true
+						continue
+					}
+					selected[neighbor] = true
+					next = append(next, neighbor)
+				}
+			}
+			frontier = next
+		}
+	}
+	selectedMode := len(focus) > 0
+	candidateNodes := make([]map[string]any, 0, len(all))
+	for _, node := range all {
+		id := stringValue(node["id"])
+		switch {
+		case selectedMode && selected[id]:
+			candidateNodes = append(candidateNodes, node)
+		case !selectedMode && len(ids) > 0 && wanted[id]:
+			candidateNodes = append(candidateNodes, node)
+		case !selectedMode && len(ids) == 0:
+			candidateNodes = append(candidateNodes, node)
+		}
+	}
+	limit := 320
+	if len(ids) > 0 || len(focus) > 0 {
 		limit = 16000
 	}
 	nodes := []any{}
 	included := map[string]bool{}
 	next := 0
 	pageBytes := 1024
-	for index, node := range all {
-		if index < offset {
+	for candidateIndex, node := range candidateNodes {
+		if candidateIndex < offset {
 			continue
 		}
 		id := stringValue(node["id"])
-		if len(ids) > 0 {
-			if !wanted[id] {
-				continue
-			}
-		} else {
-			if index < offset {
-				continue
-			}
-			if len(nodes) == 40 {
-				next = index
-				break
-			}
+		if len(ids) == 0 && len(focus) == 0 && len(nodes) == 40 {
+			next = candidateIndex
+			break
 		}
+		precise := len(ids) > 0 || focus[id]
 		meta, _ := node["metadata"].(map[string]any)
 		item := map[string]any{"id": id, "type": stringValue(node["type"])}
 		if title, ok := node["title"].(string); ok {
@@ -139,14 +300,14 @@ func cloudAgentCanvasState(repo *repository.Repository, userID, canvasID string,
 		if status, ok := meta["status"].(string); ok {
 			item["status"] = truncateRunes(status, 40)
 		}
-		capability, known := cloudAgentNodeCapabilityForType(stringValue(node["type"]))
+		capability, known := cloudAgentNodeCapabilityForNode(node)
 		if !known {
 			// Read visibility is not permission to mutate or use a node as a media reference.
 			item["agentSupported"] = false
 			item["agentUnsupportedReason"] = "仅展示基础信息；当前 Agent 不支持操作此类型节点"
 			body, _ := json.Marshal(item)
 			if pageBytes+len(body) > cloudAgentReadPageBytes-(8<<10) {
-				next = index
+				next = candidateIndex
 				break
 			}
 			pageBytes += len(body)
@@ -154,16 +315,49 @@ func cloudAgentCanvasState(repo *repository.Repository, userID, canvasID string,
 			included[id] = true
 			continue
 		}
+		if capability.Variant != nil {
+			// 变体节点（如角色卡）底层 type 仍是 text，用 kind 标明真实能力，避免当普通文本处理。
+			item["kind"] = capability.Type
+		}
 		fields := capability.SummaryFields
-		if len(ids) > 0 {
+		if precise {
 			fields = capability.DetailFields
 		}
-		projected, err := cloudAgentProjectNodeFields(node, meta, capability, fields, limit, len(ids) > 0, storyboardOffset)
+		projected, err := cloudAgentProjectNodeFields(node, meta, capability, fields, limit, precise, storyboardOffset)
 		if err != nil {
 			return nil, err
 		}
 		for key, value := range projected {
 			item[key] = value
+		}
+		if cloudAgentCharacterNode(node) {
+			if repo == nil {
+				item["character"] = map[string]any{"available": false, "issue": "角色资产读取服务不可用"}
+			} else {
+				canvas, canvasErr := repo.CanvasProjectForUser(userID, canvasID)
+				if canvasErr != nil {
+					return nil, canvasErr
+				}
+				character, characterErr := cloudAgentResolveCharacter(repo, userID, canvas.ProjectID, node)
+				if characterErr != nil {
+					item["character"] = map[string]any{"available": false, "issue": cloudAgentSafeToolError(characterErr)}
+				} else {
+					characterView := character.read(precise)
+					if precise {
+						_, referenceErr := cloudAgentCharacterImageReference(repo, userID, id, character)
+						characterView["imageReference"] = map[string]any{"ready": referenceErr == nil}
+						if referenceErr != nil {
+							characterView["imageReference"].(map[string]any)["issue"] = cloudAgentSafeToolError(referenceErr)
+						}
+						_, audioErr := cloudAgentCharacterAudioReference(repo, userID, id, character)
+						characterView["audioReference"] = map[string]any{"ready": audioErr == nil}
+						if audioErr != nil {
+							characterView["audioReference"].(map[string]any)["issue"] = cloudAgentSafeToolError(audioErr)
+						}
+					}
+					item["character"] = characterView
+				}
+			}
 		}
 		if capability.GenerationMode != "" {
 			generation := map[string]any{"taskStatus": "not_submitted"}
@@ -195,7 +389,8 @@ func cloudAgentCanvasState(repo *repository.Repository, userID, canvasID string,
 			}
 			item["generationDraft"] = draft
 		}
-		if capability.Connection.CanReference {
+		// 角色卡的引用可用性在 character.imageReference/audioReference 中给出。
+		if capability.Connection.CanReference && !cloudAgentCharacterNode(node) {
 			ref, _, err := cloudAgentReference(repo, userID, node)
 			outputReference := map[string]any{"ready": err == nil}
 			item["outputReference"] = outputReference
@@ -220,7 +415,7 @@ func cloudAgentCanvasState(repo *repository.Repository, userID, canvasID string,
 			if len(nodes) == 0 {
 				return nil, BadAuthRequest("节点详情超过单页读取预算，请使用节点对应的结构化分页工具")
 			}
-			next = index
+			next = candidateIndex
 			break
 		}
 		pageBytes += len(body)
@@ -233,7 +428,9 @@ func cloudAgentCanvasState(repo *repository.Repository, userID, canvasID string,
 		if index < connectionOffset {
 			continue
 		}
-		if included[stringValue(edge["fromNodeId"])] || included[stringValue(edge["toNodeId"])] {
+		fromIncluded := included[stringValue(edge["fromNodeId"])]
+		toIncluded := included[stringValue(edge["toNodeId"])]
+		if (selectedMode && fromIncluded && toIncluded) || (!selectedMode && (fromIncluded || toIncluded)) {
 			item := map[string]any{"id": edge["id"], "fromNodeId": edge["fromNodeId"], "toNodeId": edge["toNodeId"]}
 			body, _ := json.Marshal(item)
 			if pageBytes+len(body) > cloudAgentReadPageBytes {
@@ -244,7 +441,20 @@ func cloudAgentCanvasState(repo *repository.Repository, userID, canvasID string,
 			edges = append(edges, item)
 		}
 	}
-	return map[string]any{"snapshotHash": cloudAgentCanvasHash(doc), "mediaSnapshotHash": cloudAgentMediaContentHash(doc), "nodes": nodes, "connections": edges, "totalNodes": len(all), "nextOffset": next, "hasMore": next > 0, "nextConnectionOffset": nextConnection, "hasMoreConnections": nextConnection > 0, "pageByteBudget": cloudAgentReadPageBytes}, nil
+	result := map[string]any{"snapshotHash": cloudAgentCanvasHash(doc), "mediaSnapshotHash": cloudAgentMediaContentHash(doc), "nodes": nodes, "connections": edges, "totalNodes": len(all), "nextOffset": next, "hasMore": next > 0, "nextConnectionOffset": nextConnection, "hasMoreConnections": nextConnection > 0, "pageByteBudget": cloudAgentReadPageBytes}
+	if selectedMode {
+		result["totalSelectedNodes"] = len(candidateNodes)
+		selection := map[string]any{"mode": "subgraph", "focusNodeIds": focusNodeIDs, "selectedNodes": len(candidateNodes)}
+		if includeRelated {
+			selection["relationMode"] = "all"
+			selection["truncated"] = selectionTruncated
+			selection["nodeLimit"] = cloudAgentRelatedNodeLimit
+		} else {
+			selection["depth"] = depth
+		}
+		result["selection"] = selection
+	}
+	return result, nil
 }
 
 func cloudAgentSafeNumber(value any) (any, bool) {
@@ -282,12 +492,28 @@ func cloudAgentProjectNodeFields(node, meta map[string]any, descriptor capabilit
 			}
 			continue
 		}
-		value, ok := node[key]
-		if !ok {
-			value, ok = meta[key]
+		var value any
+		var ok bool
+		if key == "prompt" && descriptor.GenerationMode != "" {
+			value, ok = cloudAgentMediaPrompt(meta)
+		} else {
+			value, ok = node[key]
+			if !ok {
+				value, ok = meta[key]
+			}
 		}
 		if !ok || (key == "content" && descriptor.GenerationMode != "") {
 			continue
+		}
+		// Some older uploads persist only a resource URL in the text node. Do not
+		// expose that locator as if it were the novel/script正文; the model must
+		// call canvas_read_text, which authorizes and reads the owned resource.
+		if key == "content" {
+			if text, isString := value.(string); isString && assets.ResourceID(text) != "" {
+				projected["contentAvailable"] = true
+				projected["contentSource"] = "resource"
+				continue
+			}
 		}
 		if safe, truncated := cloudAgentSafeProjection(value, textLimit); safe != nil {
 			projected[key] = safe
@@ -297,6 +523,21 @@ func cloudAgentProjectNodeFields(node, meta map[string]any, descriptor capabilit
 		}
 	}
 	return projected, nil
+}
+
+func cloudAgentMediaPrompt(meta map[string]any) (string, bool) {
+	if generationSpec, ok := meta["generationSpec"].(map[string]any); ok {
+		if prompt, ok := generationSpec["prompt"].(string); ok {
+			return prompt, true
+		}
+	}
+	if prompt, ok := meta["composerContent"].(string); ok {
+		return prompt, true
+	}
+	if prompt, ok := meta["prompt"].(string); ok {
+		return prompt, true
+	}
+	return "", false
 }
 
 func cloudAgentProjectionValue(node, meta map[string]any, path string) (any, bool) {

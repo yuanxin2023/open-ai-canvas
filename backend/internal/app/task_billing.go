@@ -50,6 +50,35 @@ func (c *taskBillingCoordinator) SettleBilling(orderID string, providerRequestID
 	return c.repo.SettleBillingOrder(orderID, providerRequestID)
 }
 
+func (c *taskBillingCoordinator) BillingOrder(orderID string) (*model.BillingOrder, error) {
+	if orderID == "" {
+		return nil, nil
+	}
+	return c.repo.BillingOrder(orderID)
+}
+
+func (c *taskBillingCoordinator) SettleBillingWithAudioDuration(orderID string, providerRequestID string, durationMs int64) error {
+	if orderID == "" {
+		return nil
+	}
+	order, err := c.repo.BillingOrder(orderID)
+	if err != nil {
+		return err
+	}
+	if order == nil {
+		return errors.New("任务计费订单不存在，需人工核对")
+	}
+	if order.Status == model.BillingStatusRefunded || order.RefundRecoveryPending {
+		return c.RestoreRefundedBillingWithAudioDuration(orderID, providerRequestID, durationMs)
+	}
+	if repo, ok := c.repo.(interface {
+		SettleBillingOrderWithAudioDuration(string, string, int64) error
+	}); ok {
+		return repo.SettleBillingOrderWithAudioDuration(orderID, providerRequestID, durationMs)
+	}
+	return errors.New("实测时长结算能力不可用，需人工核对")
+}
+
 func (c *taskBillingCoordinator) RestoreRefundedBilling(orderID string, providerRequestID string) error {
 	if orderID == "" {
 		return nil
@@ -57,18 +86,42 @@ func (c *taskBillingCoordinator) RestoreRefundedBilling(orderID string, provider
 	return c.repo.RestoreRefundedBillingOrder(orderID, providerRequestID)
 }
 
+func (c *taskBillingCoordinator) RestoreRefundedBillingWithAudioDuration(orderID, providerRequestID string, durationMs int64) error {
+	if orderID == "" {
+		return nil
+	}
+	if repo, ok := c.repo.(interface {
+		RestoreRefundedBillingOrderWithAudioDuration(string, string, int64) error
+	}); ok {
+		return repo.RestoreRefundedBillingOrderWithAudioDuration(orderID, providerRequestID, durationMs)
+	}
+	return errors.New("实测时长退款恢复能力不可用，需人工核对")
+}
+
+func (c *taskBillingCoordinator) MarkRefundRecoveryReview(orderID, providerRequestID string, cause error) error {
+	if orderID == "" {
+		return nil
+	}
+	if repo, ok := c.repo.(interface {
+		MarkRefundedBillingRecoveryReview(string, string, error, *int64) error
+	}); ok {
+		return repo.MarkRefundedBillingRecoveryReview(orderID, providerRequestID, cause, nil)
+	}
+	return errors.New("退款恢复核对记录能力不可用")
+}
+
 func (c *taskBillingCoordinator) RefundBilling(orderID string, errorText string) error {
 	if orderID == "" {
 		return nil
 	}
-	return c.repo.RefundBillingOrder(orderID, truncateRunes(errorText, 1000))
+	return c.repo.RefundBillingOrder(orderID, truncateRunes(redactUpstreamAddress(errorText), 1000))
 }
 
 func (c *taskBillingCoordinator) MarkBillingUncertain(orderID string, errorText string) error {
 	if orderID == "" {
 		return nil
 	}
-	return c.repo.MarkBillingUncertain(orderID, truncateRunes(errorText, 1000))
+	return c.repo.MarkBillingUncertain(orderID, truncateRunes(redactUpstreamAddress(errorText), 1000))
 }
 
 // CheckRetryEligibility 收敛失败/取消任务重试前的计费状态校验。
@@ -86,7 +139,7 @@ func (c *taskBillingCoordinator) CheckRetryEligibility(orderID string) error {
 	if order == nil {
 		return fmt.Errorf("任务计费订单不存在：%s", orderID)
 	}
-	if order.Status == model.BillingStatusUncertain {
+	if order.Status == model.BillingStatusUncertain || order.RefundRecoveryPending {
 		return errTaskBillingReview
 	}
 	return nil

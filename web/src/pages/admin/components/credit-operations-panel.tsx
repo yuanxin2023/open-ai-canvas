@@ -6,6 +6,7 @@ import { BadgeCheck, Coins, Plus, RefreshCw, Search, Trash2, Undo2 } from "lucid
 import { PaginationBar } from "@/pages/admin/components/admin-ui";
 import { formatCredits } from "@/constant/credits";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
+import { billingReviewDescription, billingReviewRefundLabel, billingReviewReservation, billingReviewStatusLabel } from "@/lib/billing-review";
 import { AdminModal } from "@/pages/admin/ui/overlays";
 import { searchAdminUserReferences, type AdminReferenceData, type AdminUserReference } from "@/services/api/auth";
 import { adjustAdminUserCredits, getAdminCreditPolicy, listAdminBillingOrders, resolveAdminBillingOrder, resolveAdminBillingOrders, updateAdminCreditPolicy, type BillingOrder } from "@/services/api/wallet";
@@ -22,14 +23,6 @@ type PolicyFormValues = { signupBonus: number; checkinBonus: number; defaultMult
 type BillingResolutionAction = "settle" | "refund";
 type AdjustmentUser = AdminUserReference;
 type BillingResolutionTarget = { kind: "single"; order: BillingOrder; action: BillingResolutionAction } | { kind: "batch"; orders: BillingOrder[]; action: BillingResolutionAction };
-
-const billingStatusLabels = {
-    uncertain: "待核对",
-    running: "运行中",
-    reserved: "已预授权",
-    settled: "已结算",
-    refunded: "已退款",
-} satisfies Record<BillingOrder["status"], string>;
 
 export default function CreditOperationsPanel({ users, activeOperation, onOperationChange }: { users: AdminReferenceData["users"]; activeOperation: CreditOperation; onOperationChange: (operation: CreditOperation) => void }) {
     const { message } = App.useApp();
@@ -250,7 +243,7 @@ export default function CreditOperationsPanel({ users, activeOperation, onOperat
         try {
             if (resolutionTarget.kind === "single") {
                 await resolveAdminBillingOrder(resolutionTarget.order.id, { action: resolutionTarget.action, note });
-                message.success(resolutionTarget.action === "settle" ? "计费订单已结算" : "预授权积分已退回");
+                message.success(resolutionTarget.action === "settle" ? "计费订单已结算" : resolutionTarget.order.refundRecoveryPending ? "已取消恢复扣费，余额未重复退回" : "预授权积分已退回");
             } else {
                 const result = await resolveAdminBillingOrders({
                     ids: resolutionTarget.orders.map((order) => order.id),
@@ -267,7 +260,7 @@ export default function CreditOperationsPanel({ users, activeOperation, onOperat
                     await reload(page, pageSize);
                     return;
                 }
-                message.success(resolutionTarget.action === "settle" ? `已结算 ${result.resolvedCount} 条订单` : `已退回 ${result.resolvedCount} 条订单的预授权积分`);
+                message.success(resolutionTarget.action === "settle" ? `已结算 ${result.resolvedCount} 条订单` : `已处理 ${result.resolvedCount} 条订单的退回或取消恢复`);
             }
             setResolutionTarget(null);
             resolutionForm.resetFields();
@@ -330,7 +323,12 @@ export default function CreditOperationsPanel({ users, activeOperation, onOperat
             title: "预授权积分",
             width: 125,
             align: "center",
-            render: (_, order) => <span className="font-medium tabular-nums">{formatCredits(getReservedAmount(order))}</span>,
+            render: (_, order) => (
+                <div>
+                    <span className="font-medium tabular-nums">{formatCredits(billingReviewReservation(order))}</span>
+                    {order.refundRecoveryPending ? <div className="text-xs text-foreground/50">原预授权已退回</div> : null}
+                </div>
+            ),
         },
         {
             title: "实际结算 / 用量",
@@ -349,7 +347,9 @@ export default function CreditOperationsPanel({ users, activeOperation, onOperat
                         </div>
                     </div>
                 ) : (
-                    <span className="tabular-nums">{order.status === "settled" ? formatCredits(order.actualAmountMicrocredits) : "--"}</span>
+                    <span className="tabular-nums">
+                        {order.status === "settled" ? formatCredits(order.actualAmountMicrocredits) : order.status === "uncertain" && order.actualAmountMicrocredits > 0 ? `待核对 ${formatCredits(order.actualAmountMicrocredits)}（未扣）` : "--"}
+                    </span>
                 ),
         },
         {
@@ -357,7 +357,7 @@ export default function CreditOperationsPanel({ users, activeOperation, onOperat
             dataIndex: "status",
             width: 110,
             align: "center",
-            render: (value: BillingOrder["status"]) => <AdminStatusBadge label={billingStatusLabels[value]} tone={value === "settled" ? "success" : value === "refunded" ? "neutral" : "warning"} />,
+            render: (value: BillingOrder["status"], order) => <AdminStatusBadge label={billingReviewStatusLabel(order)} tone={value === "settled" ? "success" : value === "refunded" ? "neutral" : "warning"} />,
         },
         { title: "上游请求", dataIndex: "providerRequestId", width: 180, ellipsis: true, render: (value) => value || "未获取" },
         { title: "核对原因", dataIndex: "error", width: 260, ellipsis: true, render: (value) => value || "费用状态不明确" },
@@ -371,7 +371,10 @@ export default function CreditOperationsPanel({ users, activeOperation, onOperat
                     <span className="text-xs text-foreground/45">处理完成</span>
                 ) : (
                     <div className="flex justify-center">
-                        <AdminRowActions primary={{ label: "确认结算", onClick: () => openSingleResolution(order, "settle") }} actions={[{ key: "refund", label: "退回预授权", danger: true, onClick: () => openSingleResolution(order, "refund") }]} />
+                        <AdminRowActions
+                            primary={{ label: "确认结算", onClick: () => openSingleResolution(order, "settle") }}
+                            actions={[{ key: "refund", label: billingReviewRefundLabel(order), danger: true, onClick: () => openSingleResolution(order, "refund") }]}
+                        />
                     </div>
                 ),
         },
@@ -379,8 +382,16 @@ export default function CreditOperationsPanel({ users, activeOperation, onOperat
 
     const hasFilters = Boolean(keyword || orderStatus !== "review");
     const resolutionOrders = resolutionTarget?.kind === "batch" ? resolutionTarget.orders : resolutionTarget ? [resolutionTarget.order] : [];
-    const resolutionReservedTotal = resolutionOrders.reduce((sum, order) => sum + getReservedAmount(order), 0);
-    const resolutionTitle = resolutionTarget ? (resolutionTarget.action === "settle" ? (resolutionTarget.kind === "batch" ? "批量确认结算" : "确认结算计费订单") : resolutionTarget.kind === "batch" ? "批量退回预授权积分" : "确认退回预授权积分") : "";
+    const resolutionReservedTotal = resolutionOrders.reduce((sum, order) => sum + billingReviewReservation(order), 0);
+    const resolutionTitle = resolutionTarget
+        ? resolutionTarget.action === "settle"
+            ? resolutionTarget.kind === "batch"
+                ? "批量确认结算"
+                : "确认结算计费订单"
+            : resolutionTarget.kind === "batch"
+              ? "批量退回预授权积分"
+              : `确认${billingReviewRefundLabel(resolutionTarget.order)}`
+        : "";
 
     return (
         <div className="admin-credit-operations flex min-h-0 flex-1 flex-col">
@@ -729,7 +740,7 @@ export default function CreditOperationsPanel({ users, activeOperation, onOperat
             <Modal
                 title={resolutionTitle}
                 open={Boolean(resolutionTarget)}
-                okText={resolutionTarget?.action === "settle" ? "确认结算" : "退回预授权"}
+                okText={resolutionTarget?.action === "settle" ? "确认结算" : billingReviewRefundLabel(resolutionTarget?.kind === "single" ? resolutionTarget.order : undefined)}
                 cancelText="取消"
                 onCancel={() => {
                     if (resolving) return;
@@ -746,7 +757,7 @@ export default function CreditOperationsPanel({ users, activeOperation, onOperat
             >
                 {resolutionTarget ? (
                     <div className="admin-operation-confirmation">
-                        <p className="admin-operation-confirmation-copy">{resolutionTarget.action === "settle" ? "结算会依据订单计费方式确认实际费用；Token 订单可能退回差额，也可能补扣可用积分。" : "退回操作只会释放尚未结算订单的预授权积分。"}</p>
+                        <p className="admin-operation-confirmation-copy">{billingReviewDescription(resolutionTarget.action, resolutionOrders)}</p>
                         <dl className="admin-operation-confirmation-grid">
                             <div>
                                 <dt>订单数量</dt>
@@ -807,10 +818,6 @@ function CreditAccountSummary({ user }: { user: AdjustmentUser }) {
 
 function canResolveBillingOrder(order: BillingOrder) {
     return order.status === "uncertain" || order.status === "running" || order.status === "reserved";
-}
-
-function getReservedAmount(order: BillingOrder) {
-    return order.reservedAmountMicrocredits || order.amountMicrocredits;
 }
 
 function hasCreditBalance(user?: AdjustmentUser): user is AdjustmentUser & Required<Pick<AdminUserReference, "availableMicrocredits" | "reservedMicrocredits">> {

@@ -1,5 +1,9 @@
 # OpenAI Images 接口字段
 
+## 本地合并合同
+
+分辨率和质量独立声明。旧 `quality=1k/2k/4k` 只按原插件语义映射为 `low/medium/high`，不自动改为分辨率或重设价格。参考图优先使用可用的对象存储签名地址；本地资源可在归属、图片类型与大小校验后内联，附带的内联内容不能替换指定资源。无法等价转换的配置必须核对后再执行。
+
 ## 协议身份
 
 - 插件 ID：`openai-images`。
@@ -93,7 +97,7 @@
   "apiVersion": "open-ai-canvas.plugin/v2",
   "id": "openai-images",
   "name": "OpenAI Images",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "author": "OpenAI / AI 创作工作台",
   "description": "OpenAI Images 独立请求协议插件。",
   "documentation": "<当前插件的完整 documentation，由 README.md 与 docs/interface.md 拼接而成；为避免 JSON 递归，此处不重复展开正文。>",
@@ -127,11 +131,77 @@
           "agent"
         ],
         "baseUrl": "https://api.openai.com",
-        "requiresPublicMediaUrls": true,
+        "requiresPublicMediaUrls": false,
         "auth": {
           "type": "bearer",
           "field": "apiKey"
         },
+        "imageParameters": [
+          {
+            "name": "size",
+            "label": "画幅 / 尺寸",
+            "type": "string",
+            "binding": "aspectRatio",
+            "encoding": "pixels",
+            "pricing": true
+          },
+          {
+            "name": "imageResolution",
+            "label": "分辨率",
+            "type": "string",
+            "binding": "resolution",
+            "enabled": false,
+            "pricing": true
+          },
+          {
+            "name": "quality",
+            "label": "图片质量",
+            "type": "string",
+            "binding": "quality",
+            "pricing": true
+          },
+          {
+            "name": "count",
+            "label": "生成数量",
+            "type": "integer",
+            "binding": "imageCount",
+            "min": 1,
+            "max": 100,
+            "step": 1,
+            "default": 1
+          },
+          {
+            "name": "transparentBackground",
+            "label": "透明背景",
+            "type": "boolean",
+            "binding": "transparentBackground",
+            "default": false,
+            "enabled": false
+          },
+          {
+            "name": "outputFormat",
+            "label": "输出格式",
+            "type": "string",
+            "binding": "providerOptions.openai-image.output_format",
+            "values": [
+              "png",
+              "jpeg",
+              "webp"
+            ],
+            "default": "png",
+            "enabled": false
+          },
+          {
+            "name": "outputCompression",
+            "label": "压缩质量",
+            "type": "integer",
+            "binding": "providerOptions.openai-image.output_compression",
+            "min": 0,
+            "max": 100,
+            "step": 1,
+            "enabled": false
+          }
+        ],
         "parameters": [
           {
             "name": "model",
@@ -365,81 +435,31 @@
                 }
               }
             },
+            "resolution": {
+              "$omitEmpty": {
+                "$ref": "request.resolution"
+              }
+            },
             "quality": {
               "$omitEmpty": {
-                "$switch": {
-                  "cases": [
-                    {
-                      "when": {
-                        "$in": [
-                          {
-                            "$lower": {
-                              "$trim": {
-                                "$ref": "request.quality"
-                              }
-                            }
-                          },
-                          [
-                            "1k"
-                          ]
-                        ]
+                "$if": {
+                  "condition": {
+                    "$in": [
+                      {
+                        "$lower": {
+                          "$trim": {
+                            "$ref": "request.quality"
+                          }
+                        }
                       },
-                      "then": "low"
-                    },
-                    {
-                      "when": {
-                        "$in": [
-                          {
-                            "$lower": {
-                              "$trim": {
-                                "$ref": "request.quality"
-                              }
-                            }
-                          },
-                          [
-                            "2k"
-                          ]
-                        ]
-                      },
-                      "then": "medium"
-                    },
-                    {
-                      "when": {
-                        "$in": [
-                          {
-                            "$lower": {
-                              "$trim": {
-                                "$ref": "request.quality"
-                              }
-                            }
-                          },
-                          [
-                            "4k"
-                          ]
-                        ]
-                      },
-                      "then": "high"
-                    },
-                    {
-                      "when": {
-                        "$in": [
-                          {
-                            "$lower": {
-                              "$trim": {
-                                "$ref": "request.quality"
-                              }
-                            }
-                          },
-                          [
-                            "",
-                            "auto"
-                          ]
-                        ]
-                      },
-                      "then": null
-                    }
-                  ],
-                  "default": {
+                      [
+                        "",
+                        "auto"
+                      ]
+                    ]
+                  },
+                  "then": null,
+                  "else": {
                     "$ref": "request.quality"
                   }
                 }

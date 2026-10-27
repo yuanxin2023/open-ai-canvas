@@ -3,8 +3,10 @@ package app
 import (
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
+	"time"
 
+	"infinite-canvas/backend/internal/logging"
 	"infinite-canvas/backend/internal/model"
 )
 
@@ -22,6 +24,34 @@ type ModelCatalogResponse struct {
 	Source   ModelCatalogSource     `json:"source"`
 	Models   []PublicLogicalModel   `json:"models"`
 	Channels []PublicChannelCatalog `json:"channels"`
+}
+
+// PublicModelAvailability is the historical signal shown next to a model
+// without changing the binary current availability decision above it.
+// Rate24h is nil for no-data or insufficient-sample windows.
+type PublicModelAvailability struct {
+	Rate24h       *float64                         `json:"rate24h"`
+	SampleCount   int                              `json:"sampleCount24h"`
+	Trend7d       []PublicModelAvailabilityDay     `json:"trend7d"`
+	RecentResults []bool                           `json:"recentResults"`
+	DataState     PublicModelAvailabilityDataState `json:"dataState"`
+	ComputedAt    time.Time                        `json:"computedAt"`
+	DataThrough   *time.Time                       `json:"dataThrough,omitempty"`
+}
+
+type PublicModelAvailabilityDataState string
+
+const (
+	PublicModelAvailabilityReady        PublicModelAvailabilityDataState = "ready"
+	PublicModelAvailabilityInsufficient PublicModelAvailabilityDataState = "insufficient"
+	PublicModelAvailabilityNoData       PublicModelAvailabilityDataState = "no_data"
+)
+
+type PublicModelAvailabilityDay struct {
+	Day         string                           `json:"day"`
+	Rate        *float64                         `json:"rate"`
+	SampleCount int                              `json:"sampleCount"`
+	DataState   PublicModelAvailabilityDataState `json:"dataState"`
 }
 
 // PublicChannelCatalog 公开的渠道目录信息（脱敏）
@@ -46,11 +76,13 @@ type PublicChannelModel struct {
 	Capability       string                        `json:"capability"`
 	Protocol         model.ChannelInterfaceType    `json:"protocol"`
 	CapabilityConfig map[string]any                `json:"capabilityConfig,omitempty"`
+	DefaultOptions   map[string]any                `json:"defaultOptions,omitempty"`
 	PriceTiers       []PublicChannelModelPriceTier `json:"priceTiers"`
 	PricingMode      string                        `json:"pricingMode"`
 	DisplayPrice     *int64                        `json:"displayPrice,omitempty"`
 	PriceLabel       string                        `json:"priceLabel"`
 	Available        bool                          `json:"available"`
+	Availability     *PublicModelAvailability      `json:"availability,omitempty"`
 }
 
 // PublicChannelModelPriceTier 公开的渠道模型价格档（脱敏）
@@ -77,6 +109,13 @@ func (s *Service) ModelCatalog(intent *ModelRequestIntent) (*ModelCatalogRespons
 	}
 	response.Source = ModelCatalogSourceSystem
 	response.Channels = append(response.Channels, channels...)
+	if availability, availabilityErr := s.publicModelAvailability(response.Channels, time.Now().UTC()); availabilityErr != nil {
+		// Historical analytics are additive. A delayed or unavailable log store
+		// must not hide the existing catalog or change route selection behavior.
+		slog.Warn("public model availability metrics unavailable", "error", availabilityErr)
+	} else {
+		attachPublicModelAvailability(response.Channels, availability)
+	}
 	return response, nil
 }
 
@@ -110,7 +149,9 @@ func (s *Service) publicSystemChannelCatalog(intent *ModelRequestIntent) ([]Publ
 			if intent != nil {
 				matched, matchErr := s.channelModelMatchesIntent(&cm, intent)
 				if matchErr != nil {
-					log.Printf("system channel model omitted from catalog id=%s: invalid capability: %v", cm.ID, matchErr)
+					if logging.Every("catalog-omit:"+cm.ID, 10*time.Minute) {
+						slog.Warn("system channel model omitted from catalog", "id", cm.ID, "reason", "invalid capability", "error", matchErr)
+					}
 					continue
 				}
 				if !matched {
@@ -120,17 +161,21 @@ func (s *Service) publicSystemChannelCatalog(intent *ModelRequestIntent) ([]Publ
 
 			publicModel, sanitizeErr := s.sanitizeChannelModel(&cm)
 			if sanitizeErr != nil {
-				log.Printf("system channel model omitted from catalog id=%s: %v", cm.ID, sanitizeErr)
+				if logging.Every("catalog-omit:"+cm.ID, 10*time.Minute) {
+					slog.Warn("system channel model omitted from catalog", "id", cm.ID, "error", sanitizeErr)
+				}
 				continue
 			}
 			publicModels = append(publicModels, publicModel)
 		}
 
 		if len(publicModels) > 0 {
+			// 系统渠道的真实名称属于内部部署信息（供应商、中转站、内部命名等），
+			// 不得通过普通用户可访问的创作目录泄漏。前端只依赖 ID 做分组，名称留空后由客户端统一展示为“系统模型”。
 			result = append(result, PublicChannelCatalog{
 				ID:          channel.ID,
-				Name:        channel.Name,
-				DisplayName: channel.Name,
+				Name:        "",
+				DisplayName: "",
 				SortOrder:   channel.SortOrder,
 				Models:      publicModels,
 			})
@@ -146,6 +191,10 @@ func (s *Service) sanitizeChannelModel(cm *model.ChannelModel) (PublicChannelMod
 	if cm == nil {
 		return PublicChannelModel{}, fmt.Errorf("渠道模型为空")
 	}
+	normalized, err := normalizedChannelModelCapability(cm, s.protocolRegistry())
+	if err != nil {
+		return PublicChannelModel{}, err
+	}
 	// 仓储层已预加载价格档；这里只发布当前启用且价格字段自洽的活动档位。
 	priceTiers := cm.PriceTiers
 
@@ -154,9 +203,17 @@ func (s *Service) sanitizeChannelModel(cm *model.ChannelModel) (PublicChannelMod
 		if !tier.Enabled || !tier.PriceConfigured || !ValidatePriceTierPrice(&tier, cm.Capability, cm.Protocol) {
 			continue
 		}
+		selector := model.DecodeSKUSelector(tier.SelectorJSON)
+		if normalized != nil && normalized.Image != nil && normalized.Image.Parameters != nil {
+			var err error
+			selector, err = normalizedImagePriceSelector(*cm, normalized.Image.Parameters, selector)
+			if err != nil {
+				return PublicChannelModel{}, fmt.Errorf("图片价格档 %s 需核对：%w", tier.ID, err)
+			}
+		}
 		publicTiers = append(publicTiers, PublicChannelModelPriceTier{
 			ID:                           tier.ID,
-			Selector:                     model.DecodeSKUSelector(tier.SelectorJSON),
+			Selector:                     selector,
 			Resolution:                   tier.Resolution,
 			VideoSeconds:                 tier.VideoSeconds,
 			BillingMode:                  tier.BillingMode,
@@ -171,21 +228,28 @@ func (s *Service) sanitizeChannelModel(cm *model.ChannelModel) (PublicChannelMod
 	pricingMode, displayPrice, priceLabel := computeChannelModelPriceDisplay(cm, publicTiers)
 
 	var capabilityConfig map[string]any
-	normalized, err := normalizedChannelModelCapability(cm)
-	if err != nil {
-		return PublicChannelModel{}, err
-	}
 	if normalized != nil {
 		capabilityConfig, err = modelCapabilityConfigToMap(normalized)
 		if err != nil {
 			return PublicChannelModel{}, fmt.Errorf("投影渠道模型能力配置失败：%w", err)
 		}
 	}
+	var defaultOptions map[string]any
+	if normalized != nil {
+		spec, specErr := CapabilitySpecFromModelCapabilityConfig(normalized, cm.Capability)
+		if specErr != nil {
+			return PublicChannelModel{}, fmt.Errorf("投影渠道模型默认参数失败：%w", specErr)
+		}
+		defaultOptions, err = channelModelDefaultOptions(*cm, spec, s.protocolRegistry())
+		if err != nil {
+			return PublicChannelModel{}, err
+		}
+	}
 
 	return PublicChannelModel{
 		ID:               cm.ID,
 		ModelKey:         cm.ModelKey,
-		ChannelLabel:     cm.ChannelLabel,
+		ChannelLabel:     firstNonEmpty(cm.ChannelLabel, cm.ProviderModelKey, cm.ModelKey),
 		Tags:             cm.Tags,
 		Description:      cm.Description,
 		DisplayName:      cm.DisplayName,
@@ -194,11 +258,12 @@ func (s *Service) sanitizeChannelModel(cm *model.ChannelModel) (PublicChannelMod
 		Capability:       cm.Capability,
 		Protocol:         cm.Protocol,
 		CapabilityConfig: capabilityConfig,
+		DefaultOptions:   defaultOptions,
 		PriceTiers:       publicTiers,
 		PricingMode:      pricingMode,
 		DisplayPrice:     displayPrice,
 		PriceLabel:       priceLabel,
-		Available:        len(publicTiers) > 0,
+		Available:        len(publicTiers) > 0 && s.validateGenerationInterface(cm.Capability, string(cm.Protocol)) == nil,
 	}, nil
 }
 
@@ -247,7 +312,7 @@ func (s *Service) channelModelMatchesIntent(cm *model.ChannelModel, intent *Mode
 	if normalizeCapability(cm.Capability) == "audio" {
 		return true, nil
 	}
-	config, err := normalizedChannelModelCapability(cm)
+	config, err := normalizedChannelModelCapability(cm, s.protocolRegistry())
 	if err != nil {
 		return false, err
 	}

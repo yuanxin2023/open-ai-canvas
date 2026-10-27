@@ -136,6 +136,14 @@ test("same-channel system variants retain explicit model identity through select
     }
 });
 
+test("same-channel variants with identical public labels expose their distinct model keys", () => {
+    const config = sameChannelVariants();
+    for (const cost of config.channels[0].modelCosts!) cost.channelLabel = "Comfy";
+    const groups = groupModelsForPicker(config, selectableModelsByCapability(config, "video"));
+    expect(groups[0].models.map((item) => item.label)).toEqual(["Comfy · h3-fast", "Comfy · h3-multi"]);
+    expect(groups[0].models.map((item) => item.models)).toEqual([["comfy::h3-fast"], ["comfy::h3-multi"]]);
+});
+
 test("same-channel system variants do not borrow capabilities or reroute incompatible selections", () => {
     const config = sameChannelVariants();
     config.channels[0].modelCosts![0].capabilityConfig!.video!.references.maxImages = 0;
@@ -194,4 +202,16 @@ test("managed logical models and personal channels never become system product r
     expect(groups.map((item) => item.kind)).toEqual(["product", "channel", "channel"]);
     expect(groups[0].models).toHaveLength(1);
     expect(groupModelsForPicker(config, [])).toEqual([]);
+});
+
+test("new models share 未分类 while explicit groups equal to model IDs remain intact", () => {
+    const channels = systemChannelModelChannels([{ id: "upstream", name: "Provider", displayName: "Provider", models: [model("upstream-a", 300000, "a", "未分类"), model("upstream-b", 300000, "b", "未分类"), model("upstream-c", 300000, "c", "c")] }]);
+    const config = normalizeConfigSnapshot({ config: { ...defaultConfig, channels } }).config;
+    const groups = groupModelsForPicker(config, selectableModelsByCapability(config, "video"));
+    expect(groups.map((group) => group.label)).toEqual(["未分类", "c"]);
+    expect(groups[0].models.map((item) => [item.label, item.models])).toEqual([
+        ["upstream-a", ["upstream::a"]],
+        ["upstream-b", ["upstream::b"]],
+    ]);
+    expect(groups[1].models[0].models).toEqual(["upstream::c"]);
 });

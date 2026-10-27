@@ -49,8 +49,8 @@ var publicCanvasMetadataKeys = map[string]bool{
 	"characterName": true, "characterPrompt": true, "characterAliases": true, "characterView": true, "characterViewNodeIds": true,
 	"videoEditOperation": true, "videoCameraMoveId": true, "videoCameraMovePrompt": true,
 	"videoStartFrameNodeId": true, "videoEndFrameNodeId": true, "versionOfNodeId": true,
-	"versionLabel": true, "versionPrimary": true, "directorSceneId": true, "directorShotId": true,
-	"directorPreviewNodeId": true, "directorDepthNodeId": true, "directorNormalNodeId": true,
+	"versionLabel": true, "versionPrimary": true, "previsSceneId": true, "previsShotId": true,
+	"previsPreviewNodeId": true, "previsDepthNodeId": true, "previsDepthVideoNodeId": true, "previsNormalNodeId": true,
 	"skillId": true, "skillVersion": true, "skillSnapshot": true, "storyboard": true,
 	"storyboardShotDuration": true, "storyboardShotCount": true, "storyboardComposerHeight": true, "frame": true,
 }
@@ -139,47 +139,41 @@ func (s *Service) OpenSharedCanvasResource(token string, resourceID string) (*mo
 }
 
 func (s *Service) OpenSharedCanvasResourceRange(token string, resourceID string, rangeHeader string) (*assets.ResourceStream, error) {
-	userID, resource, err := s.sharedCanvasResource(token, resourceID)
+	userID, resource, _, err := s.sharedCanvasResource(token, resourceID)
 	if err != nil {
 		return nil, err
 	}
 	return s.host.OpenResourceRange(userID, resource, rangeHeader)
 }
 
-func (s *Service) PrepareSharedCanvasResourceDelivery(token string, resourceID string, rangeHeader string) (*assets.ResourceDelivery, error) {
-	userID, resource, err := s.sharedCanvasResource(token, resourceID)
+func (s *Service) PrepareSharedCanvasResourceDelivery(token string, resourceID string, options assets.AccessOptions, rangeHeader string) (*assets.ResourceDelivery, error) {
+	userID, resource, share, err := s.sharedCanvasResource(token, resourceID)
 	if err != nil {
 		return nil, err
 	}
-	delivery, err := s.host.PrepareResourceDelivery(userID, resource, assets.ResourceDeliveryOptions{})
-	if err != nil || delivery.RedirectURL != "" {
-		return delivery, err
+	if share.ExpiresAt != nil {
+		options.ExpiresAt = *share.ExpiresAt
 	}
-	stream, err := s.host.OpenResourceRange(userID, resource, rangeHeader)
-	if err != nil {
-		return nil, err
-	}
-	delivery.Stream = stream
-	return delivery, nil
+	return s.host.PrepareResourceDelivery(userID, resource, options, rangeHeader)
 }
 
-func (s *Service) sharedCanvasResource(token string, resourceID string) (string, *model.Resource, error) {
+func (s *Service) sharedCanvasResource(token string, resourceID string) (string, *model.Resource, *model.CanvasShare, error) {
 	share, project, err := s.sharedCanvasProject(token)
 	if err != nil {
-		return "", nil, err
+		return "", nil, nil, err
 	}
 	_, allowedResources, err := publicCanvasProject(project, token)
 	if err != nil {
-		return "", nil, err
+		return "", nil, nil, err
 	}
 	if !allowedResources[resourceID] {
-		return "", nil, gorm.ErrRecordNotFound
+		return "", nil, nil, gorm.ErrRecordNotFound
 	}
 	resource, err := s.repo.ResourceForUser(share.UserID, resourceID)
 	if err != nil {
-		return "", nil, err
+		return "", nil, nil, err
 	}
-	return share.UserID, resource, nil
+	return share.UserID, resource, share, nil
 }
 
 func (s *Service) sharedCanvasProject(token string) (*model.CanvasShare, *model.CanvasProject, error) {
@@ -224,8 +218,15 @@ func canvasShareTokenHash(token string) string {
 }
 
 func publicCanvasProject(project *model.CanvasProject, token string) (map[string]any, map[string]bool, error) {
+	if project == nil {
+		return nil, nil, errors.New("分享画布数据格式无效")
+	}
+	normalized, err := NormalizePrevisDocument(json.RawMessage(project.PayloadJSON))
+	if err != nil {
+		return nil, nil, err
+	}
 	var source map[string]any
-	if project == nil || json.Unmarshal([]byte(project.PayloadJSON), &source) != nil {
+	if json.Unmarshal(normalized, &source) != nil {
 		return nil, nil, errors.New("分享画布数据格式无效")
 	}
 	allowedResources := map[string]bool{}
@@ -240,7 +241,7 @@ func publicCanvasProject(project *model.CanvasProject, token string) (map[string
 		"connections":    publicCanvasConnections(source["connections"]),
 		"chatSessions":   []any{},
 		"activeChatId":   nil,
-		"directorScenes": []any{},
+		"previsScenes":   []any{},
 	}
 	rawNodes, _ := source["nodes"].([]any)
 	nodes := make([]any, 0, len(rawNodes))

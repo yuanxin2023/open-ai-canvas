@@ -1,6 +1,6 @@
 import { App, Button, InputNumber } from "antd";
 import { SettingsRow } from "@/components/ui/product/settings-row";
-import { ArrowLeft, Boxes, Brain, Bug, CircleDollarSign, Cloud, Gift, MessageSquareText, RadioTower, ReceiptText, SlidersHorizontal, Workflow } from "lucide-react";
+import { ArrowLeft, Boxes, Brain, Bug, CircleDollarSign, Cloud, Gift, Inbox, MessageSquareText, RadioTower, ReceiptText, SlidersHorizontal, Workflow } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 
@@ -20,8 +20,9 @@ import { PaymentOrdersPane } from "./payment-orders-pane";
 import { openWorkspaceWallet } from "@/lib/workspace-wallet";
 import { CreditLedgerPane } from "./credit-ledger-pane";
 import { ReferralsPane } from "./referrals-pane";
+import { FeedbackInboxPane } from "./feedback-inbox-pane";
 
-type ConfigSectionKey = "orders" | "wallet" | "referrals" | "channels" | "models" | "runninghub" | "preferences" | "prompts" | "agent-memory" | "storage" | "diagnostics";
+type ConfigSectionKey = "orders" | "wallet" | "referrals" | "channels" | "models" | "runninghub" | "preferences" | "prompts" | "agent-memory" | "storage" | "diagnostics" | "feedbacks";
 
 const configSections: Array<{ key: ConfigSectionKey; label: string; icon: ReactNode }> = [
     { key: "orders", label: "我的订单", icon: <ReceiptText className="size-4" /> },
@@ -35,6 +36,7 @@ const configSections: Array<{ key: ConfigSectionKey; label: string; icon: ReactN
     { key: "agent-memory", label: "Agent 记忆", icon: <Brain className="size-4" /> },
     { key: "storage", label: "我的对象存储", icon: <Cloud className="size-4" /> },
     { key: "diagnostics", label: "问题诊断", icon: <Bug className="size-4" /> },
+    { key: "feedbacks", label: "我的反馈", icon: <Inbox className="size-4" /> },
 ];
 
 export function isConfigSection(value: string | null): value is ConfigSectionKey {
@@ -48,11 +50,13 @@ export default function SettingsPage() {
     const requestedSection = searchParams.get("section");
     const customChannelsEnabled = useUserStore((state) => state.features.customChannelsEnabled);
     const creditsEnabled = useUserStore((state) => state.features.creditsEnabled);
+    const feedbackEnabled = useUserStore((state) => state.features.userFeedbackEnabled);
     const runtimeStatuses = usePluginStore((state) => state.runtimeStatuses);
     const runningHubPluginEnabled = runtimeStatuses[RUNNINGHUB_PLUGIN_ID] === "enabled";
     const visibleConfigSections = useMemo(() => (customChannelsEnabled ? configSections : configSections.filter((section) => section.key !== "channels"))
         .filter((section) => section.key !== "runninghub" || runningHubPluginEnabled)
-        .filter((section) => !["wallet", "orders", "referrals"].includes(section.key) || creditsEnabled), [creditsEnabled, customChannelsEnabled, runningHubPluginEnabled]);
+        .filter((section) => section.key !== "feedbacks" || feedbackEnabled)
+        .filter((section) => !["wallet", "orders", "referrals"].includes(section.key) || creditsEnabled), [creditsEnabled, customChannelsEnabled, runningHubPluginEnabled, feedbackEnabled]);
     const isVisibleConfigSection = (value: string | null): value is ConfigSectionKey => isConfigSection(value) && visibleConfigSections.some((section) => section.key === value);
     const firstVisibleSection = visibleConfigSections[0]?.key || "models";
     const [activeTab, setActiveTab] = useState<ConfigSectionKey>(isVisibleConfigSection(requestedSection) ? requestedSection : firstVisibleSection);
@@ -83,7 +87,7 @@ export default function SettingsPage() {
     }, [message, userId]);
 
     const selectSection = (section: ConfigSectionKey) => {
-        if (section === "runninghub" && !runningHubPluginEnabled) return;
+        if (!visibleConfigSections.some((item) => item.key === section)) return;
         setActiveTab(section);
         const next = new URLSearchParams(searchParams);
         next.set("section", section);
@@ -181,6 +185,7 @@ export default function SettingsPage() {
                 </div>
             </SettingsPane>
         ),
+        feedbacks: <SettingsPane><FeedbackInboxPane /></SettingsPane>,
     };
 
     return (
@@ -218,7 +223,7 @@ export default function SettingsPage() {
                 <section className="settings-content flex min-h-0 min-w-0 flex-1 flex-col">
                     <div className="app-workspace-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 md:px-6 md:py-5">
                         <div className={`settings-pane-root ${activeTab === "prompts" ? "h-full w-full" : "mx-auto w-full max-w-none"}`}>
-                            {panes[activeTab]}
+                            {visibleConfigSections.some((item) => item.key === activeTab) ? panes[activeTab] : panes[firstVisibleSection]}
                         </div>
                     </div>
                 </section>

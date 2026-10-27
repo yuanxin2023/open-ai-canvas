@@ -3,7 +3,7 @@
 set -Eeuo pipefail
 
 INSTALL_DIR="${INSTALL_DIR:-/opt/open-ai-canvas}"
-REPOSITORY="${REPOSITORY:-ddcat-ai/open-ai-canvas}"
+REPOSITORY="${REPOSITORY:-yuanxin2023/open-ai-canvas}"
 SOCKET_DIR="${CANVAS_UPDATER_SOCKET_DIR:-/run/open-ai-canvas-updater}"
 UPDATER_BIN="/usr/local/bin/open-ai-canvas-host-updater"
 UPDATER_ENV="/etc/open-ai-canvas-updater.env"
@@ -23,17 +23,23 @@ require_root() {
     command -v openssl >/dev/null 2>&1 || fail "缺少 openssl"
     [[ -f "${INSTALL_DIR}/.env" ]] || fail "未找到 ${INSTALL_DIR}/.env"
     [[ -f "${INSTALL_DIR}/docker-compose.deploy.yml" ]] || fail "未找到部署 Compose"
+    [[ "$REPOSITORY" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || fail "REPOSITORY 必须是 GitHub owner/repo"
+    local backend_image web_image agent_image
+    backend_image="$(sed -n 's/^CANVAS_BACKEND_IMAGE=//p' "${INSTALL_DIR}/.env" | tail -n 1)"
+    agent_image="$(sed -n 's/^CANVAS_YINGCE_AGENT_IMAGE=//p' "${INSTALL_DIR}/.env" | tail -n 1)"
+    web_image="$(sed -n 's/^CANVAS_WEB_IMAGE=//p' "${INSTALL_DIR}/.env" | tail -n 1)"
+    [[ "$backend_image" =~ ^ghcr\.io/[^[:space:]]+@sha256:[a-f0-9]{64}$ ]] || fail "CANVAS_BACKEND_IMAGE 必须固定为 GHCR digest"
+    [[ "$agent_image" =~ ^ghcr\.io/[^[:space:]]+@sha256:[a-f0-9]{64}$ ]] || fail "CANVAS_YINGCE_AGENT_IMAGE 必须固定为自有 GHCR digest"
+    [[ "$web_image" =~ ^ghcr\.io/[^[:space:]]+@sha256:[a-f0-9]{64}$ ]] || fail "CANVAS_WEB_IMAGE 必须固定为 GHCR digest"
 }
 
 read_image_tag() {
     local configured
     configured="$(sed -n 's/^CANVAS_IMAGE_TAG=//p' "${INSTALL_DIR}/.env" | tail -n 1)"
     [[ -n "$configured" && "$configured" != "latest" ]] || fail "请先把 CANVAS_IMAGE_TAG 固定为已发布版本"
-    if [[ "$configured" == v* ]]; then
-        RELEASE_TAG="$configured"
-    else
-        RELEASE_TAG="v${configured}"
-    fi
+    configured="${configured#v}"
+    [[ "$configured" =~ ^[0-9]+(\.[0-9]+){2,}$ && ${#configured} -le 127 ]] || fail "在线更新仅接入完整正式 Release"
+    RELEASE_TAG="v${configured}"
 }
 
 install_binary() {
@@ -72,7 +78,7 @@ ensure_token() {
     fi
     [[ ${#token} -ge 32 ]] || fail "CANVAS_UPDATER_TOKEN 长度不足"
     umask 077
-    printf 'CANVAS_UPDATER_TOKEN=%s\nCANVAS_UPDATER_INSTALL_DIR=%s\nCANVAS_UPDATER_SOCKET=%s/updater.sock\n' "$token" "$INSTALL_DIR" "$SOCKET_DIR" > "$UPDATER_ENV"
+    printf 'CANVAS_UPDATER_TOKEN=%s\nCANVAS_UPDATER_INSTALL_DIR=%s\nCANVAS_UPDATER_SOCKET=%s/updater.sock\nCANVAS_UPDATER_REPOSITORY=%s\n' "$token" "$INSTALL_DIR" "$SOCKET_DIR" "$REPOSITORY" > "$UPDATER_ENV"
 }
 
 install_service() {

@@ -49,8 +49,8 @@ test("real collection toolbar supplies filled selects without changing their lab
 });
 
 test("collection select focus uses a thin keyboard ring, not a persistent pointer outline", () => {
-    const css = readFileSync(new URL("../src/styles/workspace-product.css", import.meta.url), "utf8");
-    const toolbar = readFileSync(new URL("../src/components/layout/collection-toolbar.tsx", import.meta.url), "utf8");
+    const css = readFileSync(new URL("../src/styles/workspace-product.css", import.meta.url), "utf8").replace(/\r\n/g, "\n");
+    const toolbar = readFileSync(new URL("../src/components/layout/collection-toolbar.tsx", import.meta.url), "utf8").replace(/\r\n/g, "\n");
     expect(css).toContain(".collection-toolbar .ant-select {\n        outline: none !important;");
     expect(css).toContain('[data-input-modality="keyboard"] .ant-select:not(.ant-select-disabled):focus-within');
     expect(css).toContain("outline: 1px solid var(--control-focus-ring) !important;");
@@ -70,9 +70,9 @@ test("workspace menu tokens are shadow-free and use theme-aware surfaces", () =>
 });
 
 test("real grid consumes density rather than the old fixed column calculation", () => {
-    const page = readFileSync(new URL("../src/pages/assets/index.tsx", import.meta.url), "utf8");
-    const css = readFileSync(new URL("../src/styles/workspace-product.css", import.meta.url), "utf8");
-    const globals = readFileSync(new URL("../src/styles/globals.css", import.meta.url), "utf8");
+    const page = readFileSync(new URL("../src/pages/assets/index.tsx", import.meta.url), "utf8").replace(/\r\n/g, "\n");
+    const css = readFileSync(new URL("../src/styles/workspace-product.css", import.meta.url), "utf8").replace(/\r\n/g, "\n");
+    const globals = readFileSync(new URL("../src/styles/globals.css", import.meta.url), "utf8").replace(/\r\n/g, "\n");
     expect(page).toContain('"--collection-grid-min-width": `${assetGridCardMinWidth[gridDensity]}px`');
     expect(css).toContain("minmax(min(100%, var(--collection-grid-min-width, 224px)), 1fr)");
     expect(globals).not.toContain("--assets-grid-columns");
@@ -80,13 +80,24 @@ test("real grid consumes density rather than the old fixed column calculation", 
 });
 
 test("menu surfaces are explicitly scoped and old account inner overrides are removed", () => {
-    const css = readFileSync(new URL("../src/styles/workspace-menus.css", import.meta.url), "utf8");
-    const globals = readFileSync(new URL("../src/styles/globals.css", import.meta.url), "utf8");
+    const css = readFileSync(new URL("../src/styles/workspace-menus.css", import.meta.url), "utf8").replace(/\r\n/g, "\n");
+    const globals = readFileSync(new URL("../src/styles/globals.css", import.meta.url), "utf8").replace(/\r\n/g, "\n");
     expect(css).toContain("@layer utilities");
     expect(css).toContain(".workspace-account-popover .ant-popover-container");
     expect(css).toContain("border: 0 !important");
     expect(css).toContain("box-shadow: none !important");
     expect(css).not.toContain(".ant-modal");
     expect(globals).not.toContain(".workspace-account-popover .ant-popover-inner");
-    expect(globals).toContain(".ant-select:has(input:focus-visible)");
+    expect(globals).toContain('.app-unified-select[data-input-modality="keyboard"]:not(.ant-select-open)');
+    expect(globals).toMatch(/:where\(\.ant-select-dropdown, \.ant-dropdown-menu,[^)]*\)\s*\{\s*border: 0 !important;/);
+    expect(globals).toContain("body.app-spatial-overlays :where(.ant-dropdown-menu, .ant-select-dropdown, .ant-cascader-menus, .ant-mentions-dropdown) {\n        border: 0 !important;");
+});
+
+test("shared single-select popup uses a borderless surface instead of a bright focus frame", () => {
+    const select = readFileSync(new URL("../src/components/ui/base/select/select.tsx", import.meta.url), "utf8").replace(/\r\n/g, "\n");
+    expect(select).toContain("<AntSelect");
+    expect(select).toContain('variant={variant ?? "filled"}');
+    expect(select).toContain("data-input-modality={inputModality}");
+    expect(select).toContain('setInputModality("keyboard")');
+    expect(select).not.toContain("setPopoverWidth(width + 2)");
 });

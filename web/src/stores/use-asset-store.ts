@@ -13,7 +13,6 @@ import { cleanupUnusedImages, collectImageStorageKeys, resolveImageUrl, uploadIm
 import { cleanupUnusedMedia, collectMediaStorageKeys, resolveMediaUrl } from "@/services/file-storage";
 import { flushGenerationAssetStorageLocks, insertOrReturnGenerationAsset, withGenerationArtifactCommitLock, withGenerationAssetStorageLock } from "@/services/generation-asset-repository";
 import { CANVAS_STORE_KEY, commitPendingCanvasStorePersistenceLocked, pendingCanvasStorePersistence, withCanvasStorePersistenceLock } from "@/stores/canvas/use-canvas-store";
-import { readAllCanvasSyncDrafts } from "@/services/canvas-sync-drafts";
 
 export type AssetKind = "text" | "image" | "video" | "audio" | "model" | "entity";
 export type { AssetCategory } from "@/lib/asset-category";
@@ -23,7 +22,18 @@ export type ImageAsset = AssetBase<"image"> & { data: { dataUrl: string; storage
 export type VideoAsset = AssetBase<"video"> & { data: { url: string; storageKey?: string; width: number; height: number; durationMs?: number; hasAudio?: boolean; bytes: number; mimeType: string } };
 export type AudioAsset = AssetBase<"audio"> & { data: { url: string; storageKey?: string; durationMs?: number; bytes: number; mimeType: string } };
 export type ModelAsset = AssetBase<"model"> & { data: { url: string; storageKey?: string; bytes: number; mimeType: string; fileName: string } };
-export type EntityAsset = AssetBase<"entity"> & { data: { definition: Record<string, unknown> } };
+/** 角色卡：设定来自版本；列表接口会补上当前版本的形象/声音存储键与状态（只读展示字段）。 */
+export type EntityAsset = AssetBase<"entity"> & {
+    data: {
+        definition: Record<string, unknown>;
+        version?: number;
+        coverStorageKey?: string;
+        voiceName?: string;
+        voiceSampleStorageKey?: string;
+        visualStatus?: string;
+        voiceStatus?: string;
+    };
+};
 export type Asset = TextAsset | ImageAsset | VideoAsset | AudioAsset | ModelAsset | EntityAsset;
 export type NewAsset =
     | Omit<TextAsset, "id" | "createdAt" | "updatedAt">
@@ -64,7 +74,7 @@ type AssetStore = {
     cleanupImages: (extra?: unknown) => Promise<void>;
 };
 
-export const ASSET_STORE_KEY = "infinite-canvas:asset_store";
+export const ASSET_STORE_KEY = "yingce:asset_store";
 
 type PersistedAssetState = Pick<AssetStore, "assets">;
 type ObservedAssetPersist = {
@@ -88,6 +98,12 @@ const queuedAssetPersists = new Map<string, QueuedAssetPersist>();
 const assetPersistTokens = new Map<string, number>();
 const assetOperations = new Set<Promise<unknown>>();
 const generationAssetFailures = new Map<string, unknown>();
+const generationAssetDefaults = new Map<string, Map<string, Asset>>();
+
+// 只记录本次实际创建的生成输入，不能把重读的缓存（可能已编辑）当作默认值。
+export function getGenerationAssetDefaults(id: string): Asset | undefined {
+    return generationAssetDefaults.get(getActiveUserScope())?.get(id);
+}
 
 function recordAssetStorageDocument(scope: string, document: AssetStorageDocument) {
     observedAssetPersists.set(scope, {
@@ -96,7 +112,7 @@ function recordAssetStorageDocument(scope: string, document: AssetStorageDocumen
     });
 }
 
-function withAssetStorePersistenceSuppressed<T>(operation: () => T) {
+export function withAssetStorePersistenceSuppressed<T>(operation: () => T) {
     suppressAssetStorePersistence += 1;
     try {
         return operation();
@@ -326,13 +342,17 @@ export const useAssetStore = create<AssetStore>()(
                             assetId: id,
                             createAsset: () => {
                                 const now = new Date().toISOString();
-                                return parseAssetRecord({
+                                const created = parseAssetRecord({
                                     ...asset,
                                     id,
                                     createdAt: now,
                                     updatedAt: now,
                                     metadata: { ...asset.metadata, generationEffectKey: effectKey },
                                 });
+                                const defaults = generationAssetDefaults.get(scope) ?? new Map<string, Asset>();
+                                defaults.set(id, structuredClone(created));
+                                generationAssetDefaults.set(scope, defaults);
+                                return created;
                             },
                             updateAssets: (updater) => {
                                 withAssetStorePersistenceSuppressed(() => {
@@ -397,6 +417,7 @@ export const useAssetStore = create<AssetStore>()(
             removeAsset: async (id) => get().removeAssets([id]),
             removeAssets: async (ids) => {
                 const removedIds = new Set(ids);
+                for (const id of ids) generationAssetDefaults.get(getActiveUserScope())?.delete(id);
                 let remainingAssets: Asset[] = [];
                 let hasLocalMedia = false;
                 set((state) => {
@@ -421,7 +442,6 @@ export const useAssetStore = create<AssetStore>()(
                 await new Promise<void>((resolve, reject) => {
                     window.setTimeout(() =>
                         withGenerationArtifactCommitLock(scope, async () => {
-                            const syncDrafts = await readAllCanvasSyncDrafts(scope);
                             // 固定锁序：artifact -> Canvas（释放）-> Asset，避免跨 store 锁重入。
                             const canvasProjects = await withCanvasStorePersistenceLock(scope, async () => {
                                 await commitPendingCanvasStorePersistenceLocked(scope);
@@ -431,7 +451,7 @@ export const useAssetStore = create<AssetStore>()(
                             await withGenerationAssetStorageLock(scope, async () => {
                                 await commitPendingAssetStorePersistenceLocked(scope);
                                 const durableAssets = (await readPersistedAssetDocumentForScope(scope)).state.assets;
-                                const references = { projects: canvasProjects, assets: durableAssets, syncDrafts };
+                                const references = { projects: canvasProjects, assets: durableAssets };
                                 const imageKeys = new Set([...frozenExtraImageKeys, ...collectImageStorageKeys(references)]);
                                 const mediaKeys = new Set([...frozenExtraMediaKeys, ...collectMediaStorageKeys(references)]);
                                 await cleanupUnusedImages(

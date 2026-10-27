@@ -6,6 +6,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const scripts = fileURLToPath(new URL("../../.github/scripts/", import.meta.url));
+const gitBash = "C:/Program Files/Git/bin/bash.exe";
+const bash = process.env.CANVAS_TEST_BASH || (process.platform === "win32" && existsSync(gitBash) ? gitBash : "bash");
 const temporaryDirectories = [];
 const sha = "a".repeat(40);
 const digest = "b".repeat(64);
@@ -29,7 +31,7 @@ function fixture(overrides = {}) {
     writeFileSync(output, "");
     const env = {
         ...process.env,
-        PATH: `${bin}:${process.env.PATH}`,
+        PATH: `${bin}${path.delimiter}${process.env.PATH}`,
         GITHUB_OUTPUT: output,
         GITHUB_SHA: sha,
         GITHUB_REF: "refs/heads/main",
@@ -46,7 +48,7 @@ function fixture(overrides = {}) {
         ...overrides,
     };
     return {
-        run: (script, ...args) => spawnSync("bash", [path.join(scripts, script), ...args], { env, encoding: "utf8" }),
+        run: (script, ...args) => spawnSync(bash, [path.join(scripts, script), ...args], { env, encoding: "utf8" }),
         output: () => readFileSync(output, "utf8"),
         call: () => (existsSync(env.MOCK_CALL) ? readFileSync(env.MOCK_CALL, "utf8") : ""),
     };

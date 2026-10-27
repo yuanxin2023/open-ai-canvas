@@ -196,7 +196,7 @@ func TestUserResourceQuotaUpgradeFrom50(t *testing.T) {
 			if err := db.Migrator().DropTable(&model.UserResourceQuota{}); err != nil {
 				t.Fatal(err)
 			}
-			if err := db.Exec("DELETE FROM schema_migrations WHERE version = 51").Error; err != nil {
+			if err := db.Exec("DELETE FROM schema_migrations WHERE version >= 51").Error; err != nil {
 				t.Fatal(err)
 			}
 			for range 2 {

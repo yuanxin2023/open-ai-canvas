@@ -23,7 +23,7 @@ func newProjectWorkflowV2TestService(t *testing.T) (*Service, *gorm.DB) {
 		&model.AssetRepresentation{}, &model.CharacterVoiceBinding{},
 		&model.Shot{}, &model.ShotRevision{}, &model.ShotArtifact{}, &model.ShotAssetReference{},
 		&model.WorkflowTemplateVersion{}, &model.WorkflowInstance{}, &model.WorkflowStepInstance{}, &model.WorkflowStepTask{},
-		&model.ProductionTaskLink{}, &model.Task{}, &model.Resource{},
+		&model.ProductionTaskLink{}, &model.Task{}, &model.Resource{}, &model.UserResourceQuota{},
 	); err != nil {
 		t.Fatal(err)
 	}

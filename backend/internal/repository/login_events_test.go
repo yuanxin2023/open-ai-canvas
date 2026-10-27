@@ -11,12 +11,12 @@ import (
 	"gorm.io/gorm"
 )
 
-func TestCreateAuthSessionWithLoginEventAppliesRetention(t *testing.T) {
+func TestCreateAuthSessionForUserAppliesHistoricalRetention(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&model.AuthSession{}, &model.UserLoginEvent{}); err != nil {
+	if err := db.AutoMigrate(&model.User{}, &model.AuthSession{}, &model.UserLoginEvent{}, &model.LoginLog{}); err != nil {
 		t.Fatal(err)
 	}
 	now := time.Now().UTC()
@@ -28,17 +28,21 @@ func TestCreateAuthSessionWithLoginEventAppliesRetention(t *testing.T) {
 	if err := db.Create(&rows).Error; err != nil {
 		t.Fatal(err)
 	}
-	session := model.AuthSession{ID: "session-new", UserID: "user-1", ExpiresAt: now.Add(time.Hour), CreatedAt: now, UpdatedAt: now}
-	event := model.UserLoginEvent{ID: "event-new", UserID: "user-1", SessionID: session.ID, LoginMethod: "password", CreatedAt: now}
-	if err := New(db).CreateAuthSessionWithLoginEvent(&session, &event); err != nil {
+	user := model.User{ID: "user-1", Username: "user-1", Status: model.UserStatusActive, PasswordHash: "fixture-hash"}
+	if err := db.Create(&user).Error; err != nil {
+		t.Fatal(err)
+	}
+	session := model.AuthSession{ID: "session-new", UserID: user.ID, ExpiresAt: now.Add(time.Hour), CreatedAt: now, UpdatedAt: now}
+	event := model.LoginLog{ID: "event-new", UserID: &user.ID, Event: "login", Method: "password", Result: "success", CreatedAt: now}
+	if err := New(db).CreateAuthSessionForUser(&user, &session, &event); err != nil {
 		t.Fatal(err)
 	}
 	var count int64
 	if err := db.Model(&model.UserLoginEvent{}).Where("user_id = ?", "user-1").Count(&count).Error; err != nil {
 		t.Fatal(err)
 	}
-	if count != userLoginEventLimit {
-		t.Fatalf("login event count = %d, want %d", count, userLoginEventLimit)
+	if count != userLoginEventLimit-1 {
+		t.Fatalf("historical count = %d, want %d plus one new audit", count, userLoginEventLimit-1)
 	}
 	var expiredCount int64
 	if err := db.Model(&model.UserLoginEvent{}).Where("id = ?", "expired").Count(&expiredCount).Error; err != nil {
@@ -54,7 +58,7 @@ func TestAdminUserLoginEventsAppliesFiltersAndPagination(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&model.UserLoginEvent{}); err != nil {
+	if err := db.AutoMigrate(&model.User{}, &model.UserLoginEvent{}, &model.LoginLog{}); err != nil {
 		t.Fatal(err)
 	}
 	now := time.Date(2026, 10, 3, 12, 0, 0, 0, time.UTC)
@@ -74,7 +78,7 @@ func TestAdminUserLoginEventsAppliesFiltersAndPagination(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if total != 4 || len(page) != 2 || page[0].ID != "event-4" || page[1].ID != "event-3" {
+	if total != 4 || len(page) != 2 || page[0].ID != "legacy:event-4" || page[1].ID != "legacy:event-3" {
 		t.Fatalf("unfiltered page = %+v, total = %d", page, total)
 	}
 
@@ -100,7 +104,7 @@ func TestAdminUserLoginEventsAppliesFiltersAndPagination(t *testing.T) {
 				t.Fatalf("events = %+v, total = %d, want IDs %v", got, count, test.want)
 			}
 			for index, id := range test.want {
-				if got[index].ID != id {
+				if got[index].ID != "legacy:"+id {
 					t.Fatalf("event[%d].ID = %q, want %q", index, got[index].ID, id)
 				}
 			}

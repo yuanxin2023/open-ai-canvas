@@ -64,10 +64,16 @@ func TestAdminAnalyticsFinanceUsesSettledSnapshotsAndDeduplicates(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&model.BillingOrder{}, &model.ApiCallLog{}, &model.Task{}, &model.UserDailyActivity{}, &model.User{}); err != nil {
+	if err := db.AutoMigrate(&model.BillingOrder{}, &model.ApiCallLog{}, &model.Task{}, &model.UserDailyActivity{}, &model.User{}, &model.CreditAccount{}); err != nil {
 		t.Fatal(err)
 	}
 	svc := &Service{repo: repository.New(db)}
+	if err := db.Create(&[]model.CreditAccount{
+		{UserID: "user", AvailableMicrocredits: 3_000_000, ReservedMicrocredits: 2_000_000},
+		{UserID: "other", AvailableMicrocredits: 4_000_000},
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
 	admin := &model.User{ID: "admin", Role: model.UserRoleAdmin}
 	now := time.Now().UTC()
 	orders := []model.BillingOrder{
@@ -112,6 +118,13 @@ func TestAdminAnalyticsFinanceUsesSettledSnapshotsAndDeduplicates(t *testing.T) 
 		t.Fatal(err)
 	}
 	finance := result.KPI.Finance
+	var consumed int64
+	for _, point := range result.Trend {
+		consumed += point.ConsumedMicrocredits
+	}
+	if result.KPI.TotalBalanceMicrocredits != 7_000_000 || result.KPI.TotalConsumedMicrocredits != 1_400_000 || consumed != 1_400_000 {
+		t.Fatalf("balance/consumption mismatch: %+v, trend=%d", result.KPI, consumed)
+	}
 	if finance.SettledOrders != 4 || finance.CostedOrders != 3 || finance.RevenueMicrocredits != 1_400_000 || finance.CostMicrocredits != 600_000 || finance.ProfitMicrocredits != nil || finance.ProfitMargin != nil {
 		t.Fatalf("partial finance = %+v", finance)
 	}
@@ -163,6 +176,9 @@ func TestAdminAnalyticsFinanceUsesSettledSnapshotsAndDeduplicates(t *testing.T) 
 	if err != nil || filtered.KPI.Finance.SettledOrders != 1 || filtered.KPI.Finance.ProfitMicrocredits == nil || *filtered.KPI.Finance.ProfitMicrocredits != 600_000 {
 		t.Fatalf("model filter = %+v, %v", filtered, err)
 	}
+	if filtered.KPI.TotalBalanceMicrocredits != 7_000_000 || filtered.KPI.TotalConsumedMicrocredits != 900_000 {
+		t.Fatalf("filtered consumption or global balance changed: %+v", filtered.KPI)
+	}
 	query.ChannelID = "previous"
 	filtered, err = svc.AdminAnalytics(admin, query)
 	if err != nil || filtered.KPI.Finance.SettledOrders != 0 {
@@ -209,7 +225,7 @@ func TestAdminReferencesIncludeExistingDisplayNameGroups(t *testing.T) {
 			groups[name]++
 		}
 	}
-	if len(groups) != 3 || groups["Shared"] != 1 || groups["Other"] != 1 || groups["d"] != 1 {
+	if len(groups) != 2 || groups["Shared"] != 1 || groups["Other"] != 1 {
 		t.Fatalf("groups = %#v", groups)
 	}
 }

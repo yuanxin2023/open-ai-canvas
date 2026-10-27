@@ -53,6 +53,37 @@ func TestUndoCloudAgentCanvasRestoresLatestMutationAndIsIdempotent(t *testing.T)
 	if afterHash == beforeHash {
 		t.Fatal("canvas mutation did not change snapshot")
 	}
+	for _, rejected := range []struct {
+		name, userID, stepID, hash string
+	}{
+		{"missing step receipt", "user", "", afterHash},
+		{"different step", "user", "other-call", afterHash},
+		{"different owner", "other-user", call.ID, afterHash},
+		{"missing hash", "user", call.ID, ""},
+	} {
+		t.Run(rejected.name, func(t *testing.T) {
+			if _, err := s.UndoCloudAgentCanvas(rejected.userID, run.ID, rejected.stepID, rejected.hash, "拒绝路径"); err == nil {
+				t.Fatal("invalid receipt or foreign owner was accepted")
+			}
+		})
+	}
+	mutationBefore, err := s.repo.LatestCloudAgentCanvasMutation("user", run.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(mutationBefore).Update("has_submitted_task", true).Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.UndoCloudAgentCanvas("user", run.ID, call.ID, afterHash, "收费任务拒绝"); err == nil {
+		t.Fatal("a submitted generation task must prevent canvas undo")
+	}
+	unchanged, err := s.repo.CanvasProjectForUser("user", "agent-canvas")
+	if err != nil || unchanged.PayloadJSON != mutated.PayloadJSON {
+		t.Fatal("rejected undo changed the canvas")
+	}
+	if err := db.Model(mutationBefore).Update("has_submitted_task", false).Error; err != nil {
+		t.Fatal(err)
+	}
 	result, err := s.UndoCloudAgentCanvas("user", run.ID, call.ID, afterHash, "用户撤销")
 	if err != nil {
 		t.Fatal(err)
@@ -61,10 +92,11 @@ func TestUndoCloudAgentCanvasRestoresLatestMutationAndIsIdempotent(t *testing.T)
 		t.Fatalf("unexpected undo result: %+v", result)
 	}
 	restored, _ := s.repo.CanvasProjectForUser("user", "agent-canvas")
-	if restored.PayloadJSON != canvas.PayloadJSON {
-		t.Fatal("undo did not restore the exact before snapshot")
+	restoredDoc, err := creationDocument(restored.PayloadJSON)
+	if err != nil || cloudAgentCanvasHash(restoredDoc) != beforeHash {
+		t.Fatal("undo did not restore the semantic before snapshot")
 	}
-	result, err = s.UndoCloudAgentCanvas("user", run.ID, call.ID, beforeHash, "重复请求")
+	result, err = s.UndoCloudAgentCanvas("user", run.ID, call.ID, afterHash, "重复原请求")
 	if err != nil || result["accepted"] != true {
 		t.Fatalf("undo should be idempotent: result=%+v err=%v", result, err)
 	}

@@ -1,4 +1,4 @@
-import { Alert, App, Button, Dropdown, Input, Modal, Segmented, Select } from "antd";
+import { Alert, App, Button, Dropdown, Input, Modal, Segmented } from "antd";
 import { IconButton } from "@/pages/admin/ui/controls";
 import type { MenuProps } from "antd";
 import type { ColumnsType } from "antd/es/table";
@@ -11,13 +11,16 @@ import { PaginationBar } from "@/pages/admin/components/admin-ui";
 import { MediaPreview } from "@/components/media-preview";
 import { formatCredits } from "@/constant/credits";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
-import { exportAdminApiLogs, listAdminApiLogs, type ApiCallLog } from "@/services/api/auth";
+import { batchRecoverAdminApiLogs, exportAdminApiLogs, listAdminApiLogs, type ApiCallLog } from "@/services/api/auth";
 import { useUserStore } from "@/stores/use-user-store";
 import { ApiLogDetailModal } from "../components/api-log-detail-drawer";
+import { mediaDeliverySummary } from "@/lib/generation-task-display";
 import { AdminPageFrame } from "../components/admin-shell";
 import { AdminBatchBar, AdminDataTable, AdminExportButton, AdminFilterChip, AdminStatusBadge, AdminTableEmpty } from "../components/admin-ui";
 import { logBillingLabel, logStatus, normalizeLogView } from "./log-view";
 import "./logs-page.css";
+import { Select } from "@/components/ui/base/select";
+import { AdminSearchInput } from "../components/admin-search-input";
 
 const autoRefreshIntervals = [30, 60, 120] as const;
 type AutoRefreshInterval = (typeof autoRefreshIntervals)[number];
@@ -33,6 +36,7 @@ export default function LogsPage() {
     const view = normalizeLogView(searchParams.get("view"));
     const status = normalizeStatus(searchParams.get("status"));
     const recordType = searchParams.get("recordType") === "download" ? "download" : searchParams.get("recordType") === "all" ? "all" : "request";
+    const capability = normalizeCapability(searchParams.get("capability"));
     const page = positiveInt(searchParams.get("page"), 1);
     const pageSize = normalizePageSize(searchParams.get("pageSize"));
     const [keywordDraft, setKeywordDraft] = useState(keyword);
@@ -47,12 +51,13 @@ export default function LogsPage() {
     const [countdown, setCountdown] = useState<number>(autoRefresh.intervalSeconds);
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
     const [detailLogId, setDetailLogId] = useState<string | null>(null);
+    const [batchRecovering, setBatchRecovering] = useState(false);
     const [mediaPreview, setMediaPreview] = useState<{ url: string; kind: "image" | "video"; title: string } | null>(null);
     const requestSequence = useRef(0);
     const searchParamsRef = useRef(searchParams);
     const pendingKeywordUrlRef = useRef<string | null>(null);
     const skipKeywordUrlCommitRef = useRef(false);
-    const hasFilters = Boolean(keywordDraft || status !== "all" || recordType !== "request");
+    const hasFilters = Boolean(keywordDraft || status !== "all" || recordType !== "request" || capability !== "all");
 
     useEffect(() => {
         const preference = readAutoRefreshPreference(userId);
@@ -104,7 +109,7 @@ export default function LogsPage() {
         setLogs([]);
         setTotal(0);
         setSelectedIds([]);
-        void listAdminApiLogs({ recordType, keyword: keyword || undefined, status: status === "all" ? undefined : status, page, pageSize })
+        void listAdminApiLogs({ recordType, capability: capability === "all" ? undefined : capability, keyword: keyword || undefined, status: status === "all" ? undefined : status, page, pageSize })
             .then((result) => {
                 if (sequence !== requestSequence.current) return;
                 setLogs(result.logs);
@@ -120,7 +125,7 @@ export default function LogsPage() {
             })
             .finally(() => sequence === requestSequence.current && setLoading(false));
         return () => { requestSequence.current += 1; };
-    }, [keyword, status, recordType, page, pageSize, retry, updateUrl]);
+    }, [keyword, status, recordType, capability, page, pageSize, retry, updateUrl]);
 
     useEffect(() => {
         setCountdown(autoRefresh.intervalSeconds);
@@ -136,7 +141,7 @@ export default function LogsPage() {
         }, 1_000);
 
         return () => window.clearInterval(timer);
-    }, [autoRefresh, loading, keyword, status, recordType, page, pageSize, retry]);
+    }, [autoRefresh, loading, keyword, status, recordType, capability, page, pageSize, retry]);
 
     const updateAutoRefresh = (preference: AutoRefreshPreference) => {
         setAutoRefresh(preference);
@@ -241,7 +246,24 @@ export default function LogsPage() {
         { title: "耗时", dataIndex: "durationMs", align: "right", width: 90, render: formatDuration },
         { title: "错误摘要", key: "error", ellipsis: true, render: (_, log) => <span className={logStatus(log).tone === "error" ? "admin-log-error" : undefined} title={[log.errorCode, log.error].filter(Boolean).join(" · ")}>{[log.errorCode, log.error].filter(Boolean).join(" · ") || (logStatus(log).tone === "error" ? `HTTP ${log.statusCode || "失败"} · 未返回详情` : "—")}</span> },
     ];
-    const columns = view === "all" ? fullColumns : compactColumns;
+    const baseColumns = view === "all" ? fullColumns : compactColumns;
+    const columns: ColumnsType<ApiCallLog> = [...baseColumns, { title: "操作", key: "actions", width: 126, fixed: "right", render: (_, log) => log.capability === "video" ? <Button type="link" size="small" icon={<RefreshCw className="size-3.5" />} onClick={() => setDetailLogId(log.id)}>恢复任务</Button> : <span className="text-foreground/30">--</span> }];
+
+    const runBatchRecovery = async () => {
+        const selectedLogs = logs.filter((log) => selectedIds.includes(log.id));
+        const videoIds = selectedLogs.filter((log) => log.capability === "video").map((log) => log.id);
+        const skipped = selectedIds.length - videoIds.length;
+        if (videoIds.length === 0) { message.info("所选记录中没有视频任务可恢复"); return; }
+        setBatchRecovering(true);
+        try {
+            const result = await batchRecoverAdminApiLogs(videoIds);
+            const totalSkipped = skipped + result.skipped;
+            Modal.info({ title: "批量恢复处理结果", width: 560, content: <div className="max-h-[50vh] space-y-2 overflow-auto"><div className="mb-3">成功 {result.success} 条，失败 {result.failed} 条，跳过 {totalSkipped} 条</div>{result.items.map((item) => <div key={item.logId} className="rounded border border-border/70 px-3 py-2 text-xs"><div className="font-mono">{item.logId}</div><div>{item.recovered ? "成功" : item.error?.startsWith("跳过") ? item.error : item.providerStatus ? `仍在生成中（${item.providerStatus}）` : `失败：${item.error || "未恢复"}`}</div></div>)}</div> });
+            if (result.success > 0) window.dispatchEvent(new CustomEvent("wallet:updated"));
+            setRetry((value) => value + 1);
+        } catch (error) { message.error(error instanceof Error ? error.message : "批量恢复失败"); }
+        finally { setBatchRecovering(false); }
+    };
 
     return (
         <AdminPageFrame
@@ -267,7 +289,7 @@ export default function LogsPage() {
                         </Button>
                     </Dropdown>
                     <AdminExportButton
-                        exportFile={() => exportAdminApiLogs({ recordType, keyword: keyword || undefined, status: status === "all" ? undefined : status })}
+                        exportFile={() => exportAdminApiLogs({ recordType, capability: capability === "all" ? undefined : capability, keyword: keyword || undefined, status: status === "all" ? undefined : status })}
                         fileName={() => `请求明细-${new Date().toISOString().slice(0, 10)}.csv`}
                         label="导出当前筛选"
                         successMessage="已按当前筛选导出请求明细"
@@ -300,11 +322,13 @@ export default function LogsPage() {
                     <>
                         {keywordDraft ? <AdminFilterChip label={`搜索：${keywordDraft}`} onRemove={() => setKeywordDraft("")} /> : null}
                         {status !== "all" ? <AdminFilterChip label={`结果：${status === "succeeded" ? "成功" : "失败"}`} onRemove={() => updateUrl({ status: "all", page: 1 })} /> : null}
+                        {capability !== "all" ? <AdminFilterChip label={`能力：${capabilityText(capability)}`} onRemove={() => updateUrl({ capability: "all", page: 1 })} /> : null}
                     </>
                 }
                 toolbarFilters={
                     <>
                     <Select aria-label="明细类型" className="w-32" value={recordType} onChange={(value) => updateUrl({ recordType: value, page: 1 })} options={[{ label: "仅请求", value: "request" }, { label: "仅下载", value: "download" }, { label: "全部明细", value: "all" }]} />
+                    <Select aria-label="能力类型" className="w-28" value={capability} onChange={(value) => updateUrl({ capability: value, page: 1 })} options={[{ label: "全部能力", value: "all" }, { label: "文本", value: "text" }, { label: "图片", value: "image" }, { label: "视频", value: "video" }, { label: "音频", value: "audio" }]} />
                     <Select
                         aria-label="请求结果"
                         className="w-32"
@@ -321,10 +345,11 @@ export default function LogsPage() {
                 toolbarActive={hasFilters}
                 onReset={() => {
                     setKeywordDraft("");
-                    updateUrl({ filter: "", status: "all", recordType: "request", page: 1 });
+                    updateUrl({ filter: "", status: "all", recordType: "request", capability: "all", page: 1 });
                 }}
                 batchActions={
                     <AdminBatchBar count={selectedIds.length} onClear={() => setSelectedIds([])}>
+                        <Button size="small" icon={<RefreshCw className="size-3.5" />} loading={batchRecovering} onClick={() => void runBatchRecovery()}>批量恢复</Button>
                         <AdminExportButton
                             type="primary"
                             size="small"
@@ -354,7 +379,7 @@ export default function LogsPage() {
                     tableLayout: "fixed",
                     dataSource: logs,
                     pagination: false,
-                    scroll: { x: view === "all" ? 1775 : view === "billing" ? 1120 : 1060 },
+                    scroll: { x: view === "all" ? 1901 : view === "billing" ? 1246 : 1186 },
                 }}
                 empty={loadError ? <span role="status">数据暂不可用，请重试</span> : <AdminTableEmpty filtered={hasFilters} />}
                 footer={<PaginationBar alwaysShow current={page} pageSize={pageSize} total={total} onChange={(nextPage, nextSize) => updateUrl({ page: nextSize !== pageSize ? 1 : nextPage, pageSize: nextSize })} />}
@@ -397,6 +422,7 @@ function normalizePageSize(value: string | null) {
     const parsed = positiveInt(value, 20);
     return [20, 50, 100].includes(parsed) ? parsed : 20;
 }
+function normalizeCapability(value: string | null): "all" | "text" | "image" | "video" | "audio" { return value === "text" || value === "image" || value === "video" || value === "audio" ? value : "all"; }
 function normalizeStatus(value: string | null): "all" | "succeeded" | "failed" {
     return value === "succeeded" || value === "failed" ? value : "all";
 }
@@ -500,12 +526,13 @@ function CallStatus({ log }: { log: ApiCallLog }) {
         <div>
             <div className="mb-1 text-xs font-medium text-foreground/70">{requestKindText(log.requestKind)}</div>
             <AdminStatusBadge {...logStatus(log)} />
+            {log.mediaStage ? <div className="mt-1 text-xs text-foreground/60">{mediaDeliverySummary(log.taskStatus, log.mediaStage)}</div> : null}
             {log.capability === "video" ? <div className="mt-1 text-xs tabular-nums text-foreground/45">已轮询 {log.pollCount || 0} 次</div> : null}
         </div>
     );
 }
 
 function requestKindText(value: ApiCallLog["requestKind"]) {
-    const labels: Partial<Record<ApiCallLog["requestKind"], string>> = { create: "模型生成", poll: "状态查询", download: "结果下载", repair: "结果修复" };
+    const labels: Partial<Record<ApiCallLog["requestKind"], string>> = { create: "模型生成", poll: "状态查询", download: "结果下载", upload: "上传 OSS", local_save: "保存文件", register: "登记素材", repair: "结果修复" };
     return labels[value] || "上游请求";
 }

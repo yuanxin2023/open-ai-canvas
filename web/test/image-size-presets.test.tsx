@@ -6,13 +6,59 @@ import { ImageSizePresetsEditor } from "../src/components/image-size-presets-edi
 import { ModelCapabilityEditor } from "../src/components/model-capability-editor";
 import { defaultImageCapabilityConfig, normalizeImageValue, normalizeModelCapabilityConfig } from "../src/lib/model-capabilities";
 import { IMAGE_RATIOS, IMAGE_RESOLUTIONS, imagePresetForRatio, imagePresetValue, imageQualityForSelection, imageQualityForTier, imageSizeConfigWithPresets, imageSizePresets, imageTierAvailable } from "../src/lib/image-size-presets";
+import { imageQualityLabel } from "../src/lib/image-quality";
 import { buildImageResolutionOptions } from "../src/lib/image-resolution-tiers";
 import { resolveImageRequestSize, validateImageSize } from "../src/services/api/image-validation";
 import { buildGeminiImageGenerationConfig } from "../src/lib/gemini-image";
 
+function legacyGeminiProfile() {
+    const profile = defaultImageCapabilityConfig("gemini-image", "legacy-model");
+    delete profile.parameters;
+    profile.resolution = { supported: false, values: [], default: "auto" };
+    profile.quality = { supported: true, values: ["low", "medium", "high"], default: "medium" };
+    profile.resolutionUsesQuality = true;
+    return profile;
+}
+
 describe("统一图片分辨率与宽高比", () => {
+    test("画质公共映射覆盖创作与画布使用的 xhigh、max", () => {
+        expect(imageQualityLabel("xhigh")).toBe("超高");
+        expect(imageQualityLabel("MAX")).toBe("最高");
+    });
+
+    test("Seedream 5.0 shows 1.5K and retains the exact official 2K wide size", () => {
+        const profile = defaultImageCapabilityConfig("km-kemei-seedream", "doubao-seedream-5-0-pro-260628");
+        const intermediate = renderToStaticMarkup(<ImageSizePicker profile={profile} size="1536x1536" onChange={() => {}} />);
+        expect(intermediate).toMatch(/aria-pressed="true"[^>]*>1\.5K/);
+        expect(intermediate).toContain("1536 × 1536 px");
+        expect(intermediate).not.toMatch(/<button[^>]*>4K/);
+        const wide = renderToStaticMarkup(<ImageSizePicker profile={profile} size="2816x1584" onChange={() => {}} />);
+        expect(wide).toMatch(/aria-pressed="true"[^>]*>2K/);
+        expect(wide).toContain("2816 × 1584 px");
+        const reopened = normalizeModelCapabilityConfig({ version: 1, image: profile });
+        expect(reopened.image?.size.presets?.filter((p) => p.tier === "1.5k")).toHaveLength(8);
+        expect(resolveImageRequestSize(profile, "auto", "1536x1536")?.value).toBe("1536x1536");
+    });
+    test("管理员档位开关按已有比例启用，部分比例不显示为关闭", () => {
+        for (const model of ["midjourney-1k", "midjourney-2k"]) {
+            const profile = defaultImageCapabilityConfig("cangyuan-midjourney-v82", model);
+            const editor = renderToStaticMarkup(<ImageSizePresetsEditor profile={profile} onChange={() => {}} />);
+            const active = model === "midjourney-2k" ? "2k" : "1k";
+            for (const tier of IMAGE_RESOLUTIONS) {
+                const button = [...editor.matchAll(/<button\b[^>]*>/g)].map((match) => match[0]).find((tag) => tag.includes(`aria-label="启用 ${tier.toUpperCase()} 规格"`));
+                expect(button).toBeDefined();
+                expect(button).toContain(`aria-checked="${tier === active}"`);
+            }
+        }
+        const profile = defaultImageCapabilityConfig();
+        profile.size = imageSizeConfigWithPresets(profile, [imagePresetForRatio("2k", "16:9")]);
+        const editor = renderToStaticMarkup(<ImageSizePresetsEditor profile={profile} onChange={() => {}} />);
+        const button = [...editor.matchAll(/<button\b[^>]*>/g)].map((match) => match[0]).find((tag) => tag.includes('aria-label="启用 2K 规格"'));
+        expect(button).toContain('aria-checked="true"');
+    });
+
     test("默认 Gemini 质量枚举不能把未启用的 1K 显示出来", () => {
-        const profile = defaultImageCapabilityConfig("gemini-image", "nano-banana-pro-4k");
+        const profile = legacyGeminiProfile();
         profile.size = imageSizeConfigWithPresets(profile, IMAGE_RATIOS.map((ratio) => imagePresetForRatio("4k", ratio)));
         expect(profile.quality.supported).toBe(true);
         expect(imageTierAvailable(profile, "4k")).toBe(true);
@@ -23,7 +69,7 @@ describe("统一图片分辨率与宽高比", () => {
     });
 
     test("无质量参数的固定 4K 模型保留管理员档位，重开及自定义比例不回退 1K", () => {
-        const profile = defaultImageCapabilityConfig("gemini-image", "nano-banana-pro-4k");
+        const profile = legacyGeminiProfile();
         profile.quality = { supported: false, values: [], default: "auto" };
         profile.size = imageSizeConfigWithPresets(profile, IMAGE_RATIOS.map((ratio) => imagePresetForRatio("4k", ratio)));
         expect(imageTierAvailable(profile, "4k")).toBe(true);
@@ -42,7 +88,7 @@ describe("统一图片分辨率与宽高比", () => {
     });
 
     test("无质量参数时管理员启用的 1K 和 4K 都对用户开放，未启用的 2K 仍隐藏", () => {
-        const profile = defaultImageCapabilityConfig("gemini-image", "test");
+        const profile = legacyGeminiProfile();
         profile.quality = { supported: false, values: [], default: "auto" };
         profile.size = imageSizeConfigWithPresets(profile, [...IMAGE_RATIOS.flatMap((ratio) => [imagePresetForRatio("1k", ratio), imagePresetForRatio("4k", ratio)])]);
         expect(imageTierAvailable(profile, "1k")).toBe(true);
@@ -144,7 +190,7 @@ describe("统一图片分辨率与宽高比", () => {
         grok.size.allowCustom = true;
         expect(imageTierAvailable(grok, "4k")).toBe(false);
         expect(imageSizePresets(grok).some((preset) => preset.tier === "4k")).toBe(false);
-        const gemini = defaultImageCapabilityConfig("gemini-image", "test");
+        const gemini = legacyGeminiProfile();
         const preset = imagePresetForRatio("4k", "16:9");
         expect(buildGeminiImageGenerationConfig(imagePresetValue(gemini, preset), imageQualityForTier(gemini, "4k")).imageConfig).toEqual({ aspectRatio: "16:9", imageSize: "4K" });
         gemini.size.allowCustom = true;
@@ -171,12 +217,15 @@ describe("统一图片分辨率与宽高比", () => {
         expect(picker).not.toMatch(/<button[^>]*>4K/);
         expect(picker).toContain("换算参考");
         profile.size.parameter = "none";
+        expect(renderToStaticMarkup(<ImageSizePicker profile={profile} size="auto" onChange={() => {}} />)).toContain("分辨率");
+        profile.resolution.supported = false;
         expect(renderToStaticMarkup(<ImageSizePicker profile={profile} size="auto" onChange={() => {}} />)).toBe("");
     });
 
     test("空档位始终隐藏，允许自定义也不显示；旧尺寸不导致比例区域为空", () => {
         for (const protocol of ["openai-image", "gemini-image"]) {
-            const profile = defaultImageCapabilityConfig(protocol, "test");
+            const profile = protocol === "gemini-image" ? legacyGeminiProfile() : defaultImageCapabilityConfig(protocol, "test");
+            delete profile.parameters;
             profile.size = imageSizeConfigWithPresets(profile, [imagePresetForRatio("1k", "1:1"), imagePresetForRatio("4k", "16:9")]);
             for (const allowCustom of [false, true]) {
                 profile.size.allowCustom = allowCustom;

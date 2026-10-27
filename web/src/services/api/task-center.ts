@@ -3,6 +3,7 @@ import { notifyImageCreditsShortfall } from "@/lib/image-credit-guidance";
 import { http, apiBaseURL, type BackendEnvelope } from "@/services/api/request";
 import { consumeTaskTextStream, createTaskTextStreamParser, type TaskTextStreamEvent } from "@/services/api/task-text-stream";
 import { recordDiagnosticEvent } from "@/services/diagnostics/client-diagnostics";
+import { getActiveUserScope } from "@/lib/user-scope";
 
 export type { BackendEnvelope } from "@/services/api/request";
 
@@ -19,6 +20,12 @@ export type GenerationTaskOutput = {
 };
 
 export type GenerationTask = {
+	logicalModelId?: string;
+	workbenchSubmission?: {
+		requestKey: string;
+		replayed: boolean;
+		quote: { billingEnabled: boolean; amountMicrocredits: number; billingMode: string; priceTierVersion: number; priceVersion: number; quantity: number; chargeLimitMicrocredits?: number };
+	};
     id: string;
     clientOperationId?: string;
     retryOf?: string;
@@ -28,6 +35,8 @@ export type GenerationTask = {
     status: TaskStatus;
     progress?: number;
     stage?: string;
+    mediaStage?: "download" | "upload" | "local_save" | "register" | "completed" | "checkpoint";
+    canRecoverMedia?: boolean;
     prompt: string;
     operation?: string;
     provider?: string;
@@ -116,6 +125,10 @@ export type TaskLog = {
 };
 
 export type CreateTaskInput = {
+	workbenchRequestKey?: string;
+	workbenchExpectedUserId?: string;
+	workbenchRetryOf?: string;
+	workbenchRetryVersion?: string;
     projectId?: string;
     type?: string;
     operation?: string;
@@ -126,14 +139,16 @@ export type CreateTaskInput = {
     input?: Record<string, unknown>;
 };
 export function createGenerationTask(input: CreateTaskInput) {
+    const scope = getActiveUserScope();
     return http.post<GenerationTask>("/tasks", input).then((task) => {
+        if (scope !== getActiveUserScope()) return task;
         recordDiagnosticEvent({ level: "info", category: "task", message: "任务已创建", taskId: task.id, projectId: task.projectId });
         notifyCanvasTaskCreated(task);
         // 创建任务时积分已被预占，不能等任务结束后才刷新可用余额。
         window.dispatchEvent(new CustomEvent("wallet:updated"));
         return task;
     }).catch((error) => {
-        if (input.type === "canvas_image" || input.type?.startsWith("image_") || input.input?.mode === "image") notifyImageCreditsShortfall(error);
+        if (scope === getActiveUserScope() && (input.type === "canvas_image" || input.type?.startsWith("image_") || input.input?.mode === "image")) notifyImageCreditsShortfall(error);
         throw error;
     });
 }
@@ -212,8 +227,8 @@ export function queryGenerationTask(id: string, options?: { signal?: AbortSignal
 }
 
 type GenerationTaskSubscriptionDependencies = {
-    queryTask(id: string): Promise<GenerationTask>;
-    waitTask(id: string, options?: { initialTask?: GenerationTask; onTaskUpdate?: (task: GenerationTask) => void }): Promise<GenerationTask>;
+    queryTask(id: string, options?: { signal?: AbortSignal }): Promise<GenerationTask>;
+    waitTask(id: string, options?: { signal?: AbortSignal; initialTask?: GenerationTask; onTaskUpdate?: (task: GenerationTask) => void }): Promise<GenerationTask>;
 };
 
 export function createGenerationTaskSubscriptionService(dependencies: GenerationTaskSubscriptionDependencies) {
@@ -221,48 +236,92 @@ export function createGenerationTaskSubscriptionService(dependencies: Generation
         listeners: Set<(task: GenerationTask) => void>;
         latest?: GenerationTask;
         observation?: Promise<void>;
+        controller?: AbortController;
+        retry?: ReturnType<typeof setTimeout>;
+        failures: number;
+        scope: string;
     };
     const entries = new Map<string, Entry>();
     const publish = (entry: Entry, task: GenerationTask) => {
+        if (entry.scope !== getActiveUserScope() || !entry.listeners.size) return;
         entry.latest = task;
         for (const listener of entry.listeners) listener(task);
     };
     const observe = (id: string, entry: Entry) => {
-        if (entry.observation) return;
+        if (entry.observation || !entry.listeners.size || entry.scope !== getActiveUserScope()) return;
+        if (entry.latest && ["succeeded", "failed", "cancelled"].includes(entry.latest.status)) return;
+        if (entry.retry) clearTimeout(entry.retry);
+        entry.retry = undefined;
+        const controller = new AbortController();
+        entry.controller = controller;
         entry.observation = (async () => {
-            const initial = await dependencies.queryTask(id);
+            const initial = await dependencies.queryTask(id, { signal: controller.signal });
+            if (controller.signal.aborted) return;
             publish(entry, initial);
             if (initial.status === "succeeded" || initial.status === "failed" || initial.status === "cancelled") return;
             const terminal = await dependencies.waitTask(id, {
                 initialTask: initial,
-                onTaskUpdate: (task) => publish(entry, task),
+                signal: controller.signal,
+                onTaskUpdate: (task) => { entry.failures = 0; publish(entry, task); },
             });
             publish(entry, terminal);
         })().catch((error) => {
-            // 观察失败不能永久占住 entry，否则页面重新订阅时也不会再查询任务。
+            if (controller.signal.aborted) return;
+            console.warn("生成任务观察中断，将重连原任务", { taskId: id, error });
+        }).finally(() => {
             entry.observation = undefined;
-            console.warn("生成任务观察中断，后续订阅将重新建立连接", { taskId: id, error });
+            if (controller.signal.aborted || !entry.listeners.size || entry.scope !== getActiveUserScope()) return;
+            if (entry.latest && ["succeeded", "failed", "cancelled"].includes(entry.latest.status)) return;
+            const delayMs = Math.min(30_000, 2_000 * 2 ** Math.min(entry.failures++, 4));
+            entry.retry = setTimeout(() => observe(id, entry), delayMs);
         });
     };
+    const reconnect = () => {
+        for (const [id, entry] of entries) observe(id, entry);
+    };
+    let listening = false;
     return {
         subscribe(ids: readonly string[], listener: (task: GenerationTask) => void) {
+            if (!listening && typeof window !== "undefined") {
+                window.addEventListener("online", reconnect);
+                listening = true;
+            }
             const uniqueIds = [...new Set(ids)];
+            const ownedEntries = new Map<string, Entry>();
             for (const id of uniqueIds) {
-                const entry = entries.get(id) ?? { listeners: new Set<(task: GenerationTask) => void>() };
+                const old = entries.get(id);
+                if (old && old.scope !== getActiveUserScope()) {
+                    old.controller?.abort();
+                    if (old.retry) clearTimeout(old.retry);
+                    old.listeners.clear();
+                    entries.delete(id);
+                }
+                const entry = entries.get(id) ?? { listeners: new Set<(task: GenerationTask) => void>(), failures: 0, scope: getActiveUserScope() };
                 entries.set(id, entry);
+                ownedEntries.set(id, entry);
                 entry.listeners.add(listener);
                 if (entry.latest) listener(entry.latest);
                 observe(id, entry);
             }
             return () => {
-                for (const id of uniqueIds) entries.get(id)?.listeners.delete(listener);
+                for (const [id, entry] of ownedEntries) {
+                    entry.listeners.delete(listener);
+                    if (entry.listeners.size) continue;
+                    entry.controller?.abort();
+                    if (entry.retry) clearTimeout(entry.retry);
+                    if (entries.get(id) === entry) entries.delete(id);
+                }
+                if (!entries.size && listening) {
+                    window.removeEventListener("online", reconnect);
+                    listening = false;
+                }
             };
         },
     };
 }
 
 const generationTaskSubscriptionService = createGenerationTaskSubscriptionService({
-    queryTask: (id) => queryGenerationTask(id),
+    queryTask: (id, options) => queryGenerationTask(id, options),
     waitTask: (id, options) => waitForGenerationTask(id, options),
 });
 
@@ -286,8 +345,14 @@ export function retryGenerationTask(id: string) {
     return http.post<GenerationTask>(`/tasks/${encodeURIComponent(id)}/retry`);
 }
 
+export function recoverGenerationTaskMedia(id: string) {
+    return http.post<GenerationTask>(`/tasks/${encodeURIComponent(id)}/recover-media`);
+}
+
 export function cancelGenerationTask(id: string) {
+    const scope = getActiveUserScope();
     return http.post<GenerationTask>(`/tasks/${encodeURIComponent(id)}/cancel`).then((task) => {
+        if (scope !== getActiveUserScope()) return task;
         window.dispatchEvent(new CustomEvent("canvas:task-cancelled", { detail: { task } }));
         window.dispatchEvent(new CustomEvent("wallet:updated"));
         return task;
@@ -535,8 +600,10 @@ async function taskTextStreamHTTPError(response: Response) {
 
 function taskWaitTimeoutMs(task?: GenerationTask) {
     const type = task?.type || "";
-    if (type.includes("storyboard")) return 13 * 60 * 1000;
-    if (type.includes("video")) return 32 * 60 * 1000;
+    // 等待上限必须不小于后端同类任务的执行超时（分镜 20 分钟、视频 120 分钟，见后台
+    // 资源与策略），否则长任务会在前端被判超时、消息显示失败，而后端其实还在跑并最终成功。
+    if (type.includes("storyboard")) return 25 * 60 * 1000;
+    if (type.includes("video")) return 125 * 60 * 1000;
     if (type.includes("image")) return 10 * 60 * 1000;
     if (type.includes("text") || type.includes("audio")) return 12 * 60 * 1000;
     return 10 * 60 * 1000;
@@ -544,15 +611,10 @@ function taskWaitTimeoutMs(task?: GenerationTask) {
 
 function delay(ms: number, signal?: AbortSignal) {
     return new Promise<void>((resolve, reject) => {
-        const timer = window.setTimeout(resolve, ms);
-        signal?.addEventListener(
-            "abort",
-            () => {
-                window.clearTimeout(timer);
-                reject(new DOMException("Aborted", "AbortError"));
-            },
-            { once: true },
-        );
+        if (signal?.aborted) { reject(new DOMException("Aborted", "AbortError")); return; }
+        const abort = () => { window.clearTimeout(timer); reject(new DOMException("Aborted", "AbortError")); };
+        const timer = window.setTimeout(() => { signal?.removeEventListener("abort", abort); resolve(); }, ms);
+        signal?.addEventListener("abort", abort, { once: true });
     });
 }
 

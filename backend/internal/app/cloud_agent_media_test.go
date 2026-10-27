@@ -3,6 +3,8 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -83,8 +85,19 @@ func agentMediaRun(t *testing.T, s *Service, a cloudAgentMediaArgs, permission s
 func approveAgentMediaDraft(t *testing.T, s *Service, runID string) {
 	t.Helper()
 	run, err := s.CloudAgentRun("user", runID)
-	if err != nil || run.Approval == nil || run.Status != "waiting_approval" {
-		t.Fatalf("media must wait for approval even in auto mode: %v", err)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if run.Status != "waiting_approval" || run.Approval == nil {
+		stored, loadErr := s.repo.CloudAgent("user", runID)
+		state, decodeErr := cloudAgentDecode(stored)
+		if loadErr != nil {
+			decodeErr = loadErr
+		}
+		if decodeErr != nil || state.MediaTaskID == "" {
+			t.Fatalf("media generation was neither approved nor auto-submitted: status=%s task=%s err=%v", run.Status, state.MediaTaskID, decodeErr)
+		}
+		return
 	}
 	if err := s.DecideCloudAgentApproval("user", runID, run.Approval.ID, "approve", ""); err != nil {
 		t.Fatal(err)
@@ -196,7 +209,6 @@ func TestCloudAgentMediaReferenceAndSnapshotGuards(t *testing.T) {
 		{"existing node", func(v *cloudAgentMediaArgs) { v.NodeID = "cat" }},
 		{"mixed selection", func(v *cloudAgentMediaArgs) { v.LogicalModelID = "made-up" }},
 		{"duration budget", func(v *cloudAgentMediaArgs) { v.Duration = 25 }},
-		{"missing aspect ratio", func(v *cloudAgentMediaArgs) { v.Size = "" }},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			bad := a
@@ -220,6 +232,68 @@ func TestCloudAgentMediaReferenceAndSnapshotGuards(t *testing.T) {
 	}
 }
 
+func TestCloudAgentMediaArgumentFailureContinuesRun(t *testing.T) {
+	s, db, args := agentMediaFixture(t)
+	args.SourceNodeID = "cat" // Existing media node, invalid as a text source.
+	args.ReferenceNodeIDs = []string{"hero"}
+	run, state := agentMediaRun(t, s, args, "request_approval")
+	if err := s.advanceCloudAgentTool(run, &state); err != nil {
+		t.Fatal(err)
+	}
+	stored, err := s.repo.CloudAgent("user", run.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, err = cloudAgentDecode(stored)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.Status != "running" {
+		t.Fatalf("repairable media argument failure terminated run: status=%s message=%s", stored.Status, stored.FailureMessage)
+	}
+	var failed *CloudAgentEvent
+	for i := range state.Events {
+		if state.Events[i].Type == "tool_failed" {
+			failed = &state.Events[i]
+		}
+		if state.Events[i].Type == "run_failed" {
+			t.Fatalf("argument error emitted run_failed: %+v", state.Events[i])
+		}
+	}
+	if failed == nil {
+		t.Fatal("missing tool_failed event")
+	}
+	result, _ := failed.Payload["result"].(map[string]any)
+	if result["field"] != "sourceNodeId" || result["issue"] != "invalid_value" || result["requiredAction"] != "fix_arguments" {
+		t.Fatalf("missing actionable field feedback: %+v", result)
+	}
+	var tasks int64
+	if err := db.Model(&model.Task{}).Where("type = ?", "canvas_video").Count(&tasks).Error; err != nil {
+		t.Fatal(err)
+	}
+	if tasks != 0 {
+		t.Fatalf("invalid arguments submitted %d media tasks", tasks)
+	}
+}
+
+func TestCloudAgentUnavailableTransientReferenceIsNotRetryable(t *testing.T) {
+	s, _, args := agentMediaFixture(t)
+	args.ReferenceNodeIDs = nil
+	args.ReferenceTransientIDs = []string{"missing-transient"}
+	_, _, _, err := cloudAgentMediaDocument(s.repo, "user", "agent-canvas", args, map[string]cloudAgentTransientReference{})
+	if err == nil {
+		t.Fatal("missing transient reference was accepted")
+	}
+	var argumentErr *cloudAgentArgumentError
+	if errors.As(err, &argumentErr) {
+		t.Fatalf("unavailable transient reference was classified as a model-correctable argument: %v", err)
+	}
+	class, retryable, action := cloudAgentToolErrorClass(agentTestRequest(), agentMediaCall(args), cloudAgentWrapMediaAdmissionError(err), true)
+	if class != cloudAgentToolErrorAdmission || retryable || action != "report_to_user" {
+		t.Fatalf("unavailable transient reference entered correction retry: class=%s retryable=%v action=%s", class, retryable, action)
+	}
+}
+
 func TestCloudAgentImageCreatesReferencedNode(t *testing.T) {
 	s, db, a := agentMediaFixture(t)
 	capability := DefaultModelCapabilityConfigForModel(string(model.ChannelInterfaceGrokImage), "grok-image")
@@ -234,7 +308,7 @@ func TestCloudAgentImageCreatesReferencedNode(t *testing.T) {
 	a.Mode, a.ChannelModelKey, a.Duration, a.VideoGenerateAudio = "image", "grok-image", 0, nil
 	a.Size, a.Quality, a.NodeID = "1:1", "2k", "image-shot-1"
 	a.ReferenceNodeIDs = []string{"cat"}
-	run, _ := agentMediaRun(t, s, a, "auto")
+	run, _ := agentMediaRun(t, s, a, "request_approval")
 	if err := s.advanceCloudAgentByID("user", run.ID); err != nil {
 		t.Fatal(err)
 	}
@@ -252,7 +326,7 @@ func TestCloudAgentImageCreatesReferencedNode(t *testing.T) {
 	if err = json.Unmarshal([]byte(task.InputJSON), &input); err != nil {
 		t.Fatal(err)
 	}
-	if task.Operation != "image_to_image" || len(input.ReferenceImages) != 1 || input.Config.Count != "1" || input.Config.Quality != "2k" {
+	if task.Operation != "image_to_image" || len(input.ReferenceImages) != 1 || input.Config.Count != "1" || input.Config.ImageResolution != "2k" || input.Config.Quality != "" {
 		t.Fatal("image generation contract was lost")
 	}
 	canvas, _ := s.repo.CanvasProjectForUser("user", "agent-canvas")
@@ -302,16 +376,20 @@ func TestCloudAgentMediaRejectAndInvalidModelDoNotCreateTasks(t *testing.T) {
 			if scenario == "reject" {
 				decision = "reject"
 			}
-			if err := s.DecideCloudAgentApproval("user", run.ID, state.Approval.ID, decision, ""); err != nil {
-				t.Fatal(err)
-			}
 			if scenario == "stale-after-approval" {
+				// Approval now executes its prepared tool synchronously before
+				// returning; make the canvas stale before that execution boundary.
 				if err := db.Model(&model.CanvasProject{}).Where("id = ?", "agent-canvas").Update("payload_json", `{"nodes":[],"connections":[]}`).Error; err != nil {
 					t.Fatal(err)
 				}
 			}
-			if err := s.advanceCloudAgentByID("user", run.ID); err != nil {
+			if err := s.DecideCloudAgentApproval("user", run.ID, state.Approval.ID, decision, ""); err != nil {
 				t.Fatal(err)
+			}
+			if decision == "reject" {
+				if err := s.advanceCloudAgentByID("user", run.ID); err != nil {
+					t.Fatal(err)
+				}
 			}
 			run, _ = s.repo.CloudAgent("user", run.ID)
 			state, _ = cloudAgentDecode(run)
@@ -399,7 +477,7 @@ func TestCloudAgentMediaFillsMissingSnapshotHash(t *testing.T) {
 
 func TestCloudAgentMediaFailedTaskUpdatesNode(t *testing.T) {
 	s, db, a := agentMediaFixture(t)
-	run, _ := agentMediaRun(t, s, a, "auto")
+	run, _ := agentMediaRun(t, s, a, "request_approval")
 	if err := s.advanceCloudAgentByID("user", run.ID); err != nil {
 		t.Fatal(err)
 	}
@@ -469,7 +547,7 @@ func TestCloudAgentModelListFiltersActualReferences(t *testing.T) {
 			t.Fatalf("intent = %+v", intent)
 		}
 	}
-	for _, args := range []string{`{"mode":"video","referenceNodeIds":["hero","hero"]}`, `{"mode":"video","referenceNodeIds":["missing"]}`, `{"referenceNodeIds":["hero"]}`, `{"mode":"audio","referenceNodeIds":["hero"]}`} {
+	for _, args := range []string{`{"mode":"video","referenceNodeIds":["hero","hero"]}`, `{"mode":"video","referenceNodeIds":["missing"]}`, `{"referenceNodeIds":["hero"]}`, `{"mode":"audio","referenceNodeIds":["hero","cat"]}`} {
 		if _, err := s.cloudAgentModelIntent("user", "agent-canvas", args); err == nil {
 			t.Fatalf("accepted %s", args)
 		}
@@ -491,6 +569,123 @@ func TestCloudAgentModelListFiltersActualReferences(t *testing.T) {
 	if len(catalog.(map[string]any)["models"].([]map[string]any)) != 0 {
 		t.Fatal("no-match query fell back to incompatible models")
 	}
+}
+
+func TestCloudAgentImageCatalogTreatsUnselectedPricedOptionsAsCandidates(t *testing.T) {
+	s, db, _, _ := creationTestService(t)
+	imageModel := seedAgentLogicalImageModel(t, s, db)
+	intent := ModelRequestIntent{Capability: "image", Inputs: map[string]int{}, Options: map[string]any{}}
+
+	models, err := s.PublicLogicalModels(&intent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(models) != 1 || models[0].ID != imageModel.ID || !models[0].Available || len(models[0].PriceTiers) != 9 {
+		t.Fatalf("unselected image options should expose the priced candidate and all 9 tiers: %#v", models)
+	}
+
+	adminModels, err := s.AdminLogicalModels(&model.User{ID: "admin", Role: model.UserRoleAdmin})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(adminModels) != 1 || len(adminModels[0].PriceTiers) != 9 {
+		t.Fatalf("admin projection should expose the route's 9 configured tiers: %#v", adminModels)
+	}
+
+	catalog, err := s.cloudAgentModelList(&intent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var logicalEntry map[string]any
+	for _, entry := range catalog.(map[string]any)["models"].([]map[string]any) {
+		if entry["selection"].(map[string]any)["logicalModelId"] == imageModel.ID {
+			logicalEntry = entry
+			break
+		}
+	}
+	if logicalEntry == nil || len(logicalEntry["priceTiers"].([]PublicLogicalModelPriceTier)) != 9 {
+		t.Fatalf("agent catalog did not expose the logical candidate with 9 price tiers: %#v", logicalEntry)
+	}
+	defaultRoute, err := s.ResolveLogicalModel(imageModel.ID, intent)
+	if err != nil || defaultRoute.PriceTier == nil {
+		t.Fatalf("declared model defaults must resolve a priced specification: %v", err)
+	}
+	selectedIntent := ModelRequestIntent{Capability: "image", Inputs: map[string]int{}, Options: map[string]any{"imageResolution": "4k", "quality": "max"}}
+	routed, err := s.ResolveLogicalModel(imageModel.ID, selectedIntent)
+	if err != nil || routed.PriceTier == nil || routed.PriceTier.ID != "agent-image-4k-max" {
+		t.Fatalf("complete selection should resolve only its exact price tier: routed=%#v error=%v", routed, err)
+	}
+}
+
+func TestCloudAgentImageCatalogRejectsUnpricedExplicitCombination(t *testing.T) {
+	s, db, _, _ := creationTestService(t)
+	imageModel := seedAgentLogicalImageModel(t, s, db)
+	if err := db.Where("channel_model_id = ? AND selector_json = ?", "agent-image-cm", "{\"imageResolution\":\"4k\",\"quality\":\"max\"}").Delete(&model.ChannelModelPriceTier{}).Error; err != nil {
+		t.Fatal(err)
+	}
+	s.invalidateRouteCatalog()
+	intent := ModelRequestIntent{Capability: "image", Inputs: map[string]int{}, Options: map[string]any{"imageResolution": "4k", "quality": "max"}}
+
+	models, err := s.PublicLogicalModels(&intent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(models) != 1 || models[0].ID != imageModel.ID || models[0].Available {
+		t.Fatalf("supported but unpriced explicit combination must not be available: %#v", models)
+	}
+	catalog, err := s.cloudAgentModelList(&intent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, _ := json.Marshal(catalog)
+	if strings.Contains(string(encoded), "\"logicalModelId\":\""+imageModel.ID+"\"") {
+		t.Fatalf("agent exposed a model with no price tier for the explicit combination: %s", encoded)
+	}
+	if _, err := s.ResolveLogicalModel(imageModel.ID, intent); err == nil {
+		t.Fatal("strict routing accepted an explicitly unpriced combination")
+	}
+}
+
+func seedAgentLogicalImageModel(t *testing.T, s *Service, db *gorm.DB) model.LogicalModel {
+	t.Helper()
+	if err := db.Create(&model.SystemSetting{Key: featureAvailabilitySettingKey, ValueJSON: "{\"frontendModelsEnabled\":true}"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&model.ModelChannel{ID: "agent-image-channel", Scope: model.ChannelScopeSystem, Enabled: true, Name: "Agent image test"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	config := DefaultModelCapabilityConfigForModel(string(model.ChannelInterfaceOpenAIImage), "gpt-image-2.5-sunburst")
+	config.Image.Resolution = ImageResolutionConfig{Supported: true, Values: []string{"1k", "2k", "4k"}, Default: "1k"}
+	config.Image.Quality = ImageQualityConfig{Supported: true, Values: []string{"medium", "high", "max"}, Default: "medium"}
+	if err := db.Create(&model.ChannelModel{ID: "agent-image-cm", ChannelID: "agent-image-channel", ModelKey: "gpt-image-2.5-sunburst", DisplayName: "Sunburst", Capability: "image", Protocol: model.ChannelInterfaceOpenAIImage, CapabilityConfigJSON: mustEncodeModelCapabilityConfig(t, config), BillingMode: "fixed_request", PriceConfigured: true, Enabled: true}).Error; err != nil {
+		t.Fatal(err)
+	}
+	for _, resolution := range []string{"1k", "2k", "4k"} {
+		for _, quality := range []string{"medium", "high", "max"} {
+			selector := fmt.Sprintf("{\"imageResolution\":%q,\"quality\":%q}", resolution, quality)
+			if err := db.Create(&model.ChannelModelPriceTier{ID: "agent-image-" + resolution + "-" + quality, ChannelModelID: "agent-image-cm", SelectorKey: selector, SelectorJSON: selector, BillingMode: "fixed_request", UnitPriceMicrocredits: 100, PriceConfigured: true, Enabled: true}).Error; err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	spec, err := CapabilitySpecFromModelCapabilityConfig(config, "image")
+	if err != nil {
+		t.Fatal(err)
+	}
+	specJSON, err := json.Marshal(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	imageModel := model.LogicalModel{ID: "agent-sunburst", Code: "agent-sunburst", Name: "Sunburst", Capability: "image", Enabled: true, ActiveRevisionID: "agent-sunburst-revision", PricePolicy: "channel", BillingMode: "fixed_request"}
+	revision := model.LogicalModelRevision{ID: imageModel.ActiveRevisionID, LogicalModelID: imageModel.ID, Version: 1, CapabilitySpecJSON: string(specJSON), DefaultOptionsJSON: "{}"}
+	route := model.LogicalModelRoute{ID: "agent-sunburst-route", LogicalModelRevisionID: revision.ID, ChannelModelID: "agent-image-cm", Enabled: true, Weight: 1}
+	for _, row := range []any{&imageModel, &revision, &route} {
+		if err := db.Create(row).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	s.invalidateRouteCatalog()
+	return imageModel
 }
 
 func TestCloudAgentMediaDraftReuseLifecycle(t *testing.T) {
@@ -545,7 +740,7 @@ func TestCloudAgentMediaDraftReuseLifecycle(t *testing.T) {
 
 func TestCloudAgentMediaPreviousDraftRequiresNewApproval(t *testing.T) {
 	s, db, a := agentMediaFixture(t)
-	run, state := agentMediaRun(t, s, a, "auto")
+	run, state := agentMediaRun(t, s, a, "request_approval")
 	if err := s.advanceCloudAgentTool(run, &state); err != nil {
 		t.Fatal(err)
 	}
@@ -564,7 +759,7 @@ func TestCloudAgentMediaPreviousDraftRequiresNewApproval(t *testing.T) {
 	}
 	a.SnapshotHash = cloudAgentCanvasHash(doc)
 	a.ReferenceNodeIDs = []string{"hero"}
-	next, nextState := agentMediaRun(t, s, a, "auto", "resume-draft-next-turn")
+	next, nextState := agentMediaRun(t, s, a, "request_approval", "resume-draft-next-turn")
 	if next.ID == run.ID {
 		t.Fatal("expected a distinct run")
 	}
@@ -605,74 +800,144 @@ func TestCloudAgentMediaPreviousDraftRequiresNewApproval(t *testing.T) {
 	}
 }
 
-func TestCloudAgentAutoMediaDraftRequiresExplicitApproval(t *testing.T) {
-	for _, decision := range []string{"approve", "reject", "cancel"} {
-		t.Run(decision, func(t *testing.T) {
-			s, db, a := agentMediaFixture(t)
-			run, _ := agentMediaRun(t, s, a, "auto")
-			var ordersBefore int64
-			db.Model(&model.BillingOrder{}).Count(&ordersBefore)
-			if err := s.advanceCloudAgentByID("user", run.ID); err != nil {
-				t.Fatal(err)
-			}
-			run, _ = s.repo.CloudAgent("user", run.ID)
-			state, _ := cloudAgentDecode(run)
-			if run.Status != "waiting_approval" || state.Approval == nil || state.Approval.ModelName != "视频测试" || state.MediaTaskID != "" {
-				t.Fatal("auto mode bypassed approval or omitted selected model")
-			}
-			canvas, _ := s.repo.CanvasProjectForUser("user", "agent-canvas")
-			doc, _ := creationDocument(canvas.PayloadJSON)
-			nodes, _ := creationObjects(doc["nodes"])
-			meta, _ := nodes[a.NodeID]["metadata"].(map[string]any)
-			if meta["status"] != "idle" || meta["taskId"] != nil || meta["size"] != "9:16" || meta["agentDraftRunId"] != run.ID || len(creationMaps(doc["connections"])) != 3 {
-				t.Fatalf("missing uncharged draft with references: %+v", meta)
-			}
-			// Re-entering the tool while awaiting a decision must remain a no-op.
-			if err := s.advanceCloudAgentTool(run, &state); err != nil {
-				t.Fatal(err)
-			}
-			var count, orders int64
-			db.Model(&model.Task{}).Where("type = ?", "canvas_video").Count(&count)
-			db.Model(&model.BillingOrder{}).Count(&orders)
-			if count != 0 || orders != ordersBefore {
-				t.Fatal("draft created a task or charge")
-			}
-			// Another run may not take over this draft, even with the latest snapshot.
-			foreign := a
-			foreign.DraftRunID, foreign.SnapshotHash = "another-run", cloudAgentCanvasHash(doc)
-			if _, _, _, err := cloudAgentMediaDocument(s.repo, "user", "agent-canvas", foreign); err == nil {
-				t.Fatal("foreign draft overwrite accepted")
-			}
-			if decision == "cancel" {
-				if err := s.CancelCloudAgent(context.Background(), "user", run.ID); err != nil {
-					t.Fatal(err)
-				}
-			} else {
-				// A local focus/zoom autosave cannot change the approved content.
-				doc["viewport"], doc["updatedAt"] = map[string]any{"x": -900, "y": -500, "k": 0.8}, "later"
-				raw, _ := json.Marshal(doc)
-				if err := db.Model(&model.CanvasProject{}).Where("id = ?", "agent-canvas").Update("payload_json", string(raw)).Error; err != nil {
-					t.Fatal(err)
-				}
-				for range 2 {
-					if err := s.DecideCloudAgentApproval("user", run.ID, state.Approval.ID, decision, ""); err != nil {
-						t.Fatal(err)
-					}
-				}
-				if err := s.advanceCloudAgentByID("user", run.ID); err != nil {
-					t.Fatal(err)
-				}
-			}
-			db.Model(&model.Task{}).Where("type = ?", "canvas_video").Count(&count)
-			db.Model(&model.BillingOrder{}).Count(&orders)
-			if decision == "approve" {
-				if count != 1 {
-					t.Fatal("explicit approval did not create exactly one task")
-				}
-			} else if count != 0 || orders != ordersBefore {
-				t.Fatal("reject/cancel submitted generation")
-			}
-		})
+// 界面承诺“图片、视频始终先创建草稿，再经独立审批才提交”：auto 也必须先审批，
+// 审批前不建任务、不扣费；批准后恰好提交一次。
+func TestCloudAgentAutoMediaRequiresApprovalBeforeSubmit(t *testing.T) {
+	s, db, a := agentMediaFixture(t)
+	// Omitted size and duration should be filled by the selected model's catalog
+	// defaults during admission instead of producing a repair turn.
+	a.Size = ""
+	a.Duration = 0
+	run, _ := agentMediaRun(t, s, a, "auto")
+	var ordersBefore int64
+	if err := db.Model(&model.BillingOrder{}).Count(&ordersBefore).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := s.advanceCloudAgentByID("user", run.ID); err != nil {
+		t.Fatal(err)
+	}
+	run, _ = s.repo.CloudAgent("user", run.ID)
+	state, err := cloudAgentDecode(run)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if run.Status != "waiting_approval" || state.Approval == nil {
+		t.Fatalf("auto mode submitted media without approval: status=%s", run.Status)
+	}
+	var pendingTasks, pendingOrders int64
+	db.Model(&model.Task{}).Where("type = ?", "canvas_video").Count(&pendingTasks)
+	db.Model(&model.BillingOrder{}).Count(&pendingOrders)
+	if pendingTasks != 0 || pendingOrders != ordersBefore {
+		t.Fatalf("charged/submitted before approval: tasks=%d orders=%d before=%d", pendingTasks, pendingOrders, ordersBefore)
+	}
+	if err := s.DecideCloudAgentApproval("user", run.ID, state.Approval.ID, "approve", ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.advanceCloudAgentByID("user", run.ID); err != nil {
+		t.Fatal(err)
+	}
+	run, _ = s.repo.CloudAgent("user", run.ID)
+	state, err = cloudAgentDecode(run)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.MediaTaskID == "" {
+		t.Fatalf("approved auto media was not submitted: status=%s", run.Status)
+	}
+	task, err := s.repo.TaskForUser("user", state.MediaTaskID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var input canvasGenerationInput
+	if err := json.Unmarshal([]byte(task.InputJSON), &input); err != nil {
+		t.Fatal(err)
+	}
+	if input.Config.Size == "" || input.Config.VideoSeconds == "" {
+		t.Fatalf("model defaults were not resolved: %+v", input.Config)
+	}
+	canvas, _ := s.repo.CanvasProjectForUser("user", "agent-canvas")
+	doc, _ := creationDocument(canvas.PayloadJSON)
+	nodes, _ := creationObjects(doc["nodes"])
+	meta, _ := nodes[a.NodeID]["metadata"].(map[string]any)
+	if meta["status"] != "loading" || meta["taskId"] != task.ID || meta["agentDraftRunId"] != nil {
+		t.Fatalf("approved submission did not finalize the draft: %+v", meta)
+	}
+	var tasks, orders int64
+	if err := db.Model(&model.Task{}).Where("type = ?", "canvas_video").Count(&tasks).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(&model.BillingOrder{}).Count(&orders).Error; err != nil {
+		t.Fatal(err)
+	}
+	if tasks != 1 || orders != ordersBefore+1 {
+		t.Fatalf("approved submission created unexpected records: tasks=%d orders=%d before=%d", tasks, orders, ordersBefore)
+	}
+	// Re-entering a submitted call is idempotent and must not reserve/submit a
+	// second generation.
+	if err := s.advanceCloudAgentByID("user", run.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(&model.Task{}).Where("type = ?", "canvas_video").Count(&tasks).Error; err != nil {
+		t.Fatal(err)
+	}
+	if tasks != 1 {
+		t.Fatalf("re-entering approved media duplicated task: %d", tasks)
+	}
+
+	// Admission failures are still non-billed tool failures and do not create an
+	// approval or a draft task.
+	invalidService, invalidDB, invalidArgs := agentMediaFixture(t)
+	invalidArgs.ChannelModelKey = "removed-model"
+	invalidRun, _ := agentMediaRun(t, invalidService, invalidArgs, "auto")
+	var invalidOrdersBefore int64
+	if err := invalidDB.Model(&model.BillingOrder{}).Count(&invalidOrdersBefore).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := invalidService.advanceCloudAgentByID("user", invalidRun.ID); err != nil {
+		t.Fatal(err)
+	}
+	invalidRun, _ = invalidService.repo.CloudAgent("user", invalidRun.ID)
+	invalidState, err := cloudAgentDecode(invalidRun)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var invalidTasks, invalidOrders int64
+	if err := invalidDB.Model(&model.Task{}).Where("type = ?", "canvas_video").Count(&invalidTasks).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := invalidDB.Model(&model.BillingOrder{}).Count(&invalidOrders).Error; err != nil {
+		t.Fatal(err)
+	}
+	if invalidTasks != 0 || invalidOrders != invalidOrdersBefore || invalidState.Approval != nil {
+		t.Fatalf("invalid auto admission created side effects: tasks=%d orders=%d before=%d approval=%+v", invalidTasks, invalidOrders, invalidOrdersBefore, invalidState.Approval)
+	}
+
+	approvalService, approvalDB, approvalArgs := agentMediaFixture(t)
+	approvalRun, _ := agentMediaRun(t, approvalService, approvalArgs, "request_approval")
+	var approvalOrdersBefore int64
+	if err := approvalDB.Model(&model.BillingOrder{}).Count(&approvalOrdersBefore).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := approvalService.advanceCloudAgentByID("user", approvalRun.ID); err != nil {
+		t.Fatal(err)
+	}
+	approvalRun, _ = approvalService.repo.CloudAgent("user", approvalRun.ID)
+	approvalState, err := cloudAgentDecode(approvalRun)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if approvalRun.Status != "waiting_approval" || approvalState.Approval == nil {
+		t.Fatalf("request_approval stopped bypassing approval: status=%s approval=%+v", approvalRun.Status, approvalState.Approval)
+	}
+	var approvalTasks, approvalOrders int64
+	if err := approvalDB.Model(&model.Task{}).Where("type = ?", "canvas_video").Count(&approvalTasks).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := approvalDB.Model(&model.BillingOrder{}).Count(&approvalOrders).Error; err != nil {
+		t.Fatal(err)
+	}
+	if approvalTasks != 0 || approvalOrders != approvalOrdersBefore {
+		t.Fatalf("request_approval submitted before decision: tasks=%d orders=%d before=%d", approvalTasks, approvalOrders, approvalOrdersBefore)
 	}
 }
 
@@ -692,7 +957,7 @@ func TestCloudAgentMediaPromptCountsUnicodeCharacters(t *testing.T) {
 
 func TestCloudAgentMediaCancellationUpdatesNode(t *testing.T) {
 	s, _, a := agentMediaFixture(t)
-	run, _ := agentMediaRun(t, s, a, "auto")
+	run, _ := agentMediaRun(t, s, a, "request_approval")
 	if err := s.advanceCloudAgentByID("user", run.ID); err != nil {
 		t.Fatal(err)
 	}
@@ -816,10 +1081,60 @@ func TestCloudAgentCanvasUpdatesExistingVideoDraftThroughCapabilityContract(t *t
 	}
 	updated := updatedNodes["video-1789310237935-mmh3-baby-fullmoon"]
 	metadata := updated["metadata"].(map[string]any)
-	if updated["title"] != "满月庆祝视频草稿（舒缓呼吸感）" || metadata["composerContent"] != "下一版舒缓视频提示词" {
+	generationSpec := metadata["generationSpec"].(map[string]any)
+	if updated["title"] != "满月庆祝视频草稿（舒缓呼吸感）" || generationSpec["prompt"] != "下一版舒缓视频提示词" {
 		t.Fatalf("video draft was not updated: %#v", updated)
 	}
 	if metadata["prompt"] != "原始已提交提示词" || metadata["status"] != "error" || metadata["referenceIssue"] != "参考资产尚未准备完成" {
 		t.Fatalf("video task state or submission snapshot was overwritten: %#v", metadata)
+	}
+}
+
+func TestCloudAgentMediaDependencyIgnoresNodeMovement(t *testing.T) {
+	s, _, args := agentMediaFixture(t)
+	canvas, err := s.repo.CanvasProjectForUser("user", "agent-canvas")
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc, err := creationDocument(canvas.PayloadJSON)
+	if err != nil {
+		t.Fatal(err)
+	}
+	nodeList := append(creationMaps(doc["nodes"]), map[string]any{
+		"id": "video-shot-1", "type": "video", "title": "镜头1视频",
+		"position": map[string]any{"x": 100.0, "y": 100.0}, "width": 360.0, "height": 640.0,
+		"metadata": map[string]any{"status": "idle", "prompt": args.Prompt, "agentDraftRunId": "run-current"},
+	})
+	normalizedNodes, err := json.Marshal(nodeList)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decodedNodes []any
+	if err := json.Unmarshal(normalizedNodes, &decodedNodes); err != nil {
+		t.Fatal(err)
+	}
+	doc["nodes"] = decodedNodes
+	args.DraftRunID = "run-current"
+	base, err := cloudAgentMediaDependencyHash(doc, args)
+	if err != nil {
+		t.Fatal(err)
+	}
+	moved := cloneCreationDocument(doc)
+	nodes, err := creationObjects(moved["nodes"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{"video-shot-1", "cat", "hero", "shot-1"} {
+		node := nodes[id]
+		position := node["position"].(map[string]any)
+		position["x"] = position["x"].(float64) + 240
+		position["y"] = position["y"].(float64) + 120
+	}
+	got, err := cloudAgentMediaDependencyHash(moved, args)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != base {
+		t.Fatalf("moving target or input nodes changed generation dependency: base=%s got=%s", base, got)
 	}
 }

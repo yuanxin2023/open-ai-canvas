@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { modelQuoteDescription } from "../src/lib/model-pricing";
+import { modelQuoteDescription } from "../src/lib/model-quote-description";
 import { quoteModel, type LogicalModelQuote, type ModelRequestIntent } from "../src/services/api/logical-models";
 import { apiClient } from "../src/services/api/request";
 

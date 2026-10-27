@@ -1,6 +1,6 @@
 import { App, Button, Dropdown, Form, Input, InputNumber, Skeleton, Switch } from "antd";
 import type { MenuProps } from "antd";
-import { AlertTriangle, Database, Gauge, Infinity as InfinityIcon, MoreHorizontal, Network, RefreshCw, RotateCcw, Save, Search, ShieldCheck, TimerReset } from "lucide-react";
+import { AlertTriangle, Bot, Database, Gauge, Infinity as InfinityIcon, MoreHorizontal, Network, RefreshCw, RotateCcw, Save, Search, ShieldCheck, TimerReset } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useBlocker } from "react-router";
 
@@ -11,8 +11,8 @@ import { AdminPageFrame } from "../components/admin-shell";
 import { AdminStatusBadge, SettingsSectionCard } from "../components/admin-ui";
 import { resourcePolicyFields } from "../lib/resource-policy-fields";
 
-type PolicyGroup = "resource" | "task" | "request";
-type RuntimePolicyDraft = Pick<RuntimePolicySetting, "resource" | "task" | "request">;
+type PolicyGroup = "resource" | "storage" | "task" | "request";
+type RuntimePolicyDraft = Pick<RuntimePolicySetting, "resource" | "storage" | "task" | "request">;
 type PolicyField = {
     [Group in PolicyGroup]: {
         group: Group;
@@ -49,6 +49,13 @@ type PolicyNumberControlProps = {
 
 const resourceFields: PolicyField[] = resourcePolicyFields;
 
+const storageFields: PolicyField[] = [
+    { group: "storage", name: "transferTimeoutSeconds", label: "对象存储传输超时", extra: "对象存储上传、下载、删除与连接测试的最长等待时间。", unit: "秒", min: 10, max: 3_600 },
+    { group: "storage", name: "accessURLTTLSeconds", label: "访问地址有效期", extra: "浏览器访问对象资源时使用的签名地址有效期。", unit: "秒", min: 60, max: 86_400 },
+    { group: "storage", name: "providerAccessURLTTLSeconds", label: "厂商访问地址有效期", extra: "模型或其他外部厂商读取对象资源时使用的地址有效期。", unit: "秒", min: 300, max: 86_400 },
+    { group: "storage", name: "nonSeekableBufferMB", label: "非可寻址上传缓冲", extra: "S3 兼容存储接收不可重复读取请求体时的最大内存缓冲。", unit: "MB", max: 999 },
+    { group: "storage", name: "errorBodyKB", label: "错误响应保留", extra: "对象存储错误响应中最多保留的诊断内容。", unit: "KB", max: 1_024 },
+];
 const concurrencyFields: PolicyField[] = [
     { group: "task", name: "workerConcurrency", label: "Worker 并发", extra: "集群同时执行的后台任务数。", unit: "个", max: 999 },
     { group: "task", name: "channelConcurrency", label: "全局渠道并发", extra: "渠道选择跟随系统时采用的并发上限。", unit: "个", max: 999 },
@@ -62,6 +69,35 @@ const timeoutFields: PolicyField[] = [
     { group: "task", name: "videoTimeoutMinutes", label: "视频任务超时", extra: "视频任务的最长执行时间。", unit: "分钟", max: 9_999 },
     { group: "task", name: "storyboardTimeoutMinutes", label: "分镜任务超时", extra: "Agent 分镜任务的最长执行时间。", unit: "分钟", max: 9_999 },
     { group: "task", name: "defaultTimeoutMinutes", label: "默认任务超时", extra: "未匹配专用类型时使用的最长执行时间。", unit: "分钟", max: 9_999 },
+];
+
+const agentFields: PolicyField[] = [
+    {
+        group: "task",
+        name: "agentStepMaxOutputTokens",
+        label: "单步输出上限",
+        extra: "画布 Agent 每次模型调用的输出上限，含思考、正文与工具调用参数。0 表示不限制，此时只有单步超时兜底；抬高可以避免长思考模型被截断后返回空内容。",
+        unit: "token",
+        min: 0,
+        max: 131_072,
+    },
+    {
+        group: "task",
+        name: "agentStepTimeoutSeconds",
+        label: "单步超时",
+        extra: "画布 Agent 单步模型调用的最长等待时间，到点会中止这一步并自动关思考重试一次。0 表示沿用“文本任务超时”，不再单独计时。",
+        unit: "秒",
+        min: 0,
+        max: 3_600,
+    },
+    {
+        group: "task",
+        name: "agentMaxSessions",
+        label: "同时对话上限",
+        extra: "同时进行中的画布 Agent 轮次，新安装默认 30。审批等待不占名额，降低上限不会中断已开始的对话。",
+        unit: "个",
+        max: 64,
+    },
 ];
 
 const rateFields: PolicyField[] = [
@@ -92,6 +128,15 @@ const relayFields: PolicyField[] = [
 const policySections: PolicySectionDefinition[] = [
     { id: "policy-resource", icon: <Database className="size-4" aria-hidden="true" />, title: "资源与账号配额", shortTitle: "资源配额", description: "上传、文件容量、结构化数据和历史记录上限。", fields: resourceFields },
     {
+        id: "policy-storage",
+        icon: <Database className="size-4" aria-hidden="true" />,
+        title: "对象存储运行时",
+        shortTitle: "对象存储",
+        description: "对象存储传输、签名地址和上传缓冲策略。",
+        fields: storageFields,
+        status: <AdminStatusBadge label="保存后热更新" tone="info" />,
+    },
+    {
         id: "policy-concurrency",
         icon: <Gauge className="size-4" aria-hidden="true" />,
         title: "任务与并发",
@@ -101,6 +146,15 @@ const policySections: PolicySectionDefinition[] = [
         status: <AdminStatusBadge label="保存后热更新" tone="info" />,
     },
     { id: "policy-timeout", icon: <TimerReset className="size-4" aria-hidden="true" />, title: "任务超时", shortTitle: "任务超时", description: "不同生成类型的最长执行时间。", fields: timeoutFields },
+    {
+        id: "policy-agent",
+        icon: <Bot className="size-4" aria-hidden="true" />,
+        title: "画布 Agent 单步",
+        shortTitle: "Agent 单步",
+        description: "画布 Agent 每一步模型调用的输出上限与等待时限；两者一起决定单步最坏耗时。",
+        fields: agentFields,
+        status: <AdminStatusBadge label="保存后热更新" tone="info" />,
+    },
     { id: "policy-rate", icon: <ShieldCheck className="size-4" aria-hidden="true" />, title: "业务频控", shortTitle: "业务频控", description: "账号与 IP 维度的固定窗口请求限制。", fields: rateFields },
     { id: "policy-relay", icon: <Network className="size-4" aria-hidden="true" />, title: "渠道中转与熔断", shortTitle: "中转与熔断", description: "请求体、响应体、并发、超时和上游故障保护。", fields: relayFields },
 ];
@@ -650,7 +704,7 @@ function PolicyNumberControl({ value, onChange, inputId, label, unit, min, max, 
 }
 
 function toPolicyDraft(value: RuntimePolicyDraft): RuntimePolicyDraft {
-    return { resource: { ...value.resource }, task: { ...value.task }, request: { ...value.request } };
+    return { resource: { ...value.resource }, storage: { ...value.storage }, task: { ...value.task }, request: { ...value.request } };
 }
 
 function readPolicyValue(value: RuntimePolicyDraft, field: PolicyField) {

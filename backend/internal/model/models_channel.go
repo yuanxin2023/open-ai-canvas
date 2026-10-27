@@ -20,7 +20,10 @@ type ModelChannel struct {
 	SecretKey        string `json:"-"`
 	APIFormat        string `json:"apiFormat" gorm:"size:24"`
 	ConcurrencyLimit int    `json:"concurrencyLimit"`
-	ModelsJSON       string `json:"modelsJson" gorm:"type:text"`
+	// ProxyURL 是渠道级出站代理地址，支持 socks5://、socks5h://、http://、https://。
+	// 留空时使用全局环境变量代理。
+	ProxyURL   string `json:"proxyUrl" gorm:"size:512"`
+	ModelsJSON string `json:"modelsJson" gorm:"type:text"`
 	// RetiredModelsJSON 记录已被一个模型家族吸收的上游 SKU，防止目录拉取时重新创建重复记录。
 	RetiredModelsJSON string         `json:"-" gorm:"type:text"`
 	HeadersJSON       string         `json:"-" gorm:"type:text"`
@@ -46,7 +49,7 @@ type ChannelModel struct {
 	SortOrder                    int                  `json:"sortOrder" gorm:"not null;default:0"`
 	Icon                         string               `json:"icon" gorm:"size:80"`
 	Capability                   string               `json:"capability" gorm:"size:32;index"`
-	Protocol                     ChannelInterfaceType `json:"protocol" gorm:"size:32;index"`
+	Protocol                     ChannelInterfaceType `json:"protocol" gorm:"size:64;index"`
 	BillingMode                  string               `json:"billingMode" gorm:"size:32"`
 	UnitPriceMicrocredits        int64                `json:"unitPriceMicrocredits"`
 	InputTokenPriceMicrocredits  int64                `json:"inputTokenPriceMicrocredits"`
@@ -105,6 +108,7 @@ type ApiCallLog struct {
 	ChannelName            string        `json:"channelName" gorm:"-"`
 	TaskID                 string        `json:"taskId,omitempty" gorm:"index;size:36"`
 	TaskStatus             TaskStatus    `json:"taskStatus,omitempty" gorm:"-"`
+	MediaStage             string        `json:"mediaStage,omitempty" gorm:"-"`
 	BillingOrderID         string        `json:"billingOrderId,omitempty" gorm:"index;size:36"`
 	BillingStatus          BillingStatus `json:"billingStatus,omitempty" gorm:"-"`
 	BillingAmount          int64         `json:"billingAmountMicrocredits" gorm:"-"`
@@ -114,13 +118,13 @@ type ApiCallLog struct {
 	Source                 string        `json:"source" gorm:"index;size:64"`
 	Capability             string        `json:"capability" gorm:"index;size:32"`
 	Operation              string        `json:"operation" gorm:"size:64"`
-	RequestKind            string        `json:"requestKind" gorm:"index;size:24"`
+	RequestKind            string        `json:"requestKind" gorm:"index;size:24;index:idx_api_logs_kind_status_created,priority:1"`
 	Billable               bool          `json:"billable" gorm:"index"`
 	APIFormat              string        `json:"apiFormat" gorm:"size:24"`
 	Method                 string        `json:"method" gorm:"size:16"`
 	Path                   string        `json:"path"`
 	Model                  string        `json:"model" gorm:"size:120;index:idx_api_logs_model_created,priority:1"`
-	Status                 ApiCallStatus `json:"status" gorm:"index;size:24;index:idx_api_logs_status_created,priority:1"`
+	Status                 ApiCallStatus `json:"status" gorm:"index;size:24;index:idx_api_logs_status_created,priority:1;index:idx_api_logs_kind_status_created,priority:2"`
 	StatusCode             int           `json:"statusCode"`
 	DurationMs             int64         `json:"durationMs"`
 	PollCount              int           `json:"pollCount"`
@@ -145,5 +149,17 @@ type ApiCallLog struct {
 	RequestBody            string        `json:"requestBody,omitempty" gorm:"type:text"`
 	ResponseBody           string        `json:"responseBody,omitempty" gorm:"type:text"`
 	StartedAt              time.Time     `json:"startedAt"`
-	CreatedAt              time.Time     `json:"createdAt" gorm:"index;index:idx_api_logs_user_created,priority:2;index:idx_api_logs_channel_created,priority:2;index:idx_api_logs_model_created,priority:2;index:idx_api_logs_status_created,priority:2"`
+	CreatedAt              time.Time     `json:"createdAt" gorm:"index;index:idx_api_logs_user_created,priority:2;index:idx_api_logs_channel_created,priority:2;index:idx_api_logs_model_created,priority:2;index:idx_api_logs_status_created,priority:2;index:idx_api_logs_kind_status_created,priority:3"`
+	CreatedAtEpoch         int64         `json:"-" gorm:"index:idx_api_logs_created_epoch"`
+}
+
+func (a *ApiCallLog) BeforeCreate(tx *gorm.DB) error {
+	if a.CreatedAtEpoch == 0 {
+		if a.CreatedAt.IsZero() {
+			a.CreatedAtEpoch = time.Now().Unix()
+		} else {
+			a.CreatedAtEpoch = a.CreatedAt.Unix()
+		}
+	}
+	return nil
 }

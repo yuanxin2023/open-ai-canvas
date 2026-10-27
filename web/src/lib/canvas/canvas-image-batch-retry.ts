@@ -25,6 +25,12 @@ export function retireImageBatchChildren(root: CanvasNodeData, nodes: CanvasNode
                 delete metadata.batchChildIds;
                 delete metadata.primaryImageId;
                 delete metadata.batchFailedCount;
+                delete metadata.imageLayerGroup;
+                delete metadata.layerDecomposition;
+                delete metadata.imageLayerWorkflow;
+                delete metadata.experimentalLayerPlan;
+                delete metadata.layerExtraction;
+                delete metadata.imageLayerMaterials;
                 if (!hasImageBatchResult(node)) metadata.status = "idle";
                 return { ...node, metadata };
             }
@@ -32,6 +38,8 @@ export function retireImageBatchChildren(root: CanvasNodeData, nodes: CanvasNode
             if (index < 0) return node;
             const metadata = { ...node.metadata };
             delete metadata.batchRootId;
+            delete metadata.imageLayer;
+            delete metadata.layerExtraction;
             return {
                 ...node,
                 position: { x: root.position.x - node.width - 48, y: root.position.y + index * (node.height + 24) },
@@ -93,6 +101,7 @@ export function cancelIncompleteImageBatch(rootId: string, childIds: string[], n
 }
 
 export function failedImageBatchChildren(root: CanvasNodeData, nodes: CanvasNodeData[]) {
+    if (root.metadata?.experimentalLayerPlan) return [];
     if (root.type !== CanvasNodeType.Image || !root.metadata?.isBatchRoot) return [];
     const nodeById = new Map(nodes.map((node) => [node.id, node]));
     return (root.metadata.batchChildIds || [])
@@ -135,6 +144,7 @@ export function restoreUnsubmittedImageBatchChild(current: CanvasNodeData, origi
 }
 
 export function reconcileImageBatchRoot(root: CanvasNodeData, nodes: CanvasNodeData[]) {
+    if (root.metadata?.imageLayerGroup || root.metadata?.experimentalLayerPlan) return root;
     if (root.type !== CanvasNodeType.Image || !root.metadata?.isBatchRoot) return root;
     const nodeById = new Map(nodes.map((node) => [node.id, node]));
     const children = (root.metadata.batchChildIds || [])
@@ -159,7 +169,7 @@ export function reconcileImageBatchRoot(root: CanvasNodeData, nodes: CanvasNodeD
     const loading = children.some((node) => node.metadata?.status === "loading");
     const failed = children.find((node) => node.metadata?.status === "error");
     // 批次父节点只是子任务的投影，不能保留上一轮单图任务的身份/终态。
-    const metadata: CanvasNodeMetadata = resetGenerationTaskMetadata(root.metadata, root.metadata?.status);
+    const metadata: CanvasNodeMetadata = root.metadata.generationOutputCount ? { ...root.metadata } : resetGenerationTaskMetadata(root.metadata, root.metadata?.status);
     metadata.batchFailedCount = children.filter((node) => node.metadata?.status === "error").length;
 
     if (primary) {
@@ -171,12 +181,15 @@ export function reconcileImageBatchRoot(root: CanvasNodeData, nodes: CanvasNodeD
         metadata.naturalWidth = primary.metadata?.naturalWidth;
         metadata.naturalHeight = primary.metadata?.naturalHeight;
         metadata.primaryImageId = primary.id;
+        if (primary.metadata?.producedModel) metadata.producedModel = primary.metadata.producedModel;
+        else delete metadata.producedModel;
         metadata.status = "success";
         delete metadata.errorDetails;
         delete metadata.generationErrorCode;
         delete metadata.failedPromptFingerprint;
     } else {
         delete metadata.content;
+        delete metadata.producedModel;
         delete metadata.storageKey;
         delete metadata.assetId;
         delete metadata.mimeType;

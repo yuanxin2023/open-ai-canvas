@@ -1,6 +1,7 @@
+import { imageQualityLabel } from "@/lib/image-quality";
 import type { ChannelModel, ChannelModelPriceTier } from "@/services/api/wallet";
 import { AdminStatusBadge } from "./admin-ui";
-import { formatModelMargin, formatModelPrice, modelPriceFields } from "./channel-model-pricing";
+import { formatModelMarkup, formatModelPrice, modelPriceFields } from "./channel-model-pricing";
 
 export function ChannelModelCostSummary({ item }: { item: ChannelModel }) {
     const tiers = item.priceTiers?.filter((tier) => tier.enabled) || [];
@@ -35,7 +36,7 @@ function priceLabel(tier: ChannelModelPriceTier, capability: ChannelModel["capab
                     {tier.costPricing?.configured ? formatModelPrice(cost) : "未配置成本"} / {tier.priceConfigured ? formatModelPrice(sale) : "未配置售价"}
                 </span>
                 <span className="admin-model-cost-unit">
-                    积分 / {unit} · 利润率 {formatModelMargin(cost, sale)}
+                    积分 / {unit} · 加价 {formatModelMarkup(cost, sale)}
                 </span>
             </div>
         );
@@ -52,7 +53,8 @@ export function specificationLabel(tier: ChannelModelPriceTier) {
     return (
         [
             operation ? operations[operation] || operation : "",
-            specific(selector.quality).toUpperCase(),
+            imageQualityLabel(specific(selector.quality)),
+            imageQualityLabel(specific(selector.resolution)),
             specific(selector.size),
             resolution.toUpperCase(),
             duration ? `${duration} 秒` : "",

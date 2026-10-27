@@ -18,13 +18,14 @@ var (
 )
 
 type AdminUserCounts struct {
-	LedgerEntries int64 `json:"ledgerEntries"`
-	Tasks         int64 `json:"tasks"`
-	APICalls      int64 `json:"apiCalls"`
-	AuditEvents   int64 `json:"auditEvents"`
-	LoginEvents   int64 `json:"loginEvents"`
+	LedgerEntries        int64 `json:"ledgerEntries"`
+	Tasks                int64 `json:"tasks"`
+	APICalls             int64 `json:"apiCalls"`
+	AuditEvents          int64 `json:"auditEvents"`
+	LoginEvents          int64 `json:"loginEvents"`
+	RechargeMicrocredits int64 `json:"rechargeMicrocredits"`
+	CheckinMicrocredits  int64 `json:"checkinMicrocredits"`
 }
-
 type AdminUserLoginEventFilter struct {
 	StartAt     *time.Time
 	EndAt       *time.Time
@@ -129,10 +130,20 @@ func (r *Repository) AdminUserCounts(userID string) (AdminUserCounts, error) {
 		{&model.Task{}, "user_id = ?", &counts.Tasks},
 		{&model.ApiCallLog{}, "user_id = ?", &counts.APICalls},
 		{&model.AdminAuditEvent{}, "target_type = 'user' AND target_id = ?", &counts.AuditEvents},
-		{&model.UserLoginEvent{}, "user_id = ?", &counts.LoginEvents},
 	}
 	for _, query := range queries {
 		if err := r.db.Model(query.model).Where(query.where, userID).Count(query.value).Error; err != nil {
+			return AdminUserCounts{}, err
+		}
+	}
+	if err := r.loginAuditQuery().Where("user_id = ?", userID).Count(&counts.LoginEvents).Error; err != nil {
+		return AdminUserCounts{}, err
+	}
+	for entryType, target := range map[model.CreditLedgerType]*int64{
+		model.CreditLedgerPaymentTopup: &counts.RechargeMicrocredits,
+		model.CreditLedgerCheckinBonus: &counts.CheckinMicrocredits,
+	} {
+		if err := r.db.Model(&model.CreditLedgerEntry{}).Where("user_id = ? AND type = ?", userID, entryType).Select("COALESCE(SUM(amount_microcredits), 0)").Scan(target).Error; err != nil {
 			return AdminUserCounts{}, err
 		}
 	}
@@ -140,7 +151,7 @@ func (r *Repository) AdminUserCounts(userID string) (AdminUserCounts, error) {
 }
 
 func (r *Repository) AdminUserLoginEvents(userID string, filter AdminUserLoginEventFilter, limit int, offset int) ([]model.UserLoginEvent, int64, error) {
-	query := r.db.Model(&model.UserLoginEvent{}).Where("user_id = ?", userID)
+	query := r.loginAuditQuery().Where("user_id = ?", userID)
 	if filter.StartAt != nil {
 		query = query.Where("created_at >= ?", *filter.StartAt)
 	}
@@ -148,18 +159,25 @@ func (r *Repository) AdminUserLoginEvents(userID string, filter AdminUserLoginEv
 		query = query.Where("created_at <= ?", *filter.EndAt)
 	}
 	if filter.LoginMethod != "" {
-		query = query.Where("login_method = ?", filter.LoginMethod)
+		query = query.Where("method = ?", filter.LoginMethod)
 	}
 	if filter.IP != "" {
-		query = query.Where("ip_address LIKE ?", "%"+filter.IP+"%")
+		query = query.Where("ip LIKE ?", "%"+filter.IP+"%")
 	}
-	var total int64
-	if err := query.Count(&total).Error; err != nil {
+	logs, total, err := loginAuditPage(query, limit, offset)
+	if err != nil {
 		return nil, 0, err
 	}
-	var events []model.UserLoginEvent
-	err := query.Order("created_at desc").Limit(limit).Offset(offset).Find(&events).Error
-	return events, total, err
+	events := make([]model.UserLoginEvent, 0, len(logs))
+	for _, log := range logs {
+		events = append(events, model.UserLoginEvent{
+			ID: log.ID, UserID: userID, Event: log.Event, Result: log.Result, Source: log.Source,
+			LoginMethod: log.Method, IPAddress: log.IP, UserAgent: log.UserAgent,
+			DeviceType: log.DeviceType, Browser: log.Browser, BrowserVersion: log.BrowserVersion,
+			OS: log.OS, OSVersion: log.OSVersion, CreatedAt: log.CreatedAt,
+		})
+	}
+	return events, total, nil
 }
 
 func (r *Repository) AdminUserTasks(userID string, limit int, offset int) ([]model.Task, int64, error) {

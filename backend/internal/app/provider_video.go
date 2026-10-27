@@ -30,6 +30,7 @@ func (s *Service) validateResolvedVideoCapability(input *canvasGenerationInput) 
 		}
 		input.Config.CapabilityConfig = normalized
 		input.VideoCapability = normalized.Video
+		applyAutoDLVideoScreenSpec(input, normalized.Video)
 		applyFixedVideoResolution(input, normalized.Video)
 		return validateVideoTask(normalized.Video, *input)
 	}
@@ -46,6 +47,7 @@ func (s *Service) validateResolvedVideoCapability(input *canvasGenerationInput) 
 		return errors.New("当前视频模型能力参数无效")
 	}
 	input.VideoCapability = normalized.Video
+	applyAutoDLVideoScreenSpec(input, normalized.Video)
 	applyFixedVideoResolution(input, normalized.Video)
 	return validateVideoTask(normalized.Video, *input)
 }
@@ -503,6 +505,9 @@ func videoImageRole(input canvasGenerationInput, image providerMedia) string {
 }
 
 func videoImageRoleOrDefault(input canvasGenerationInput, image providerMedia, fallback string) string {
+	if image.Role == "first_frame" || image.Role == "last_frame" {
+		return image.Role
+	}
 	if metadataString(input.Metadata, "videoEditOperation") == "reference_to_video" {
 		return "reference_image"
 	}

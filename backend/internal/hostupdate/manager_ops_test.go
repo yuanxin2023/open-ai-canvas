@@ -146,3 +146,62 @@ func TestCheckWritableDirectory(t *testing.T) {
 		t.Fatal("missing directory was accepted")
 	}
 }
+
+func TestComposeProjectNameUsesInstallDirectory(t *testing.T) {
+	cases := map[string]string{
+		"/opt/yingce":           "yingce",
+		"/srv/Open AI Canvas_2": "openaicanvas_2",
+		"/":                     "open-ai-canvas",
+		"/srv/!!!":              "open-ai-canvas",
+	}
+	for installDir, want := range cases {
+		if got := composeProjectName(installDir); got != want {
+			t.Errorf("composeProjectName(%q) = %q, want %q", installDir, got, want)
+		}
+	}
+}
+
+func TestWriteComposeEnvOverrideReplacesImageRefs(t *testing.T) {
+	installDir := t.TempDir()
+	stateDir := filepath.Join(installDir, "state")
+	if err := os.MkdirAll(stateDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	envPath := filepath.Join(installDir, ".env")
+	if err := os.WriteFile(envPath, []byte("CANVAS_BACKEND_IMAGE=old-backend\nCANVAS_WEB_IMAGE=old-web\nPOSTGRES_DB=canvas\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	manager := &Manager{config: Config{InstallDir: installDir, EnvFile: ".env", StateDir: stateDir}}
+	path, err := manager.writeComposeEnvOverride(deploymentImages{backend: "new-backend", web: "new-web", agent: "new-agent"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(path)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	value := string(data)
+	if !strings.Contains(value, "CANVAS_BACKEND_IMAGE=new-backend\n") || !strings.Contains(value, "CANVAS_WEB_IMAGE=new-web\n") || !strings.Contains(value, "CANVAS_YINGCE_AGENT_IMAGE=new-agent\n") || !strings.Contains(value, "POSTGRES_DB=canvas\n") {
+		t.Fatalf("unexpected override env: %q", value)
+	}
+}
+
+// 自有构建要求显式指定匹配 Agent 和独立凭据；旧更新器不具备条件时应停在预检。
+func TestDeployComposeRequiresExplicitAgentConfiguration(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "..", "..", "docker-compose.deploy.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	compose := string(data)
+	for _, required := range []string{"${CANVAS_YINGCE_AGENT_IMAGE:?", "${YINGCE_AGENT_TOKEN:?"} {
+		if !strings.Contains(compose, required) {
+			t.Errorf("docker-compose.deploy.yml must require explicit %s…}", required)
+		}
+	}
+	for _, fallback := range []string{"${CANVAS_YINGCE_AGENT_IMAGE:-", "${YINGCE_AGENT_TOKEN:-${CANVAS_UPDATER_TOKEN:?"} {
+		if strings.Contains(compose, fallback) {
+			t.Errorf("docker-compose.deploy.yml must not fall back to %s…}", fallback)
+		}
+	}
+}

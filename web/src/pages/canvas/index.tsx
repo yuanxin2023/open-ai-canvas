@@ -19,6 +19,7 @@ import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 import { flushCanvasStorePersistence, useCanvasStore } from "@/stores/canvas/use-canvas-store";
 import { useCanvasUiStore } from "@/stores/canvas/use-canvas-ui-store";
 import { exportCanvasProjects } from "@/lib/canvas/canvas-export";
+import { migrateLegacyPrevisDocument } from "@/lib/canvas/previs/previs-legacy-document";
 import { saveCanvasDrawing, type CanvasDrawingRenderDraft } from "@/lib/canvas/canvas-drawing-storage";
 import { createCanvasProjectWithRemoteSync, hasRemoteUserDataSyncSession, loadCanvasProjectForEditing, saveRemoteUserDataNow, scheduleRemoteUserDataSync } from "@/services/user-data-sync";
 import { listRemoteCanvasProjectsPage, type CanvasLibrarySummary } from "@/services/api/user-data";
@@ -29,7 +30,6 @@ import { resourceFileUrl, resourceStorageKey, uploadResourceFile } from "@/servi
 import { primeResourceBlobCache } from "@/services/resource-blob-cache";
 import { useSyncProgressStore } from "@/stores/use-sync-progress-store";
 import { ensureCanvasNodeAsset } from "@/services/project-asset-sync";
-import { CanvasSyncDraftMenu } from "./canvas-sync-status";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
 
 const CanvasDeleteProjectsDialog = lazy(() => import("@/components/canvas/canvas-delete-projects-dialog").then((module) => ({ default: module.CanvasDeleteProjectsDialog })));
@@ -49,6 +49,7 @@ export default function CanvasPage() {
     const [openingProjectId, setOpeningProjectId] = useState("");
     const openingProjectIdRef = useRef("");
     const hydrated = useCanvasStore((state) => state.hydrated);
+    const hydrationError = useCanvasStore((state) => state.hydrationError);
     const localProjects = useCanvasStore((state) => state.projects);
     const userId = useUserStore((state) => state.user?.id);
     const sessionHydrated = useUserStore((state) => state.hydrated);
@@ -144,7 +145,7 @@ export default function CanvasPage() {
         try {
             for (const id of selectedIds) await loadCanvasProjectForEditing(id);
             selectedIds.forEach((id) => updateProject(id, { projectId }));
-            await saveRemoteUserDataNow();
+            await saveRemoteUserDataNow(selectedIds);
             message.success(projectId ? "已加入项目" : "已移出项目，画布仍保留");
             setAssociationOpen(false);
         } catch (error) {
@@ -171,6 +172,7 @@ export default function CanvasPage() {
             if (!projectFile) throw new Error("缺少 projects.json 元数据文件");
             const data = JSON.parse(await projectFile.text()) as CanvasExportFile;
             if (!Array.isArray(data.projects)) throw new Error("projects.json 中缺少画布列表");
+            data.projects = data.projects.map((item) => ({ ...item, project: migrateLegacyPrevisDocument(item.project) }));
             for (const item of data.projects) {
                 if (!Array.isArray(item.files)) throw new Error(`画布「${item.project?.title || "未命名画布"}」的媒体清单无效`);
                 const missing = item.files.find((entry) => !zip.get(entry.path));
@@ -405,6 +407,7 @@ export default function CanvasPage() {
         });
     }, [hydrated, message, mode, projects, sessionHydrated, userId, libraryQuery.isSuccess]);
 
+    if (hydrationError) return <WorkspacePage><WorkspaceState icon="canvas" title="旧画布需要核对" description={hydrationError} /></WorkspacePage>;
     if (hydrated && !libraryQuery.isError && (mode === "new" || mode === "recent" || mode === "handoff")) return <main className="flex h-full items-center justify-center bg-background text-sm text-stone-500">正在打开画布...</main>;
 
     return (
@@ -416,7 +419,6 @@ export default function CanvasPage() {
                     meta={<span className="app-projects-header-meta">{totalProjects} 个</span>}
                     actions={
                         <div className="collection-header-actions">
-                            <CanvasSyncDraftMenu />
                             <Button type="primary" disabled={!hydrated} icon={<Plus />} onClick={createAndEnter}>
                                 新建画布
                             </Button>

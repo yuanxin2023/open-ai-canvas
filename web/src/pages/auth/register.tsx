@@ -1,11 +1,14 @@
 import { type FormEvent, useEffect, useRef, useState, type ReactNode } from "react";
-import { App, Button, Divider, Input } from "antd";
+import { App, Button, Checkbox, Divider, Input, Segmented } from "antd";
 import { ArrowLeft, ArrowRight, Gift, Info, KeyRound, LockKeyhole, Mail, ShieldCheck, TriangleAlert } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router";
 
 import { getAuthSession, getAuthSettings, linuxDOLoginURL, register, sendRegistrationEmailCode } from "@/services/api/auth";
 import { ApiError } from "@/services/api/request";
 import { LinuxDOIcon } from "./auth-scene";
+import { AppModal } from "@/components/ui/product/app-modal";
+import { VerificationFields } from "@/components/auth/verification-fields";
+import { emptyVerification, methodLabels, verificationMethods, type VerificationMethod } from "@/services/api/verification";
 
 type AuthSettings = Awaited<ReturnType<typeof getAuthSettings>>;
 type RegistrationStep = "details" | "verification";
@@ -15,6 +18,12 @@ export default function RegisterPage() {
     const [params] = useSearchParams();
     const { message } = App.useApp();
     const [settings, setSettings] = useState<AuthSettings | null>(null);
+    const [settingsFailed, setSettingsFailed] = useState(false);
+    const [settingsReloadKey, setSettingsReloadKey] = useState(0);
+    const [agreementAccepted, setAgreementAccepted] = useState(false);
+    const [agreementOpen, setAgreementOpen] = useState(false);
+    const [method, setMethod] = useState<VerificationMethod>("email");
+    const [verification, setVerification] = useState({ ...emptyVerification });
     const [step, setStep] = useState<RegistrationStep>("details");
     const [email, setEmail] = useState("");
     const [emailCode, setEmailCode] = useState("");
@@ -33,13 +42,27 @@ export default function RegisterPage() {
 
     useEffect(() => {
         let cancelled = false;
+        setSettingsFailed(false);
+        setSettings(null);
+        setAgreementAccepted(false);
         void getAuthSettings()
-            .then((value) => !cancelled && setSettings(value))
-            .catch((error) => !cancelled && message.error(error instanceof Error ? error.message : "读取注册设置失败"));
+            .then((value) => {
+                if (cancelled) return;
+                if (!value.agreementTitle?.trim()) throw new Error("注册服务协议名称未配置，请联系管理员");
+                setSettings(value);
+                setAgreementAccepted(false);
+                setMethod(value.emailRegistration ? "email" : (verificationMethods(value, "register")[0] ?? "email"));
+            })
+            .catch((error) => {
+                if (cancelled) return;
+                setSettings(null);
+                setSettingsFailed(true);
+                message.error(error instanceof Error ? error.message : "读取注册设置失败");
+            });
         return () => {
             cancelled = true;
         };
-    }, [message]);
+    }, [message, settingsReloadKey]);
 
     useEffect(() => {
         if (countdown <= 0) return;
@@ -57,12 +80,29 @@ export default function RegisterPage() {
     const firstUser = settings?.firstUser === true;
     const backendOutdated = Boolean(settings && settings.emailFirstRegistration !== true);
     const registrationClosed = settings?.registrationEnabled === false;
-    const mailUnavailable = Boolean(settings && !firstUser && settings.emailCodeRequired && !settings.emailEnabled);
-    const unavailableMessage = backendOutdated ? "注册服务仍是旧版本，请先升级或重启后端服务。" : registrationClosed ? "当前已关闭普通注册，请联系管理员创建账号。" : mailUnavailable ? "管理员尚未配置注册邮件，普通邮箱注册暂不可用。" : "";
-    const formDisabled = !settings || Boolean(unavailableMessage);
-    const detailsCooldown = !firstUser && countdown > 0 && codeEmail !== normalizedEmail;
+    const methods = settings ? verificationMethods(settings, "register") : [];
+    const mailUnavailable = Boolean(settings && !firstUser && method === "email" && !settings.emailEnabled);
+    const verificationUnavailable = Boolean(settings && !firstUser && methods.length === 0);
+    const unavailableMessage = backendOutdated
+        ? "注册服务仍是旧版本，请先升级或重启后端服务。"
+        : registrationClosed
+          ? "当前已关闭普通注册，请联系管理员创建账号。"
+          : mailUnavailable
+            ? "管理员尚未配置注册邮件，普通邮箱注册暂不可用。"
+            : verificationUnavailable
+              ? "当前没有可用的注册验证方式，请联系管理员。"
+              : "";
+    const formDisabled = !settings || Boolean(unavailableMessage) || submitting;
+    const detailsCooldown = !firstUser && method === "email" && countdown > 0 && codeEmail !== normalizedEmail;
+    const agreementTitle = (settings?.agreementTitle || "").trim().replace(/^《|》$/g, "");
+    const agreementContent = (settings?.agreementContent || "").trim();
 
     const validateDetails = () => {
+        if (!settings) return false;
+        if (!agreementAccepted) {
+            message.warning(`请先阅读并同意${agreementTitle}`);
+            return false;
+        }
         if (password !== confirmPassword) {
             message.error("两次输入的密码不一致");
             return false;
@@ -71,7 +111,7 @@ export default function RegisterPage() {
     };
 
     const sendCode = async (advance: boolean) => {
-        if (sending.current || (!advance && countdown > 0)) return;
+        if (!settings || !agreementAccepted || sending.current || (!advance && countdown > 0)) return;
         if (!normalizedEmail) {
             message.warning("请先输入邮箱");
             return;
@@ -102,11 +142,21 @@ export default function RegisterPage() {
     };
 
     const completeRegistration = async (code?: string) => {
-        if (registering.current || registerCountdown > 0) return;
+        if (formDisabled || registering.current || registerCountdown > 0 || !validateDetails()) return;
         registering.current = true;
         setSubmitting(true);
         try {
-            await register({ email: normalizedEmail, password, emailCode: code, referralCode: settings?.referralEnabled && !firstUser ? invitationCode.trim() || undefined : undefined });
+            if (!firstUser && method !== "email") {
+                if (!verification.ticket || !/^\d{6}$/.test(verification.smsCode) || (method === "sms_email" && !/^\d{6}$/.test(verification.emailCode))) {
+                    throw new Error("请获取并填写本次注册所需的验证码");
+                }
+            }
+            await register({
+                ...(firstUser || method === "email" ? { email: normalizedEmail, emailCode: code } : verification),
+                password,
+                acceptedTerms: agreementAccepted,
+                referralCode: settings?.referralEnabled && !firstUser ? invitationCode.trim() || undefined : undefined,
+            });
             const { applyUserSession } = await import("@/lib/user-session");
             await applyUserSession(await getAuthSession());
             if (!firstUser) window.sessionStorage.setItem("infinite-canvas:model-setup-guide", "1");
@@ -124,7 +174,7 @@ export default function RegisterPage() {
     const submitDetails = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         if (formDisabled || !validateDetails()) return;
-        if (firstUser) {
+        if (firstUser || method !== "email") {
             await completeRegistration();
             return;
         }
@@ -140,8 +190,27 @@ export default function RegisterPage() {
         await completeRegistration(emailCode);
     };
 
+    const agreementControl = settings ? (
+        <div className="auth-agreement-row" data-accepted={agreementAccepted ? "true" : "false"}>
+            <Checkbox checked={agreementAccepted} disabled={submitting} onChange={(event) => setAgreementAccepted(event.target.checked)}>
+                <span className="auth-agreement-label">我已阅读并同意</span>
+            </Checkbox>
+            <button type="button" className="auth-agreement-link" onClick={() => setAgreementOpen(true)}>
+                《{agreementTitle}》
+            </button>
+        </div>
+    ) : null;
+
     return (
         <>
+            {settingsFailed ? (
+                <Notice icon={<TriangleAlert className="size-3.5" />} tone="amber">
+                    读取注册设置失败，暂时无法确认验证方式和服务协议。
+                    <Button type="link" size="small" onClick={() => setSettingsReloadKey((value) => value + 1)}>
+                        重新读取
+                    </Button>
+                </Notice>
+            ) : null}
             {unavailableMessage ? (
                 <Notice icon={<TriangleAlert className="size-3.5" />} tone="amber">
                     {unavailableMessage}
@@ -150,8 +219,8 @@ export default function RegisterPage() {
                 <form onSubmit={submitVerification} className="space-y-5">
                     <div className="flex items-start justify-between gap-4">
                         <div>
-                            <p className="text-sm font-medium text-white/88">验证你的邮箱</p>
-                            <p className="mt-1 text-xs leading-5 text-white/45">验证码已发送至 {codeEmail || normalizedEmail}，10 分钟内有效。</p>
+                            <p className="auth-scene-label text-sm font-medium">验证你的邮箱</p>
+                            <p className="auth-scene-muted mt-1 text-xs leading-5">验证码已发送至 {codeEmail || normalizedEmail}，10 分钟内有效。</p>
                         </div>
                         <Button type="text" size="small" icon={<ArrowLeft className="size-3.5" />} onClick={() => setStep("details")} disabled={submitting}>
                             返回修改
@@ -161,7 +230,7 @@ export default function RegisterPage() {
                     <AuthField label="邮箱验证码">
                         <Input
                             size="large"
-                            prefix={<ShieldCheck className="size-4 text-white/35" />}
+                            prefix={<ShieldCheck className="auth-scene-icon size-4" />}
                             value={emailCode}
                             onChange={(event) => setEmailCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
                             placeholder="6 位验证码"
@@ -173,7 +242,8 @@ export default function RegisterPage() {
                         />
                     </AuthField>
 
-                    <Button type="primary" htmlType="submit" size="large" block loading={submitting} disabled={registerCountdown > 0} icon={<ArrowRight className="size-4" />} iconPlacement="end">
+                    {agreementControl}
+                    <Button type="primary" htmlType="submit" size="large" block loading={submitting} disabled={registerCountdown > 0 || !agreementAccepted} icon={<ArrowRight className="size-4" />} iconPlacement="end">
                         {registerCountdown > 0 ? `${registerCountdown} 秒后可重试` : "验证并创建账号"}
                     </Button>
                     <div className="text-center">
@@ -190,25 +260,42 @@ export default function RegisterPage() {
                         </Notice>
                     ) : null}
 
-                    <AuthField label="邮箱">
-                        <Input
-                            size="large"
-                            prefix={<Mail className="size-4 text-white/35" />}
-                            value={email}
-                            onChange={(event) => setEmail(event.target.value)}
-                            placeholder="用于登录与安全验证"
-                            type="email"
-                            autoComplete="email"
-                            autoFocus
-                            required
-                            disabled={formDisabled}
+                    {!firstUser && methods.length > 1 ? (
+                        <Segmented
+                            block
+                            aria-label="注册验证方式"
+                            value={method}
+                            disabled={formDisabled || sendingCode}
+                            options={methods.map((value) => ({ value, label: methodLabels[value] }))}
+                            onChange={(value) => {
+                                setMethod(value as VerificationMethod);
+                                setVerification({ ...emptyVerification });
+                            }}
                         />
-                    </AuthField>
+                    ) : null}
+                    {firstUser || method === "email" ? (
+                        <AuthField label="邮箱">
+                            <Input
+                                size="large"
+                                prefix={<Mail className="auth-scene-icon size-4" />}
+                                value={email}
+                                onChange={(event) => setEmail(event.target.value)}
+                                placeholder="用于登录与安全验证"
+                                type="email"
+                                autoComplete="email"
+                                autoFocus
+                                required
+                                disabled={formDisabled}
+                            />
+                        </AuthField>
+                    ) : (
+                        <VerificationFields key={method} purpose="register" method={method} value={verification} onChange={setVerification} disabled={formDisabled} />
+                    )}
 
                     <AuthField label="密码">
                         <Input.Password
                             size="large"
-                            prefix={<LockKeyhole className="size-4 text-white/35" />}
+                            prefix={<LockKeyhole className="auth-scene-icon size-4" />}
                             value={password}
                             onChange={(event) => setPassword(event.target.value)}
                             placeholder="至少 8 位"
@@ -222,7 +309,7 @@ export default function RegisterPage() {
                     <AuthField label="确认密码">
                         <Input.Password
                             size="large"
-                            prefix={<LockKeyhole className="size-4 text-white/35" />}
+                            prefix={<LockKeyhole className="auth-scene-icon size-4" />}
                             value={confirmPassword}
                             onChange={(event) => setConfirmPassword(event.target.value)}
                             placeholder="再次输入密码"
@@ -239,7 +326,7 @@ export default function RegisterPage() {
                                 <AuthField label="6 位推广码（可选）">
                                     <Input
                                         size="large"
-                                        prefix={<KeyRound className="size-4 text-white/35" />}
+                                        prefix={<KeyRound className="auth-scene-icon size-4" />}
                                         value={invitationCode}
                                         onChange={(event) => setInvitationCode(event.target.value.toUpperCase())}
                                         placeholder="请输入好友的 6 位推广码"
@@ -250,7 +337,7 @@ export default function RegisterPage() {
                                 </AuthField>
                             ) : null}
                             <AuthField label="优惠码（可选）">
-                                <Input size="large" prefix={<Gift className="size-4 text-white/35" />} value={promoCode} onChange={(event) => setPromoCode(event.target.value)} placeholder="请输入优惠码" autoComplete="off" disabled={formDisabled} />
+                                <Input size="large" prefix={<Gift className="auth-scene-icon size-4" />} value={promoCode} onChange={(event) => setPromoCode(event.target.value)} placeholder="请输入优惠码" autoComplete="off" disabled={formDisabled} />
                             </AuthField>
                             <Notice icon={<Info className="size-3.5" />} tone="blue">
                                 {settings?.referralEnabled ? "推广码仅在注册时绑定邀请关系；优惠码仍为后续功能预留。" : "优惠码为后续功能预留，当前不会提交或发放权益。"}
@@ -258,31 +345,35 @@ export default function RegisterPage() {
                         </>
                     ) : null}
 
+                    {agreementControl}
                     <Button
                         type="primary"
                         htmlType="submit"
                         size="large"
                         block
-                        loading={firstUser ? submitting : sendingCode}
-                        disabled={formDisabled || registerCountdown > 0 || detailsCooldown}
+                        loading={firstUser || method !== "email" ? submitting : sendingCode}
+                        disabled={formDisabled || sendingCode || registerCountdown > 0 || detailsCooldown || !agreementAccepted}
                         icon={<ArrowRight className="size-4" />}
                         iconPlacement="end"
                     >
-                        {registerCountdown > 0 ? `${registerCountdown} 秒后可重试` : detailsCooldown ? `${countdown} 秒后可重试` : firstUser ? "创建管理员账号" : "继续"}
+                        {registerCountdown > 0 ? `${registerCountdown} 秒后可重试` : detailsCooldown ? `${countdown} 秒后可重试` : firstUser ? "创建管理员账号" : method === "email" ? "继续" : "验证并创建账号"}
                     </Button>
                 </form>
             )}
 
-            {settings?.linuxdoEnabled ? (
+            {settings?.linuxdoEnabled && !settings.smsAndEmailRegistration ? (
                 <>
-                    <Divider plain className="!border-white/10 !text-white/30">
+                    <Divider plain className="auth-scene-divider">
                         或
                     </Divider>
-                    <Button size="large" block icon={<LinuxDOIcon />} href={linuxDOLoginURL(next)}>
+                    <Button size="large" block icon={<LinuxDOIcon />} disabled={!agreementAccepted || submitting} href={agreementAccepted ? linuxDOLoginURL(next, true) : undefined}>
                         使用 Linux.do 登录
                     </Button>
                 </>
             ) : null}
+            <AppModal title={agreementTitle} open={agreementOpen} onCancel={() => setAgreementOpen(false)} footer={null} className="auth-agreement-modal">
+                {agreementContent ? <div className="whitespace-pre-wrap break-words text-sm leading-7">{agreementContent}</div> : <p className="text-sm text-[var(--user-ink-muted)]">服务协议内容待补充，请联系管理员在后台“登录与注册”中完善。</p>}
+            </AppModal>
         </>
     );
 }
@@ -290,7 +381,7 @@ export default function RegisterPage() {
 function AuthField({ label, children }: { label: string; children: ReactNode }) {
     return (
         <label className="block space-y-2">
-            <span className="text-xs font-medium text-white/62">{label}</span>
+            <span className="auth-scene-label text-xs font-medium">{label}</span>
             {children}
         </label>
     );
@@ -298,7 +389,7 @@ function AuthField({ label, children }: { label: string; children: ReactNode }) 
 
 function Notice({ icon, tone, children }: { icon: ReactNode; tone: "blue" | "amber"; children: ReactNode }) {
     return (
-        <div className={`flex items-start gap-2 rounded-lg border px-3 py-2.5 text-xs leading-5 ${tone === "blue" ? "border-blue-300/15 bg-blue-300/[0.06] text-blue-100/78" : "border-amber-300/15 bg-amber-300/[0.06] text-amber-100/78"}`}>
+        <div data-tone={tone} className="auth-scene-notice flex items-start gap-2 rounded-lg border px-3 py-2.5 text-xs leading-5">
             <span className="mt-0.5 shrink-0">{icon}</span>
             {children}
         </div>

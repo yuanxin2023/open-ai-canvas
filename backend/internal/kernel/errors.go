@@ -10,6 +10,7 @@ type AppError struct {
 	Retryable         bool
 	RetryAfterSeconds int
 	Cause             error
+	Details           map[string]any
 }
 
 func (e *AppError) Error() string {

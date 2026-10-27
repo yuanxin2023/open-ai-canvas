@@ -378,6 +378,9 @@ func (r *Repository) PurgeUserData(userID string, expectedResourceIDs []string, 
 		if err := tx.Where("user_id = ?", userID).Delete(&model.ApiCallLog{}).Error; err != nil {
 			return err
 		}
+		if err := tx.Where("user_id = ?", userID).Delete(&model.WorkbenchSubmission{}).Error; err != nil {
+			return err
+		}
 		if err := tx.Where("user_id = ?", userID).Delete(&model.Task{}).Error; err != nil {
 			return err
 		}
@@ -420,6 +423,8 @@ func (r *Repository) PurgeUserData(userID string, expectedResourceIDs []string, 
 			{&model.AgentLesson{}, "author_user_id = ?"}, {&model.AgentMemorySetting{}, "user_id = ?"},
 			{&model.CreationSubmission{}, "user_id = ?"}, {&model.CreationRun{}, "user_id = ?"},
 			{&model.UserPromptCustomization{}, "user_id = ?"}, {&model.UserPrompt{}, "user_id = ?"},
+			{&model.UserInspirationLibrary{}, "user_id = ?"},
+			{&model.FeedbackResourceReference{}, "user_id = ?"}, {&model.UserFeedback{}, "user_id = ?"},
 			{&model.UserAnnouncementRead{}, "user_id = ?"}, {&model.UserPluginState{}, "user_id = ?"},
 			{&model.UserDailyActivity{}, "user_id = ?"}, {&model.UserDailyUploadUsage{}, "user_id = ?"},
 			{&model.UserResourceQuota{}, "user_id = ?"},
@@ -427,6 +432,8 @@ func (r *Repository) PurgeUserData(userID string, expectedResourceIDs []string, 
 			{&model.AnnouncementImageDraft{}, "user_id = ?"},
 			{&model.InspirationCoverDraft{}, "user_id = ?"}, {&model.PaymentPromotionImageDraft{}, "user_id = ?"}, {&model.UserIdentity{}, "user_id = ?"},
 			{&model.UserLoginEvent{}, "user_id = ?"},
+			{&model.LoginLog{}, "user_id = ?"},
+			{&model.UserAvatar{}, "user_id = ?"},
 			{&model.UserUsernameChange{}, "user_id = ?"},
 			{&model.AuthSession{}, "user_id = ?"},
 			{&model.AdminPermissionGrant{}, "user_id = ?"},

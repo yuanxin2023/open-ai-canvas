@@ -7,7 +7,7 @@
 <p align="center">让一个故事，从文字走向银幕</p>
 
 <p align="center">
-  <a href="https://github.com/ddcat-ai/open-ai-canvas">GitHub</a> ·
+  <a href="https://github.com/yuanxin2023/open-ai-canvas">GitHub</a> ·
   <a href="docs/content/docs/overview/features.mdx">功能</a> ·
   <a href="docs/content/docs/overview/quick-start.mdx">文档</a> ·
   <a href="SECURITY.md">安全策略</a>
@@ -17,9 +17,52 @@ AI 创作工作台是一个开源的 AI 影视与短剧创作工作台：用自�
 
 > 项目仍在快速开发，数据结构和外部接口可能调整。默认适合个人、本地或可信环境部署；未经安全配置，不要直接作为公网多人服务使用。
 
-在线演示：[https://ddcat.pronhubcn.com](https://ddcat.pronhubcn.com)
+在线演示：[https://yingce.tv](https://yingce.tv)
 
 账号/密码：test/test123456
+
+
+## 赞助商
+
+感谢以下赞助商对影策项目的支持：
+
+| LOGO | 类型 | 赞助商名称 | 说明 | 网站 |
+| --- | --- | --- | --- | --- |
+| <img src="assets/artdance.png" alt="ArtDance" width="160"> | 商业 | ArtDance | 本项目 Seedance 模型的天使投资人。 | [artbox.top](https://artbox.top) |
+| <img src="assets/soonstudio.jpg" alt="soonstudio" width="160"> | 商业 | soonstudio | API 一站式网站，自研系统，非 New API；支持手机、短信接码，覆盖国内外几乎所有模型 API 接口，并发高、稳定性强。源于开源，步入 AI 领域，感谢开源。 | [soonstudio.ai](https://soonstudio.ai/) |
+| <img src="assets/fluxion.jpg" alt="Fluxion AI" width="160"> | 商业 | Fluxion AI | 面向个人开发者、技术团队与企业，通过统一 API 接入并管理全球主流 AI 模型，根据不同模型与线路，API 调用成本较官方或基准价格可降低 40%—98%。 | [注册送 $3.88 试用福利](https://fluxionai.space/register?source=github&campaign=yingce&promo=yingce) |
+| <img src="assets/sponsor1.svg" alt="快乐机艺术小组" width="160"> | 团队 | 快乐机艺术小组 | 一支跨学科的艺术创作团队，持续探索数字与艺术的全新表达形式。 | 暂无 |
+| <img src="assets/metaso.png" alt="秘塔" width="160"> | 企业 | 秘塔 | 提供 MiniMax H3 视频生成 API，支持原生 2K、音画同步和 OpenAI 兼容协议。 | [metaso.cn](https://metaso.cn/minimax-h3/?s=dd) |
+| <img src="assets/fruivision.png" alt="浮瑞万相AI" width="160"> | 企业 | 浮瑞万相AI | 一家专注于AI视听的AI Native公司 | 暂无 |
+| <img src="assets/xmzm.png" alt="喜马抓马" width="160"> | 团队 | 喜马抓马 | 中国AI视听先锋厂牌/AI 视听全链路综合服务平台 | [himadrama.com](https://himadrama.com) |
+| <img src="assets/yuyutech.jpg" alt="羽宇科技" width="160"> | 企业 | 羽宇科技 | 一站式AI应用平台。提供模型算力入口、AI短剧视频制作（Studio）、企业数字员工（Agent）及内容出海（OPC）全栈解决方案。 | 暂无 |
+| <img src="assets/panda.jpg" alt="panda AI" width="160"> | 团队 | panda AI | API接口平台，面向个人开发者、技术团队与企业，稳定提供GPT、Gemini、grok等图片视频模型 | [api.pandatk.com](https://api.pandatk.com) |
+
+### 3D 预演台赞助用户
+
+感谢以下用户赞助 3D 预演台的开发：
+
+<p>
+  <a href="https://github.com/TripsCoder"><img src="https://github.com/TripsCoder.png?size=64" width="48" height="48" alt="TripsCoder"></a>
+  <a href="https://github.com/sugtex"><img src="https://github.com/sugtex.png?size=64" width="48" height="48" alt="sugtex"></a>
+  <a href="https://github.com/Leyi813"><img src="https://github.com/Leyi813.png?size=64" width="48" height="48" alt="Leyi813"></a>
+  <a href="https://github.com/daoge05178"><img src="https://github.com/daoge05178.png?size=64" width="48" height="48" alt="daoge05178"></a>
+  <a href="https://github.com/AetherNo2332"><img src="https://github.com/AetherNo2332.png?size=64" width="48" height="48" alt="AetherNo2332"></a>
+</p>
+
+GitHub 用户：[@TripsCoder](https://github.com/TripsCoder) · [@sugtex](https://github.com/sugtex) · [@Leyi813](https://github.com/Leyi813) · [@daoge05178](https://github.com/daoge05178) · [@AetherNo2332](https://github.com/AetherNo2332)
+
+| 赞助用户 | 联系方式 |
+| --- | --- |
+| vv | 2838033228@qq.com |
+| 克里斯 | [artbox.top](https://artbox.top) |
+| 宇熙 | 53121904@qq.com |
+| 落羽 | luoyyv66@gmail.com |
+| 今夕何在 | 809321478@qq.com |
+| Alpha-M·Break | 15739564793@qq.com |
+| 不吃鸭梨 | elio02519@gmail.com |
+| 九月 | 563641352@qq.com |
+| A | jiaboxuan1205@gmail.com |
 
 ## 核心能力
 
@@ -29,7 +72,7 @@ AI 创作工作台是一个开源的 AI 影视与短剧创作工作台：用自�
 - **任务与素材管理**：异步队列、进度与日志、取消/重试、素材库、资源引用校验和登录后的跨设备同步。
 - **时间线剪辑**：片段编排、拆分、修剪、字幕转写和服务端成片导出，并支持插件化编辑面板。
 - **云端 Agent**：支持持久化对话、画布摘要和流式事件回放；当前为只读阶段，真实环境能力以文档和验收清单为准。
-- **Agent 技能生态**：内置技能覆盖生产流程；社区技能库 [judian-skills](https://github.com/itsWyatt-K/judian-skills) 补充生成前方法论（短剧节奏校准、提示词组装与质检、图/视频反推、UGC 与广告链路、MiniMax H3 官方规范、FLUX.2 资产图与视觉决策转换层，共 72 个，MIT/Apache-2.0/CC-BY-4.0 许可蒸馏并逐卡署名）。安装：技能页 → 安装技能 → GitHub 标签 → 仓库地址填 `https://github.com/itsWyatt-K/judian-skills`，子目录填 `skills/drama/onlyshot-redfruit-7beats` 这类技能路径。
+- **Agent 技能生态**：内置技能覆盖生产流程；社区技能库 [judian-skills](https://github.com/itsWyatt-K/judian-skills) 提供 34 个场景域包索引，完整卡片通过 GitHub 安装后按需读取。安装：技能页 → 安装技能 → GitHub 标签 → 仓库地址填 `https://github.com/itsWyatt-K/judian-skills`，子目录填 `skills/drama/story-structure-engine` 这类域包路径。
 - **管理与渠道**：系统渠道、逻辑模型、用量/积分、功能开关、对象存储、响应拦截和管理后台。
 
 完整功能以[功能清单](docs/content/docs/overview/features.mdx)为准。
@@ -45,7 +88,7 @@ AI 创作工作台是一个开源的 AI 影视与短剧创作工作台：用自�
 ### 宿主机启动
 
 ```bash
-git clone https://github.com/ddcat-ai/open-ai-canvas.git
+git clone https://github.com/yuanxin2023/open-ai-canvas.git
 cd open-ai-canvas
 
 # 使用 Git 忽略的目录保存本地开发数据和缓存
@@ -75,6 +118,8 @@ Windows PowerShell 用户可在仓库根目录执行：
 
 ### Docker 开发与本地构建
 
+以下命令用于本地开发或试运行。部署服务器并使用后台在线更新，请使用下文的官方 Release 镜像部署。
+
 源码热更新：
 
 ```bash
@@ -88,7 +133,7 @@ LOCAL_UID=$(id -u) LOCAL_GID=$(id -g) \
 docker compose -f docker-compose.local.yml up -d --build
 ```
 
-默认前端端口为 `3000`、后端端口为 `8080`；端口冲突时可通过 `CANVAS_WEB_HOST_PORT` 和 `CANVAS_BACKEND_HOST_PORT` 覆盖。
+热更新开发默认前端端口为 `3000`、后端端口为 `8080`；端口冲突时可通过 `CANVAS_WEB_HOST_PORT` 和 `CANVAS_BACKEND_HOST_PORT` 覆盖。本地构建编排只暴露 web 的 `3000`，后端留在容器网络内，不安装 Host Updater。
 
 更多本地开发说明（包括时间线字幕转写）见[本地开发文档](docs/content/docs/backend/local-development.mdx)。
 
@@ -112,33 +157,39 @@ docker compose -f docker-compose.local.yml up -d --build
 
 ## 服务器部署
 
-### 源码构建（推荐）
+自有版本由同一源码构建 Web、Backend、迁移程序与独立 Agent；在线更新仅使用自有完整正式 Release。说明及验收边界见[自有构建与独立 Agent](docs/content/docs/backend/self-hosted-deployment.mdx)。
 
-适用于 Linux 云服务器。脚本会安装 Docker、拉取源码、生成受保护的 `.env`，并启动 PostgreSQL、Redis、后端和网页：
+### 自有正式 Release 镜像（后台手动确认更新）
+
+适用于使用 systemd 的 Linux 服务器。先从 [GitHub Releases](https://github.com/yuanxin2023/open-ai-canvas/releases) 选择包含镜像、Host Updater 二进制和 `SHA256SUMS` 的已发布版本，将下方 `vX.Y.Z` 替换为该版本：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ddcat-ai/open-ai-canvas/main/scripts/install-server.sh | sudo bash
+CANVAS_RELEASE=vX.Y.Z
+curl -fsSL "https://raw.githubusercontent.com/yuanxin2023/open-ai-canvas/${CANVAS_RELEASE}/scripts/install-server-image.sh" \
+  | sudo env CANVAS_IMAGE_TAG="${CANVAS_RELEASE}" REPOSITORY_REF="${CANVAS_RELEASE}" bash
 ```
 
-默认访问 `http://服务器IP:3000`。更新或排查：
+脚本使用 `docker-compose.deploy.yml`，启动 PostgreSQL、Redis、独立 `yingce-agent`、backend 和 web，由一次性 `migrate` 服务迁移数据库，并安装宿主机 Host Updater。backend、web、Agent 镜像会固定为对应 GHCR digest。默认访问 `http://服务器IP:3000`，安装完成后在“系统配置 → 系统更新”检查后续版本。
+
+查看状态和日志：
 
 ```bash
 cd /opt/open-ai-canvas
-sudo docker compose --env-file .env \
-  -f docker-compose.deploy.yml -f docker-compose.build.yml ps
-sudo docker compose --env-file .env \
-  -f docker-compose.deploy.yml -f docker-compose.build.yml logs -f --tail=200
+sudo docker compose --env-file .env -f docker-compose.deploy.yml ps
+sudo docker compose --env-file .env -f docker-compose.deploy.yml logs -f --tail=200
 ```
 
-### 使用 GHCR 镜像
+### 源码构建与已有部署
 
-不需要源码时，可使用镜像部署脚本：
+需要运行自行修改的源码时，可以使用源码安装脚本：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ddcat-ai/open-ai-canvas/main/scripts/install-server-image.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/yuanxin2023/open-ai-canvas/main/scripts/install-server.sh | sudo bash
 ```
 
-生产环境请在 `/opt/open-ai-canvas/.env` 中将 `CANVAS_IMAGE_TAG` 固定为具体 Release，不要使用 `latest`。更新流程、数据库迁移、备份和回退说明见[系统更新文档](docs/content/docs/backend/system-update.mdx)。
+脚本使用 PostgreSQL、Redis、独立 Agent 和源码构建叠加层，但不安装 Host Updater；该部署不属于后台在线更新管理范围，需自行构建、备份和升级。根目录的 `docker-compose.yml`、`docker-compose.local.yml` 和自行编写的两容器 SQLite 编排用于本地试运行，不作为默认服务器部署方案。
+
+已有 SQLite 或自定义 Compose 部署，不能只替换 Compose 文件或补装更新器就获得在线更新；应先核对原数据卷、完成备份和数据迁移。方案选择见 [Docker 部署](docs/content/docs/overview/docker.mdx)，更新约束、备份和回退见[系统更新文档](docs/content/docs/backend/system-update.mdx)。
 
 ## 安全边界
 
@@ -163,7 +214,7 @@ curl -fsSL https://raw.githubusercontent.com/ddcat-ai/open-ai-canvas/main/script
 - [画布操作手册](docs/content/docs/canvas/canvas-node-manual.mdx)
 - [插件系统](docs/content/docs/plugins/plugin-system.mdx)
 - [待办与待测试](docs/content/docs/progress/todo.mdx) · [待测试清单](docs/content/docs/progress/pending-test.mdx)
-- [更新日志](CHANGELOG.md) · [贡献指南](CONTRIBUTING.md) · [上游声明](NOTICE)
+- [更新日志](CHANGELOG.md) · [贡献指南](CONTRIBUTING.md)
 
 ### 验证命令
 
@@ -180,11 +231,13 @@ cd backend && go test ./...
 cd docs && bun run types:check
 ```
 
-## 交流与反馈
+## 许可证
 
 问题反馈、技术讨论和产品升级建议请通过仓库的 [Issues](https://github.com/ddcat-ai/open-ai-canvas/issues) 提交。
 
 ## 许可证和上游
+
+本轮候选固定整合 [ddcat-ai/open-ai-canvas v1.6.9.2](https://github.com/ddcat-ai/open-ai-canvas/releases/tag/v1.6.9.2)，保留原项目及第三方许可归属。
 
 本项目采用 [MIT](LICENSE) 协议。AI 创作工作台基于 [basketikun/infinite-canvas](https://github.com/basketikun/infinite-canvas) 的早期版本进行二次开发，上游作者和贡献者保留其对应代码的权利与署名。
 
@@ -379,7 +432,7 @@ cd docs && bun run types:check
 </td>
 <td width="50%" valign="top">
   <img src="assets/user-bensharp.jpg" alt="bensharp" width="56" align="left">
-  <strong>bensharp<br><sub>VV：jiahezuiai</sub></strong><br>
+  <strong>nancy<br><sub>VV：jiahezuiai</sub></strong><br>
   <a href="mailto:275008147@qq.com">275008147@qq.com</a><br>
   <em>在哪跌倒，就在哪睡一觉</em>
   <br clear="left">
@@ -413,6 +466,24 @@ cd docs && bun run types:check
   <img src="assets/user-chunqiu.jpg" alt="春秋" width="56" align="left">
   <strong>春秋<br><sub>Agent记忆核心贡献者 · VV：A13068788886</sub></strong><br>
   <a href="mailto:558328@qq.com">558328@qq.com</a><br>
+  <br clear="left">
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+  <img src="assets/user-song.jpg" alt="亿媒网老宋" width="56" align="left">
+  <strong>亿媒网老宋</strong><br>
+  <a href="mailto:61731514@qq.com">61731514@qq.com</a><br>
+  <a href="https://em8.top">亿媒网 em8.top</a><br>
+  <em>全国10W+媒体、自媒体，助力企业品牌传播</em>
+  <br clear="left">
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+  <img src="assets/user-Wyatt_K.png" alt="Wyatt_K" width="56" align="left">
+  <strong>Wyatt_K</strong><br>
+  <em>千里之行，始于足下。</em>
   <br clear="left">
 </td>
 </tr>

@@ -17,6 +17,7 @@ type (
 	LoginEnvironment           = auth.LoginEnvironment
 	UpdateProfileRequest       = auth.UpdateProfileRequest
 	ChangePasswordRequest      = auth.ChangePasswordRequest
+	LoginContext               = auth.LoginContext
 	PublicAuthSettings         = auth.PublicAuthSettings
 	AuthSessionResult          = auth.AuthSessionResult
 	AuthUser                   = auth.AuthUser
@@ -128,7 +129,9 @@ func (s *Service) authDomain() *auth.Service {
 	if s.auth != nil {
 		return s.auth
 	}
-	return auth.New(s.repo, authHost{svc: s}, nil)
+	domain := auth.New(s.repo, authHost{svc: s}, nil)
+	domain.SetSMSDelivery(s.smsDomain())
+	return domain
 }
 
 func (s *Service) PublicAuthSettings() (*PublicAuthSettings, error) {
@@ -151,8 +154,12 @@ func (s *Service) LoginWithEnvironment(req LoginRequest, environment LoginEnviro
 	return s.authDomain().LoginWithEnvironment(req, environment)
 }
 
-func (s *Service) Logout(cookieValue string) error {
-	return s.authDomain().Logout(cookieValue)
+func (s *Service) LoginRateLimitSubject(account string) (string, error) {
+	return s.authDomain().LoginRateLimitSubject(account)
+}
+
+func (s *Service) Logout(cookieValue string, contexts ...LoginContext) error {
+	return s.authDomain().Logout(cookieValue, contexts...)
 }
 
 func (s *Service) CurrentUser(cookieValue string) (*model.User, error) {
@@ -223,12 +230,12 @@ func (s *Service) LinuxDOEnabled() bool {
 	return s.authDomain().LinuxDOEnabled()
 }
 
-func (s *Service) BeginLinuxDOLogin(nextPath string) (string, error) {
-	return s.authDomain().BeginLinuxDOLogin(nextPath)
+func (s *Service) BeginLinuxDOLogin(nextPath string, acceptedTerms bool) (string, error) {
+	return s.authDomain().BeginLinuxDOLogin(nextPath, acceptedTerms)
 }
 
-func (s *Service) CompleteLinuxDOLogin(stateValue string, code string) (*LinuxDOCallbackResult, error) {
-	return s.authDomain().CompleteLinuxDOLogin(stateValue, code)
+func (s *Service) CompleteLinuxDOLogin(stateValue string, code string, cookieValue string, contexts ...LoginContext) (*LinuxDOCallbackResult, error) {
+	return s.authDomain().CompleteLinuxDOLogin(stateValue, code, cookieValue, contexts...)
 }
 
 func (s *Service) CompleteLinuxDOLoginWithEnvironment(stateValue string, code string, environment LoginEnvironment) (*LinuxDOCallbackResult, error) {

@@ -10,6 +10,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"infinite-canvas/backend/internal/assets"
 	"infinite-canvas/backend/internal/model"
 	"infinite-canvas/backend/internal/repository"
 
@@ -269,6 +270,39 @@ func (s *Service) OpenAnnouncementImage(actor *model.User, announcementID string
 	return s.openResourceRange(resource.UserID, resource, rangeHeader)
 }
 
+func (s *Service) PrepareAnnouncementImageDelivery(actor *model.User, announcementID string, options ResourceAccessOptions, rangeHeader string) (*ResourceDelivery, error) {
+	if actor == nil {
+		return nil, Unauthorized("请先登录")
+	}
+	announcement, err := s.repo.Announcement(strings.TrimSpace(announcementID))
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, NotFound("公告不存在")
+		}
+		return nil, err
+	}
+	if actor.Role != model.UserRoleAdmin && announcement.Status != model.AnnouncementStatusActive {
+		return nil, Forbidden("公告不可访问")
+	}
+	if announcement.ImageResourceID == "" {
+		return nil, NotFound("公告配图不存在")
+	}
+	resource, err := s.repo.Resource(announcement.ImageResourceID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, NotFound("公告配图不存在")
+		}
+		return nil, err
+	}
+	if resource.Kind != "image" || resource.Status != model.ResourceStatusReady {
+		return nil, BadAuthRequest("公告配图资源不可用")
+	}
+	if options.Purpose == "" {
+		options.Purpose = assets.PurposeDisplay
+	}
+	return s.prepareResourceDelivery(resource.UserID, resource, options, rangeHeader)
+}
+
 func (s *Service) cleanupStaleAnnouncementImageDrafts() {
 	for {
 		drafts, err := s.repo.StaleAnnouncementImageDrafts(time.Now().Add(-announcementImageDraftTTL), 50)
@@ -486,6 +520,7 @@ type CreateBannerAnnouncementRequest struct {
 	NoticeType string     `json:"noticeType"`
 	Link       string     `json:"link"`
 	Status     string     `json:"status"` // "active" | "disabled"
+	SortOrder  int        `json:"sortOrder"`
 	StartsAt   *time.Time `json:"startsAt"`
 	EndsAt     *time.Time `json:"endsAt"`
 }
@@ -729,6 +764,7 @@ func (s *Service) CreateBannerAnnouncement(actor *model.User, req CreateBannerAn
 		NoticeType: noticeType,
 		Link:       link,
 		Status:     status,
+		SortOrder:  req.SortOrder,
 		StartsAt:   req.StartsAt,
 		EndsAt:     req.EndsAt,
 		CreatedBy:  actor.ID,
@@ -776,6 +812,7 @@ func (s *Service) UpdateBannerAnnouncement(actor *model.User, id string, req Upd
 	banner.NoticeType = noticeType
 	banner.Link = link
 	banner.Status = status
+	banner.SortOrder = req.SortOrder
 	banner.StartsAt = req.StartsAt
 	banner.EndsAt = req.EndsAt
 	banner.UpdatedAt = time.Now()

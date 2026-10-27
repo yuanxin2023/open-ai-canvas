@@ -55,6 +55,15 @@ func (s *Service) ListUserPrompts(userID, keyword string, mode model.Inspiration
 }
 
 func (s *Service) CreateUserPrompt(userID string, req UserPromptRequest) (*model.UserPrompt, error) {
+	if s.libraryState == nil {
+		var row *model.UserPrompt
+		_, err := s.withInspirationTransaction(userID, nil, func(tx *Service, _ *InspirationLibraryData) (bool, error) {
+			var err error
+			row, err = tx.CreateUserPrompt(userID, req)
+			return true, err
+		})
+		return row, err
+	}
 	count, err := s.repo.UserPromptCount(userID)
 	if err != nil {
 		return nil, err
@@ -79,6 +88,15 @@ func (s *Service) CreateUserPrompt(userID string, req UserPromptRequest) (*model
 }
 
 func (s *Service) UpdateUserPrompt(userID, id string, req UserPromptRequest) (*model.UserPrompt, error) {
+	if s.libraryState == nil {
+		var row *model.UserPrompt
+		_, err := s.withInspirationTransaction(userID, nil, func(tx *Service, _ *InspirationLibraryData) (bool, error) {
+			var err error
+			row, err = tx.UpdateUserPrompt(userID, id, req)
+			return true, err
+		})
+		return row, err
+	}
 	row, err := s.repo.UserPromptForUser(userID, strings.TrimSpace(id))
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -89,6 +107,11 @@ func (s *Service) UpdateUserPrompt(userID, id string, req UserPromptRequest) (*m
 	req, tagsJSON, err := s.normalizeUserPromptRequest(userID, req)
 	if err != nil {
 		return nil, err
+	}
+	if row.Prompt != req.Prompt {
+		metadata := s.libraryState.Metadata[row.ID]
+		metadata.PromptZhNeedsReview = metadata.PromptZh != ""
+		s.libraryState.Metadata[row.ID] = metadata
 	}
 	row.Title, row.Description, row.Mode, row.Prompt = req.Title, req.Description, req.Mode, req.Prompt
 	row.Tags, row.TagsJSON, row.Source = req.Tags, tagsJSON, req.Source
@@ -103,6 +126,12 @@ func (s *Service) UpdateUserPrompt(userID, id string, req UserPromptRequest) (*m
 }
 
 func (s *Service) DeleteUserPrompt(userID, id string) error {
+	if s.libraryState == nil {
+		_, err := s.withInspirationTransaction(userID, nil, func(tx *Service, _ *InspirationLibraryData) (bool, error) {
+			return true, tx.DeleteUserPrompt(userID, id)
+		})
+		return err
+	}
 	deleted, err := s.repo.DeleteUserPrompt(userID, strings.TrimSpace(id))
 	if err != nil {
 		return err
@@ -110,6 +139,7 @@ func (s *Service) DeleteUserPrompt(userID, id string) error {
 	if !deleted {
 		return kernel.NotFound("提示词不存在")
 	}
+	removeInspirationPromptLinks(s.libraryState, strings.TrimSpace(id))
 	return nil
 }
 
@@ -149,8 +179,8 @@ func (s *Service) normalizeUserPromptRequest(userID string, req UserPromptReques
 			return req, "", kernel.BadAuthRequest("封面地址不能超过 1000 个字符")
 		}
 		parsed, err := url.Parse(req.CoverURL)
-		if err != nil || parsed.Scheme != "https" || parsed.Host == "" {
-			return req, "", kernel.BadAuthRequest("封面外链必须是有效的 HTTPS 地址")
+		if err != nil || !validBuiltinInspirationCover(req.CoverURL) && (parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil) {
+			return req, "", kernel.BadAuthRequest("封面须使用有效的 HTTPS 地址或内置灵感图片")
 		}
 	}
 	seen := map[string]bool{}

@@ -6,13 +6,14 @@ import { latchCanvasConnectionApproach, type CanvasConnectionApproach } from "@/
 import type { PendingConnectionCreate } from "@/components/canvas/canvas-workspace-overlays";
 import { getNodeSpec } from "@/constant/canvas";
 import { batchSourceRestriction, buildBatchConnectionCreateRequest, hasBatchConnectionCandidate, planBatchConnections, type CanvasBatchConnectionPreview } from "@/lib/canvas/canvas-batch-connection";
-import { batchReferenceHandleAtY } from "@/lib/canvas/canvas-batch-table";
+import { batchCellConnectionError, batchCellHandle, parseBatchCellHandle, type BatchScroll } from "@/lib/canvas/canvas-batch-references";
 import { connectedNodeCenterFromEdgeDrop } from "@/lib/canvas/canvas-connected-node-placement";
-import { canvasConnectionError } from "@/lib/canvas/canvas-connection-policy";
-import { attachNodeToStoryboardRow, createCanvasNode, getConnectionTargetAnchor, isHiddenBatchChild, normalizeConnection, storyboardHandleAtY, storyboardPromptTemplateMetadata, storyboardRowFromHandle } from "@/lib/canvas/canvas-project-domain";
+import { canvasConnectionError, connectionInputSummary } from "@/lib/canvas/canvas-connection-policy";
+import { resolveCanvasConnectionTarget, type CanvasConnectionDropTarget as ConnectionDropTarget } from "@/lib/canvas/canvas-connection-hit";
+import { audioModelForConnectionInput } from "@/lib/model-selection";
+import { attachNodeToStoryboardRow, createCanvasNode, normalizeConnection, storyboardPromptTemplateMetadata, storyboardRowFromHandle } from "@/lib/canvas/canvas-project-domain";
 import { createCanvasDrawingFromImage } from "@/lib/canvas/canvas-drawing-storage";
 import { isDrawingEngineAvailable, type CanvasDrawingEngine } from "@/lib/canvas/canvas-drawing-engine";
-import { isFrameNode, isNodeHiddenByCollapsedFrame } from "@/lib/canvas/canvas-frame";
 import { normalizeRunningHubCapability, type AiConfig } from "@/stores/use-config-store";
 import { useUserStore } from "@/stores/use-user-store";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type CanvasNodeMetadata, type ConnectionHandle, type ContextMenuState, type Position, type ViewportTransform } from "@/types/canvas";
@@ -27,6 +28,7 @@ type UseCanvasConnectionControllerOptions = {
     connectionsRef: { current: CanvasConnection[] };
     viewportRef: { current: ViewportTransform };
     scriptScrollTopById: Record<string, number>;
+    batchScrollById?: Record<string, BatchScroll>;
     screenToCanvas: (clientX: number, clientY: number) => Position;
     setNodes: Dispatch<SetStateAction<CanvasNodeData[]>>;
     setConnections: Dispatch<SetStateAction<CanvasConnection[]>>;
@@ -36,6 +38,7 @@ type UseCanvasConnectionControllerOptions = {
     setDialogNodeId: Dispatch<SetStateAction<string | null>>;
     setDrawingNodeId: Dispatch<SetStateAction<string | null>>;
     onReplaceReference?: (targetNodeId: string, oldReference: { id: string; nodeId?: string; label?: string; title?: string }, sourceNodeId: string) => void;
+    onBatchCellConnect?: (tableId: string, rowId: string, columnId: string, sourceId: string) => void;
 };
 
 export type ConnectionReplaceHover = {
@@ -43,13 +46,6 @@ export type ConnectionReplaceHover = {
     referenceLabel: string;
     clientX: number;
     clientY: number;
-};
-
-type ConnectionDropTarget = {
-    nodeId: string | null;
-    handleId?: string;
-    anchorRatio?: number;
-    isNearNode: boolean;
 };
 
 type BatchConnectionDropTarget = ConnectionDropTarget;
@@ -76,6 +72,7 @@ export function useCanvasConnectionController({
     connectionsRef,
     viewportRef,
     scriptScrollTopById,
+    batchScrollById,
     screenToCanvas,
     setNodes,
     setConnections,
@@ -85,6 +82,7 @@ export function useCanvasConnectionController({
     setDialogNodeId,
     setDrawingNodeId,
     onReplaceReference,
+    onBatchCellConnect,
 }: UseCanvasConnectionControllerOptions) {
     const { message } = App.useApp();
     const tldrawLicenseKey = useUserStore((state) => state.drawingEngine.tldrawLicenseKey);
@@ -92,7 +90,6 @@ export function useCanvasConnectionController({
     const [connectingParams, setConnectingParams] = useState<ConnectionHandle | null>(null);
     const [connectionTargetNodeId, setConnectionTargetNodeId] = useState<string | null>(null);
     const [connectionApproach, setConnectionApproach] = useState<CanvasConnectionApproach>(null);
-    const [connectionTargetAnchorRatio, setConnectionTargetAnchorRatio] = useState<number | undefined>();
     const [connectionReplaceHover, setConnectionReplaceHover] = useState<ConnectionReplaceHover | null>(null);
     const [pendingConnectionCreate, setPendingConnectionCreate] = useState<PendingConnectionCreate | null>(null);
     const [batchConnectionPreview, setBatchConnectionPreview] = useState<CanvasBatchConnectionPreview | null>(null);
@@ -155,7 +152,6 @@ export function useCanvasConnectionController({
             connectingPointerIdRef.current = null;
             connectingPointerStartRef.current = null;
             setConnectionTargetNodeId(null);
-            setConnectionTargetAnchorRatio(undefined);
         }
     }, [updateConnectionReplaceHover]);
 
@@ -185,6 +181,13 @@ export function useCanvasConnectionController({
 
     const commitBatchConnection = useCallback((sourceNodeIds: string[], targetNodeId: string, targetHandleId?: string, targetAnchorRatio?: number) => {
         const plan = planBatchConnections({ sourceNodeIds, targetNodeId, targetHandleId, targetAnchorRatio, nodes: nodesRef.current, connections: connectionsRef.current, config });
+        const cell = parseBatchCellHandle(targetHandleId);
+        if (cell) {
+            const error = sourceNodeIds.length !== 1 ? "每个参考格只能连接一张图片" : batchCellConnectionError(nodesRef.current, sourceNodeIds[0], targetNodeId, targetHandleId);
+            if (error) message.warning(error);
+            else onBatchCellConnect?.(targetNodeId, cell.rowId, cell.columnId, sourceNodeIds[0]);
+            return plan;
+        }
         if (!plan.connections.length) {
             const reason = plan.skipped[0]?.reason || "没有可建立的连接";
             message.warning(reason);
@@ -199,7 +202,7 @@ export function useCanvasConnectionController({
         if (skippedCount) message.warning(`已连接 ${plan.connected.length} 个节点${suffix}：${plan.skipped[0].reason}`);
         else message.success(`已连接 ${plan.connected.length} 个节点${suffix}`);
         return plan;
-    }, [config, connectionsRef, message, nodesRef, setConnections, setContextMenu, setNodes]);
+    }, [config, connectionsRef, message, nodesRef, onBatchCellConnect, setConnections, setContextMenu, setNodes]);
 
     const connectNodes = useCallback((current: ConnectionHandle, targetNodeId: string, targetHandleId?: string, targetAnchorRatio?: number) => {
         if (current.nodeId === targetNodeId) return;
@@ -213,6 +216,14 @@ export function useCanvasConnectionController({
         const toHandleId = toNodeId === current.nodeId ? current.handleId : targetHandleId;
         const fromAnchorRatio = fromNodeId === current.nodeId ? current.anchorRatio : targetAnchorRatio;
         const toAnchorRatio = toNodeId === current.nodeId ? current.anchorRatio : targetAnchorRatio;
+        const cell = parseBatchCellHandle(toHandleId);
+        if (cell) {
+            const error = batchCellConnectionError(nodesRef.current, fromNodeId, toNodeId, toHandleId);
+            if (error) message.warning(error);
+            else onBatchCellConnect?.(toNodeId, cell.rowId, cell.columnId, fromNodeId);
+            setContextMenu(null);
+            return;
+        }
         const policyError = canvasConnectionError(config, nodesRef.current, connectionsRef.current, { fromNodeId, toNodeId });
         if (policyError) {
             message.warning(policyError);
@@ -226,7 +237,7 @@ export function useCanvasConnectionController({
             setNodes((currentNodes) => attachNodeToStoryboardRow(currentNodes, { fromNodeId, toNodeId, fromHandleId, toHandleId }));
         }
         setContextMenu(null);
-    }, [config, connectionsRef, message, nodesRef, setConnections, setContextMenu, setNodes]);
+    }, [config, connectionsRef, message, nodesRef, onBatchCellConnect, setConnections, setContextMenu, setNodes]);
 
     const createConnectedNode = useCallback(async (type: CanvasNodeType.Image | CanvasNodeType.Text | CanvasNodeType.Script | CanvasNodeType.BatchTable | CanvasNodeType.Video | CanvasNodeType.Audio | CanvasNodeType.Drawing | CanvasNodeType.Config | CanvasNodeType.MediaConversion, pending: PendingConnectionCreate, workflowProvider?: "runninghub") => {
         const nodeType = type;
@@ -293,6 +304,12 @@ export function useCanvasConnectionController({
               ? pending.position
               : connectedNodeCenterFromEdgeDrop(pending.position, spec, pending.connection.handleType);
         const newNode = createCanvasNode(nodeType, position, metadata);
+        if (nodeType === CanvasNodeType.Audio) {
+            const probe = normalizeConnection(pending.connection.nodeId, newNode.id, [...nodesRef.current, newNode], pending.connection.handleType);
+            const input = probe ? connectionInputSummary(newNode.id, [...nodesRef.current, newNode], connectionsRef.current, probe) : undefined;
+            const model = input ? audioModelForConnectionInput(config, input) : audioModelForConnectionInput(config, { textCount: 0, imageCount: 0, videoCount: 0, audioCount: 0, characterCount: 0 });
+            if (model) newNode.metadata = { ...newNode.metadata, model, generationMode: "audio" };
+        }
         if (nodeType === CanvasNodeType.Config && selectedWorkflowProvider) newNode.title = "RunningHub 工作流";
         if (storyboardRow) newNode.title = `镜头 ${storyboardRow.shotNumber} · 视频`;
         if (batchSourceNodeIds.length && nodeType === CanvasNodeType.Drawing) {
@@ -405,94 +422,63 @@ export function useCanvasConnectionController({
             return plan.connections.length ? "" : plan.skipped[0]?.reason || "当前选中的节点不能连接到此类型";
         }
         const spec = getNodeSpec(nodeType);
-        const pendingNode: CanvasNodeData = { id: "__pending-connection-node__", type: nodeType, title: "", position: pending.position, width: spec.width, height: spec.height };
-        const pendingNodes = [...nodesRef.current, pendingNode];
-        const connection = normalizeConnection(pending.connection.nodeId, pendingNode.id, pendingNodes, pending.connection.handleType);
+        const basePendingNode: CanvasNodeData = { id: "__pending-connection-node__", type: nodeType, title: "", position: pending.position, width: spec.width, height: spec.height };
+        const connection = normalizeConnection(pending.connection.nodeId, basePendingNode.id, [...nodesRef.current, basePendingNode], pending.connection.handleType);
         if (!connection) return "当前节点类型不能这样连接";
+        // 新建音频节点还没有模型，按这条连线的输入挑一个接得住的音频模型再校验。
+        const pendingAudioModel = nodeType === CanvasNodeType.Audio
+            ? audioModelForConnectionInput(config, connectionInputSummary(basePendingNode.id, [...nodesRef.current, basePendingNode], connectionsRef.current, connection))
+            : "";
+        const pendingNode: CanvasNodeData = pendingAudioModel ? { ...basePendingNode, metadata: { model: pendingAudioModel, generationMode: "audio" } } : basePendingNode;
+        const pendingNodes = [...nodesRef.current, pendingNode];
         return canvasConnectionError(config, pendingNodes, connectionsRef.current, connection);
     }, [config, connectionsRef, nodesRef, runtimeStatuses]);
 
     const getConnectionDropTarget = useCallback((clientX: number, clientY: number, current: ConnectionHandle): ConnectionDropTarget => {
-        const world = screenToCanvas(clientX, clientY);
-        const scale = Math.max(viewportRef.current.k, 0.05);
-        const handleRadius = CONNECTION_SNAP_RADIUS / scale;
-        let isNearNode = false;
-        let bestNodeId: string | null = null;
-        let bestHandleId: string | undefined;
-        let bestAnchorRatio: number | undefined;
-        let bestPriority = Number.POSITIVE_INFINITY;
-
-        [...nodesRef.current]
-            .filter((node) => !isHiddenBatchChild(node, nodesRef.current) && !isNodeHiddenByCollapsedFrame(node, nodesRef.current) && !isFrameNode(node))
-            .reverse()
-            .forEach((node) => {
-                const scrollTop = scriptScrollTopById[node.id] || 0;
-                const targetHandleId = node.type === CanvasNodeType.Script ? storyboardHandleAtY(node, world.y, scrollTop) : node.type === CanvasNodeType.BatchTable ? batchReferenceHandleAtY(node, world.y, handleRadius) : undefined;
-                if ((node.type === CanvasNodeType.Script || node.type === CanvasNodeType.BatchTable) && !targetHandleId) return;
-                // Ordinary nodes expose one centered input/output port. Only
-                // storyboard rows have a meaningful vertical target position.
-                const targetAnchorRatio = undefined;
-                const anchor = getConnectionTargetAnchor(node, current, targetHandleId, scrollTop);
-                const dx = world.x - anchor.x;
-                const dy = world.y - anchor.y;
-                // Do not treat the node body or a rectangular padding band as a
-                // connection target. LibTV snaps only inside the circular
-                // quick-add area centred on the corresponding side handle.
-                const hitsSnapZone = dx * dx + dy * dy <= handleRadius * handleRadius;
-                if (!hitsSnapZone) return;
-                isNearNode = true;
+        const cell = batchCellAtPoint(clientX, clientY);
+        if (cell && current.handleType === "source") {
+            const handleId = batchCellHandle(cell.rowId, cell.columnId);
+            const error = batchCellConnectionError(nodesRef.current, current.nodeId, cell.tableId, handleId);
+            return { nodeId: error ? null : cell.tableId, handleId, isNearNode: true };
+        }
+        return resolveCanvasConnectionTarget({
+            nodes: nodesRef.current,
+            current,
+            point: screenToCanvas(clientX, clientY),
+            radius: CONNECTION_SNAP_RADIUS / Math.max(viewportRef.current.k, 0.05),
+            bodyNodeId: nodeAtPoint(clientX, clientY),
+            scriptScrollTopById,
+            batchScrollById,
+            canConnect: (node) => {
                 const normalized = node.id === current.nodeId ? null : normalizeConnection(current.nodeId, node.id, nodesRef.current, current.handleType);
-                if (!normalized || canvasConnectionError(config, nodesRef.current, connectionsRef.current, normalized)) return;
-                if (1 < bestPriority) {
-                    bestNodeId = node.id;
-                    bestHandleId = targetHandleId;
-                    bestAnchorRatio = targetAnchorRatio;
-                    bestPriority = 1;
-                }
-            });
-        return { nodeId: bestNodeId, handleId: bestHandleId, anchorRatio: bestAnchorRatio, isNearNode };
-    }, [config, connectionsRef, nodesRef, screenToCanvas, scriptScrollTopById, viewportRef]);
+                return Boolean(normalized && !canvasConnectionError(config, nodesRef.current, connectionsRef.current, normalized));
+            },
+        });
+    }, [batchScrollById, config, connectionsRef, nodesRef, screenToCanvas, scriptScrollTopById, viewportRef]);
 
     const getBatchConnectionDropTarget = useCallback((clientX: number, clientY: number, sourceNodeIds: string[]): BatchConnectionDropTarget => {
+        const cell = batchCellAtPoint(clientX, clientY);
+        if (cell) {
+            const handleId = batchCellHandle(cell.rowId, cell.columnId);
+            const error = sourceNodeIds.length !== 1 || batchCellConnectionError(nodesRef.current, sourceNodeIds[0], cell.tableId, handleId);
+            return { nodeId: error ? null : cell.tableId, handleId, isNearNode: true };
+        }
         const source = sourceNodeIds
             .map((id) => nodesRef.current.find((node) => node.id === id))
             .find((node): node is CanvasNodeData => Boolean(node && !batchSourceRestriction(node)));
         if (!source) return { nodeId: null, isNearNode: false };
 
-        const world = screenToCanvas(clientX, clientY);
-        const scale = Math.max(viewportRef.current.k, 0.05);
-        const handleRadius = CONNECTION_SNAP_RADIUS / scale;
-        let isNearNode = false;
-        let bestNodeId: string | null = null;
-        let bestHandleId: string | undefined;
-        let bestAnchorRatio: number | undefined;
-        let bestPriority = Number.POSITIVE_INFINITY;
-        const current: ConnectionHandle = { nodeId: source.id, handleType: "source" };
-
-        [...nodesRef.current]
-            .filter((node) => !isHiddenBatchChild(node, nodesRef.current) && !isNodeHiddenByCollapsedFrame(node, nodesRef.current) && !isFrameNode(node))
-            .reverse()
-            .forEach((node) => {
-                const scrollTop = scriptScrollTopById[node.id] || 0;
-                const targetHandleId = node.type === CanvasNodeType.Script ? storyboardHandleAtY(node, world.y, scrollTop) : node.type === CanvasNodeType.BatchTable ? batchReferenceHandleAtY(node, world.y, handleRadius) : undefined;
-                if ((node.type === CanvasNodeType.Script || node.type === CanvasNodeType.BatchTable) && !targetHandleId) return;
-                const targetAnchorRatio = undefined;
-                const anchor = getConnectionTargetAnchor(node, current, targetHandleId, scrollTop);
-                const dx = world.x - anchor.x;
-                const dy = world.y - anchor.y;
-                const hitsSnapZone = dx * dx + dy * dy <= handleRadius * handleRadius;
-                if (!hitsSnapZone) return;
-                isNearNode = true;
-                if (!hasBatchConnectionCandidate(sourceNodeIds, node.id, nodesRef.current)) return;
-                if (1 < bestPriority) {
-                    bestNodeId = node.id;
-                    bestHandleId = targetHandleId;
-                    bestAnchorRatio = targetAnchorRatio;
-                    bestPriority = 1;
-                }
-            });
-        return { nodeId: bestNodeId, handleId: bestHandleId, anchorRatio: bestAnchorRatio, isNearNode };
-    }, [nodesRef, screenToCanvas, scriptScrollTopById, viewportRef]);
+        return resolveCanvasConnectionTarget({
+            nodes: nodesRef.current,
+            current: { nodeId: source.id, handleType: "source" },
+            point: screenToCanvas(clientX, clientY),
+            radius: CONNECTION_SNAP_RADIUS / Math.max(viewportRef.current.k, 0.05),
+            bodyNodeId: nodeAtPoint(clientX, clientY),
+            scriptScrollTopById,
+            batchScrollById,
+            canConnect: (node) => hasBatchConnectionCandidate(sourceNodeIds, node.id, nodesRef.current),
+        });
+    }, [batchScrollById, nodesRef, screenToCanvas, scriptScrollTopById, viewportRef]);
 
     const startBatchConnection = useCallback((event: ReactPointerEvent, sourceNodeIds: string[]) => {
         const eligible = sourceNodeIds.filter((id) => {
@@ -668,7 +654,6 @@ export function useCanvasConnectionController({
         setMouseWorld(screenToCanvas(event.clientX, event.clientY));
         setConnecting({ nodeId, handleType, handleId, anchorRatio });
         setConnectionTargetNodeId(null);
-        setConnectionTargetAnchorRatio(undefined);
         setSelectedConnectionId(null);
     }, [clearBatchConnection, closeConnectionCreateMenu, commitBatchConnection, connectNodes, screenToCanvas, setConnecting, setSelectedConnectionId]);
 
@@ -708,7 +693,12 @@ export function useCanvasConnectionController({
             if (!current || connectingPointerIdRef.current !== event.pointerId || pendingConnectionCreateRef.current) return;
             if (current.handleType === "source" && typeof document !== "undefined") {
                 const el = document.elementFromPoint(event.clientX, event.clientY);
-                let chip = el?.closest<HTMLElement>("[data-reference-chip]");
+                let chip = el?.closest<HTMLElement>("[data-batch-reference-cell],[data-reference-chip]");
+                if (chip?.hasAttribute("data-batch-reference-cell")) {
+                    const tableId = chip.dataset.targetNodeId || "";
+                    const handleId = batchCellHandle(chip.dataset.rowId || "", chip.dataset.columnId || "");
+                    if (batchCellConnectionError(nodesRef.current, current.nodeId, tableId, handleId)) chip = undefined;
+                }
                 if (!chip) {
                     const shelf = el?.closest<HTMLElement>(".canvas-node-composer-references");
                     if (shelf) {
@@ -734,7 +724,6 @@ export function useCanvasConnectionController({
             const point = screenToCanvas(event.clientX, event.clientY);
             setConnectionApproach((previous) => latchCanvasConnectionApproach(previous, dropTarget.nodeId, point));
             setConnectionTargetNodeId(dropTarget.nodeId);
-            setConnectionTargetAnchorRatio(dropTarget.anchorRatio);
             setMouseWorld(point);
         };
         const handlePointerMove = (event: PointerEvent) => {
@@ -817,7 +806,6 @@ export function useCanvasConnectionController({
         closeConnectionCreateMenu,
         connectionTargetNodeId,
         connectionApproach,
-        connectionTargetAnchorRatio,
         connectionReplaceHover,
         connectingParams,
         createConnectedNode,
@@ -832,4 +820,16 @@ export function useCanvasConnectionController({
         pendingConnectionCreate,
         setConnecting,
     };
+}
+
+function batchCellAtPoint(clientX: number, clientY: number) {
+    const element = document.elementFromPoint(clientX, clientY)?.closest<HTMLElement>("[data-batch-reference-cell]");
+    const tableId = element?.dataset.targetNodeId;
+    const rowId = element?.dataset.rowId;
+    const columnId = element?.dataset.columnId;
+    return tableId && rowId && columnId ? { tableId, rowId, columnId } : undefined;
+}
+
+function nodeAtPoint(clientX: number, clientY: number) {
+    return document.elementFromPoint(clientX, clientY)?.closest<HTMLElement>(".node-element[data-node-id]")?.dataset.nodeId || null;
 }

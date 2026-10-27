@@ -2,16 +2,25 @@ package service
 
 import "infinite-canvas/backend/internal/app"
 
+const (
+	WorkbenchKindImage = app.WorkbenchKindImage
+	WorkbenchKindVideo = app.WorkbenchKindVideo
+)
+
 type (
+	InspirationLibraryCommand              = app.InspirationLibraryCommand
+	InspirationLibraryView                 = app.InspirationLibraryView
 	ControlPreviewQuery                    = app.ControlPreviewQuery
 	UserResourceQuotaRequest               = app.UserResourceQuotaRequest
 	UserResourceQuotaView                  = app.UserResourceQuotaView
 	ReferralPolicy                         = app.ReferralPolicy
 	ReferralDashboard                      = app.ReferralDashboard
 	ReferralRewardPage                     = app.ReferralRewardPage
+	BindProjectAssetImageRequest           = app.BindProjectAssetImageRequest
 	PaymentOrderQuery                      = app.PaymentOrderQuery
 	PaymentReconciliationQuery             = app.PaymentReconciliationQuery
 	CloudAgentRequest                      = app.CloudAgentRequest
+	CloudAgentRunViewOptions               = app.CloudAgentRunViewOptions
 	CloudAgentMediaSettings                = app.CloudAgentMediaSettings
 	CloudAgentCapabilitySet                = app.CloudAgentCapabilitySet
 	AgentProfileRequest                    = app.AgentProfileRequest
@@ -25,6 +34,10 @@ type (
 	AgentMemorySettingRequest              = app.AgentMemorySettingRequest
 	AgentMemoryCompactView                 = app.AgentMemoryCompactView
 	AgentMemoryCompactSummary              = app.AgentMemoryCompactSummary
+	AgentMemoryProposalDecision            = app.AgentMemoryProposalDecision
+	AgentMemoryRevisionRestore             = app.AgentMemoryRevisionRestore
+	AgentMemoryProposalView                = app.AgentMemoryProposalView
+	AgentMemoryRevisionView                = app.AgentMemoryRevisionView
 	APICallLogPage                         = app.APICallLogPage
 	APICallLogQuery                        = app.APICallLogQuery
 	AccountFileStorageUsage                = app.AccountFileStorageUsage
@@ -33,6 +46,7 @@ type (
 	AdminAuditPage                         = app.AdminAuditPage
 	AdminCacheClearGroupResult             = app.AdminCacheClearGroupResult
 	AdminCacheClearRequest                 = app.AdminCacheClearRequest
+	AgentSessionLimitRequest               = app.AgentSessionLimitRequest
 	AdminCacheClearResult                  = app.AdminCacheClearResult
 	AdminChannelModelFetchResult           = app.AdminChannelModelFetchResult
 	AdminChannelModelImportRequest         = app.AdminChannelModelImportRequest
@@ -106,6 +120,8 @@ type (
 	BulkDisableUsersResult                 = app.BulkDisableUsersResult
 	CanvasLibraryPage                      = app.CanvasLibraryPage
 	CanvasLibrarySummary                   = app.CanvasLibrarySummary
+	CanvasOperationsRequest                = app.CanvasOperationsRequest
+	CanvasEditLeaseRequest                 = app.CanvasEditLeaseRequest
 	CanvasHistoryList                      = app.CanvasHistoryList
 	CanvasShareRequest                     = app.CanvasShareRequest
 	CanvasShareStatus                      = app.CanvasShareStatus
@@ -124,6 +140,9 @@ type (
 	ChannelOrderItem                       = app.ChannelOrderItem
 	ChannelOrderRequest                    = app.ChannelOrderRequest
 	ChannelRequest                         = app.ChannelRequest
+	SystemChannelExport                    = app.SystemChannelExport
+	SystemChannelImportResult              = app.SystemChannelImportResult
+	CharacterAssetSummary                  = app.CharacterAssetSummary
 	CharacterCardSummary                   = app.CharacterCardSummary
 	CharacterRepresentationInput           = app.CharacterRepresentationInput
 	CharacterRepresentationSummary         = app.CharacterRepresentationSummary
@@ -137,6 +156,7 @@ type (
 	CreateAssetFolderRequest               = app.CreateAssetFolderRequest
 	CreateAssetVersionRequest              = app.CreateAssetVersionRequest
 	CreatePaymentOrderRequest              = app.CreatePaymentOrderRequest
+	CreateCharacterRequest                 = app.CreateCharacterRequest
 	CreateProjectAssetFolderRequest        = app.CreateProjectAssetFolderRequest
 	CreateProjectCharacterRequest          = app.CreateProjectCharacterRequest
 	CreateProjectRequest                   = app.CreateProjectRequest
@@ -153,6 +173,7 @@ type (
 	CreationRunOutput                      = app.CreationRunOutput
 	CreationSubmissionOutput               = app.CreationSubmissionOutput
 	CreditPolicy                           = app.CreditPolicy
+	BillingAutoRefundSetting               = app.BillingAutoRefundSetting
 	DiagnosticBundle                       = app.DiagnosticBundle
 	DiagnosticClientEvent                  = app.DiagnosticClientEvent
 	DiagnosticExportRequest                = app.DiagnosticExportRequest
@@ -257,6 +278,9 @@ type (
 	PublicLinuxDOSetting                   = app.PublicLinuxDOSetting
 	PublicLogicalModel                     = app.PublicLogicalModel
 	PublicLogicalModelPriceTier            = app.PublicLogicalModelPriceTier
+	PublicModelAvailability                = app.PublicModelAvailability
+	PublicModelAvailabilityDataState       = app.PublicModelAvailabilityDataState
+	PublicModelAvailabilityDay             = app.PublicModelAvailabilityDay
 	PublicModelChannel                     = app.PublicModelChannel
 	PublicOSSSetting                       = app.PublicOSSSetting
 	PublicRegistrationSetting              = app.PublicRegistrationSetting
@@ -278,7 +302,9 @@ type (
 	ResolveBillingBatchResult              = app.ResolveBillingBatchResult
 	ResolveBillingRequest                  = app.ResolveBillingRequest
 	ResourceDelivery                       = app.ResourceDelivery
-	ResourceDeliveryOptions                = app.ResourceDeliveryOptions
+	ResourceAccessOptions                  = app.ResourceAccessOptions
+	ResourceAccessRequest                  = app.ResourceAccessRequest
+	ResourceAccess                         = app.ResourceAccess
 	ResourceStream                         = app.ResourceStream
 	ResponseInterceptionRule               = app.ResponseInterceptionRule
 	ResponseInterceptionSetting            = app.ResponseInterceptionSetting
@@ -294,6 +320,11 @@ type (
 	Service                                = app.Service
 	ShotRevisionInput                      = app.ShotRevisionInput
 	SkillCategory                          = app.SkillCategory
+	AddedSkillReference                    = app.AddedSkillReference
+	SkillLibraryCategory                   = app.SkillLibraryCategory
+	SkillLibraryCategoryList               = app.SkillLibraryCategoryList
+	SkillLibraryCategoryMutationRequest    = app.SkillLibraryCategoryMutationRequest
+	SkillLibraryCategoryAssignmentRequest  = app.SkillLibraryCategoryAssignmentRequest
 	SkillEffectiveUser                     = app.SkillEffectiveUser
 	SkillFileSearchResult                  = app.SkillFileSearchResult
 	SkillGitHubInstallRequest              = app.SkillGitHubInstallRequest
@@ -306,6 +337,7 @@ type (
 	SkillPackageBundleFile                 = app.SkillPackageBundleFile
 	SkillPackageFileContent                = app.SkillPackageFileContent
 	SkillPackageFileItem                   = app.SkillPackageFileItem
+	SkillPreset                            = app.SkillPreset
 	SkillShowcaseMedia                     = app.SkillShowcaseMedia
 	StorageMigrationSummary                = app.StorageMigrationSummary
 	StyleProfileFavoriteRequest            = app.StyleProfileFavoriteRequest
@@ -357,6 +389,12 @@ type (
 	UpdateOrdinaryUserRequest              = app.UpdateOrdinaryUserRequest
 	PromoteAdministratorRequest            = app.PromoteAdministratorRequest
 	UpdateWorkflowStepRequest              = app.UpdateWorkflowStepRequest
+	WorkbenchToolInput                     = app.WorkbenchToolInput
+	WorkbenchPresetInput                   = app.WorkbenchPresetInput
+	WorkbenchToolView                      = app.WorkbenchToolView
+	WorkbenchPresetView                    = app.WorkbenchPresetView
+	WorkbenchTaskInput                     = app.WorkbenchTaskInput
+	WorkbenchRetryIntentView               = app.WorkbenchRetryIntentView
 	UserAnnouncementFeed                   = app.UserAnnouncementFeed
 	UserAssetPage                          = app.UserAssetPage
 	UserAssetPageFilter                    = app.UserAssetPageFilter

@@ -17,6 +17,7 @@ import {
     FileClock,
     HardDrive,
     Home,
+    Inbox,
     Infinity as InfinityIcon,
     KeyRound,
     Layers3,
@@ -27,6 +28,8 @@ import {
     Moon,
     Palette,
     Paintbrush,
+    PanelLeftClose,
+    PanelLeftOpen,
     PlugZap,
     RadioTower,
     RefreshCw,
@@ -41,6 +44,7 @@ import {
     TicketCheck,
     ToggleLeft,
     UserCog,
+    WandSparkles,
     UsersRound,
 } from "lucide-react";
 import { Suspense, useEffect, useState, type ReactNode } from "react";
@@ -98,7 +102,9 @@ const adminNavigation: AdminNavigationGroup[] = [
             { path: "/admin/models", label: "前台模型", description: "展示、线路与用户价格", icon: <Layers3 className="size-4" />, requireFeature: "frontendModelsEnabled" },
             { path: "/admin/plugins", label: "插件管理", description: "平台可用性、上传与卸载", icon: <PlugZap className="size-4" /> },
             { path: "/admin/skills", label: "技能管理", description: "公共技能与分类开放", icon: <BookOpenCheck className="size-4" /> },
+            { path: "/admin/skill-curation", label: "技能分类", description: "平台策展与分类维护", icon: <BookOpenCheck className="size-4" /> },
             { path: "/admin/prompt-templates", label: "提示词模板", description: "平台创作策略版本", icon: <MessageSquareText className="size-4" /> },
+            { path: "/admin/workbench-tools", label: "工作台工具", description: "生图/视频工具与预设", icon: <WandSparkles className="size-4" /> },
         ],
     },
     {
@@ -109,6 +115,8 @@ const adminNavigation: AdminNavigationGroup[] = [
             { path: "/admin/users", label: "用户管理", description: "普通用户账号与状态", icon: <UsersRound className="size-4" /> },
             { path: "/admin/administrators", label: "管理员配置", description: "管理员账号与模块权限", icon: <UserCog className="size-4" />, fullAdminOnly: true },
             { path: "/admin/customer-service", label: "客服配置", description: "客服入口、样式与移动", icon: <Headphones className="size-4" /> },
+            { path: "/admin/login-logs", label: "用户登录日志", description: "登录、失败与主动退出", icon: <FileClock className="size-4" /> },
+            { path: "/admin/feedbacks", label: "用户反馈", description: "Bug、功能提议与收件箱答复", icon: <Inbox className="size-4" /> },
             { path: "/admin/agent-lessons", label: "Agent 记忆", description: "按用户查看个人记忆", icon: <Sparkles className="size-4" /> },
         ],
     },
@@ -148,7 +156,7 @@ const adminNavigation: AdminNavigationGroup[] = [
         label: "系统配置",
         collapsible: true,
         items: [
-            { path: "/admin/settings/appearance", label: "站点及外观", description: "品牌、Canvas/Live2D、SEO 与备案", icon: <Palette className="size-4" /> },
+            { path: "/admin/settings/appearance", label: "站点及外观", description: "品牌、Canvas/Live2D、更新公告、SEO 与备案", icon: <Palette className="size-4" /> },
             { path: "/admin/settings/features", label: "功能开放", description: "工作台、插件与模型能力", icon: <ToggleLeft className="size-4" /> },
             { path: "/admin/settings/drawing-engine", label: "绘图工具", description: "画布绘图节点默认引擎", icon: <Paintbrush className="size-4" /> },
             { path: "/admin/settings/system-performance", label: "系统性能", description: "主机、数据库与缓存状态", icon: <Activity className="size-4" /> },
@@ -174,8 +182,12 @@ const adminNavigation: AdminNavigationGroup[] = [
 
 const permissionByAdminPath = new Map<string, (typeof ADMIN_PERMISSION_GROUPS)[number]["items"][number]["permission"]>();
 for (const group of ADMIN_PERMISSION_GROUPS) {
-    for (const item of group.items) permissionByAdminPath.set(item.path, item.permission);
+    for (const item of group.items) {
+        if (item.path) permissionByAdminPath.set(item.path, item.permission);
+    }
 }
+permissionByAdminPath.set("/admin/login-logs", "admin.users.accounts");
+permissionByAdminPath.set("/admin/skill-curation", "admin.platform.skills");
 
 function canAccessAdminItem(item: AdminNavigationItem, access: AdminAccess | undefined) {
     if (item.fullAdminOnly) return access?.level === "full";
@@ -230,7 +242,7 @@ function AdminShellLayout() {
                 <main id="admin-root" data-admin-root data-admin-density={density} className="admin-shell flex h-full min-h-0 overflow-hidden">
                     <aside className={cn("admin-sidebar hidden shrink-0 flex-col overflow-hidden lg:flex", collapsed && "is-collapsed")}>
                         <div className="admin-sidebar-identity shrink-0">
-                            <AdminTooltip title={collapsed ? "查看更新日志" : undefined} placement="right">
+                            <AdminTooltip title={collapsed ? (appearance.updates?.enabled ? "查看更新公告" : "查看更新日志") : undefined} placement="right">
                                 <AppChangelogButton
                                     className={cn("admin-sidebar-brand-button", collapsed && "is-collapsed")}
                                     icon={<BrandLogoFrame className="admin-sidebar-brand-mark grid shrink-0 place-items-center bg-foreground text-background" logoClassName="size-5 object-contain" alt="" fallback={<InfinityIcon className="size-4" />} />}
@@ -243,20 +255,27 @@ function AdminShellLayout() {
                             </AdminTooltip>
                         </div>
                         <AdminNavigation collapsed={collapsed} />
-                        <div className="admin-sidebar-footer shrink-0">
-                            <AdminTooltip title={collapsed ? "返回创作台" : undefined} placement="right">
-                                <NavLink to="/" aria-label={collapsed ? "返回创作台" : undefined} className={cn("admin-nav-link", collapsed && "is-collapsed")}>
-                                    <Home className="size-4" strokeWidth={1.6} />
-                                    {!collapsed ? <span>返回创作台</span> : null}
-                                </NavLink>
-                            </AdminTooltip>
+                        <div className={cn("admin-sidebar-footer shrink-0", collapsed && "is-collapsed")}>
+                            <div className="admin-sidebar-footer-row">
+                                <AdminTooltip title={collapsed ? "返回创作台" : undefined} placement="right">
+                                    <NavLink to="/" aria-label={collapsed ? "返回创作台" : undefined} className={cn("admin-nav-link", collapsed && "is-collapsed")}>
+                                        <Home className="size-4" strokeWidth={1.6} />
+                                        {!collapsed ? <span>返回创作台</span> : null}
+                                    </NavLink>
+                                </AdminTooltip>
+                                {!collapsed ? (
+                                    <button type="button" className="admin-sidebar-collapse-toggle" onClick={toggleCollapsed} aria-label="收起侧栏" title="收起侧栏" aria-expanded={!collapsed}>
+                                        <PanelLeftClose className="size-4" strokeWidth={1.7} />
+                                    </button>
+                                ) : null}
+                            </div>
+                            {collapsed ? (
+                                <button type="button" className="admin-sidebar-collapse-toggle is-collapsed" onClick={toggleCollapsed} aria-label="展开侧栏" title="展开侧栏">
+                                    <PanelLeftOpen className="size-4" strokeWidth={1.7} />
+                                </button>
+                            ) : null}
                         </div>
                     </aside>
-                    <AdminTooltip title={collapsed ? "展开侧栏" : "收起侧栏"} placement="right">
-                        <button type="button" className={cn("admin-sidebar-edge-toggle hidden lg:grid", collapsed && "is-collapsed")} onClick={toggleCollapsed} aria-label={collapsed ? "展开侧栏" : "收起侧栏"} aria-expanded={!collapsed}>
-                            {collapsed ? <ChevronRight className="size-3.5" aria-hidden="true" /> : <ChevronLeft className="size-3.5" aria-hidden="true" />}
-                        </button>
-                    </AdminTooltip>
                     <section className="flex min-w-0 flex-1 flex-col overflow-hidden">
                         <MobileAdminNavigation />
                         <Suspense

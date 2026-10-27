@@ -17,8 +17,10 @@ const (
 	AdminPermissionPlugins               AdminPermission = "admin.platform.plugins"
 	AdminPermissionSkills                AdminPermission = "admin.platform.skills"
 	AdminPermissionPromptTemplates       AdminPermission = "admin.platform.prompt_templates"
+	AdminPermissionWorkbenchTools        AdminPermission = "admin.platform.workbench_tools"
 	AdminPermissionUsers                 AdminPermission = "admin.users.accounts"
 	AdminPermissionCustomerService       AdminPermission = "admin.users.customer_service"
+	AdminPermissionFeedbacks             AdminPermission = "admin.users.feedbacks"
 	AdminPermissionAgentLessons          AdminPermission = "admin.users.agent_lessons"
 	AdminPermissionProducts              AdminPermission = "admin.commerce.products"
 	AdminPermissionRedeemCodes           AdminPermission = "admin.commerce.redeem_codes"
@@ -36,6 +38,7 @@ const (
 	AdminPermissionSystemPerformance     AdminPermission = "admin.settings.system_performance"
 	AdminPermissionAccess                AdminPermission = "admin.settings.access"
 	AdminPermissionEmail                 AdminPermission = "admin.settings.email"
+	AdminPermissionSMS                   AdminPermission = "admin.settings.sms"
 	AdminPermissionArkPrivateAssets      AdminPermission = "admin.settings.ark_private_assets"
 	AdminPermissionResponseInterception  AdminPermission = "admin.settings.response_interception"
 	AdminPermissionThirdParty            AdminPermission = "admin.settings.third_party"
@@ -47,13 +50,13 @@ const (
 
 var AllAdminPermissions = []AdminPermission{
 	AdminPermissionAnalyticsOverview, AdminPermissionControlPreview, AdminPermissionAPILogs,
-	AdminPermissionChannels, AdminPermissionLogicalModels, AdminPermissionPlugins, AdminPermissionSkills, AdminPermissionPromptTemplates,
-	AdminPermissionUsers, AdminPermissionCustomerService, AdminPermissionAgentLessons,
+	AdminPermissionChannels, AdminPermissionLogicalModels, AdminPermissionPlugins, AdminPermissionSkills, AdminPermissionPromptTemplates, AdminPermissionWorkbenchTools,
+	AdminPermissionUsers, AdminPermissionCustomerService, AdminPermissionFeedbacks, AdminPermissionAgentLessons,
 	AdminPermissionProducts, AdminPermissionRedeemCodes,
 	AdminPermissionPaymentProviders, AdminPermissionPaymentOrders, AdminPermissionPaymentReconciliation, AdminPermissionCredits, AdminPermissionReferrals,
 	AdminPermissionInspirations, AdminPermissionAnnouncements, AdminPermissionBannerAnnouncements,
 	AdminPermissionAppearance, AdminPermissionFeatures, AdminPermissionDrawingEngine, AdminPermissionSystemPerformance,
-	AdminPermissionAccess, AdminPermissionEmail, AdminPermissionArkPrivateAssets, AdminPermissionResponseInterception,
+	AdminPermissionAccess, AdminPermissionEmail, AdminPermissionSMS, AdminPermissionArkPrivateAssets, AdminPermissionResponseInterception,
 	AdminPermissionThirdParty, AdminPermissionSystemUpdate,
 	AdminPermissionStorageResources, AdminPermissionRuntimePolicy, AdminPermissionStorageService,
 }

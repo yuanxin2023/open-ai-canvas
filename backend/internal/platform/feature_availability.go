@@ -23,7 +23,13 @@ const (
 	FeatureSkillLibrary          = "skillLibrary"
 	FeaturePluginCenter          = "pluginCenter"
 	FeatureSystemPlugins         = "systemPluginsVisibleToUsers"
+	FeatureInspirationSources    = "inspirationSourcesVisible"
+	FeatureInspirationHall       = "inspirationHall"
+	FeatureInspirationGallery    = "inspirationGallery"
+	FeatureUserFeedback          = "userFeedback"
 	FeatureTimelineTranscription = "timelineTranscription"
+	FeatureImageWorkbench        = "imageWorkbench"
+	FeatureVideoWorkbench        = "videoWorkbench"
 )
 
 type FeatureAvailability struct {
@@ -36,7 +42,13 @@ type FeatureAvailability struct {
 	SkillLibraryEnabled          bool `json:"skillLibraryEnabled"`
 	PluginCenterEnabled          bool `json:"pluginCenterEnabled"`
 	SystemPluginsVisibleToUsers  bool `json:"systemPluginsVisibleToUsers"`
+	InspirationSourcesVisible    bool `json:"inspirationSourcesVisible"`
+	InspirationHallEnabled       bool `json:"inspirationHallEnabled"`
+	InspirationGalleryEnabled    bool `json:"inspirationGalleryEnabled"`
+	UserFeedbackEnabled          bool `json:"userFeedbackEnabled"`
 	TimelineTranscriptionEnabled bool `json:"timelineTranscriptionEnabled"`
+	ImageWorkbenchEnabled        bool `json:"imageWorkbenchEnabled"`
+	VideoWorkbenchEnabled        bool `json:"videoWorkbenchEnabled"`
 }
 
 type PublicFeatureAvailability struct {
@@ -58,7 +70,13 @@ func DefaultFeatureAvailability() FeatureAvailability {
 		SkillLibraryEnabled:          true,
 		PluginCenterEnabled:          true,
 		SystemPluginsVisibleToUsers:  true,
+		InspirationSourcesVisible:    true,
+		InspirationHallEnabled:       false,
+		InspirationGalleryEnabled:    false,
+		UserFeedbackEnabled:          false,
 		TimelineTranscriptionEnabled: true,
+		ImageWorkbenchEnabled:        false,
+		VideoWorkbenchEnabled:        false,
 	}
 }
 
@@ -124,8 +142,20 @@ func (s *Service) FeatureEnabled(feature string) (bool, error) {
 		return value.PluginCenterEnabled, nil
 	case FeatureSystemPlugins:
 		return value.SystemPluginsVisibleToUsers, nil
+	case FeatureInspirationSources:
+		return value.InspirationSourcesVisible, nil
+	case FeatureInspirationHall:
+		return value.InspirationHallEnabled, nil
+	case FeatureInspirationGallery:
+		return value.InspirationGalleryEnabled, nil
+	case FeatureUserFeedback:
+		return value.UserFeedbackEnabled, nil
 	case FeatureTimelineTranscription:
 		return value.TimelineTranscriptionEnabled, nil
+	case FeatureImageWorkbench:
+		return value.ImageWorkbenchEnabled, nil
+	case FeatureVideoWorkbench:
+		return value.VideoWorkbenchEnabled, nil
 	default:
 		return false, errors.New("未知功能开放配置")
 	}
@@ -156,8 +186,20 @@ func (s *Service) RequireFeature(feature string) error {
 		return kernel.Forbidden("插件中心暂未开放")
 	case FeatureSystemPlugins:
 		return kernel.Forbidden("系统插件暂未向普通用户展示")
+	case FeatureInspirationSources:
+		return kernel.Forbidden("素材来源说明暂未开放")
+	case FeatureInspirationHall:
+		return kernel.Forbidden("灵感大厅暂未开放")
+	case FeatureInspirationGallery:
+		return kernel.Forbidden("灵感画廊暂未开放")
+	case FeatureUserFeedback:
+		return kernel.Forbidden("用户反馈暂未开放")
 	case FeatureTimelineTranscription:
 		return kernel.Forbidden("字幕转写暂未开放")
+	case FeatureImageWorkbench:
+		return kernel.Forbidden("生图暂未开放")
+	case FeatureVideoWorkbench:
+		return kernel.Forbidden("视频暂未开放")
 	default:
 		return kernel.Forbidden("该功能暂未开放")
 	}

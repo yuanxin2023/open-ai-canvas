@@ -1,10 +1,12 @@
 import { expect, test } from "bun:test";
+import { moduleGroupSource } from "./helpers/module-group-source";
 
 function compactSource(source: string) {
     return source.replace(/\s+/g, " ").trim();
 }
 
 function sourceSection(source: string, startMarker: string, endMarker: string) {
+    source = source.replace(/\r\n/g, "\n");
     const start = source.indexOf(startMarker);
     const end = source.indexOf(endMarker, start + startMarker.length);
     expect(start).toBeGreaterThanOrEqual(0);
@@ -14,7 +16,7 @@ function sourceSection(source: string, startMarker: string, endMarker: string) {
 
 test("announcement editor preserves image and pinned fields through edit and save", async () => {
     const [panelSource, safetySource] = await Promise.all([
-        Bun.file(new URL("../src/pages/admin/components/admin-announcements-panel.tsx", import.meta.url)).text(),
+        Promise.resolve(moduleGroupSource("pages/admin/components/admin-announcements-panel.tsx")),
         Bun.file(new URL("../src/pages/admin/components/admin-announcement-safety.ts", import.meta.url)).text(),
     ]);
     const panel = compactSource(panelSource);
@@ -81,14 +83,14 @@ test("channel model fetch requires explicit selection before import", async () =
     expect(apiSource).toContain("http.post<{ models: string[] }>(`/admin/channels/${encodeURIComponent(channelId)}/models/fetch`)");
     expect(apiSource).toContain("http.post<{ models: string[]; added: number }>(`/admin/channels/${encodeURIComponent(channelId)}/models/import`, { models })");
     expect(component).toContain('title="选择要导入的模型"');
-    expect(component).toContain("默认已全选");
+    expect(component).toContain("默认勾选已存在的模型，新模型默认不勾选");
     expect(component).toContain("setFetchPreviewOpen(true)");
-    expect(component).toContain("setSelectedFetchModels(result.models)");
+    expect(component).toMatch(/setSelectedFetchModels\(\s*selectExistingImportModels\(\s*result.models,/);
     expect(component).toContain("已选择 {selectedFetchModels.length} / {fetchPreviewModels.length} 个模型");
-    expect(component).toContain("disabled={importing || allFetchModelsSelected}");
-    expect(component).toContain("onClick={() => setSelectedFetchModels(fetchPreviewModels)}");
-    expect(component).toContain("disabled={importing || selectedFetchModels.length === 0}");
-    expect(component).toContain("onClick={() => setSelectedFetchModels([])}");
+    expect(component).toContain("disabled={importing || !visibleFetchModels.length || allVisibleFetchModelsSelected}");
+    expect(component).toContain("onClick={() => setSelectedFetchModels((current) => selectVisibleModels(current, visibleFetchModels))}");
+    expect(component).toContain("disabled={importing || selectedVisibleFetchCount === 0}");
+    expect(component).toContain("onClick={() => setSelectedFetchModels((current) => deselectVisibleModels(current, visibleFetchModels))}");
     expect(component).toContain("取消全选");
     expect(component).toContain("disabled={importing}");
     expect(component).toContain("importAdminChannelModels(channel.id, selectedFetchModels)");
@@ -132,7 +134,7 @@ test("analytics keeps range presets and uses order finances without a separate p
 });
 
 test("storage settings keep generic S3 controls and connection validation", async () => {
-    const source = await Bun.file(new URL("../src/pages/admin/settings/storage-settings-page.tsx", import.meta.url)).text();
+    const source = await Promise.resolve(moduleGroupSource("pages/admin/settings/storage-settings-page.tsx"));
     const compacted = compactSource(source);
 
     expect(compacted).toContain('{ mode: "s3", label: "S3 兼容存储"');
@@ -345,11 +347,11 @@ test("admin settings use full-width summaries without selected-card side stripes
 
 test("task-first settings reveal dependent configuration only after the primary choice", async () => {
     const [storageSource, emailSource, accessSource, featureSource, appearanceSource, drawingSource, arkSource, interceptionSource, thirdPartySource, cssSource] = await Promise.all([
-        Bun.file(new URL("../src/pages/admin/settings/storage-settings-page.tsx", import.meta.url)).text(),
+        Promise.resolve(moduleGroupSource("pages/admin/settings/storage-settings-page.tsx")),
         Bun.file(new URL("../src/pages/admin/components/email-settings-panel.tsx", import.meta.url)).text(),
         Bun.file(new URL("../src/pages/admin/components/access-settings-panel.tsx", import.meta.url)).text(),
         Bun.file(new URL("../src/pages/admin/components/feature-availability-panel.tsx", import.meta.url)).text(),
-        Bun.file(new URL("../src/pages/admin/settings/appearance-settings-page.tsx", import.meta.url)).text(),
+        Promise.resolve(moduleGroupSource("pages/admin/settings/appearance-settings-page.tsx")),
         Bun.file(new URL("../src/pages/admin/settings/drawing-engine-settings-page.tsx", import.meta.url)).text(),
         Bun.file(new URL("../src/pages/admin/settings/ark-private-assets-settings-page.tsx", import.meta.url)).text(),
         Bun.file(new URL("../src/pages/admin/settings/response-interception-settings-page.tsx", import.meta.url)).text(),
@@ -453,9 +455,10 @@ test("request logs display user credit billing independently from upstream cost"
     expect(billingSummary).toContain("未扣积分");
     expect(billingSummary).not.toContain("costAvailable");
     expect(detailSource).toContain('["请求阶段", requestKindText(log.requestKind)]');
-    expect(detailSource).toContain('["计费属性", log.billable ? "计费调用" : "不计费"]');
     expect(detailSource).toContain('["销售价格（积分）", billingText(log)]');
-    expect(detailSource).toContain('["上游成本", log.costAvailable');
+    expect(detailSource).toContain('["成本价格（积分）", log.creditCostMicrocredits');
+    expect(detailSource).toContain('label="请求 ID" value={<CopyValue value={log.id} />}');
+    expect(detailSource).toContain('["供应商任务 ID", log.providerRequestId ?');
     expect(apiSource).toContain("billingAmountMicrocredits: number");
     expect(apiSource).toContain("billingAvailable: boolean");
 });

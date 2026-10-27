@@ -44,26 +44,11 @@ func (w *taskLifecycleCoordinator) retryTask(userID string, id string) (*model.T
 		}
 		return nil, err
 	}
-	if task.CreationSubmissionID != nil {
-		return nil, creationConflict("智能创作重做需要新的报价批准，请回到创作会话继续")
-	}
-	if task.AgentRunID != "" || task.GenerationID != "" || strings.HasPrefix(task.Operation, "cloud_agent") || taskHasAgentOrigin(task.InputJSON) {
-		return nil, BadAuthRequest("Agent 重试需要新的幂等键和预算校验，请回到 Agent 对话重新发送")
-	}
-	if task.Status != model.TaskStatusFailed && task.Status != model.TaskStatusCancelled {
-		return nil, BadAuthRequest("只有失败或已取消的任务可以重试")
-	}
-	if task.ProviderCancelStatus == model.ProviderCancelStatusRequested {
-		return nil, BadAuthRequest("上游取消状态仍在确认中，请确认费用结果后再重试")
-	}
-	if err := s.taskBilling().CheckRetryEligibility(task.BillingOrderID); err != nil {
-		if errors.Is(err, errTaskBillingReview) {
-			return nil, BadAuthRequest("上一次调用费用仍在核对中，处理完成前不能重复提交")
-		}
+	if err := s.requireTaskWorkbenchFeature(task); err != nil {
 		return nil, err
 	}
-	if isContentModerationFailure(task.Error) {
-		return nil, BadAuthRequest(contentModerationRetryMessage)
+	if err := validateTaskRetryEligibility(task, s.taskBilling()); err != nil {
+		return nil, err
 	}
 	decryptedInput, err := s.decryptTaskInputJSON(task.InputJSON)
 	if err != nil {
@@ -132,6 +117,12 @@ func (w *taskLifecycleCoordinator) cancelTaskWithIntent(_ context.Context, userI
 	// 先从账单和请求日志补齐上游 ID，再做条件更新。取消与 worker 完成之间
 	// 以数据库终态为准，避免“用户已取消但迟到结果又把任务写成成功”。
 	s.hydrateTaskProviderRequestID(task)
+	// 用户一旦看到任务进入上游提交/生成阶段，即使 request ID 尚未来得及写回，
+	// 也必须按“可能已经产生上游费用”处理。父任务失败和 worker context 属于
+	// 内部协调，仍需继续走下面的上游取消/对账流程，不能被这条 UI 规则截断。
+	if intent.Source == model.TaskCancellationUserRequest && (strings.TrimSpace(task.ProviderRequestID) != "" || task.MediaStage != "" || !taskStageAllowsUserCancellation(task.Status, task.Stage)) {
+		return nil, BadAuthRequest("第三方请求已提交，任务不可取消")
+	}
 	originalStatus := task.Status
 	now := time.Now()
 	if intent.RequestedAt.IsZero() {
@@ -204,4 +195,17 @@ func (w *taskLifecycleCoordinator) cancelTaskWithIntent(_ context.Context, userI
 	}
 
 	return taskForOutput(*task), nil
+}
+
+func taskStageAllowsUserCancellation(status model.TaskStatus, stage string) bool {
+	switch strings.ToLower(strings.TrimSpace(stage)) {
+	case "":
+		return status == model.TaskStatusQueued
+	case "queued", "等待队列调度":
+		return true
+	case "后端接管任务", "正在准备创作":
+		return status == model.TaskStatusRunning || status == model.TaskStatusQueued
+	default:
+		return false
+	}
 }

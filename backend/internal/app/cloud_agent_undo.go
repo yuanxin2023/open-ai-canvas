@@ -27,8 +27,8 @@ func (s *Service) UndoCloudAgentCanvas(userID, runID, stepID, expectedSnapshotHa
 		return nil, BadAuthRequest("需要有效的画布快照哈希")
 	}
 	stepID = strings.TrimSpace(stepID)
-	if len(stepID) > 160 {
-		return nil, BadAuthRequest("Agent 操作 ID 过长")
+	if stepID == "" || len(stepID) > 160 {
+		return nil, BadAuthRequest("需要有效的 Agent 操作 ID")
 	}
 	if len([]rune(reason)) > 2000 {
 		return nil, BadAuthRequest("撤销理由过长")
@@ -53,7 +53,7 @@ func (s *Service) UndoCloudAgentCanvas(userID, runID, stepID, expectedSnapshotHa
 			}
 			return err
 		}
-		if stepID != "" && mutation.StepID != stepID {
+		if mutation.StepID != stepID {
 			return creationConflict("待撤销的 Agent 操作已不是当前运行的最新变更")
 		}
 
@@ -70,7 +70,7 @@ func (s *Service) UndoCloudAgentCanvas(userID, runID, stepID, expectedSnapshotHa
 		}
 		currentHash := cloudAgentCanvasHash(currentDoc)
 		if mutation.Status == "undone" {
-			if currentHash == mutation.BeforeSnapshotHash && expectedSnapshotHash == currentHash {
+			if currentHash == mutation.BeforeSnapshotHash && (expectedSnapshotHash == currentHash || expectedSnapshotHash == mutation.AfterSnapshotHash) {
 				result = map[string]any{"accepted": true, "snapshotHash": currentHash}
 				return nil
 			}

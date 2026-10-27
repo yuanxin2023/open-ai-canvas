@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -16,7 +17,7 @@ func newRefundedBillingRecoveryRepository(t *testing.T) (*Repository, *gorm.DB) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&model.CreditAccount{}, &model.BillingOrder{}, &model.ApiCallLog{}, &model.CreditLedgerEntry{}); err != nil {
+	if err := db.AutoMigrate(&model.CreditAccount{}, &model.BillingOrder{}, &model.ApiCallLog{}, &model.CreditLedgerEntry{}, &model.AdminAuditEvent{}); err != nil {
 		t.Fatal(err)
 	}
 	return &Repository{db: db}, db
@@ -88,22 +89,39 @@ func TestRestoreRefundedBillingOrderUsesObservedTokenAmount(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := repo.RestoreRefundedBillingOrder("order-1", "provider-task-1"); err != nil {
-		t.Fatalf("RestoreRefundedBillingOrder() error = %v", err)
+	if err := repo.RestoreRefundedBillingOrder("order-1", "provider-task-1"); !errors.Is(err, ErrInsufficientCredits) {
+		t.Fatalf("insufficient balance recovery error = %v", err)
 	}
 
 	var order model.BillingOrder
 	if err := db.First(&order, "id = ?", "order-1").Error; err != nil {
 		t.Fatal(err)
 	}
-	if order.ActualAmountMicrocredits != 1_750_000 || order.RefundedAmountMicrocredits != 170_000 || order.OutputTokens != 108900 || !order.UsageAvailable {
-		t.Fatalf("restored token order = %#v", order)
-	}
 	var account model.CreditAccount
 	if err := db.First(&account, "user_id = ?", "user-1").Error; err != nil {
 		t.Fatal(err)
 	}
-	if account.AvailableMicrocredits != -1_650_000 {
-		t.Fatalf("available balance = %d, want -1650000", account.AvailableMicrocredits)
+	if account.AvailableMicrocredits != 100_000 || order.Status != model.BillingStatusUncertain || !order.RefundRecoveryPending {
+		t.Fatalf("insufficient recovery changed funds: account=%#v order=%#v", account, order)
+	}
+	if err := db.Model(&account).Update("available_microcredits", 2_000_000).Error; err != nil {
+		t.Fatal(err)
+	}
+	for attempt := 0; attempt < 2; attempt++ {
+		if err := repo.RestoreRefundedBillingOrder("order-1", "provider-task-1"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := db.First(&order, "id = ?", "order-1").Error; err != nil {
+		t.Fatal(err)
+	}
+	if order.ActualAmountMicrocredits != 1_750_000 || order.RefundedAmountMicrocredits != 170_000 || order.OutputTokens != 108900 || !order.UsageAvailable || order.RefundRecoveryPending || order.Status != model.BillingStatusSettled {
+		t.Fatalf("restored token order = %#v", order)
+	}
+	if err := db.First(&account, "user_id = ?", "user-1").Error; err != nil {
+		t.Fatal(err)
+	}
+	if account.AvailableMicrocredits != 250_000 {
+		t.Fatalf("restored token balance=%d", account.AvailableMicrocredits)
 	}
 }

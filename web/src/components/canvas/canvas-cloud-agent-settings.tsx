@@ -18,17 +18,19 @@ type AgentSettingsProps = {
     selectedModel: string;
     permissionMode: AgentPermissionMode;
     reasoningMode: AgentReasoningMode;
+    reasoningSupported: boolean;
     onReasoningModeChange: (value: AgentReasoningMode) => void;
     profileView: AgentProfileView | null;
     profileLoading: boolean;
     profileSaving: boolean;
     profileError?: string;
     projectId?: string;
+    /** 空字符串表示当前未绑定画布。 */
     canvasId: string;
     onReloadProfile: () => Promise<void>;
     onSaveProfile: (input: { scope: AgentProfileScope; projectId?: string; canvasId?: string; content: string; revision: number }) => Promise<AgentProfileView>;
     contextScope: AgentContextKey[];
-    nodeCount: number;
+    nodeCount: number | null;
     skillsEnabled: boolean;
     installedSkills: Skill[];
     marketSkills: Skill[];
@@ -59,7 +61,7 @@ const permissionOptions: Array<{ value: AgentPermissionMode; label: string; desc
 ];
 
 const contextOptions: Array<{ value: AgentContextKey; label: string; description: string }> = [
-    { value: "canvas", label: "已保存画布摘要", description: "最多 80 个节点的标题与文本片段，不含媒体正文或未同步修改" },
+    { value: "canvas", label: "画布节点目录", description: "每次请求只带节点 id、类型和标题；正文按页读取，不含媒体或未同步修改" },
 ];
 
 const reasoningOptions: Array<{ value: AgentReasoningMode; label: string; description: string }> = [
@@ -101,11 +103,11 @@ export function CanvasCloudAgentSettings(props: AgentSettingsProps) {
 function SettingsHome({ props, theme, onOpen }: { props: AgentSettingsProps; theme: CanvasTheme; onOpen: (section: SettingsSection) => void }) {
     return (
         <div className="canvas-agent-settings-scroll thin-scrollbar min-h-0 flex-1 space-y-6 overflow-y-auto p-4">
-            <section>
+            {props.reasoningSupported ? <section>
                 <SettingLabel label="推理模式" hint="新运行生效" />
                 <div className="grid grid-cols-3 gap-2">{reasoningOptions.map((option) => <button key={option.value} type="button" aria-pressed={props.reasoningMode === option.value} onClick={() => props.onReasoningModeChange(option.value)} className="rounded-xl p-3 text-left" style={{ background: props.reasoningMode === option.value ? theme.toolbar.itemHover : theme.node.fill, border: `1px solid ${props.reasoningMode === option.value ? theme.accent.primary : 'transparent'}` }}><div className="text-xs font-semibold">{option.label}</div><div className="mt-1 text-[10px] opacity-50">{option.description}</div></button>)}</div>
                 <p className="mt-2 text-xs leading-5" style={{ color: theme.node.muted }}>推理只用于目标拆解、缺口判断和下一步工具选择，不会把内部思考过程展示给用户。</p>
-            </section>
+            </section> : null}
             <section>
                 <SettingLabel label="对话模型" hint="新运行生效" />
                 <div className="min-w-0 rounded-xl px-2 py-1.5" style={{ background: theme.node.fill }}>
@@ -131,7 +133,7 @@ function SettingsHome({ props, theme, onOpen }: { props: AgentSettingsProps; the
             <section>
                 <SettingLabel label="能力与范围" />
                 <div className="space-y-1">
-                    <SettingRow theme={theme} icon={<Cpu className="size-4" />} title="上下文" summary={`${props.nodeCount} 个节点 · ${props.contextScope.length} 个范围`} onClick={() => onOpen("context")} />
+                    <SettingRow theme={theme} icon={<Cpu className="size-4" />} title="上下文" summary={props.nodeCount === null ? "未绑定画布" : `${props.nodeCount} 个节点 · ${props.contextScope.length} 个范围`} onClick={() => onOpen("context")} />
                     <SettingRow theme={theme} icon={<Sparkles className="size-4" />} title="长期偏好" summary={profileSummary(props.profileView)} onClick={() => onOpen("profile")} />
                     <SettingRow theme={theme} icon={<BookMarked className="size-4" />} title="个人记忆" summary="批准、添加、导出导入；只影响你的会话" onClick={() => onOpen("memories")} />
                     {props.skillsEnabled ? <SettingRow theme={theme} icon={<Sparkles className="size-4" />} title="Skills · 用户技能库" summary={`${props.installedSkills.length} 个已安装 · 本轮启用 ${props.selectedSkillIds.length} 个`} onClick={() => onOpen("skills")} /> : null}
@@ -228,7 +230,7 @@ function ProfileWorkspace({ props, theme }: { props: AgentSettingsProps; theme: 
         }
     };
 
-    const disabled = profileUnavailable || props.profileSaving || (scope === "project" && !props.projectId);
+    const disabled = profileUnavailable || props.profileSaving || (scope === "project" && !props.projectId) || (scope === "canvas" && !props.canvasId);
     return (
         <div className="canvas-agent-settings-scroll thin-scrollbar min-h-0 flex-1 overflow-y-auto p-4">
             <div className="rounded-xl p-4" style={{ background: theme.node.fill }}>
@@ -238,9 +240,9 @@ function ProfileWorkspace({ props, theme }: { props: AgentSettingsProps; theme: 
             <div className="mt-4 flex gap-1 rounded-xl p-1" style={{ background: theme.node.fill }}>
                 <TabButton theme={theme} active={scope === "user"} label="用户" onClick={() => setScope("user")} />
                 <TabButton theme={theme} active={scope === "project"} label="项目" onClick={() => setScope("project")} />
-                <TabButton theme={theme} active={scope === "canvas"} label="画布" onClick={() => setScope("canvas")} />
+                {props.canvasId ? <TabButton theme={theme} active={scope === "canvas"} label="画布" onClick={() => setScope("canvas")} /> : null}
             </div>
-            {scope === "project" && !props.projectId ? <p className="mt-3 text-xs leading-5" style={{ color: theme.node.muted }}>当前画布尚未关联项目，项目偏好暂不可用。</p> : null}
+            {scope === "project" && !props.projectId ? <p className="mt-3 text-xs leading-5" style={{ color: theme.node.muted }}>当前未进入关联项目的画布，项目偏好暂不可用。</p> : null}
             {props.profileLoading ? <p className="mt-4 text-xs" style={{ color: theme.node.muted }}>正在读取偏好快照…</p> : null}
             {props.profileError ? <ProfileError message={props.profileError} onRetry={props.onReloadProfile} theme={theme} /> : null}
             <label className="mt-4 block">

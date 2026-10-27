@@ -1,25 +1,20 @@
 import { ImageSizePicker } from "./image-size-picker";
-import { imageResolutionUsesQuality } from "@/lib/image-size-presets";
-import { type ReactNode } from "react";
+import { ImageParameterFields } from "./image-parameter-fields";
+import { imageResolutionUsesQuality, imageSizePresets } from "@/lib/image-size-presets";
+import { useEffect, useState, type ReactNode } from "react";
 import { ConfigProvider } from "antd";
 import { Switch } from "@/components/ui/base/switch";
+import { ChevronDown, ChevronUp } from "lucide-react";
 
 import { type CanvasTheme } from "@/lib/canvas-theme";
 import { buildImageResolutionOptions, formatImageResolutionSize } from "@/lib/image-resolution-tiers";
 import { modelCapabilityConfigFor, normalizeImageValue, type ImageCapabilityConfig } from "@/lib/model-capabilities";
 import { mergedImageCapabilityConfig } from "@/lib/model-selection";
+import { imagePriceSelector, normalizeImagePriceSelector } from "@/lib/image-pricing";
 import { modelOptionName, resolveModelChannel, type AiConfig } from "@/stores/use-config-store";
+import { imageQualityLabel } from "@/lib/image-quality";
 
-const qualityOptions = [
-    { value: "auto", label: "自动" },
-    { value: "high", label: "高" },
-    { value: "medium", label: "中" },
-    { value: "low", label: "低" },
-    { value: "1k", label: "1K" },
-    { value: "2k", label: "2K" },
-    { value: "4k", label: "4K" },
-];
-
+export { imageQualityLabel } from "@/lib/image-quality";
 type AspectOption = { value: string; label: string; width: number; height: number; icon: string; size?: string };
 
 const aspectOptions: AspectOption[] = [
@@ -31,7 +26,7 @@ const aspectOptions: AspectOption[] = [
     { value: "16:9", label: "16:9", width: 1824, height: 1024, icon: "landscape" },
     { value: "2:1", label: "2:1", size: "2048x1024", width: 2048, height: 1024, icon: "landscape" },
     { value: "1:2", label: "1:2", size: "1024x2048", width: 1024, height: 2048, icon: "portrait" },
-    { value: "21:9", label: "21:9", size: "2352x1008", width: 2352, height: 1008, icon: "landscape" },
+    { value: "21:9", label: "21:9", size: "1938x812", width: 1938, height: 812, icon: "landscape" },
     { value: "9:16", label: "9:16", width: 1024, height: 1824, icon: "portrait" },
     { value: "1:1-2k", label: "1:1(2k)", size: "2048x2048", width: 2048, height: 2048, icon: "square" },
     { value: "16:9-2k", label: "16:9(2k)", size: "2048x1152", width: 2048, height: 1152, icon: "landscape" },
@@ -43,7 +38,7 @@ const aspectOptions: AspectOption[] = [
 
 type ImageSettingsPanelProps = {
     config: AiConfig;
-    onConfigChange: (key: "quality" | "size" | "transparentBackground" | "count", value: string) => void;
+    onConfigChange: (key: "quality" | "imageResolution" | "size" | "transparentBackground" | "count" | "imageParameters", value: string) => void;
     theme: CanvasTheme;
     showTitle?: boolean;
     showQuality?: boolean;
@@ -65,8 +60,9 @@ export function ImageSettingsPanel({ config, onConfigChange, theme, showTitle = 
     const effectiveMaxCount = Math.min(maxCount, profile.maxOutputs);
     const count = Math.max(1, Math.min(effectiveMaxCount, Number(normalized.count)));
     const activeSize = normalized.size;
-    const activeQualityOptions = profile.quality.values.map((value) => qualityOptions.find((item) => item.value === value) || { value, label: value });
+    const activeQualityOptions = profile.quality.values.map((value) => ({ value, label: imageQualityLabel(value) }));
     const priceTiers = imageModelPriceTiers(config);
+    if (profile.parameters) return <ImageSettingsTheme theme={theme}><div className={className}>{showTitle ? <div className="mb-3 text-base font-semibold">图像设置</div> : null}<ImageParameterFields profile={profile} config={config} onChange={onConfigChange} showSize={showSize} showCount={showCount} showQuality={showQuality} showTransparent={showTransparent} /></div></ImageSettingsTheme>;
 
     return (
         <ImageSettingsTheme theme={theme}>
@@ -110,12 +106,14 @@ export function ImageSettingsPanel({ config, onConfigChange, theme, showTitle = 
                     <div className="space-y-2">
                         <SettingTitle color={theme.node.muted}>生成张数</SettingTitle>
                         <div className="grid grid-cols-4 gap-1.5">
-                            {Array.from({ length: Math.min(quickCount, effectiveMaxCount) }, (_, index) => index + 1).map((value) => (
+                            {Array.from({ length: Math.min(3, effectiveMaxCount) }, (_, index) => index + 1).map((value) => (
                                 <OptionPill key={value} selected={count === value} theme={theme} onClick={() => onConfigChange("count", String(value))}>
                                     {value}
                                 </OptionPill>
                             ))}
-                            <CountInput value={count} quickCount={quickCount} max={effectiveMaxCount} theme={theme} onChange={(value) => onConfigChange("count", String(value || 1))} />
+                            {effectiveMaxCount >= 4 ? (
+                                <CountStepperInput value={count} max={effectiveMaxCount} theme={theme} onChange={(value) => onConfigChange("count", String(value))} />
+                            ) : null}
                         </div>
                     </div>
                 ) : null}
@@ -142,10 +140,6 @@ export function ImageSettingsTheme({ theme, children }: { theme: CanvasTheme; ch
     );
 }
 
-export function imageQualityLabel(value: string) {
-    return ({ auto: "自动", high: "高", medium: "中", low: "低", "1k": "1K", "2k": "2K", "4k": "4K" } as Record<string, string>)[value.toLowerCase()] || value || "默认";
-}
-
 function isGrokResolutionQuality(profile: ImageCapabilityConfig) {
     const values = profile.quality.values.map((item) => item.toLowerCase());
     return values.some((value) => ["1k", "2k", "4k"].includes(value));
@@ -163,11 +157,12 @@ function imageModelPriceTiers(config: AiConfig) {
 }
 
 function hasPriceTierForImageSelection(tiers: ReturnType<typeof imageModelPriceTiers>, quality: string, size: string) {
-	if (!tiers.length) return true;
-	return tiers.some((tier) => {
-		const selector = tier.selector || {};
-		return (!selector.quality || selector.quality === "*" || selector.quality === quality.toLowerCase()) && (!selector.size || selector.size === "*" || selector.size === size.toLowerCase());
-	});
+    if (!tiers.length) return true;
+    const requested = imagePriceSelector(quality, size);
+    return tiers.some((tier) => {
+        const selector = normalizeImagePriceSelector(tier.selector || {});
+        return Object.entries(selector).every(([key, value]) => value === "*" || requested[key] === value);
+    });
 }
 
 function OptionPill({ selected, disabled = false, theme, onClick, children }: { selected: boolean; disabled?: boolean; theme: CanvasTheme; onClick: () => void; children: ReactNode }) {
@@ -185,31 +180,130 @@ function OptionPill({ selected, disabled = false, theme, onClick, children }: { 
     );
 }
 
-function CountInput({ value, quickCount, max, theme, onChange }: { value: number; quickCount: number; max: number; theme: CanvasTheme; onChange: (value: number | null) => void }) {
-    const commit = (input: HTMLInputElement) => {
-        const next = Math.max(1, Math.min(max, Math.floor(Number(input.value) || 1)));
-        input.value = String(next);
+function CountStepperInput({
+    value,
+    max,
+    theme,
+    onChange,
+}: {
+    value: number;
+    max: number;
+    theme: CanvasTheme;
+    onChange: (value: number) => void;
+}) {
+    const isSelected = value >= 4;
+    const [draftValue, setDraftValue] = useState(() => (value >= 4 ? String(value) : "4"));
+
+    useEffect(() => {
+        if (value >= 4) {
+            setDraftValue(String(value));
+        }
+    }, [value]);
+
+    const handleSelectThis = () => {
+        const num = Math.max(1, Math.min(max, parseInt(draftValue, 10) || 4));
+        onChange(num);
+    };
+
+    const handleStepUp = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        const base = value >= 4 ? value : (parseInt(draftValue, 10) || 4);
+        const next = Math.min(max, base + 1);
+        setDraftValue(String(next));
         onChange(next);
     };
+
+    const handleStepDown = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        const base = value >= 4 ? value : (parseInt(draftValue, 10) || 4);
+        const next = Math.max(1, base - 1);
+        setDraftValue(String(next));
+        onChange(next);
+    };
+
+    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setDraftValue(e.target.value);
+    };
+
+    const handleInputBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+        const num = Math.max(1, Math.min(max, parseInt(e.target.value, 10) || 4));
+        setDraftValue(String(num));
+        onChange(num);
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === "Enter") {
+            e.currentTarget.blur();
+        } else if (e.key === "ArrowUp") {
+            e.preventDefault();
+            const base = value >= 4 ? value : (parseInt(draftValue, 10) || 4);
+            const next = Math.min(max, base + 1);
+            setDraftValue(String(next));
+            onChange(next);
+        } else if (e.key === "ArrowDown") {
+            e.preventDefault();
+            const base = value >= 4 ? value : (parseInt(draftValue, 10) || 4);
+            const next = Math.max(1, base - 1);
+            setDraftValue(String(next));
+            onChange(next);
+        }
+    };
+
     return (
-        <label className="flex h-8 overflow-hidden rounded-full text-xs" style={{ background: theme.toolbar.itemHover, color: theme.node.text }}>
+        <div
+            className="group relative flex h-8 items-center overflow-hidden rounded-full border text-xs transition-colors cursor-pointer select-none"
+            style={{
+                background: isSelected ? theme.toolbar.activeBg : theme.toolbar.itemHover,
+                borderColor: isSelected ? theme.accent.primary : "transparent",
+                color: theme.node.text,
+            }}
+            onClick={handleSelectThis}
+        >
             <input
-                key={value > quickCount ? `custom-${value}` : "quick"}
-                type="number"
-                min={1}
-                max={max}
+                type="text"
+                inputMode="numeric"
                 aria-label="自定义生成张数"
-                placeholder="输入"
-                className="min-w-0 flex-1 bg-transparent px-2 text-center outline-none placeholder:text-current placeholder:opacity-55 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                style={{ color: theme.node.text, WebkitTextFillColor: theme.node.text }}
-                defaultValue={value > quickCount ? value : ""}
-                onBlur={(event) => commit(event.currentTarget)}
-                onKeyDown={(event) => {
-                    if (event.key === "Enter") event.currentTarget.blur();
+                value={draftValue}
+                onChange={handleInputChange}
+                onBlur={handleInputBlur}
+                onKeyDown={handleKeyDown}
+                onFocus={(e) => {
+                    e.currentTarget.select();
+                    if (value < 4) {
+                        handleSelectThis();
+                    }
                 }}
-                onMouseDown={(event) => event.stopPropagation()}
+                className="w-full min-w-0 flex-1 bg-transparent pl-2 pr-0.5 text-center font-medium text-xs outline-none"
+                style={{ color: theme.node.text, WebkitTextFillColor: theme.node.text }}
             />
-        </label>
+            <div
+                className="flex flex-col h-full w-4.5 shrink-0 border-l justify-center items-center divide-y"
+                style={{ borderColor: `${theme.toolbar.border}80` }}
+            >
+                <button
+                    type="button"
+                    tabIndex={-1}
+                    onClick={handleStepUp}
+                    disabled={value >= max && isSelected}
+                    className="flex flex-1 w-full items-center justify-center hover:bg-black/15 dark:hover:bg-white/15 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                    title="增加 1 张"
+                    aria-label="增加 1 张"
+                >
+                    <ChevronUp className="size-2.5 opacity-70" />
+                </button>
+                <button
+                    type="button"
+                    tabIndex={-1}
+                    onClick={handleStepDown}
+                    disabled={value <= 1 && isSelected}
+                    className="flex flex-1 w-full items-center justify-center hover:bg-black/15 dark:hover:bg-white/15 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                    title="减少 1 张"
+                    aria-label="减少 1 张"
+                >
+                    <ChevronDown className="size-2.5 opacity-70" />
+                </button>
+            </div>
+        </div>
     );
 }
 

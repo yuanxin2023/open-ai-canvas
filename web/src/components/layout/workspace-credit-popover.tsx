@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { CreditProductCard } from "@/components/payments/credit-product-card";
+import { topupSaleDescription } from "@/lib/topup-sale-policy";
 import { PaymentPromotionBanner, promotionClockOffset } from "@/components/payments/payment-promotion-banner";
 import { AppModal } from "@/components/ui/product/app-modal";
 import { formatCredits } from "@/constant/credits";
@@ -129,6 +130,7 @@ export function WorkspaceCreditPopover({ userId }: { userId: string }) {
     }, [selectedProduct?.id, paymentOrder?.id, paymentOrder?.status]);
 
     const openPaymentSelector = (product: TopupProduct) => {
+        if (!product.canPurchase) { message.warning("该套餐当前不可购买"); return; }
         setSelectedProduct(product);
         setSelectedProviderId((current) => providers.some((provider) => provider.id === current) ? current : providers[0]?.id || "");
         setPaymentOrder(null);
@@ -142,6 +144,7 @@ export function WorkspaceCreditPopover({ userId }: { userId: string }) {
     };
 
     const startPayment = async () => {
+        if (!selectedProduct?.canPurchase) { message.warning("该套餐当前不可购买"); return; }
         if (!selectedProduct || !selectedProvider) {
             message.error("请选择支付方式");
             return;
@@ -174,7 +177,7 @@ export function WorkspaceCreditPopover({ userId }: { userId: string }) {
             const result = await queryPaymentOrder(paymentOrder.id);
             setPaymentOrder(result.order);
             if (result.order.status === "credited") paymentCompleted(result.order.id);
-            else if (result.order.status === "closed") message.warning("订单已关闭，未产生积分充值");
+            else if (result.order.status === "closed") message.warning(result.order.closurePending ? "订单已在站内关闭，渠道结果待确认；若已支付，将按原订单到账" : "渠道已确认关闭");
             else message.info("支付渠道尚未确认，请稍后再试");
         } catch (error) {
             message.error(error instanceof Error ? error.message : "查询支付结果失败");
@@ -190,7 +193,8 @@ export function WorkspaceCreditPopover({ userId }: { userId: string }) {
             const result = await closePaymentOrder(paymentOrder.id);
             setPaymentOrder(result.order);
             if (result.order.status === "credited") paymentCompleted(result.order.id);
-            else message.success("未支付订单已关闭");
+            else if (result.order.closurePending) message.info("订单已在站内关闭，渠道结果待确认");
+            else message.success("渠道已确认关闭订单");
         } catch (error) {
             message.error(error instanceof Error ? error.message : "关闭订单失败");
         } finally {
@@ -355,8 +359,9 @@ export function WorkspaceCreditPopover({ userId }: { userId: string }) {
                                     key={product.id}
                                     product={product}
                                     maxCreditsMicrocredits={maxProductCredits}
-                                    actionLabel={providers.length ? undefined : "暂无可用支付方式"}
-                                    actionDisabled={!providers.length}
+                                    availabilityLabel={topupSaleDescription(product)}
+                                    actionLabel={!product.canPurchase ? "暂不可购买" : providers.length ? undefined : "暂无可用支付方式"}
+                                    actionDisabled={!product.canPurchase || !providers.length}
                                     onAction={() => openPaymentSelector(product)}
                                 />
                             ))}

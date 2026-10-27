@@ -93,6 +93,7 @@ func TestTaskBillingCoordinatorRetryEligibility(t *testing.T) {
 		{name: "running order", orderID: "order-1", order: &model.BillingOrder{Status: model.BillingStatusRunning}, wantErr: false},
 		{name: "settled order", orderID: "order-1", order: &model.BillingOrder{Status: model.BillingStatusSettled}, wantErr: false},
 		{name: "refunded order", orderID: "order-1", order: &model.BillingOrder{Status: model.BillingStatusRefunded}, wantErr: false},
+		{name: "refund recovery pending", orderID: "order-1", order: &model.BillingOrder{Status: model.BillingStatusRefunded, RefundRecoveryPending: true}, wantErr: true, wantReview: true},
 		{name: "uncertain order", orderID: "order-1", order: &model.BillingOrder{Status: model.BillingStatusUncertain}, wantErr: true, wantReview: true},
 		{name: "missing order", orderID: "order-1", wantErr: true, wantReview: false},
 		{name: "lookup failure", orderID: "order-1", orderErr: errors.New("database unavailable"), wantErr: true, wantReview: false},
@@ -128,6 +129,27 @@ func TestTaskBillingCoordinatorTruncatesFailureText(t *testing.T) {
 	}
 	if got := repo.uncertainCalls[0]; !strings.HasSuffix(got, strings.Repeat("中", 1000)+"...") {
 		t.Fatalf("uncertain reason was not truncated with compatibility suffix: %q", got)
+	}
+}
+
+func TestTaskBillingCoordinatorHidesUpstreamAddressInReason(t *testing.T) {
+	repo := &taskBillingRepositoryStub{}
+	billing := newTaskBillingCoordinator(repo)
+	reason := `Post "https://www.kccai.ai/v1/images/generations": http2: server sent GOAWAY and closed the connection`
+
+	if err := billing.RefundBilling("order-1", reason); err != nil {
+		t.Fatalf("RefundBilling() error = %v", err)
+	}
+	if err := billing.MarkBillingUncertain("order-1", reason); err != nil {
+		t.Fatalf("MarkBillingUncertain() error = %v", err)
+	}
+	for name, got := range map[string]string{"refund": repo.refundCalls[0], "uncertain": repo.uncertainCalls[0]} {
+		if strings.Contains(got, "kccai.ai") {
+			t.Fatalf("%s reason leaked upstream host: %q", name, got)
+		}
+		if !strings.Contains(got, upstreamAddressLinkPlaceholder) {
+			t.Fatalf("%s reason should mark the hidden link: %q", name, got)
+		}
 	}
 }
 

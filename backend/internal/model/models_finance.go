@@ -13,8 +13,8 @@ type CreditAccount struct {
 
 type CreditLedgerEntry struct {
 	ID                         string           `json:"id" gorm:"primaryKey;size:36"`
-	UserID                     string           `json:"userId" gorm:"size:36;index;index:idx_credit_ledger_user_created,priority:1"`
-	Type                       CreditLedgerType `json:"type" gorm:"size:32;index"`
+	UserID                     string           `json:"userId" gorm:"size:36;index;index:idx_credit_ledger_user_created,priority:1;index:idx_credit_ledger_user_type,priority:1"`
+	Type                       CreditLedgerType `json:"type" gorm:"size:32;index;index:idx_credit_ledger_user_type,priority:2"`
 	AmountMicrocredits         int64            `json:"amountMicrocredits"`
 	AvailableDeltaMicrocredits int64            `json:"availableDeltaMicrocredits"`
 	ReservedDeltaMicrocredits  int64            `json:"reservedDeltaMicrocredits"`
@@ -69,6 +69,7 @@ type BillingOrder struct {
 	ChargeLimitMicrocredits      int64 `json:"chargeLimitMicrocredits,omitempty"`
 	ActualAmountMicrocredits     int64 `json:"actualAmountMicrocredits"`
 	RefundedAmountMicrocredits   int64 `json:"refundedAmountMicrocredits"`
+	RefundRecoveryPending        bool  `json:"refundRecoveryPending,omitempty" gorm:"not null;default:false"`
 	InputTokenPriceMicrocredits  int64 `json:"inputTokenPriceMicrocredits"`
 	OutputTokenPriceMicrocredits int64 `json:"outputTokenPriceMicrocredits"`
 	CachedTokenPriceMicrocredits int64 `json:"cachedTokenPriceMicrocredits"`

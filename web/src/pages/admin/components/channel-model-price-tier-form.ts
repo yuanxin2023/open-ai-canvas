@@ -1,4 +1,7 @@
+import { normalizeLegacyImageOptions } from "@/lib/image-parameter-legacy";
 import type { ModelCapabilityChoice } from "@/components/model-protocol-picker";
+import type { ModelCapabilityConfig } from "@/lib/model-capabilities";
+import type { ImageCapabilityConfig } from "@/lib/model-capabilities";
 import type { ChannelModel, ChannelModelPriceTier } from "@/services/api/wallet";
 
 export type PriceTierMatchMode = "default" | "advanced";
@@ -11,13 +14,17 @@ export function normalizeUpstreamModelKey(value: unknown): string {
 }
 
 export type PriceTierFormValues = {
+    imageSelector?: Record<string, string>;
     matchMode: PriceTierMatchMode;
     operation: string;
+    imageResolution: string;
     quality: string;
     size: string;
     resolution: string;
     videoSeconds: number;
     videoGenerateAudio: string;
+    /** 视频处理输出帧率档：le30 / le60 / le120，* 表示任意。 */
+    fpsBand: string;
     imageCount: number;
     providerModelKey?: string;
     billingMode: ChannelModel["billingMode"];
@@ -38,11 +45,13 @@ export function defaultPriceTier(matchMode: PriceTierMatchMode = "default"): Pri
     return {
         matchMode,
         operation: "*",
+        imageResolution: "*",
         quality: "*",
         size: "*",
         resolution: "*",
         videoSeconds: 0,
         videoGenerateAudio: "*",
+        fpsBand: "*",
         imageCount: 0,
         providerModelKey: "",
         billingMode: "fixed_request",
@@ -60,17 +69,21 @@ export function defaultPriceTier(matchMode: PriceTierMatchMode = "default"): Pri
     };
 }
 
-export function priceTierToForm(tier: ChannelModelPriceTier): PriceTierFormValues {
-    const selector = tier.selector || {};
-    const hasSpecificMatch = [selector.operation, selector.quality, selector.size].some((value) => value && value !== "*") || (tier.resolution && tier.resolution !== "*") || tier.videoSeconds > 0 || Number(selector.imageCount || 0) > 0;
+export function priceTierToForm(tier: ChannelModelPriceTier, image?: ImageCapabilityConfig, protocol?: string): PriceTierFormValues {
+    const selector = normalizeLegacyImageOptions(protocol, { ...(tier.selector || {}) }) as Record<string, string>;
+    const candidates = image?.parameters ? Object.values(selector) : [selector.operation, selector.imageResolution, selector.quality, selector.resolution, selector.size, selector.fpsBand];
+    const hasSpecificMatch = candidates.some((value) => value && value !== "*") || (tier.resolution && tier.resolution !== "*") || tier.videoSeconds > 0 || Number(selector.imageCount || 0) > 0;
     return {
         matchMode: hasSpecificMatch ? "advanced" : "default",
         operation: selector.operation || "*",
+        imageSelector: Object.fromEntries(Object.entries(selector).filter(([name]) => name !== "operation")),
+        imageResolution: selector.imageResolution || "*",
         quality: selector.quality || "*",
         size: selector.size || "*",
-        resolution: tier.resolution || "*",
+        resolution: selector.resolution || tier.resolution || "*",
         videoSeconds: tier.videoSeconds || 0,
         videoGenerateAudio: selector.videoGenerateAudio || "*",
+        fpsBand: selector.fpsBand || "*",
         imageCount: Number(selector.imageCount || 0),
         providerModelKey: tier.providerModelKey || "",
         billingMode: tier.billingMode,
@@ -103,16 +116,32 @@ export function legacyPriceTierToForm(item: ChannelModel): PriceTierFormValues {
     };
 }
 
-export function skuSelectorFromForm(capability: ModelCapabilityChoice, tier: PriceTierFormValues) {
+export function skuSelectorFromForm(capability: ModelCapabilityChoice, tier: PriceTierFormValues, capabilityConfig?: ModelCapabilityConfig) {
     if (tier.matchMode !== "advanced") return {};
     const selector: Record<string, string> = {};
     if (tier.operation && tier.operation !== "*") selector.operation = tier.operation;
     if (capability === "video") {
         if (tier.resolution && tier.resolution !== "*") selector.vquality = tier.resolution;
         if (tier.imageCount > 0) selector.imageCount = String(tier.imageCount);
+        if (capabilityConfig?.video?.processing && tier.fpsBand && tier.fpsBand !== "*") selector.fpsBand = tier.fpsBand;
     }
     if (capability === "image") {
-        if (tier.quality && tier.quality !== "*") selector.quality = tier.quality;
+        if (capabilityConfig?.image?.parameters) {
+            for (const field of capabilityConfig.image.parameters) {
+                if (field.enabled === false || !field.pricing) continue;
+                const value = tier.imageSelector?.[field.name];
+                if (value !== undefined && value !== "" && value !== "*") selector[field.name] = String(value);
+            }
+            return selector;
+        }
+        if (tier.imageResolution && tier.imageResolution !== "*") {
+            selector.imageResolution = tier.imageResolution;
+        } else if (capabilityConfig?.image?.resolution?.supported && tier.quality && ["1k", "1.5k", "2k", "4k"].includes(tier.quality.toLowerCase())) {
+            // 旧定价把档位存在 quality 时，写入 imageResolution 以匹配新选择器。
+            selector.imageResolution = tier.quality.toLowerCase();
+        } else if (tier.quality && tier.quality !== "*") {
+            selector.quality = tier.quality;
+        }
         if (tier.size && tier.size !== "*") selector.size = tier.size;
     }
     return selector;
@@ -126,10 +155,10 @@ export function priceTierVideoSecondsFromForm(capability: ModelCapabilityChoice,
     return capability === "video" && tier.matchMode === "advanced" ? tier.videoSeconds || 0 : 0;
 }
 
-export function priceTierPayloadFromForm(capability: ModelCapabilityChoice, tier: PriceTierFormValues, upstreamModel: string) {
+export function priceTierPayloadFromForm(capability: ModelCapabilityChoice, tier: PriceTierFormValues, upstreamModel: string, capabilityConfig?: ModelCapabilityConfig) {
     const videoTokens = capability === "video" && tier.billingMode === "token";
     return {
-        selector: skuSelectorFromForm(capability, tier),
+        selector: skuSelectorFromForm(capability, tier, capabilityConfig),
         resolution: priceTierResolutionFromForm(capability, tier),
         videoSeconds: priceTierVideoSecondsFromForm(capability, tier),
         providerModelKey: tier.providerModelKey?.trim() || upstreamModel,

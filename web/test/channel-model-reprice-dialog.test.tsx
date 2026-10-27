@@ -54,15 +54,15 @@ test("recalculation resets all specifications; manual edit changes only its fina
         })),
     };
     const rows = modelRepriceRows(previewModelRepricing([pricingModel], 25, 2));
-    expect(rows.map((row) => row.sale)).toEqual(["4", "4", "4"]);
+    expect(rows.map((row) => row.sale)).toEqual(["3.75", "3.75", "3.75"]);
     rows[1]!.sale = "5.5";
     rows[1]!.manual = true;
-    expect(modelRepricePayload([pricingModel], rows)[0]!.priceTiers.map((tier) => tier.prices.unitPriceMicrocredits)).toEqual([4_000_000, 5_500_000, 4_000_000]);
+    expect(modelRepricePayload([pricingModel], rows)[0]!.priceTiers.map((tier) => tier.prices.unitPriceMicrocredits)).toEqual([3_750_000, 5_500_000, 3_750_000]);
     const html = render([pricingModel], rows);
     expect(html).toContain('value="5.50"');
     expect(html).toContain("手动修改");
     const reset = modelRepriceRows(previewModelRepricing([pricingModel], 25, 2));
-    expect(reset.map((row) => row.sale)).toEqual(["4", "4", "4"]);
+    expect(reset.map((row) => row.sale)).toEqual(["3.75", "3.75", "3.75"]);
     expect(reset.every((row) => !row.manual)).toBe(true);
 });
 

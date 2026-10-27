@@ -1,4 +1,4 @@
-import { Alert, App, Button, Form, Input, InputNumber, Modal, Segmented, Select, Switch, Table, Tag } from "antd";
+import { Alert, App, Button, Form, Input, InputNumber, Modal, Segmented, Switch, Table, Tag } from "antd";
 import type { FormInstance } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { Archive, FlaskConical, GitBranch, Layers3, Pencil, Plus, Search } from "lucide-react";
@@ -12,6 +12,7 @@ import { AdminPageFrame } from "@/pages/admin/components/admin-shell";
 import { AdminDataTable, AdminFilterChip, AdminRowActions, AdminStatusBadge, AdminTableEmpty } from "@/pages/admin/components/admin-ui";
 import { listAdminChannels } from "@/services/api/auth";
 import { listAdminChannelModels, type ChannelModel } from "@/services/api/wallet";
+import { Select } from "@/components/ui/base/select";
 import {
     createAdminLogicalModel,
     deleteAdminLogicalModel,
@@ -173,7 +174,8 @@ export default function LogicalModelsPage() {
             message.error("请至少添加一条供应线路");
             return;
         }
-        const sourceError = capabilitySourceError(values.capability, modelSourceSpecs, values.capabilitySpec);
+        const currentSpec = normalizeCapabilitySpecForSources(values.capabilitySpec, modelSourceSpecs) || values.capabilitySpec;
+        const sourceError = capabilitySourceError(values.capability, modelSourceSpecs, currentSpec);
         if (values.enabled && sourceError) {
             setEditorTab("capabilities");
             message.error(sourceError);
@@ -638,7 +640,9 @@ function RouteFields({
                                                             .map((item) => (item ? capabilitySpecFromChannelModel(item) : undefined))
                                                             .filter((item): item is CapabilitySpec => Boolean(item));
                                                         form.setFieldValue("routes", nextRoutes);
-                                                        if (!hasCapabilityRules(form.getFieldValue("capabilitySpec"))) form.setFieldValue("capabilitySpec", mergeCapabilitySpecs(capability, specs));
+                                                        const current = form.getFieldValue("capabilitySpec");
+                                                        if (capability === "image" || !hasCapabilityRules(current))
+                                                            form.setFieldValue("capabilitySpec", capability === "image" && hasCapabilityRules(current) ? normalizeCapabilitySpecForSources(current, specs) : mergeCapabilitySpecs(capability, specs));
                                                     }}
                                                 />
                                             </Form.Item>

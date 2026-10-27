@@ -20,7 +20,7 @@ describe("curated creation inspirations", () => {
             Bun.file(new URL("../src/components/user-prompt-editor-modal.css", import.meta.url)).text(),
             Bun.file(new URL("../src/pages/prompts/index.tsx", import.meta.url)).text(),
         ]);
-        expect(workspace).toContain('source === "personal" ? <button type="button" className="creation-inspiration-add"');
+        expect(workspace).toContain('source === "personal" && userId ? <button type="button" className="creation-inspiration-add"');
         expect(workspace).toContain("<UserPromptEditorModal");
         expect(workspace).toContain("setInspirations((current) => [created, ...current.filter");
         expect(editor).toContain("await createUserPrompt(input)");

@@ -7,22 +7,51 @@ on:
 permissions:
   contents: read
 
+# 同一个 PR 连续推送时取消旧的检查，只保留最新提交；被发布流程调用（workflow_call）时
+# 每次运行使用独立分组，绝不互相取消，避免中间提交的镜像发布被跳过。
+concurrency:
+  group: quality-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
-  backend:
-    name: Backend checks
+  agent-lint:
+    name: Agent architecture and static checks
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: backend
-    # 后端有 5 个用例默认会静默跳过：3 个需要 CANVAS_TEST_POSTGRES_DSN（PostgreSQL 迁移、
-    # 素材字节修复、画布版本历史），2 个用 exec.LookPath("redis-server") 自起临时实例
-    # （Redis 租约、缓存白名单）。只跑 go test ./... 而不备齐这两样，这些路径永远不会被执行。
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+      # v2.5.0 supports Go 1.25. This job scopes linting to Agent domain packages;
+      # the existing backend job continues to own the full integration suite.
+      - uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.5.0
+          working-directory: backend
+          args: --config=.golangci.yml ./internal/agent/...
+      - name: Check Agent architecture
+        run: go test -count=1 ./internal/agent/architecture
+
+  backend:
+    name: Backend checks
+    runs-on: ubuntu-latest
+    # go test 自身有 20 分钟超时；这里兜底防止依赖服务卡死时占用 Runner 数小时。
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: backend
+    # 提供 PostgreSQL、Redis 与原始 Schema 51 夹具，并核对十一条依赖路径实际通过。
     services:
       postgres:
         image: postgres:16-alpine
         env:
           POSTGRES_PASSWORD: canvas_test
-          POSTGRES_DB: canvas_test
+          POSTGRES_DB: canvas_merge_fixture
         ports:
           - 5432:5432
         options: >-
@@ -31,14 +60,44 @@ jobs:
           --health-timeout 5s
           --health-retries 12
     env:
-      CANVAS_TEST_POSTGRES_DSN: postgres://postgres:canvas_test@127.0.0.1:5432/canvas_test?sslmode=disable
+      CANVAS_TEST_POSTGRES_DSN: postgres://postgres:canvas_test@127.0.0.1:5432/canvas_merge_fixture?sslmode=disable
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-go@v5
         with:
           go-version-file: backend/go.mod
           cache-dependency-path: backend/go.sum
           cache: true
+      - name: Generate original Schema 51 fixtures from the pinned local baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          fixture_source="$RUNNER_TEMP/canvas-schema51-source"
+          fixture_output="$RUNNER_TEMP/canvas-schema51-fixtures"
+          mkdir -p "$fixture_source" "$fixture_output" "$(go env GOMODCACHE)"
+          git -C .. archive 15861487c12780d08043ed7d7eca864deea73c53 backend | tar -x -C "$fixture_source"
+          cp internal/database/testdata/schema51_export_test.go "$fixture_source/backend/internal/database/schema51_export_test.go"
+          docker run --rm --user "$(id -u):$(id -g)" \
+            --add-host codex-canvas-merge-v1692-postgres:host-gateway \
+            --mount "type=bind,src=$fixture_source/backend,dst=/source,readonly" \
+            --mount "type=bind,src=$fixture_output,dst=/results" \
+            --mount "type=bind,src=$(go env GOMODCACHE),dst=/go/pkg/mod" \
+            --tmpfs /tmp:rw,exec,nosuid,nodev,mode=1777 \
+            --workdir /source -e GOCACHE=/tmp/go-build-cache -e GOFLAGS=-mod=readonly -e GOENV=off -e GOTOOLCHAIN=local \
+            -e CANVAS_FIXTURE_OUTPUT=/results \
+            -e CANVAS_TEST_POSTGRES_DSN='postgres://postgres:canvas_test@codex-canvas-merge-v1692-postgres:5432/canvas_merge_fixture?sslmode=disable' \
+            golang:1.25-bookworm go test -timeout=10m -count=1 -run '^TestExportOriginalSchema51$' ./internal/database
+          printf 'CANVAS_TEST_MIGRATION_FIXTURES=%s\n' "$fixture_output" >> "$GITHUB_ENV"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.19.0
+          cache: npm
+          cache-dependency-path: backend/agent-runtime/pi/package-lock.json
+      - name: Install Pi Agent runtime dependencies
+        working-directory: backend/agent-runtime/pi
+        run: npm ci --omit=dev --ignore-scripts
       - name: Install redis-server for integration tests
         # 用例自己拉起临时 redis-server（unix socket），所以需要的是可执行文件而不是 redis 服务。
         run: |
@@ -47,12 +106,19 @@ jobs:
           fi
           sudo systemctl stop redis-server || true
       - name: Check formatting
-        run: test -z "$(gofmt -l .)"
+        shell: bash
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then
+            printf '%s\n' "$unformatted"
+            echo "::error::Go files require gofmt. Run gofmt -w on the files listed above."
+            exit 1
+          fi
       - name: Run Go tests
         shell: bash
         run: |
           set -o pipefail
-          go test -timeout 30m -json ./... | tee "$RUNNER_TEMP/go-tests.jsonl"
+          go test -json -timeout=20m ./... | tee "$RUNNER_TEMP/go-tests.jsonl"
       - name: Ensure dependency-backed tests were not skipped
         shell: bash
         run: |
@@ -95,6 +161,7 @@ jobs:
   web:
     name: Web checks
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: web
@@ -133,7 +200,7 @@ jobs:
         run: bun run test
       # ubuntu-latest 预装 google-chrome；脚本的解析顺序已覆盖该路径，
       # 因此不引入第三方 setup action，也不需要任何 secret。
-      - name: Director P0 Chrome E2E
+      - name: Previs P0 Chrome E2E
         run: |
           google-chrome --version || chromium --version
-          bun run test:director:e2e
+          bun run test:previs:e2e

@@ -44,6 +44,32 @@ test("new nodes and reference connections are applied atomically", () => {
     expect(result.connections).toEqual([edge]);
 });
 
+test("Agent refresh applies server reference order when local connections were untouched", () => {
+    const imageOne = { id: "image-one", fromNodeId: "image-one", toNodeId: node.id };
+    const imageTwo = { id: "image-two", fromNodeId: "image-two", toNodeId: node.id };
+    const characterOne = { id: "character-one", fromNodeId: "character-one", toNodeId: node.id };
+    const characterTwo = { id: "character-two", fromNodeId: "character-two", toNodeId: node.id };
+    const previous = { ...project, connections: [characterOne, characterTwo, imageOne, imageTwo] };
+    const incoming = { ...previous, revision: 2, connections: [imageOne, imageTwo, characterOne, characterTwo] };
+    const merged = mergeAgentCanvasEditor(previous, incoming, previous.nodes, previous.connections, previous);
+
+    expect(merged.connections.map((connection) => connection.id)).toEqual(["image-one", "image-two", "character-one", "character-two"]);
+});
+
+test("Agent refresh preserves moving the first reference to the fifth position locally", () => {
+    const roleOne = { id: "role-one", fromNodeId: "role-one", toNodeId: node.id };
+    const imageTwo = { id: "image-two", fromNodeId: "image-two", toNodeId: node.id };
+    const roleThree = { id: "role-three", fromNodeId: "role-three", toNodeId: node.id };
+    const imageFour = { id: "image-four", fromNodeId: "image-four", toNodeId: node.id };
+    const imageFive = { id: "image-five", fromNodeId: "image-five", toNodeId: node.id };
+    const previous = { ...project, connections: [roleOne, imageTwo, roleThree, imageFour, imageFive] };
+    const incoming = { ...previous, revision: 2, connections: [imageFive, roleOne, imageTwo, roleThree, imageFour] };
+    const local = { ...previous, connections: [imageTwo, roleThree, imageFour, imageFive, roleOne] };
+    const merged = mergeAgentCanvasEditor(previous, incoming, local.nodes, local.connections, local);
+
+    expect(merged.connections.map((connection) => connection.id)).toEqual(["image-two", "role-three", "image-four", "image-five", "role-one"]);
+});
+
 test("deleted nodes and a newer task binding are not overwritten", () => {
     expect(() => applyAgentCanvasPatch({ ...project, nodes: [] }, patch)).toThrow("冲突");
     // A replacement task can have the same running status; its task identity is a fence.
@@ -68,12 +94,60 @@ test("task progress ahead of the server checkpoint still accepts terminal state"
     expect(isCanvasNodeGenerating(result.nodes[0])).toBe(false);
 });
 
-test("full Agent refresh removes unchanged nodes but preserves conflicting local edits", () => {
-    const remaining = { ...node, id: "remaining", metadata: {} };
-    const previous = { ...project, nodes: [node, remaining] };
-    const incoming = { ...previous, nodes: [remaining] };
-    expect(mergeAgentCanvasEditor(previous, incoming, previous.nodes, []).nodes).toEqual([remaining]);
-    const local = { ...node, title: "Unsaved local title" };
-    expect(() => mergeAgentCanvasEditor(previous, incoming, [local, remaining], [])).toThrow("冲突");
-    expect(local.title).toBe("Unsaved local title");
+test("full Previs refresh merges scene bookkeeping and preserves the local viewport", () => {
+    const scene = {
+        id: "scene-1",
+        version: 1 as const,
+        title: "镜头",
+        background: "#111111",
+        environmentIntensity: 0.7,
+        environment: { mode: "color" as const },
+        gridVisible: true,
+        objects: [],
+        cameras: [],
+        lights: [],
+        shots: [],
+        activeShotId: "shot-1",
+        createdAt: "2026-09-13T00:00:00Z",
+        updatedAt: "2026-09-13T00:00:00Z",
+    };
+    const previous = { ...project, previsScenes: [scene] };
+    const incoming = {
+        ...previous,
+        revision: 2,
+        updatedAt: "2026-09-13T12:00:00Z",
+        previsScenes: [{ ...scene, updatedAt: "2026-09-13T12:00:00Z", objects: [{ id: "actor-1", name: "Agent 演员" }] }],
+    };
+    const local = {
+        ...previous,
+        viewport: { x: -480, y: -220, k: 0.72 },
+        previsScenes: [{ ...scene, updatedAt: "2026-09-13T11:59:00Z" }],
+    };
+    const merged = mergeAgentCanvasEditor(previous, incoming, local.nodes, local.connections, local);
+    expect(merged.previsScenes[0].objects).toEqual(incoming.previsScenes[0].objects);
+    expect(merged.previsScenes[0].updatedAt).toBe(incoming.previsScenes[0].updatedAt);
+    expect(merged.viewport).toEqual(local.viewport);
+});
+
+test("full Previs refresh still rejects a same-field scene edit", () => {
+    const scene = {
+        id: "scene-1",
+        version: 1 as const,
+        title: "镜头",
+        background: "#111111",
+        environmentIntensity: 0.7,
+        environment: { mode: "color" as const },
+        gridVisible: true,
+        objects: [],
+        cameras: [],
+        lights: [],
+        shots: [],
+        activeShotId: "shot-1",
+        createdAt: "2026-09-13T00:00:00Z",
+        updatedAt: "2026-09-13T00:00:00Z",
+    };
+    const previous = { ...project, previsScenes: [scene] };
+    const incoming = { ...previous, revision: 2, previsScenes: [{ ...scene, title: "云端镜头", updatedAt: "2026-09-13T12:00:00Z" }] };
+    const local = { ...previous, previsScenes: [{ ...scene, title: "本地镜头", updatedAt: "2026-09-13T11:59:00Z" }] };
+    expect(() => mergeAgentCanvasEditor(previous, incoming, local.nodes, local.connections, local)).toThrow("冲突");
 });

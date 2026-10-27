@@ -15,9 +15,11 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"infinite-canvas/backend/internal/model"
+	"infinite-canvas/backend/internal/storage"
 
 	"gorm.io/gorm"
 )
@@ -34,20 +36,23 @@ const (
 )
 
 type OSSSettingRequest struct {
-	Enabled         bool   `json:"enabled"`
-	Provider        string `json:"provider"`
-	Region          string `json:"region"`
-	Endpoint        string `json:"endpoint"`
-	CDNBaseURL      string `json:"cdnBaseUrl"`
-	Bucket          string `json:"bucket"`
-	AccessKeyID     string `json:"accessKeyId"`
-	AccessKeySecret string `json:"accessKeySecret"`
-	PublicBaseURL   string `json:"publicBaseUrl"`
-	PathPrefix      string `json:"pathPrefix"`
-	S3Preset        string `json:"s3Preset"`
-	PathStyle       bool   `json:"pathStyle"`
-	SessionToken    string `json:"sessionToken"`
-	AllowUserS3     bool   `json:"allowUserS3"`
+	Enabled           bool   `json:"enabled"`
+	Provider          string `json:"provider"`
+	Region            string `json:"region"`
+	Endpoint          string `json:"endpoint"`
+	CDNBaseURL        string `json:"cdnBaseUrl"`
+	Bucket            string `json:"bucket"`
+	AccessKeyID       string `json:"accessKeyId"`
+	AccessKeySecret   string `json:"accessKeySecret"`
+	PublicBaseURL     string `json:"publicBaseUrl"`
+	PathPrefix        string `json:"pathPrefix"`
+	S3Preset          string `json:"s3Preset"`
+	PathStyle         bool   `json:"pathStyle"`
+	SessionToken      string `json:"sessionToken"`
+	AllowUserS3       bool   `json:"allowUserS3"`
+	CDNAuthMode       string `json:"cdnAuthMode"`
+	RequireCDN        bool   `json:"requireCDN"`
+	AllowPrivateProxy bool   `json:"allowPrivateProxy"`
 }
 
 type PublicOSSSetting struct {
@@ -70,34 +75,12 @@ type PublicOSSSetting struct {
 	HistoryCount            int64      `json:"historyCount"`
 	ReferencedResourceCount int64      `json:"referencedResourceCount"`
 	AllowUserS3             bool       `json:"allowUserS3"`
+	CDNAuthMode             string     `json:"cdnAuthMode"`
+	RequireCDN              bool       `json:"requireCDN"`
+	AllowPrivateProxy       bool       `json:"allowPrivateProxy"`
 	UpdatedBy               string     `json:"updatedBy"`
 	CreatedAt               time.Time  `json:"createdAt"`
 	UpdatedAt               time.Time  `json:"updatedAt"`
-}
-
-type ossSettingValue struct {
-	Enabled           bool   `json:"enabled"`
-	Provider          string `json:"provider"`
-	Region            string `json:"region"`
-	Endpoint          string `json:"endpoint"`
-	CDNBaseURL        string `json:"cdnBaseUrl"`
-	Bucket            string `json:"bucket"`
-	AccessKeyID       string `json:"accessKeyId"`
-	AccessKeySecret   string `json:"accessKeySecret"`
-	PublicBaseURL     string `json:"publicBaseUrl"`
-	PathPrefix        string `json:"pathPrefix"`
-	S3Preset          string `json:"s3Preset"`
-	PathStyle         bool   `json:"pathStyle"`
-	SessionToken      string `json:"sessionToken"`
-	StorageLocationID string `json:"storageLocationId"`
-	AllowUserS3       bool   `json:"allowUserS3"`
-	// 平台切换云厂商后仍需读取历史资源，因此仅归档非当前厂商的访问密钥。
-	ArchivedCredentials map[string]ossProviderCredentials `json:"archivedCredentials,omitempty"`
-}
-
-type ossProviderCredentials struct {
-	AccessKeyID     string `json:"accessKeyId"`
-	AccessKeySecret string `json:"accessKeySecret"`
 }
 
 func (s *Service) AdminOSSSetting(actor *model.User) (*PublicOSSSetting, error) {
@@ -441,28 +424,76 @@ func (s *Service) settingsEncryptionKey() ([]byte, error) {
 	if _, err := io.ReadFull(rand.Reader, key); err != nil {
 		return nil, err
 	}
-	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
-	if errors.Is(err, os.ErrExist) {
+	if err := publishSettingsKey(path, key, os.Link); errors.Is(err, os.ErrExist) {
+		return readExistingSettingsKey(path)
+	} else if err != nil {
+		return nil, err
+	}
+	return key, nil
+}
+
+func readExistingSettingsKey(path string) ([]byte, error) {
+	// An older process or the exclusive-create fallback may still be writing.
+	for attempt := 0; attempt < 11; attempt++ {
 		data, readErr := os.ReadFile(path)
 		if readErr != nil {
 			return nil, fmt.Errorf("读取存储加密密钥失败：%w", readErr)
 		}
-		if len(data) != 32 {
-			return nil, errors.New("存储加密密钥长度无效")
+		if len(data) == 32 {
+			return data, nil
 		}
-		return data, nil
+		if attempt < 10 {
+			time.Sleep(5 * time.Millisecond)
+		}
 	}
+	return nil, errors.New("存储加密密钥长度无效")
+}
+
+func publishSettingsKey(path string, key []byte, link func(string, string) error) error {
+	file, err := os.CreateTemp(filepath.Dir(path), ".settings-key-*")
 	if err != nil {
-		return nil, err
+		return err
 	}
+	defer os.Remove(file.Name())
+	defer file.Close()
 	if _, err := file.Write(key); err != nil {
-		_ = file.Close()
-		return nil, err
+		return err
+	}
+	if err := file.Sync(); err != nil {
+		return err
 	}
 	if err := file.Close(); err != nil {
-		return nil, err
+		return err
 	}
-	return key, nil
+	// Link publishes complete bytes without replacing another process's key.
+	if err := link(file.Name(), path); err != nil {
+		if !errors.Is(err, syscall.ENOTSUP) && !errors.Is(err, syscall.EPERM) {
+			return err
+		}
+		// Some filesystems prohibit hard links. O_EXCL still prevents replacement,
+		// but readers may see an incomplete file and a crash may leave it invalid.
+		fallback, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+		if err != nil {
+			return err
+		}
+		defer fallback.Close()
+		if _, err := fallback.Write(key); err != nil {
+			return err
+		}
+		if err := fallback.Sync(); err != nil {
+			return err
+		}
+		if err := fallback.Close(); err != nil {
+			return err
+		}
+	}
+	// Persist the published name, not only the inode's contents.
+	dir, err := os.Open(filepath.Dir(path))
+	if err != nil {
+		return err
+	}
+	defer dir.Close()
+	return dir.Sync()
 }
 
 func (s *Service) protectTaskSecrets(value interface{}) error {
@@ -563,7 +594,11 @@ func ossSettingFromRequest(req OSSSettingRequest, current ossSettingValue) (ossS
 		PathStyle:       req.PathStyle,
 		SessionToken:    strings.TrimSpace(req.SessionToken),
 		AllowUserS3:     req.AllowUserS3,
+		Delivery:        storage.DeliverySettings{CDNAuthMode: strings.ToLower(strings.TrimSpace(req.CDNAuthMode)), RequireCDN: req.RequireCDN, AllowPrivateProxy: req.AllowPrivateProxy},
 	})
+	if next.Delivery.CDNAuthMode != "" && next.Delivery.CDNAuthMode != "public" && next.Delivery.CDNAuthMode != "qiniu" {
+		return next, BadAuthRequest("CDN 鉴权方式无效，仅支持 public 或 qiniu")
+	}
 	if next.Provider != aliyunOSSProvider && next.Provider != tencentCOSProvider && next.Provider != qiniuKodoProvider && next.Provider != s3Provider {
 		return next, BadAuthRequest("仅支持阿里云 OSS、腾讯云 COS、七牛云 Kodo 和通用 S3")
 	}
@@ -640,49 +675,6 @@ func archiveOSSProviderCredentials(next ossSettingValue, current ossSettingValue
 	return next
 }
 
-func cloneOSSProviderCredentials(source map[string]ossProviderCredentials) map[string]ossProviderCredentials {
-	if len(source) == 0 {
-		return nil
-	}
-	cloned := make(map[string]ossProviderCredentials, len(source))
-	for provider, credentials := range source {
-		cloned[strings.ToLower(strings.TrimSpace(provider))] = ossProviderCredentials{
-			AccessKeyID:     strings.TrimSpace(credentials.AccessKeyID),
-			AccessKeySecret: strings.TrimSpace(credentials.AccessKeySecret),
-		}
-	}
-	return cloned
-}
-
-func normalizeOSSSetting(value ossSettingValue) ossSettingValue {
-	value.Provider = strings.ToLower(strings.TrimSpace(value.Provider))
-	if value.Provider == "" {
-		value.Provider = aliyunOSSProvider
-	}
-	value.Region = strings.TrimSpace(value.Region)
-	value.Endpoint = strings.TrimRight(strings.TrimSpace(value.Endpoint), "/")
-	if value.Provider == tencentCOSProvider && value.Endpoint == "" && value.Region != "" {
-		value.Endpoint = "https://cos." + value.Region + ".myqcloud.com"
-	}
-	value.CDNBaseURL = strings.TrimRight(strings.TrimSpace(value.CDNBaseURL), "/")
-	value.Bucket = strings.TrimSpace(value.Bucket)
-	value.AccessKeyID = strings.TrimSpace(value.AccessKeyID)
-	value.AccessKeySecret = strings.TrimSpace(value.AccessKeySecret)
-	value.PublicBaseURL = strings.TrimRight(strings.TrimSpace(value.PublicBaseURL), "/")
-	value.PathPrefix = strings.Trim(strings.TrimSpace(value.PathPrefix), "/")
-	if value.PathPrefix == "" {
-		value.PathPrefix = defaultOSSPathPrefix
-	}
-	value.S3Preset = strings.ToLower(strings.TrimSpace(value.S3Preset))
-	if value.S3Preset == "" {
-		value.S3Preset = "custom"
-	}
-	value.SessionToken = strings.TrimSpace(value.SessionToken)
-	value.StorageLocationID = strings.TrimSpace(value.StorageLocationID)
-	value.ArchivedCredentials = cloneOSSProviderCredentials(value.ArchivedCredentials)
-	return value
-}
-
 func defaultOSSSetting() ossSettingValue {
 	return ossSettingValue{Provider: aliyunOSSProvider, PathPrefix: defaultOSSPathPrefix}
 }
@@ -704,6 +696,9 @@ func (s *Service) publicOSSSetting(setting *model.SystemSetting, value ossSettin
 		HasSessionToken:    value.SessionToken != "",
 		StorageLocationID:  value.StorageLocationID,
 		AllowUserS3:        value.AllowUserS3,
+		CDNAuthMode:        value.Delivery.CDNAuthMode,
+		RequireCDN:         value.Delivery.RequireCDN,
+		AllowPrivateProxy:  value.Delivery.AllowPrivateProxy,
 	}
 	if setting != nil {
 		result.UpdatedBy = setting.UpdatedBy
@@ -733,6 +728,9 @@ func (s *Service) publicUserOSSSetting(setting *model.UserOSSSetting, value ossS
 		HasSessionToken:    value.SessionToken != "",
 		StorageLocationID:  value.StorageLocationID,
 		AllowUserS3:        allowUserS3,
+		CDNAuthMode:        value.Delivery.CDNAuthMode,
+		RequireCDN:         value.Delivery.RequireCDN,
+		AllowPrivateProxy:  value.Delivery.AllowPrivateProxy,
 	}
 	if value.Provider == s3Provider && !allowUserS3 {
 		result.Enabled = false

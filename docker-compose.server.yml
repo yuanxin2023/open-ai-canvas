@@ -35,8 +35,12 @@ services:
       context: .
       dockerfile: backend/Dockerfile
       args:
+        BUILD_VERSION: ${CANVAS_BUILD_VERSION:-}
+        BUILD_COMMIT: ${CANVAS_BUILD_COMMIT:-unknown}
+        BUILD_TIME: ${CANVAS_BUILD_TIME:-unknown}
         GOPROXY: ${GOPROXY:-https://goproxy.cn,direct}
-    command: ["migrate-schema", "up"]
+    entrypoint: ["migrate-schema"]
+    command: ["up"]
     environment:
       CANVAS_BACKEND_DATA_DIR: /data
       CANVAS_DATABASE_DRIVER: postgres
@@ -45,6 +49,27 @@ services:
       postgres:
         condition: service_healthy
 
+  yingce-agent:
+    image: open-ai-canvas-yingce-agent:server
+    build:
+      context: .
+      dockerfile: yingce-agent/Dockerfile
+      args:
+        BUILD_VERSION: ${CANVAS_BUILD_VERSION:-}
+        BUILD_COMMIT: ${CANVAS_BUILD_COMMIT:-unknown}
+        BUILD_TIME: ${CANVAS_BUILD_TIME:-unknown}
+    environment:
+      YINGCE_AGENT_TOKEN: ${YINGCE_AGENT_TOKEN:?请配置至少 32 字符的独立 Agent Token}
+      MAX_CONCURRENT_SESSIONS: ${YINGCE_AGENT_MAX_SESSIONS:-30}
+      NODE_MAX_OLD_SPACE_SIZE: ${YINGCE_AGENT_NODE_MEMORY_MB:-512}
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8081/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
   backend:
     container_name: open-ai-canvas-backend
     image: open-ai-canvas-backend:server
@@ -52,6 +77,9 @@ services:
       context: .
       dockerfile: backend/Dockerfile
       args:
+        BUILD_VERSION: ${CANVAS_BUILD_VERSION:-}
+        BUILD_COMMIT: ${CANVAS_BUILD_COMMIT:-unknown}
+        BUILD_TIME: ${CANVAS_BUILD_TIME:-unknown}
         GOPROXY: ${GOPROXY:-https://goproxy.cn,direct}
     environment:
       CANVAS_BACKEND_ADDR: ":8080"
@@ -68,10 +96,17 @@ services:
       CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS: ${CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS:-}
       CANVAS_CORS_ORIGINS: ${CANVAS_CORS_ORIGINS:-*}
       CANVAS_PUBLIC_BASE_URL: ${CANVAS_PUBLIC_BASE_URL:-}
+      YINGCE_AGENT_URL: http://yingce-agent:8081
+      YINGCE_AGENT_TOKEN: ${YINGCE_AGENT_TOKEN:?请配置至少 32 字符的独立 Agent Token}
+      YINGCE_AGENT_BRIDGE_HOST: backend
+      CANVAS_LOG_LEVEL: ${CANVAS_LOG_LEVEL:-info}
+      CANVAS_LOG_FORMAT: ${CANVAS_LOG_FORMAT:-text}
       GIN_MODE: release
     volumes:
       - ${CANVAS_DATA_PATH:-./data}:/data
     depends_on:
+      yingce-agent:
+        condition: service_healthy
       postgres:
         condition: service_healthy
       redis:
@@ -87,6 +122,10 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        BUILD_VERSION: ${CANVAS_BUILD_VERSION:-}
+        BUILD_COMMIT: ${CANVAS_BUILD_COMMIT:-unknown}
+        BUILD_TIME: ${CANVAS_BUILD_TIME:-unknown}
     ports:
       - "127.0.0.1:5173:3000"
     depends_on:

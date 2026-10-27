@@ -12,6 +12,7 @@ import (
 )
 
 func RegisterInspirationRoutes(r *gin.RouterGroup, svc *service.Service) {
+	registerInspirationLibraryRoutes(r, svc)
 	r.GET("/inspirations", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {

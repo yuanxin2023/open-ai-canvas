@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { Select } from "antd";
+
 
 import { listAddedSkills, type Skill } from "@/services/api/skills";
 import { SKILL_RUNTIME_PROFILES, type SkillRuntimeProfile } from "@/services/skill-runtime";
 import { useUserStore } from "@/stores/use-user-store";
+import { Select } from "@/components/ui/base/select";
 
 export function useSkillRuntimeCatalog() {
     const enabled = useUserStore((state) => state.features.skillLibraryEnabled);

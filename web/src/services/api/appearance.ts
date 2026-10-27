@@ -1,8 +1,10 @@
 import { http } from "@/services/api/request";
 import type { CanvasAppearance } from "@/lib/canvas/agent-appearance";
 import { apiBaseURL } from "@/services/api/request";
+import type { UpdateAnnouncement } from "@/lib/update-announcement";
 
 export type PublicAppearance = {
+    updates?: UpdateAnnouncement;
     canvas?: CanvasAppearance;
     schemaVersion: number;
     brandName: string;
@@ -37,6 +39,7 @@ export type PublicAppearance = {
 };
 
 export type AdminAppearance = {
+    updates?: UpdateAnnouncement;
     canvas?: CanvasAppearance;
     schemaVersion: number;
     brandName: string;
@@ -69,6 +72,7 @@ export type AdminAppearance = {
 };
 
 export type AppearanceAssetSlot = "logo" | "logo-dark" | "video" | "poster";
+export type AppearanceAssetUploadSlot = AppearanceAssetSlot;
 
 export type AppearanceResource = {
     id: string;
@@ -93,6 +97,7 @@ export async function updateAdminAppearance(
         AdminAppearance,
         | "brandName"
         | "canvas"
+        | "updates"
         | "brandSlug"
         | "authHeroTitle"
         | "authHeroDescription"
@@ -125,11 +130,20 @@ export async function resetAdminAppearance() {
     return result.setting;
 }
 
-export async function uploadAppearanceAsset(slot: AppearanceAssetSlot, file: File) {
+export async function uploadAppearanceAsset(slot: AppearanceAssetUploadSlot | "update-image" | "update-video", file: File) {
     const body = new FormData();
     body.append("file", file);
     const result = await http.post<{ resource: AppearanceResource }>(`/admin/settings/appearance/assets/${slot}`, body);
     return result.resource;
+}
+
+export function appearanceAssetURL(slot: AppearanceAssetUploadSlot, revision = "") {
+    const query = revision ? `?v=${encodeURIComponent(revision)}` : "";
+    return `${apiBaseURL.replace(/\/$/, "")}/public/appearance/assets/${encodeURIComponent(slot)}${query}`;
+}
+
+export function updateAnnouncementPreviewURL(resourceId: string) {
+    return `${apiBaseURL.replace(/\/$/, "")}/admin/settings/appearance/updates/${encodeURIComponent(resourceId)}`;
 }
 
 export async function uploadLive2D(file: File) {

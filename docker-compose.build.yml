@@ -5,7 +5,20 @@ services:
       context: .
       dockerfile: backend/Dockerfile
       args:
+        BUILD_VERSION: ${CANVAS_BUILD_VERSION:-}
+        BUILD_COMMIT: ${CANVAS_BUILD_COMMIT:-unknown}
+        BUILD_TIME: ${CANVAS_BUILD_TIME:-unknown}
         GOPROXY: ${GOPROXY:-https://proxy.golang.org,direct}
+
+  yingce-agent:
+    image: open-ai-canvas-yingce-agent:server
+    build:
+      context: .
+      dockerfile: yingce-agent/Dockerfile
+      args:
+        BUILD_VERSION: ${CANVAS_BUILD_VERSION:-}
+        BUILD_COMMIT: ${CANVAS_BUILD_COMMIT:-unknown}
+        BUILD_TIME: ${CANVAS_BUILD_TIME:-unknown}
 
   backend:
     image: open-ai-canvas-backend:server
@@ -13,6 +26,9 @@ services:
       context: .
       dockerfile: backend/Dockerfile
       args:
+        BUILD_VERSION: ${CANVAS_BUILD_VERSION:-}
+        BUILD_COMMIT: ${CANVAS_BUILD_COMMIT:-unknown}
+        BUILD_TIME: ${CANVAS_BUILD_TIME:-unknown}
         GOPROXY: ${GOPROXY:-https://proxy.golang.org,direct}
 
   web:
@@ -21,4 +37,7 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
+        BUILD_VERSION: ${CANVAS_BUILD_VERSION:-}
+        BUILD_COMMIT: ${CANVAS_BUILD_COMMIT:-unknown}
+        BUILD_TIME: ${CANVAS_BUILD_TIME:-unknown}
         VITE_TLDRAW_LICENSE_KEY: ${VITE_TLDRAW_LICENSE_KEY:-}

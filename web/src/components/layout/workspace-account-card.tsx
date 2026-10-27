@@ -58,7 +58,7 @@ export function WorkspaceAccountCard({ onBuyCredits, onNavigate }: { onBuyCredit
         </details>
         <nav className="workspace-account-card-actions" aria-label="账户操作">
             <Link to="/profile" state={{ profileReturnTo: `${location.pathname}${location.search}${location.hash}` }} onClick={onNavigate}><UserRound /><span>个人资料</span><ArrowUpRight /></Link>
-            <Link to="/settings" onClick={onNavigate}><Settings /><span>账户与设置</span><ArrowUpRight /></Link>
+            <Link to="/settings" onClick={onNavigate}><Settings /><span>账号管理</span><ArrowUpRight /></Link>
             {user.role === "admin" ? <Link to="/admin" onClick={onNavigate}><ShieldCheck /><span>管理员后台</span><ArrowUpRight /></Link> : null}
             <Button danger type="text" icon={<LogOut />} loading={loggingOut} onClick={() => void handleLogout()}>退出登录</Button>
         </nav>

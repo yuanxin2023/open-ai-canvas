@@ -56,8 +56,8 @@ func (s *Service) AdminStartUpdate(ctx context.Context, actor *model.User, targe
 		return hostupdate.Status{}, NewAppError(http.StatusServiceUnavailable, "当前部署未安装 Host Updater")
 	}
 	targetVersion = strings.TrimSpace(targetVersion)
-	if targetVersion == "" {
-		return hostupdate.Status{}, NewAppError(http.StatusBadRequest, "目标版本不能为空")
+	if !hostupdate.IsStableReleaseVersion(targetVersion) {
+		return hostupdate.Status{}, NewAppError(http.StatusBadRequest, "请选择自有仓库的完整正式发布版本")
 	}
 	status, err := s.updateManager.Start(ctx, targetVersion)
 	if err != nil {

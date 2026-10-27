@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { LoaderCircle } from "lucide-react";
 import { installLive2DLoader } from "@/services/live2d-loader";
 import { adaptLive2DRenderOrders } from "@/lib/canvas/live2d-core-adapter";
 
@@ -9,13 +10,13 @@ function loadCore() {
     if (corePromise) return corePromise;
     corePromise = new Promise<void>((resolve, reject) => {
         const script = document.createElement("script");
-        // Deployment-owned runtime only. Uploaded models may never provide executable code.
+        // Bundled same-origin runtime only. Uploaded models may never provide executable code.
         script.src = `${import.meta.env.BASE_URL}live2d/live2dcubismcore.min.js`;
         const timer = window.setTimeout(() => fail(), 15000);
         const fail = () => {
             clearTimeout(timer);
             script.remove();
-            reject(new Error("Live2D 运行库未安装或加载失败，请部署 Cubism Core 后重试"));
+            reject(new Error("Live2D 运行库加载失败，请确认部署产物包含 Cubism Core 且静态资源可访问后重试"));
         };
         script.onload = () => {
             if (!("Live2DCubismCore" in window)) {
@@ -95,8 +96,9 @@ export function Live2DAvatar({
                     model.update(Math.min(now - elapsed, 100));
                     elapsed = now;
                     app.render();
-                } catch {
-                    failRendering("Live2D 渲染失败，已回退默认形象");
+                } catch (error) {
+                    const detail = error instanceof Error && error.message ? `：${error.message}` : "";
+                    failRendering(`Live2D 渲染失败${detail}，已回退默认形象`);
                 }
             };
             const sync = () => {
@@ -188,9 +190,16 @@ export function Live2DAvatar({
         };
     }, [url, width, height, reducedMotion]);
     return (
-        <span style={{ display: "grid", placeItems: "center", width, height, pointerEvents: "none" }}>
+        <span aria-busy={!failed && !ready} style={{ display: "grid", placeItems: "center", width, height, pointerEvents: "none" }}>
             <span ref={host} style={{ gridArea: "1 / 1", visibility: failed || !ready ? "hidden" : "visible", width, height }} />
-            {failed || !ready ? <span style={{ gridArea: "1 / 1" }}>{fallback}</span> : null}
+            {failed ? (
+                <span style={{ gridArea: "1 / 1" }}>{fallback}</span>
+            ) : !ready ? (
+                <span role="status" style={{ gridArea: "1 / 1" }}>
+                    <LoaderCircle className={reducedMotion ? "size-6" : "size-6 motion-safe:animate-spin"} aria-hidden="true" />
+                    <span className="sr-only">正在加载 Live2D 模型</span>
+                </span>
+            ) : null}
         </span>
     );
 }

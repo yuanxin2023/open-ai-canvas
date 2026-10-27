@@ -81,14 +81,21 @@ export function getSystemUpdateStatus(signal?: AbortSignal) {
     return http.get<SystemUpdateStatus>("/admin/system-update", { signal });
 }
 
-export function checkSystemUpdate() {
-    return http.post<SystemUpdateStatus>("/admin/system-update/check");
+function mutationHeaders(actorId: string) {
+    if (!actorId) throw new Error("请先登录");
+    return { "X-Canvas-Expected-User-ID": actorId };
 }
 
-export function startSystemUpdate(targetVersion: string) {
-    return http.post<SystemUpdateStatus>("/admin/system-update/start", { targetVersion });
+export function checkSystemUpdate(actorId: string) {
+    return http.post<SystemUpdateStatus>("/admin/system-update/check", undefined, { headers: mutationHeaders(actorId) });
 }
 
-export function rollbackSystemUpdate(reason: string) {
-    return http.post<SystemUpdateStatus>("/admin/system-update/rollback", { reason });
+export function startSystemUpdate(targetVersion: string, actorId: string) {
+    if (!/^v[0-9]+(?:\.[0-9]+){2,}$/.test(targetVersion) || targetVersion.length > 128) throw new Error("请选择自有仓库的正式发布版本");
+    return http.post<SystemUpdateStatus>("/admin/system-update/start", { targetVersion }, { headers: mutationHeaders(actorId) });
+}
+
+export function rollbackSystemUpdate(reason: string, actorId: string) {
+    if (!reason.trim()) throw new Error("请填写回退原因");
+    return http.post<SystemUpdateStatus>("/admin/system-update/rollback", { reason: reason.trim() }, { headers: mutationHeaders(actorId) });
 }

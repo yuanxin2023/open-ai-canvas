@@ -80,8 +80,9 @@ type linuxDOSettingValue struct {
 }
 
 type LinuxDOCallbackResult struct {
-	Session *AuthSessionResult
-	Next    string
+	Session         *AuthSessionResult
+	Next            string
+	Reauthenticated bool
 }
 
 func (s *Service) AdminLinuxDOSetting(actor *model.User) (*PublicLinuxDOSetting, error) {
@@ -140,7 +141,7 @@ func (s *Service) LinuxDOEnabled() bool {
 	return err == nil && setting.Enabled
 }
 
-func (s *Service) BeginLinuxDOLogin(nextPath string) (string, error) {
+func (s *Service) BeginLinuxDOLogin(nextPath string, acceptedTerms bool) (string, error) {
 	count, err := s.repo.UserCount()
 	if err != nil {
 		return "", err
@@ -155,14 +156,44 @@ func (s *Service) BeginLinuxDOLogin(nextPath string) (string, error) {
 	if !setting.Enabled {
 		return "", kernel.Forbidden("Linux.do 登录尚未启用")
 	}
+	return s.beginLinuxDOAuthorization(setting, &model.OAuthState{NextPath: safeOAuthNext(nextPath), AcceptedTerms: acceptedTerms})
+}
+
+func (s *Service) BeginLinuxDOReauthentication(actor *model.User, cookie string) (string, error) {
+	user, session, err := s.profileSession(actor, cookie)
+	if err != nil {
+		return "", err
+	}
+	if _, err := s.repo.UserIdentityForUser(user.ID, "linuxdo"); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return "", kernel.Forbidden("该账号没有关联 Linux.do 身份")
+		}
+		return "", err
+	}
+	_, setting, err := s.readLinuxDOSetting()
+	if err != nil {
+		return "", err
+	}
+	if !setting.Enabled {
+		return "", kernel.Forbidden("Linux.do 登录尚未启用")
+	}
+	return s.beginLinuxDOAuthorization(setting, &model.OAuthState{NextPath: "/profile?section=security&reauth=success", ReauthUserID: user.ID, ReauthSessionID: session.ID})
+}
+
+func (s *Service) LinuxDOReauthenticationState(stateValue string) (bool, error) {
+	if strings.TrimSpace(stateValue) == "" {
+		return false, nil
+	}
+	return s.repo.LinuxDOReauthenticationState(HashToken(stateValue))
+}
+
+func (s *Service) beginLinuxDOAuthorization(setting linuxDOSettingValue, record *model.OAuthState) (string, error) {
 	state := RandomToken()
 	verifier := RandomToken()
 	challengeBytes := sha256.Sum256([]byte(verifier))
 	challenge := base64.RawURLEncoding.EncodeToString(challengeBytes[:])
-	if err := s.repo.CreateOAuthState(&model.OAuthState{
-		ID: kernel.NewID(), Provider: "linuxdo", StateHash: HashToken(state), CodeVerifier: verifier,
-		NextPath: safeOAuthNext(nextPath), ExpiresAt: time.Now().Add(10 * time.Minute),
-	}); err != nil {
+	record.ID, record.Provider, record.StateHash, record.CodeVerifier, record.ExpiresAt = kernel.NewID(), "linuxdo", HashToken(state), verifier, time.Now().Add(10*time.Minute)
+	if err := s.repo.CreateOAuthState(record); err != nil {
 		return "", err
 	}
 	authorizeURL, err := url.Parse(setting.AuthorizationURL)
@@ -183,12 +214,25 @@ func (s *Service) BeginLinuxDOLogin(nextPath string) (string, error) {
 	return authorizeURL.String(), nil
 }
 
-func (s *Service) CompleteLinuxDOLogin(stateValue string, code string) (*LinuxDOCallbackResult, error) {
-	return s.CompleteLinuxDOLoginWithEnvironment(stateValue, code, LoginEnvironment{})
-}
-
-func (s *Service) CompleteLinuxDOLoginWithEnvironment(stateValue string, code string, environment LoginEnvironment) (*LinuxDOCallbackResult, error) {
-	environment = normalizeLoginEnvironment(environment)
+func (s *Service) CompleteLinuxDOLogin(stateValue string, code string, cookieValue string, contexts ...LoginContext) (result *LinuxDOCallbackResult, err error) {
+	var context LoginContext
+	if len(contexts) > 0 {
+		context = contexts[0]
+	}
+	event := NewLoginLog("linuxdo", "login", context)
+	logFailure := true
+	defer func() {
+		if err != nil && logFailure {
+			err = s.recordLoginFailure(event, err)
+		}
+	}()
+	if strings.TrimSpace(stateValue) != "" {
+		reauth, stateErr := s.LinuxDOReauthenticationState(stateValue)
+		if stateErr != nil {
+			return nil, stateErr
+		}
+		logFailure = !reauth
+	}
 	if strings.TrimSpace(stateValue) == "" || strings.TrimSpace(code) == "" {
 		return nil, kernel.BadAuthRequest("Linux.do 登录回调缺少必要参数")
 	}
@@ -199,9 +243,27 @@ func (s *Service) CompleteLinuxDOLoginWithEnvironment(stateValue string, code st
 	if err != nil {
 		return nil, err
 	}
+	logFailure = state.ReauthUserID == "" && state.ReauthSessionID == ""
 	_, setting, err := s.readLinuxDOSetting()
 	if err != nil {
 		return nil, err
+	}
+	if !setting.Enabled {
+		return nil, kernel.Forbidden("Linux.do 登录尚未启用")
+	}
+	var reauthUser *model.User
+	var reauthSession *model.AuthSession
+	if state.ReauthUserID != "" || state.ReauthSessionID != "" {
+		if cookieValue == "" {
+			return nil, kernel.Unauthorized("重新验证需要当前登录会话")
+		}
+		reauthUser, reauthSession, err = s.profileSession(&model.User{ID: state.ReauthUserID}, cookieValue)
+		if err != nil {
+			return nil, err
+		}
+		if reauthSession.ID != state.ReauthSessionID {
+			return nil, kernel.Unauthorized("重新验证与当前登录会话不匹配")
+		}
 	}
 	accessToken, err := exchangeLinuxDOCode(setting, code, state.CodeVerifier)
 	if err != nil {
@@ -214,6 +276,12 @@ func (s *Service) CompleteLinuxDOLoginWithEnvironment(stateValue string, code st
 	subject := profileString(profile, setting.SubjectField)
 	if subject == "" {
 		return nil, errors.New("Linux.do 用户信息缺少稳定用户 ID")
+	}
+	if reauthUser != nil {
+		if err := s.repo.ReauthenticateLinuxDOSession(reauthUser, reauthSession, subject, time.Now()); err != nil {
+			return nil, profileWriteError(err)
+		}
+		return &LinuxDOCallbackResult{Next: "/profile?section=security&reauth=success", Reauthenticated: true}, nil
 	}
 	providerUsername := profileString(profile, setting.UsernameField)
 	displayName := kernel.FirstNonEmpty(profileString(profile, setting.DisplayNameField), providerUsername, "Linux.do 用户")
@@ -232,6 +300,14 @@ func (s *Service) CompleteLinuxDOLoginWithEnvironment(stateValue string, code st
 			return nil, err
 		}
 	} else if errors.Is(err, gorm.ErrRecordNotFound) {
+		event.Source = "registration"
+		policy, policyErr := s.verificationPolicy()
+		if policyErr != nil {
+			return nil, policyErr
+		}
+		if policy.SMSAndEmailRegistration {
+			return nil, kernel.Forbidden("平台要求短信和邮箱验证，请先通过注册页面创建账号；第三方登录不能绕过双重验证")
+		}
 		registrationEnabled, settingErr := s.RegistrationEnabled()
 		if settingErr != nil {
 			return nil, settingErr
@@ -239,17 +315,21 @@ func (s *Service) CompleteLinuxDOLoginWithEnvironment(stateValue string, code st
 		if !registrationEnabled {
 			return nil, kernel.Forbidden("管理员未开放新用户注册")
 		}
+		if !state.AcceptedTerms {
+			return nil, kernel.BadAuthRequest("请先同意" + s.AgreementTitleForMessage())
+		}
 		user, identity, err = s.createLinuxDOUser(subject, providerUsername, displayName, profileString(profile, setting.EmailField), avatarURL)
 		if err != nil {
 			return nil, err
 		}
-		user.RegistrationIP = environment.IPAddress
+		user.RegistrationIP = loginLogText(context.IP, 64)
 		if err := s.repo.CreateOAuthUser(user, identity); err != nil {
 			return nil, err
 		}
 	} else {
 		return nil, err
 	}
+	loginLogUser(event, user)
 	if user.Status != model.UserStatusActive {
 		return nil, kernel.Forbidden("该账号已被禁用")
 	}
@@ -259,15 +339,18 @@ func (s *Service) CompleteLinuxDOLoginWithEnvironment(stateValue string, code st
 	now := time.Now()
 	user.LastLoginAt = &now
 	user.UpdatedAt = now
-	if err := s.repo.Save(user); err != nil {
+	if err := s.repo.UpdateUserLoginTime(user.ID, now); err != nil {
 		return nil, err
 	}
-	s.host.RecordActivity(user.ID, "login", 1)
-	session, err := s.createAuthSession(user, "linuxdo", environment)
+	session, err := s.createAuthSession(user, event)
 	if err != nil {
 		return nil, err
 	}
 	return &LinuxDOCallbackResult{Session: session, Next: safeOAuthNext(state.NextPath)}, nil
+}
+
+func (s *Service) CompleteLinuxDOLoginWithEnvironment(stateValue string, code string, environment LoginEnvironment) (*LinuxDOCallbackResult, error) {
+	return s.CompleteLinuxDOLogin(stateValue, code, "", loginContextFromEnvironment(environment))
 }
 
 func (s *Service) createLinuxDOUser(subject string, providerUsername string, displayName string, email string, avatarURL string) (*model.User, *model.UserIdentity, error) {

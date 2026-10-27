@@ -22,6 +22,7 @@ type UpdateUserProfileInput struct {
 	UserID           string
 	Username         string
 	AvatarResourceID *string
+	AvatarPreset     *string
 	ChangeID         string
 	Now              time.Time
 	Window           time.Duration
@@ -75,8 +76,21 @@ func (r *Repository) UpdateUserProfile(input UpdateUserProfileInput) (*model.Use
 		}
 
 		updates := map[string]any{"updated_at": input.Now}
-		if input.AvatarResourceID != nil {
+		avatarChanged := input.AvatarPreset != nil || input.AvatarResourceID != nil && *input.AvatarResourceID != stored.AvatarResourceID
+		if input.AvatarPreset != nil {
+			updates["avatar_resource_id"] = ""
+			updates["avatar_mode"] = "default"
+			updates["avatar_version"] = ""
+			updates["avatar_preset"] = *input.AvatarPreset
+		} else if avatarChanged {
 			updates["avatar_resource_id"] = *input.AvatarResourceID
+			updates["avatar_mode"] = ""
+			updates["avatar_version"] = ""
+		}
+		if avatarChanged && stored.AvatarMode == "custom" {
+			if err := tx.Delete(&model.UserAvatar{}, "user_id = ?", stored.ID).Error; err != nil {
+				return err
+			}
 		}
 		if changed {
 			oldUsername := stored.Username

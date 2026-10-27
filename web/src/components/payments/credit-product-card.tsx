@@ -26,12 +26,13 @@ type CreditProductCardProps = {
     product: CreditProductCardData;
     maxCreditsMicrocredits: number;
     actionLabel?: string;
+    availabilityLabel?: string;
     actionDisabled?: boolean;
     onAction?: () => void;
     preview?: boolean;
 };
 
-export function CreditProductCard({ product, maxCreditsMicrocredits, actionLabel, actionDisabled = false, onAction, preview = false }: CreditProductCardProps) {
+export function CreditProductCard({ product, maxCreditsMicrocredits, actionLabel, availabilityLabel, actionDisabled = false, onAction, preview = false }: CreditProductCardProps) {
     const benefits = splitProductBenefits(product.benefits);
     const activeSegments = creditProductActiveSegments(product.creditsMicrocredits, maxCreditsMicrocredits);
     const featured = Boolean(product.featured);
@@ -60,6 +61,7 @@ export function CreditProductCard({ product, maxCreditsMicrocredits, actionLabel
                     </div>
                     {product.description ? <p className="workspace-credit-product-description">{product.description}</p> : null}
                     <p className="workspace-credit-product-caption">{priceCaption}</p>
+                    {availabilityLabel ? <p className="workspace-credit-product-caption">{availabilityLabel}</p> : null}
                     <Button className="workspace-credit-product-action" type="primary" block disabled={actionDisabled} tabIndex={preview ? -1 : undefined} aria-disabled={preview || actionDisabled} onClick={preview ? undefined : onAction}>
                         {actionLabel || product.actionText || "立即购买"}
                     </Button>

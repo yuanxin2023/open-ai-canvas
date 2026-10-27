@@ -10,6 +10,7 @@ import { loadAssetsPage, loadCanvasPage, loadCanvasProjectPage, loadCreatePage, 
 import { CanvasRefreshShell } from "@/pages/canvas/canvas-refresh-shell";
 import { AuthScene } from "@/pages/auth/auth-scene";
 import RouteErrorPage from "@/pages/route-error";
+import { isGuestWorkspacePath } from "@/lib/guest-workspace";
 
 const AdminPage = lazy(() => import("@/pages/admin"));
 const AnalyticsPage = lazy(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.AnalyticsPage })));
@@ -27,10 +28,12 @@ const ChannelsPage = lazy(() => import("@/pages/admin/channels/channels-page"));
 const LogicalModelsPage = lazy(() => import("@/pages/admin/logical-models/logical-models-page"));
 const AdminPluginsPage = lazy(() => import("@/pages/admin/plugins/plugins-page"));
 const AdminSkillsPage = lazy(() => import("@/pages/admin/skills/skills-page"));
+const SkillCurationPage = lazy(() => import("@/pages/admin/skill-curation-page"));
 const AdminPaymentsPage = lazy(() => import("@/pages/admin/payments/payments-page"));
 const ProductOperationsPage = lazy(() => import("@/pages/admin/product-operations/product-operations-page"));
 const CustomerServicePage = lazy(() => import("@/pages/admin/customer-service/customer-service-page"));
 const LogsPage = lazy(() => import("@/pages/admin/logs/logs-page"));
+const LoginLogsPage = lazy(() => import("@/pages/admin/login-logs/login-logs-page"));
 const RedemptionCodesPage = lazy(() => import("@/pages/admin/redemption-codes/redemption-codes-page"));
 const ReferralsAdminPage = lazy(() => import("@/pages/admin/referrals/referrals-page"));
 const RuntimePolicySettingsPage = lazy(() => import("@/pages/admin/settings/runtime-policy-settings-page"));
@@ -40,9 +43,11 @@ const StorageSettingsPage = lazy(() => import("@/pages/admin/settings/storage-se
 const ArkPrivateAssetsSettingsPage = lazy(() => import("@/pages/admin/settings/ark-private-assets-settings-page"));
 const ResponseInterceptionSettingsPage = lazy(() => import("@/pages/admin/settings/response-interception-settings-page"));
 const ThirdPartySettingsPage = lazy(() => import("@/pages/admin/settings/libtv-settings-page"));
+const WorkbenchToolsPage = lazy(() => import("@/pages/admin/workbench-tools/workbench-tools-page"));
 const SystemUpdatePage = lazy(() => import("@/pages/admin/settings/system-update-page"));
 const SystemPerformancePage = lazy(() => import("@/pages/admin/settings/system-performance-page"));
 const StoryboardPromptsPage = lazy(() => import("@/pages/admin/storyboard-prompts/storyboard-prompts-page"));
+const AdminFeedbacksPage = lazy(() => import("@/pages/admin/feedbacks/feedbacks-page"));
 const UsersPage = lazy(() => import("@/pages/admin/users/users-page"));
 const AdministratorsPage = lazy(() => import("@/pages/admin/users/administrators-page"));
 const AssetsPage = lazy(loadAssetsPage);
@@ -54,6 +59,8 @@ const CanvasPage = lazy(loadCanvasPage);
 const CanvasProjectPage = lazy(loadCanvasProjectPage);
 const SharedCanvasPage = lazy(() => import("@/pages/canvas/shared"));
 const CreatePage = lazy(loadCreatePage);
+const ImageWorkbenchPage = lazy(() => import("@/pages/workbench/image-workbench-route"));
+const VideoWorkbenchPage = lazy(() => import("@/pages/workbench/video-workbench-page"));
 const NotFound = lazy(() => import("@/pages/not-found"));
 const SkillsPage = lazy(() => import("@/pages/skills"));
 const PluginsPage = lazy(() => import("@/pages/plugins"));
@@ -83,7 +90,16 @@ function AuthenticatedWorkspaceLayout() {
     const { pathname } = useLocation();
     const isCanvasProjectRoute = pathname.startsWith("/canvas/");
     const fallback = isCanvasProjectRoute ? <CanvasRefreshShell /> : <FullScreenLoader label="正在打开创作空间" detail="准备当前页面" />;
-    return <RequireAuth><Suspense fallback={fallback}><UserLayout><Outlet /></UserLayout></Suspense><CustomerServiceWidget /></RequireAuth>;
+    return (
+        <RequireAuth allowAnonymous={isGuestWorkspacePath(pathname)}>
+            <Suspense fallback={fallback}>
+                <UserLayout>
+                    <Outlet />
+                </UserLayout>
+            </Suspense>
+            <CustomerServiceWidget />
+        </RequireAuth>
+    );
 }
 
 /**
@@ -96,10 +112,10 @@ function AuthenticatedWorkspaceLayout() {
  */
 function devRoutes() {
     const FolderPreviewLab = lazy(() => import("@/pages/dev/folder-preview-lab"));
-    const DirectorReproLab = lazy(() => import("@/pages/dev/director-repro-lab"));
+    const PrevisReproLab = lazy(() => import("@/pages/dev/previs-repro-lab"));
     return [
         { path: "/dev/folders", element: fullScreenDeferred(<FolderPreviewLab />), errorElement: <RouteErrorPage /> },
-        { path: "/dev/director-repro", element: fullScreenDeferred(<DirectorReproLab />), errorElement: <RouteErrorPage /> },
+        { path: "/dev/previs-repro", element: fullScreenDeferred(<PrevisReproLab />), errorElement: <RouteErrorPage /> },
     ];
 }
 
@@ -120,8 +136,24 @@ export const router = createBrowserRouter([
         element: <AuthenticatedWorkspaceLayout />,
         errorElement: <RouteErrorPage />,
         children: [
-            { path: "/", element: <RequireAuth>{deferred(<CreatePage />)}</RequireAuth> },
-            { path: "/create", element: <RequireAuth>{deferred(<CreatePage />)}</RequireAuth> },
+            { path: "/", element: deferred(<CreatePage />) },
+            { path: "/create", element: deferred(<CreatePage />) },
+            {
+                path: "/toolbox/image",
+                element: (
+                    <RequireAuth>
+                        <RequireFeature feature="imageWorkbenchEnabled">{deferred(<ImageWorkbenchPage />)}</RequireFeature>
+                    </RequireAuth>
+                ),
+            },
+            {
+                path: "/toolbox/video",
+                element: (
+                    <RequireAuth>
+                        <RequireFeature feature="videoWorkbenchEnabled">{deferred(<VideoWorkbenchPage />)}</RequireFeature>
+                    </RequireAuth>
+                ),
+            },
             {
                 path: "/tasks",
                 element: (
@@ -204,7 +236,14 @@ export const router = createBrowserRouter([
                 ),
             },
             { path: "/canvas", element: <RequireAuth>{deferred(<CanvasPage />)}</RequireAuth> },
-            { path: "/canvas/:id", element: <RequireAuth><CanvasProjectPage /></RequireAuth> },
+            {
+                path: "/canvas/:id",
+                element: (
+                    <RequireAuth>
+                        <CanvasProjectPage />
+                    </RequireAuth>
+                ),
+            },
             {
                 path: "/admin",
                 element: <RequireAuth>{deferred(<AdminPage />)}</RequireAuth>,
@@ -212,6 +251,8 @@ export const router = createBrowserRouter([
                     { index: true, element: <AdminLanding>{adminRoute("admin.analytics.overview", <AnalyticsPage />)}</AdminLanding> },
                     { path: "control-preview", element: adminRoute("admin.analytics.control_preview", <ControlPreviewPage />) },
                     { path: "users", element: adminRoute("admin.users.accounts", <UsersPage />) },
+                    { path: "login-logs", element: adminRoute("admin.users.accounts", <LoginLogsPage />) },
+                    { path: "feedbacks", element: adminRoute("admin.users.feedbacks", <AdminFeedbacksPage />) },
                     { path: "administrators", element: <RequireFullAdmin><AdministratorsPage /></RequireFullAdmin> },
                     { path: "channels", element: adminRoute("admin.platform.channels", <ChannelsPage />) },
                     { path: "models", element: adminRoute("admin.platform.logical_models", <RequireFeature feature="frontendModelsEnabled"><LogicalModelsPage /></RequireFeature>) },
@@ -222,6 +263,8 @@ export const router = createBrowserRouter([
                     { path: "payment-reconciliation", element: adminRoute("admin.finance.reconciliation", <AdminPaymentsPage view="reconciliation" />) },
                     { path: "product-operations", element: adminRoute("admin.commerce.products", <ProductOperationsPage />) },
                     { path: "prompt-templates", element: adminRoute("admin.platform.prompt_templates", <StoryboardPromptsPage />) },
+                    { path: "workbench-tools", element: adminRoute("admin.platform.workbench_tools", <WorkbenchToolsPage />) },
+                    { path: "skill-curation", element: adminRoute("admin.platform.skills", <SkillCurationPage />) },
                     { path: "storyboard-prompts", element: <Navigate to="/admin/prompt-templates" replace /> },
                     { path: "announcements", element: adminRoute("admin.content.announcements", <AnnouncementsPage />) },
                     { path: "customer-service", element: adminRoute("admin.users.customer_service", <CustomerServicePage />) },

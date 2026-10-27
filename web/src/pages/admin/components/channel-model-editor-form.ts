@@ -1,9 +1,12 @@
 import type { ModelCapabilityChoice } from "@/components/model-protocol-picker";
-import { defaultModelCapabilityConfig, normalizeModelCapabilityConfig, type ModelCapabilityConfig } from "@/lib/model-capabilities";
+import type { FormInstance } from "antd";
+import { defaultModelCapabilityConfig, normalizeLegacyImageResolutionConfig, normalizeModelCapabilityConfig, type ModelCapabilityConfig } from "@/lib/model-capabilities";
+import { imagePresetForRatio, imageSizePresets } from "@/lib/image-size-presets";
 import { modelProtocolSupportsTokenBilling, type ModelProtocolDefinition } from "@/lib/model-protocols";
 import type { ChannelModel } from "@/services/api/wallet";
 import type { ModelTag } from "@/lib/model-tags";
-import { defaultPriceTier, legacyPriceTierToForm, priceTierToForm, type PriceTierFormValues } from "./channel-model-price-tier-form";
+import { initializeImageRatioDefaults, resolveImageParameters } from "@/lib/image-parameters";
+import { defaultPriceTier, legacyPriceTierToForm, normalizeUpstreamModelKey, priceTierToForm, type PriceTierFormValues } from "./channel-model-price-tier-form";
 
 export type ChannelModelFormValues = {
     modelKey: string;
@@ -18,9 +21,17 @@ export type ChannelModelFormValues = {
     priceTiers: PriceTierFormValues[];
     enabled: boolean;
     capabilityConfig?: ModelCapabilityConfig;
+    capabilityMigrationError?: string;
 };
 
 export type EditorSection = "identity" | "capabilities" | "pricing";
+
+export function replaceChannelModelFormValues(form: Pick<FormInstance<ChannelModelFormValues>, "setFieldsValue" | "setFieldValue">, values: ChannelModelFormValues) {
+    const { capabilityConfig, ...fields } = values;
+    form.setFieldsValue(fields);
+    // 整体替换协议配置，避免 setFieldsValue 深合并后残留旧协议字段。
+    form.setFieldValue("capabilityConfig", capabilityConfig);
+}
 
 export function editorSectionForField(name: (string | number)[]): EditorSection {
     return name[0] === "priceTiers" ? "pricing" : name[0] === "capabilityConfig" ? "capabilities" : "identity";
@@ -30,19 +41,53 @@ export function initialChannelModelValues(item: ChannelModel | null, protocols: 
     const capability = item?.capability || "text";
     const protocol = item ? item.protocol : protocols.find((p) => p.capability === capability && p.enabled !== false)?.value;
     const upstreamModel = item?.providerModelKey || item?.modelKey || "";
+    const rawCapabilityConfig = item?.capabilityConfig || defaultModelCapabilityConfig(protocol, upstreamModel);
+    let capabilityConfig =
+        capability === "audio"
+            ? undefined
+            : (() => {
+                  const normalized = normalizeModelCapabilityConfig(rawCapabilityConfig);
+                  return normalized.image ? { ...normalized, image: normalizeLegacyImageResolutionConfig(protocol, normalized.image) } : normalized;
+              })();
+    const definitions = protocols.find((p) => p.value === protocol)?.imageParameters;
+    let capabilityMigrationError: string | undefined;
+    try {
+        if (capabilityConfig?.image && capability === "image" && definitions) capabilityConfig = { ...capabilityConfig, image: resolveImageParameters(capabilityConfig.image, definitions, upstreamModel, protocol) };
+    } catch (error) {
+        capabilityMigrationError = error instanceof Error ? error.message : "旧图片配置需要核对";
+    }
+    let priceTiers: PriceTierFormValues[];
+    try {
+        priceTiers = item ? (item.priceTiers?.length ? item.priceTiers.map((tier) => priceTierToForm(tier, capabilityConfig?.image, protocol)) : [legacyPriceTierToForm(item)]) : [defaultPriceTier()];
+    } catch (error) {
+        capabilityMigrationError = error instanceof Error ? error.message : "旧图片价格需要核对";
+        priceTiers = item?.priceTiers?.map((tier) => priceTierToForm(tier)) || [defaultPriceTier()];
+    }
     return {
         modelKey: item?.modelKey || "",
         providerModelKey: upstreamModel,
-        displayName: item?.displayName || "",
-        channelLabel: item?.channelLabel || "",
+        displayName: item?.displayName || "未分类",
+        channelLabel: item?.channelLabel || upstreamModel,
         tags: item?.tags?.map((tag) => ({ ...tag })) || [],
         description: item?.description || "",
         icon: item?.icon || "",
         capability,
         protocol,
-        priceTiers: item ? (item.priceTiers?.length ? item.priceTiers.map(priceTierToForm) : [legacyPriceTierToForm(item)]) : [defaultPriceTier()],
+        priceTiers,
+        capabilityMigrationError,
         enabled: item?.enabled ?? true,
-        capabilityConfig: capability === "audio" ? undefined : normalizeModelCapabilityConfig(item?.capabilityConfig || defaultModelCapabilityConfig(protocol, upstreamModel)),
+        capabilityConfig,
+    };
+}
+
+export function duplicateChannelModelValues(item: ChannelModel, protocols: ModelProtocolDefinition[]): ChannelModelFormValues {
+    const values = initialChannelModelValues(item, protocols);
+    const sourceUpstream = normalizeUpstreamModelKey(item.providerModelKey || item.modelKey);
+    return {
+        ...values,
+        modelKey: "",
+        providerModelKey: "",
+        priceTiers: values.priceTiers.map((tier) => (normalizeUpstreamModelKey(tier.providerModelKey) === sourceUpstream ? { ...tier, providerModelKey: "" } : tier)),
     };
 }
 
@@ -50,20 +95,77 @@ export function initialChannelModelValues(item: ChannelModel | null, protocols: 
 export function changeChannelModelCapability(values: ChannelModelFormValues, protocols: ModelProtocolDefinition[]): ChannelModelFormValues {
     const capability = values.capability;
     const protocol = protocols.find((p) => p.value === values.protocol && p.capability === capability && p.enabled !== false)?.value || protocols.find((p) => p.capability === capability && p.enabled !== false)?.value;
-    return {
+    const capabilityConfig = capability === "audio" ? undefined : defaultModelCapabilityConfig(protocol, values.providerModelKey?.trim() || values.modelKey.trim());
+    if (capabilityConfig?.image && protocols.find((p) => p.value === protocol)?.imageParameters) {
+        capabilityConfig.image.parameters = [];
+        if (!capabilityConfig.image.resolution.supported || !protocols.find((p) => p.value === protocol)?.imageParameters?.some((p) => p.name === "size" && p.encoding === "pixels" && !p.values?.length)) capabilityConfig.image.size.presets = undefined;
+    }
+    return updateChannelModelUpstreamCapabilities(
+        {
+            ...values,
+            protocol,
+            capabilityConfig,
+            priceTiers: values.priceTiers.map((tier) => ({
+                ...tier,
+                operation: "*",
+                imageSelector: {},
+                imageResolution: "*",
+                quality: "*",
+                size: "*",
+                resolution: "*",
+                videoSeconds: 0,
+                videoGenerateAudio: "*",
+                imageCount: 0,
+            })),
+        },
+        protocols,
+    );
+}
+
+export function changeChannelModelProtocol(values: ChannelModelFormValues, protocol: string, protocols: ModelProtocolDefinition[] = []): ChannelModelFormValues {
+    const capabilityConfig = values.capability === "audio" ? undefined : defaultModelCapabilityConfig(protocol, values.providerModelKey?.trim() || values.modelKey.trim());
+    if (capabilityConfig?.image && protocols.find((p) => p.value === protocol)?.imageParameters) {
+        capabilityConfig.image.parameters = [];
+        if (!capabilityConfig.image.resolution.supported || !protocols.find((p) => p.value === protocol)?.imageParameters?.some((p) => p.name === "size" && p.encoding === "pixels" && !p.values?.length)) capabilityConfig.image.size.presets = undefined;
+    }
+    const next: ChannelModelFormValues = {
         ...values,
         protocol,
-        capabilityConfig: capability === "audio" ? undefined : defaultModelCapabilityConfig(protocol, values.providerModelKey?.trim() || values.modelKey.trim()),
-        priceTiers: values.priceTiers.map((tier) => ({
-            ...tier,
-            operation: "*",
-            quality: "*",
-            size: "*",
-            resolution: "*",
-            videoSeconds: 0,
-            videoGenerateAudio: "*",
-            imageCount: 0,
-        })),
+        capabilityConfig,
+        priceTiers: values.capability === "image" ? values.priceTiers.map((tier) => ({ ...tier, imageResolution: "*", quality: "*", imageSelector: {} })) : values.priceTiers,
+    };
+    return updateChannelModelUpstreamCapabilities(next, protocols);
+}
+
+export function updateChannelModelUpstreamCapabilities(values: ChannelModelFormValues, protocols: ModelProtocolDefinition[] = []): ChannelModelFormValues {
+    const definitions = protocols.find((p) => p.value === values.protocol)?.imageParameters;
+    if (values.capability === "image" && definitions) {
+        const profile = values.capabilityConfig || defaultModelCapabilityConfig(values.protocol, values.providerModelKey || values.modelKey);
+        if (profile.image) {
+            const fresh = profile.image.parameters?.length === 0;
+            try {
+                const resolved = resolveImageParameters(profile.image, definitions, values.providerModelKey?.trim() || values.modelKey.trim(), values.protocol);
+                return { ...values, capabilityMigrationError: undefined, capabilityConfig: { ...profile, image: fresh ? initializeImageRatioDefaults(resolved, resolved.parameters!) : resolved } };
+            } catch (error) {
+                return { ...values, capabilityMigrationError: error instanceof Error ? error.message : "旧图片配置需要核对" };
+            }
+        }
+    }
+    if (values.capability !== "image" || values.protocol !== "cangyuan-midjourney-v82") return values;
+    const defaults = defaultModelCapabilityConfig(values.protocol, values.providerModelKey?.trim() || values.modelKey.trim());
+    const image = values.capabilityConfig?.image;
+    if (!image) return { ...values, capabilityConfig: defaults };
+    if (image.size.parameter !== "aspect_ratio") return values;
+    const tier = defaults.image!.size.presets![0].tier;
+    const presets = imageSizePresets(image);
+    if (presets.length && presets.every((preset) => preset.tier === tier)) return values;
+    const ratios = Array.from(new Set(presets.map((preset) => preset.ratio)));
+    return {
+        ...values,
+        capabilityConfig: {
+            ...values.capabilityConfig!,
+            image: { ...image, size: { ...image.size, presets: ratios.length ? ratios.map((ratio) => imagePresetForRatio(tier, ratio)) : defaults.image!.size.presets } },
+        },
     };
 }
 
@@ -73,7 +175,7 @@ export function validateChannelModelProtocol(capability: string, protocol: strin
     }
 }
 
-export function validateChannelModelPrices(values: Pick<ChannelModelFormValues, "capability" | "protocol" | "priceTiers">) {
+export function validateChannelModelPrices(values: Pick<ChannelModelFormValues, "capability" | "protocol" | "priceTiers" | "capabilityConfig">) {
     const { capability, protocol, priceTiers } = values;
     if (!priceTiers?.length) throw new Error("请至少配置一个价格档");
     if (priceTiers.filter((tier) => tier.matchMode === "default").length > 1) throw new Error("只能配置一个所有规格统一价格");
@@ -88,12 +190,23 @@ export function validateChannelModelPrices(values: Pick<ChannelModelFormValues, 
             throw new Error(`价格档 ${index + 1}：${text}`);
         };
         if (!["fixed_request", "per_second", "token"].includes(tier.billingMode)) fail("请选择计费方式");
-        if (tier.billingMode === "per_second" && capability !== "video") fail("按秒计费仅支持视频，请重新选择计费方式并核对价格");
+        if (tier.billingMode === "per_second" && capability !== "video" && capability !== "audio") fail("按秒计费仅支持视频或音频，请重新选择计费方式并核对价格");
         if (tier.billingMode === "token" && !modelProtocolSupportsTokenBilling(capability, protocol)) fail("当前模型能力不支持 Token 计费，请重新选择计费方式并核对价格");
         if (tier.matchMode === "advanced") {
             if (tier.operation && tier.operation !== "*" && !operations[capability]?.includes(tier.operation)) fail("生成方式与模型能力不匹配");
             const specific = (value: string | undefined) => Boolean(value && value !== "*");
-            if (!(specific(tier.operation) || (capability === "image" && (specific(tier.quality) || specific(tier.size))) || (capability === "video" && (specific(tier.resolution) || tier.videoSeconds > 0 || tier.imageCount > 0))))
+            const image = values.capabilityConfig?.image;
+            const imageCondition =
+                Object.values(tier.imageSelector || {}).some(specific) ||
+                (image?.resolution.supported !== false && specific(tier.imageResolution)) ||
+                (image?.quality.supported !== false && specific(tier.quality)) ||
+                specific(tier.resolution) ||
+                specific(tier.size);
+            if (!(
+                specific(tier.operation) ||
+                (capability === "image" && imageCondition) ||
+                (capability === "video" && (specific(tier.resolution) || tier.videoSeconds > 0 || tier.imageCount > 0 || Boolean(values.capabilityConfig?.video?.processing && specific(tier.fpsBand))))
+            ))
                 fail("规格价格至少需要一个匹配条件；统一价格请选择默认价格");
         }
         const prices = tier.billingMode !== "token" ? [tier.unitPrice] : capability === "video" ? [tier.outputTokenPrice] : [tier.inputTokenPrice, tier.outputTokenPrice, tier.cachedTokenPrice];

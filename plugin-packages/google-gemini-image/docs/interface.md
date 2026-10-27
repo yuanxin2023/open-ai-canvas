@@ -1,5 +1,9 @@
 # Google Gemini Image 接口字段
 
+## 本地合并合同
+
+分辨率使用 `imageResolution`，旧 `quality=low/medium/high` 分别等价为 1K/2K/4K。`auto` 保留省略 `imageSize` 的原请求行为；未明确匹配的参数或价格条件必须核对，不能静默使用默认值。旧配置和历史订单不在读取时改写。
+
 ## 协议身份
 
 - 插件 ID：`google-gemini-image`。
@@ -91,7 +95,7 @@ imageSize 只映射 1K/2K/4K；未知质量值（如视频清晰度 720）必须
   "apiVersion": "open-ai-canvas.plugin/v2",
   "id": "google-gemini-image",
   "name": "Google Gemini Image",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "author": "Google / AI 创作工作台",
   "description": "Google Gemini Image 独立请求协议插件。",
   "documentation": "<当前插件的完整 documentation，由 README.md 与 docs/interface.md 拼接而成；为避免 JSON 递归，此处不重复展开正文。>",
@@ -130,6 +134,68 @@ imageSize 只映射 1K/2K/4K；未知质量值（如视频清晰度 720）必须
           "type": "google-api-key",
           "field": "apiKey"
         },
+        "imageParameters": [
+          {
+            "name": "size",
+            "label": "画幅比例",
+            "type": "string",
+            "binding": "aspectRatio",
+            "encoding": "ratio",
+            "values": [
+              "1:1",
+              "2:3",
+              "3:2",
+              "3:4",
+              "4:3",
+              "4:5",
+              "5:4",
+              "9:16",
+              "16:9",
+              "21:9"
+            ],
+            "default": "1:1"
+          },
+          {
+            "name": "imageResolution",
+            "label": "分辨率",
+            "type": "string",
+            "binding": "resolution",
+            "values": [
+              "auto",
+              "1k",
+              "2k",
+              "4k"
+            ],
+            "default": "1k",
+            "pricing": true
+          },
+          {
+            "name": "count",
+            "label": "生成数量",
+            "type": "integer",
+            "binding": "imageCount",
+            "min": 1,
+            "max": 1,
+            "step": 1,
+            "default": 1
+          },
+          {
+            "name": "seed",
+            "label": "随机种子",
+            "type": "integer",
+            "binding": "providerOptions.gemini-image.seed",
+            "enabled": false
+          },
+          {
+            "name": "temperature",
+            "label": "随机程度",
+            "type": "number",
+            "binding": "providerOptions.gemini-image.temperature",
+            "min": 0,
+            "max": 2,
+            "enabled": false
+          }
+        ],
         "parameters": [
           {
             "name": "model",

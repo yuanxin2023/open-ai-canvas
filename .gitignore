@@ -18,14 +18,19 @@ docs/content/docs/plugins/*
 # Keep the task stability runbook versioned without unignoring generated docs.
 !docs/content/docs/backend/
 docs/content/docs/backend/*
+!docs/content/docs/backend/skill-curation.mdx
 !docs/content/docs/backend/task-runtime-stability.mdx
 !docs/content/docs/backend/user-resource-quotas.mdx
 !docs/content/docs/backend/agent-prompt-policy.mdx
 !docs/content/docs/backend/canvas-agent-appearance.mdx
+!docs/content/docs/backend/update-announcements.mdx
 !docs/content/docs/backend/http-api.mdx
 !docs/content/docs/backend/code-map.mdx
 !docs/content/docs/backend/newapi-channel-2.mdx
+!docs/content/docs/backend/bailian-minimax-video.mdx
 !docs/content/docs/backend/video-token-billing.mdx
+!docs/content/docs/backend/plugin-packages.mdx
+!docs/content/docs/backend/self-hosted-deployment.mdx
 !docs/content/docs/backend/creative-agent-runtime.mdx
 # Keep the creative Agent design versioned without unignoring generated docs.
 !docs/content/docs/overview/
@@ -75,6 +80,6 @@ camera_language_guide.md
 backend/cmd/server/server
 # One-off local probe scripts and their compiled output.
 backend/tmp_*
-# Deployment-owned proprietary Live2D Core; never redistribute in this repository.
-/web/public/live2d/live2dcubismcore.min.js
+# Keep the runtime in source control; its optional debug map is not deployed.
 /web/public/live2d/live2dcubismcore.min.js.map
+.zocde/

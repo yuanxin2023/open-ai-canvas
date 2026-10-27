@@ -5,29 +5,14 @@ import (
 	"strings"
 )
 
-// Agent arguments and the canvas editor enter the same public generation codec.
-// Resource materialization and provider credentials remain outside this object.
+// cloudAgentGenerationSpec 将 Agent 参数和已解析素材转换为画布生成合同。
+// refs 提供真实素材类型，resolvedConfig 提供准入后的模型默认值；返回可保存的规格或参数错误。
 func cloudAgentGenerationSpec(a cloudAgentMediaArgs, refs map[string]any, resolvedConfig map[string]any) (contract.GenerationSpec, error) {
 	selection := &contract.ModelSelection{Kind: "channel", ChannelID: a.ChannelID, ModelKey: a.ChannelModelKey}
 	if a.LogicalModelID != "" {
 		selection = &contract.ModelSelection{Kind: "logical", LogicalModelID: a.LogicalModelID}
 	}
-	options := contract.Options{}
-	if a.Mode == "image" || a.Mode == "video" {
-		options.Size = &a.Size
-	}
-	if a.Mode == "video" {
-		options.DurationSeconds, options.GenerateAudio = &a.Duration, a.VideoGenerateAudio
-		if a.Quality != "" {
-			options.Resolution = &a.Quality
-		}
-	} else if a.Mode == "image" {
-		count := 1
-		options.Count = &count
-		if a.Quality != "" {
-			options.Quality = &a.Quality
-		}
-	}
+	options := cloudAgentMediaOptions(a)
 	if resolvedConfig != nil {
 		config := options.TaskConfig()
 		for key, value := range resolvedConfig {
@@ -51,6 +36,19 @@ func cloudAgentGenerationSpec(a cloudAgentMediaArgs, refs map[string]any, resolv
 		}
 	}
 	bindings := []contract.ReferenceBinding{}
+	// 帧选择沿用视频编辑器的 metadata 字段；这里只校验真实引用，不从提示词或图片顺序猜用途。
+	for _, frame := range []struct{ field, id string }{
+		{"videoStartFrameNodeId", a.VideoStartFrameNodeID},
+		{"videoEndFrameNodeId", a.VideoEndFrameNodeID},
+	} {
+		if frame.id == "" {
+			continue
+		}
+		binding, exists := byID[frame.id]
+		if a.Mode != "video" || !exists || binding.MediaType != "image" || !containsString(a.ReferenceNodeIDs, frame.id) {
+			return contract.GenerationSpec{}, cloudAgentFieldError(frame.field, "invalid_value", "首尾帧仅用于视频，必须选择 referenceNodeIds 中的真实图片节点")
+		}
+	}
 	for _, id := range a.ReferenceNodeIDs {
 		binding, exists := byID[id]
 		if !exists {
@@ -67,4 +65,35 @@ func cloudAgentGenerationSpec(a cloudAgentMediaArgs, refs map[string]any, resolv
 	}
 	spec := contract.GenerationSpec{Version: contract.GenerationVersion, Mode: a.Mode, Prompt: a.Prompt, ModelSelection: selection, Options: options, ReferenceBindings: bindings, TextInputMode: "prompt-only"}
 	return spec, spec.Validate()
+}
+
+func cloudAgentMediaOptions(a cloudAgentMediaArgs) contract.Options {
+	options := contract.Options{}
+	// Absence stays absent until capability admission resolves model defaults.
+	if (a.Mode == "image" || a.Mode == "video") && strings.TrimSpace(a.Size) != "" {
+		options.Size = &a.Size
+	}
+	if a.Mode == "video" {
+		if a.Duration > 0 {
+			options.DurationSeconds = &a.Duration
+		}
+		options.GenerateAudio = a.VideoGenerateAudio
+		options.Watermark = a.VideoWatermark
+		if a.Quality != "" {
+			options.Resolution = &a.Quality
+		}
+	} else if a.Mode == "image" {
+		count := 1
+		options.Count = &count
+		if a.ImageResolution != "" {
+			options.ImageResolution = &a.ImageResolution
+		}
+		if a.ImageParameters != "" {
+			options.ImageParameters = &a.ImageParameters
+		}
+		if a.Quality != "" {
+			options.Quality = &a.Quality
+		}
+	}
+	return options
 }

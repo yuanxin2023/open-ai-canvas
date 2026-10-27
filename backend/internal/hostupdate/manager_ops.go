@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -21,13 +22,38 @@ import (
 )
 
 type githubRelease struct {
-	TagName     string    `json:"tag_name"`
-	Name        string    `json:"name"`
-	Body        string    `json:"body"`
-	HTMLURL     string    `json:"html_url"`
-	PublishedAt time.Time `json:"published_at"`
-	Draft       bool      `json:"draft"`
-	Prerelease  bool      `json:"prerelease"`
+	TagName     string               `json:"tag_name"`
+	Name        string               `json:"name"`
+	Body        string               `json:"body"`
+	HTMLURL     string               `json:"html_url"`
+	PublishedAt time.Time            `json:"published_at"`
+	Draft       bool                 `json:"draft"`
+	Prerelease  bool                 `json:"prerelease"`
+	Assets      []githubReleaseAsset `json:"assets"`
+}
+
+type githubReleaseAsset struct {
+	Name  string `json:"name"`
+	State string `json:"state"`
+	Size  int64  `json:"size"`
+}
+
+func (m *Manager) completeRelease(release githubRelease) bool {
+	if release.Draft || release.Prerelease || !IsStableReleaseVersion(release.TagName) {
+		return false
+	}
+	assets := make(map[string]bool)
+	for _, asset := range release.Assets {
+		if asset.State == "uploaded" && asset.Size > 0 {
+			assets[asset.Name] = true
+		}
+	}
+	for _, name := range []string{"SHA256SUMS", "open-ai-canvas-host-updater-linux-amd64", "open-ai-canvas-host-updater-linux-arm64", filepath.Base(m.config.ComposeFile)} {
+		if !assets[name] {
+			return false
+		}
+	}
+	return true
 }
 
 func (m *Manager) latestRelease(ctx context.Context) (*Release, error) {
@@ -58,12 +84,12 @@ func (m *Manager) latestRelease(ctx context.Context) (*Release, error) {
 	}
 	filtered := make([]githubRelease, 0, len(releases))
 	for _, release := range releases {
-		if !release.Draft && strings.HasPrefix(release.TagName, "v") {
+		if m.completeRelease(release) {
 			filtered = append(filtered, release)
 		}
 	}
 	if len(filtered) == 0 {
-		return nil, errors.New("GitHub 尚未发布可用 Release")
+		return nil, errors.New("自有仓库尚未发布资产完整的正式 Release")
 	}
 	sort.SliceStable(filtered, func(i, j int) bool { return CompareVersions(filtered[i].TagName, filtered[j].TagName) > 0 })
 	latest := filtered[0]
@@ -133,7 +159,7 @@ func (m *Manager) preflight(composePath, targetVersion string) error {
 	if err := checkBackupDiskSpace(m.config.BackupDir); err != nil {
 		return err
 	}
-	if err := m.compose(composePath, targetVersion, 2*time.Minute, nil, "config", "--quiet"); err != nil {
+	if err := m.composeWithImages(composePath, targetVersion, immutableImageRefs(m.config.Repository, targetVersion), 2*time.Minute, nil, "config", "--quiet"); err != nil {
 		return fmt.Errorf("目标 Compose 校验失败：%w", err)
 	}
 	current, err := m.currentVersion()
@@ -243,16 +269,46 @@ func (m *Manager) restartSelf() {
 	_ = m.runner.Run(ctx, "systemctl", []string{"restart", m.config.ServiceName}, nil, io.Discard, io.Discard)
 }
 
+type deploymentImages struct {
+	backend string
+	web     string
+	agent   string
+}
+
+func immutableImageRefs(repository, version string) deploymentImages {
+	owner := strings.ToLower(strings.SplitN(repository, "/", 2)[0])
+	tag := strings.TrimPrefix(version, "v")
+	return deploymentImages{
+		backend: "ghcr.io/" + owner + "/open-ai-canvas-backend:" + tag,
+		web:     "ghcr.io/" + owner + "/open-ai-canvas-web:" + tag,
+		agent:   "ghcr.io/" + owner + "/open-ai-canvas-yingce-agent:" + tag,
+	}
+}
+
 func (m *Manager) compose(composePath, imageTag string, timeout time.Duration, stdout io.Writer, arguments ...string) error {
+	return m.composeWithImages(composePath, imageTag, deploymentImages{}, timeout, stdout, arguments...)
+}
+
+func (m *Manager) composeWithImages(composePath, imageTag string, images deploymentImages, timeout time.Duration, stdout io.Writer, arguments ...string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	args := []string{"compose", "--env-file", m.envPath(), "-f", composePath}
+	envFile := m.envPath()
+	if images.backend != "" {
+		var err error
+		envFile, err = m.writeComposeEnvOverride(images)
+		if err != nil {
+			return fmt.Errorf("准备目标 Compose 环境：%w", err)
+		}
+		defer os.Remove(envFile)
+	}
+	args := []string{"compose", "--project-name", composeProjectName(m.config.InstallDir), "--env-file", envFile, "-f", composePath}
 	args = append(args, arguments...)
 	var stderr bytes.Buffer
 	if stdout == nil {
 		stdout = io.Discard
 	}
-	err := m.runner.Run(ctx, "docker", args, []string{"CANVAS_IMAGE_TAG=" + strings.TrimPrefix(imageTag, "v")}, stdout, &stderr)
+	environment := []string{"CANVAS_IMAGE_TAG=" + strings.TrimPrefix(imageTag, "v")}
+	err := m.runner.Run(ctx, "docker", args, environment, stdout, &stderr)
 	if err != nil {
 		message := strings.TrimSpace(stderr.String())
 		if len(message) > 1000 {
@@ -266,22 +322,130 @@ func (m *Manager) compose(composePath, imageTag string, timeout time.Duration, s
 	return nil
 }
 
-func (m *Manager) verifyImages(targetVersion string) error {
-	owner := strings.SplitN(m.config.Repository, "/", 2)[0]
-	for _, image := range []string{"ghcr.io/" + owner + "/open-ai-canvas-backend:", "ghcr.io/" + owner + "/open-ai-canvas-web:"} {
+func composeProjectName(installDir string) string {
+	name := filepath.Base(filepath.Clean(installDir))
+	if name == "." || name == string(filepath.Separator) || name == "" {
+		return "open-ai-canvas"
+	}
+	var builder strings.Builder
+	for _, char := range strings.ToLower(name) {
+		if (char >= 'a' && char <= 'z') || (char >= '0' && char <= '9') || char == '-' || char == '_' {
+			builder.WriteRune(char)
+		}
+	}
+	if result := strings.Trim(builder.String(), "-_ "); result != "" {
+		return result
+	}
+	return "open-ai-canvas"
+}
+
+func (m *Manager) writeComposeEnvOverride(images deploymentImages) (string, error) {
+	data, err := os.ReadFile(m.envPath())
+	if err != nil {
+		return "", err
+	}
+	path := filepath.Join(m.config.StateDir, ".compose-env-override-"+randomID())
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		return "", err
+	}
+	cleanup := func() { _ = os.Remove(path) }
+	if err := setEnvValue(path, "CANVAS_BACKEND_IMAGE", images.backend); err != nil {
+		cleanup()
+		return "", err
+	}
+	if err := setEnvValue(path, "CANVAS_WEB_IMAGE", images.web); err != nil {
+		cleanup()
+		return "", err
+	}
+	if err := setEnvValue(path, "CANVAS_YINGCE_AGENT_IMAGE", images.agent); err != nil {
+		cleanup()
+		return "", err
+	}
+	return path, nil
+}
+
+func (m *Manager) verifyImages(targetVersion string) (deploymentImages, error) {
+	images := immutableImageRefs(m.config.Repository, targetVersion)
+	refs := []string{images.backend, images.web, images.agent}
+	digests := make([]string, 0, len(refs))
+	commit := ""
+	for _, image := range refs {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		var output bytes.Buffer
 		var stderr bytes.Buffer
-		err := m.runner.Run(ctx, "docker", []string{"image", "inspect", image + strings.TrimPrefix(targetVersion, "v"), "--format", "{{json .RepoDigests}}"}, nil, &output, &stderr)
+		err := m.runner.Run(ctx, "docker", []string{"image", "inspect", image, "--format", "{{json .}}"}, nil, &output, &stderr)
 		cancel()
 		if err != nil {
-			return fmt.Errorf("校验目标镜像摘要失败：%s", strings.TrimSpace(stderr.String()))
+			return deploymentImages{}, fmt.Errorf("校验目标镜像摘要失败：%s", strings.TrimSpace(stderr.String()))
 		}
-		if !strings.Contains(output.String(), "@sha256:") {
-			return fmt.Errorf("目标镜像 %s 未包含仓库摘要", image+targetVersion)
+		var inspected struct {
+			RepoDigests []string
+			Config      struct{ Labels map[string]string }
 		}
+		if err := json.Unmarshal(output.Bytes(), &inspected); err != nil {
+			return deploymentImages{}, fmt.Errorf("解析目标镜像摘要失败：%w", err)
+		}
+		repository := strings.Split(image, ":")[0]
+		var digest string
+		for _, candidate := range inspected.RepoDigests {
+			if strings.HasPrefix(candidate, repository+"@sha256:") {
+				encoded := strings.TrimPrefix(candidate, repository+"@sha256:")
+				if value, err := hex.DecodeString(encoded); err == nil && len(value) == 32 {
+					digest = candidate
+					break
+				}
+			}
+		}
+		if digest == "" {
+			return deploymentImages{}, fmt.Errorf("目标镜像 %s 未包含仓库摘要", image)
+		}
+		labels := inspected.Config.Labels
+		if labels["org.opencontainers.image.version"] != targetVersion || strings.TrimSuffix(labels["org.opencontainers.image.source"], ".git") != "https://github.com/"+m.config.Repository {
+			return deploymentImages{}, fmt.Errorf("目标镜像 %s 的版本或源码来源不匹配", image)
+		}
+		revision := labels["org.opencontainers.image.revision"]
+		encoded, decodeErr := hex.DecodeString(revision)
+		if decodeErr != nil || len(encoded) != 20 && len(encoded) != 32 {
+			return deploymentImages{}, fmt.Errorf("目标镜像 %s 缺少有效源码提交", image)
+		}
+		if commit != "" && commit != revision {
+			return deploymentImages{}, errors.New("Web、Backend 与 Agent 镜像来自不同源码提交，停止更新")
+		}
+		commit = revision
+		digests = append(digests, digest)
 	}
-	return nil
+	return deploymentImages{backend: digests[0], web: digests[1], agent: digests[2]}, nil
+}
+
+func setDeploymentImages(path, version string, images deploymentImages) error {
+	if err := setEnvValue(path, "CANVAS_IMAGE_TAG", strings.TrimPrefix(version, "v")); err != nil {
+		return err
+	}
+	if err := setEnvValue(path, "CANVAS_BACKEND_IMAGE", images.backend); err != nil {
+		return err
+	}
+	if err := setEnvValue(path, "CANVAS_WEB_IMAGE", images.web); err != nil {
+		return err
+	}
+	if err := setEnvValue(path, "CANVAS_YINGCE_AGENT_IMAGE", images.agent); err != nil {
+		return err
+	}
+	return ensureAgentToken(path)
+}
+
+func ensureAgentToken(path string) error {
+	values, err := readEnvFile(path)
+	if err != nil {
+		return err
+	}
+	if len(strings.TrimSpace(values["YINGCE_AGENT_TOKEN"])) >= 32 {
+		return nil
+	}
+	token := make([]byte, 32)
+	if _, err := rand.Read(token); err != nil {
+		return fmt.Errorf("生成 Agent 服务凭证：%w", err)
+	}
+	return setEnvValue(path, "YINGCE_AGENT_TOKEN", hex.EncodeToString(token))
 }
 
 func (m *Manager) createBackup(version string) (Backup, error) {

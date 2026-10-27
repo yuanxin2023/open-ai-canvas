@@ -9,55 +9,6 @@ import (
 	"gorm.io/gorm"
 )
 
-type AgentLessonCategoryCount struct {
-	Category string
-	Count    int64
-}
-
-func (r *Repository) ApprovedAgentLessonCategoryCounts(userID string) ([]AgentLessonCategoryCount, error) {
-	var rows []AgentLessonCategoryCount
-	err := r.db.Model(&model.AgentLesson{}).
-		Select("category, count(1) as count").
-		Where("author_user_id = ? AND status = ?", strings.TrimSpace(userID), model.AgentLessonStatusApproved).
-		Group("category").
-		Find(&rows).Error
-	return rows, err
-}
-
-type AgentLessonCandidate struct {
-	ID        string
-	Topic     string
-	Category  string
-	StepsJSON string
-}
-
-func (r *Repository) ApprovedAgentLessonCandidates(userID string, limit int) ([]AgentLessonCandidate, error) {
-	if limit <= 0 || limit > 2000 {
-		limit = 2000
-	}
-	var rows []AgentLessonCandidate
-	err := r.db.Model(&model.AgentLesson{}).
-		Select("id, topic, category, steps_json").
-		Where("author_user_id = ? AND status = ?", strings.TrimSpace(userID), model.AgentLessonStatusApproved).
-		Order("hits DESC, updated_at DESC").
-		Limit(limit).
-		Find(&rows).Error
-	return rows, err
-}
-
-func (r *Repository) AgentLessonsByIDs(userID string, ids []string) ([]model.AgentLesson, error) {
-	if len(ids) == 0 {
-		return nil, nil
-	}
-	query := r.db.Where("id IN ? AND status = ?", ids, model.AgentLessonStatusApproved)
-	if trimmed := strings.TrimSpace(userID); trimmed != "" {
-		query = query.Where("author_user_id = ?", trimmed)
-	}
-	var lessons []model.AgentLesson
-	err := query.Find(&lessons).Error
-	return lessons, err
-}
-
 func (r *Repository) AgentLessonsByCategory(userID, category string, limit int) ([]model.AgentLesson, error) {
 	if limit <= 0 || limit > 500 {
 		limit = 500
@@ -123,6 +74,28 @@ func (r *Repository) CountAgentLessonsByAuthor(userID, status string) (int64, er
 	var count int64
 	err := query.Count(&count).Error
 	return count, err
+}
+
+func (r *Repository) ExpirePendingAgentLessons(userID string, createdBefore, updatedAt time.Time, limit int) (int64, error) {
+	if limit <= 0 || limit > 1000 {
+		limit = 500
+	}
+	query := r.db.Model(&model.AgentLesson{}).Select("id").
+		Where("status = ? AND created_at <= ?", model.AgentLessonStatusPending, createdBefore)
+	if userID = strings.TrimSpace(userID); userID != "" {
+		query = query.Where("author_user_id = ?", userID)
+	}
+	var ids []string
+	if err := query.Order("created_at ASC").Limit(limit).Pluck("id", &ids).Error; err != nil {
+		return 0, err
+	}
+	if len(ids) == 0 {
+		return 0, nil
+	}
+	update := r.db.Model(&model.AgentLesson{}).
+		Where("id IN ? AND status = ?", ids, model.AgentLessonStatusPending).
+		Updates(map[string]any{"status": model.AgentLessonStatusExpired, "updated_at": updatedAt})
+	return update.RowsAffected, update.Error
 }
 
 func (r *Repository) AdminAgentLessons(status, userID, keyword string, limit int) ([]model.AgentLesson, error) {
@@ -193,45 +166,16 @@ func (r *Repository) BumpAgentLessonHits(userID string, ids []string) error {
 	return query.UpdateColumn("hits", gorm.Expr("hits + 1")).Error
 }
 
-func (r *Repository) TouchAgentLesson(userID, id string, verifiedAt time.Time) error {
-	query := r.db.Model(&model.AgentLesson{}).Where("id = ?", strings.TrimSpace(id))
-	if trimmed := strings.TrimSpace(userID); trimmed != "" {
-		query = query.Where("author_user_id = ?", trimmed)
-	}
-	return query.Updates(map[string]any{"last_verified_at": verifiedAt, "updated_at": verifiedAt}).Error
-}
-
 func (r *Repository) BumpAgentLessonInjected(userID string, ids []string) error {
 	if len(ids) == 0 {
 		return nil
 	}
-	query := r.db.Model(&model.AgentLesson{}).Where("id IN ?", ids)
-	if trimmed := strings.TrimSpace(userID); trimmed != "" {
-		query = query.Where("author_user_id = ?", trimmed)
-	}
-	return query.UpdateColumn("injected", gorm.Expr("injected + 1")).Error
-}
-
-func (r *Repository) ApplyUserAgentMemoryCompact(userID string, updates []model.AgentLesson, deleteIDs []string) error {
-	userID = strings.TrimSpace(userID)
-	if userID == "" {
+	if strings.TrimSpace(userID) == "" {
 		return gorm.ErrRecordNotFound
 	}
-	return r.db.Transaction(func(tx *gorm.DB) error {
-		for index := range updates {
-			lesson := updates[index]
-			if strings.TrimSpace(lesson.AuthorUserID) != userID {
-				return gorm.ErrRecordNotFound
-			}
-			if err := tx.Save(&lesson).Error; err != nil {
-				return err
-			}
-		}
-		if len(deleteIDs) == 0 {
-			return nil
-		}
-		return tx.Where("author_user_id = ? AND id IN ?", userID, deleteIDs).Delete(&model.AgentLesson{}).Error
-	})
+	return r.db.Model(&model.AgentLesson{}).
+		Where("author_user_id = ? AND id IN ? AND status = ?", strings.TrimSpace(userID), ids, model.AgentLessonStatusApproved).
+		UpdateColumn("injected", gorm.Expr("injected + 1")).Error
 }
 
 func (r *Repository) AgentMemorySetting(userID string) (*model.AgentMemorySetting, error) {

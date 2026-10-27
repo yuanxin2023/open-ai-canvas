@@ -10,7 +10,6 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -23,6 +22,8 @@ import (
 
 func RegisterAuthRoutes(r *gin.RouterGroup, svc *service.Service) {
 	registerChannelOrderRoutes(r, svc)
+	registerNotificationRoutes(r, svc)
+	registerAuthProfileRoutes(r, svc)
 	r.GET("/auth/settings", func(c *gin.Context) {
 		settings, err := svc.PublicAuthSettings()
 		if err != nil {
@@ -42,7 +43,8 @@ func RegisterAuthRoutes(r *gin.RouterGroup, svc *service.Service) {
 		if !available || !enforceRateLimit(c, "register:"+c.ClientIP(), policy.Request.RegisterPerHour, time.Hour) {
 			return
 		}
-		result, err := svc.RegisterWithEnvironment(req, loginEnvironment(c))
+		req.LoginContext = loginRequestContext(c)
+		result, err := svc.Register(req)
 		if err != nil {
 			failService(c, err)
 			return
@@ -114,7 +116,7 @@ func RegisterAuthRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		ok(c, gin.H{"reset": true})
 	})
-	r.POST("/auth/login", func(c *gin.Context) {
+	r.POST("/auth/login", rejectedLoginAudit(svc, "password"), func(c *gin.Context) {
 		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 64<<10)
 		var req service.LoginRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
@@ -125,10 +127,17 @@ func RegisterAuthRoutes(r *gin.RouterGroup, svc *service.Service) {
 		if !available || !enforceRateLimit(c, "login-ip:"+c.ClientIP(), policy.Request.LoginIPPerTenMinutes, 10*time.Minute) {
 			return
 		}
-		if !enforceRateLimit(c, "login:"+c.ClientIP()+":"+strings.ToLower(strings.TrimSpace(req.Username)), policy.Request.LoginAccountPerTenMinutes, 10*time.Minute) {
+		subject, err := svc.LoginRateLimitSubject(req.Username)
+		if err != nil {
+			failService(c, err)
 			return
 		}
-		result, err := svc.LoginWithEnvironment(req, loginEnvironment(c))
+		if !enforceRateLimit(c, "login:"+c.ClientIP()+":"+subject, policy.Request.LoginAccountPerTenMinutes, 10*time.Minute) {
+			return
+		}
+		req.LoginContext = loginRequestContext(c)
+		c.Set("login_audit_handled", true)
+		result, err := svc.Login(req)
 		if err != nil {
 			failService(c, err)
 			return
@@ -140,16 +149,20 @@ func RegisterAuthRoutes(r *gin.RouterGroup, svc *service.Service) {
 		if !enforceRateLimit(c, "linuxdo-start:"+c.ClientIP(), 20, 10*time.Minute) {
 			return
 		}
-		target, err := svc.BeginLinuxDOLogin(c.Query("next"))
+		acceptedTerms := c.Query("acceptedTerms") == "true"
+		target, err := svc.BeginLinuxDOLogin(c.Query("next"), acceptedTerms)
 		if err != nil {
 			failService(c, err)
 			return
 		}
 		c.Redirect(http.StatusFound, target)
 	})
-	r.GET("/auth/linuxdo/callback", linuxDOCallbackHandler(svc))
+	r.GET("/auth/linuxdo/callback", rejectedLoginAudit(svc, "linuxdo"), linuxDOCallbackHandler(svc))
 	r.POST("/auth/logout", func(c *gin.Context) {
-		_ = svc.Logout(sessionCookie(c))
+		if err := svc.Logout(sessionCookie(c), loginRequestContext(c)); err != nil {
+			failService(c, err)
+			return
+		}
 		clearSessionCookie(c)
 		ok(c, gin.H{"ok": true})
 	})
@@ -184,7 +197,7 @@ func RegisterAuthRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
-		ok(c, gin.H{"user": publicUser, "logicalModels": logicalModels, "runtimeLimits": limits, "drawingEngine": drawingEngine, "features": features})
+		ok(c, gin.H{"user": publicUser, "runtimeLimits": limits, "drawingEngine": drawingEngine, "features": features, "logicalModels": logicalModels})
 	})
 	r.PATCH("/auth/profile", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
@@ -251,7 +264,7 @@ func RegisterAuthRoutes(r *gin.RouterGroup, svc *service.Service) {
 
 // 兼容已在 Linux.do OAuth 应用中登记的传统回调地址，处理逻辑与 /api/auth/linuxdo/callback 完全一致。
 func RegisterOAuthCallbackRoutes(r gin.IRoutes, svc *service.Service) {
-	r.GET("/oauth/linuxdo/callback", linuxDOCallbackHandler(svc))
+	r.GET("/oauth/linuxdo/callback", rejectedLoginAudit(svc, "linuxdo"), linuxDOCallbackHandler(svc))
 }
 
 func linuxDOCallbackHandler(svc *service.Service) gin.HandlerFunc {
@@ -259,12 +272,27 @@ func linuxDOCallbackHandler(svc *service.Service) gin.HandlerFunc {
 		if !enforceRateLimit(c, "linuxdo-callback:"+c.ClientIP(), 30, 10*time.Minute) {
 			return
 		}
-		result, err := svc.CompleteLinuxDOLoginWithEnvironment(c.Query("state"), c.Query("code"), loginEnvironment(c))
+		reauthentication, stateErr := svc.LinuxDOReauthenticationState(c.Query("state"))
+		if stateErr != nil {
+			if err := svc.RecordRejectedLogin("linuxdo", loginRequestContext(c), 400); err != nil {
+				log.Printf("OAuth rejected login audit write failed: error=%v", err)
+			}
+			c.Redirect(http.StatusFound, "/login?oauth_error="+url.QueryEscape("无法读取身份验证状态，请重试"))
+			return
+		}
+		c.Set("login_audit_handled", true)
+		result, err := svc.CompleteLinuxDOLogin(c.Query("state"), c.Query("code"), sessionCookie(c), loginRequestContext(c))
 		if err != nil {
+			if reauthentication {
+				c.Redirect(http.StatusFound, "/profile?section=security&reauth=error")
+				return
+			}
 			c.Redirect(http.StatusFound, "/login?oauth_error="+url.QueryEscape(err.Error()))
 			return
 		}
-		setSessionCookie(c, result.Session.Session, result.Session.MaxAgeSecs)
+		if !result.Reauthenticated {
+			setSessionCookie(c, result.Session.Session, result.Session.MaxAgeSecs)
+		}
 		c.Redirect(http.StatusFound, result.Next)
 	}
 }
@@ -904,118 +932,8 @@ func RegisterAdminRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		ok(c, gin.H{"setting": setting})
 	})
-	r.GET("/admin/api-logs", func(c *gin.Context) {
-		user, err := currentUser(c, svc)
-		if err != nil {
-			failService(c, err)
-			return
-		}
-		page, limit, err := parsePaginationQuery(c, 50)
-		if err != nil {
-			fail(c, http.StatusBadRequest, err)
-			return
-		}
-		logs, err := svc.AdminAPICallLogs(user, service.APICallLogQuery{AnalyticsQuery: analyticsQuery(c), RecordType: c.Query("recordType"), Keyword: c.Query("keyword"), Status: c.Query("status"), Page: page, Limit: limit})
-		if err != nil {
-			failService(c, err)
-			return
-		}
-		ok(c, logs)
-	})
-	r.GET("/admin/api-logs/:id/media", func(c *gin.Context) {
-		user, err := currentUser(c, svc)
-		if err != nil {
-			failService(c, err)
-			return
-		}
-		delivery, err := svc.PrepareAdminAPICallLogMediaDelivery(user, c.Param("id"), c.GetHeader("Range"))
-		if err != nil {
-			failService(c, err)
-			return
-		}
-		if delivery.RedirectURL != "" {
-			c.Header("Cache-Control", "private, no-store")
-			c.Header("Referrer-Policy", "no-referrer")
-			c.Header("X-Content-Type-Options", "nosniff")
-			c.Redirect(http.StatusTemporaryRedirect, delivery.RedirectURL)
-			return
-		}
-		stream := delivery.Stream
-		defer stream.Body.Close()
-		resource := stream.Resource
-		mimeType := resource.MimeType
-		if mimeType == "" {
-			mimeType = "application/octet-stream"
-		}
-		c.Header("Cache-Control", "private, no-cache")
-		c.Header("Accept-Ranges", "bytes")
-		c.Header("X-Content-Type-Options", "nosniff")
-		if c.Query("download") == "1" {
-			extension := filepath.Ext(resource.ObjectKey)
-			if len(extension) > 12 {
-				extension = ""
-			}
-			c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=api-log-media%s", extension))
-		}
-		if resource.Provider == "local" {
-			if seeker, ok := stream.Body.(io.ReadSeeker); ok {
-				c.Header("Content-Type", mimeType)
-				http.ServeContent(c.Writer, c.Request, resource.ID, resource.UpdatedAt, seeker)
-				return
-			}
-		}
-		if stream.ContentRange != "" {
-			c.Header("Content-Range", stream.ContentRange)
-		}
-		if stream.AcceptRanges != "" {
-			c.Header("Accept-Ranges", stream.AcceptRanges)
-		}
-		c.DataFromReader(stream.StatusCode, stream.ContentLength, mimeType, stream.Body, nil)
-	})
-	r.GET("/admin/api-logs/:id", func(c *gin.Context) {
-		user, err := currentUser(c, svc)
-		if err != nil {
-			failService(c, err)
-			return
-		}
-		log, err := svc.AdminAPICallLog(user, c.Param("id"))
-		if err != nil {
-			failService(c, err)
-			return
-		}
-		ok(c, gin.H{"log": log})
-	})
-	r.POST("/admin/api-logs/:id/query-task", func(c *gin.Context) {
-		user, err := currentUser(c, svc)
-		if err != nil {
-			failService(c, err)
-			return
-		}
-		result, err := svc.AdminQueryFailedVideoTask(c.Request.Context(), user, c.Param("id"))
-		if err != nil {
-			failService(c, err)
-			return
-		}
-		ok(c, result)
-	})
-	r.GET("/admin/api-logs-export.csv", func(c *gin.Context) {
-		user, err := currentUser(c, svc)
-		if err != nil {
-			failService(c, err)
-			return
-		}
-		selectedIDs := []string(nil)
-		if value := strings.TrimSpace(c.Query("ids")); value != "" {
-			selectedIDs = strings.Split(value, ",")
-		}
-		data, err := svc.AdminAPICallLogsCSV(user, service.APICallLogQuery{AnalyticsQuery: analyticsQuery(c), RecordType: c.Query("recordType"), Keyword: c.Query("keyword"), Status: c.Query("status"), IDs: selectedIDs})
-		if err != nil {
-			failService(c, err)
-			return
-		}
-		c.Header("Content-Disposition", "attachment; filename=api-calls-"+time.Now().UTC().Format("20060102-150405")+".csv")
-		c.Data(http.StatusOK, "text/csv; charset=utf-8", data)
-	})
+	registerAdminAPILogRoutes(r, svc)
+	registerAdminLoginLogRoutes(r, svc)
 }
 
 func RegisterSystemProxyRoutes(r *gin.RouterGroup, svc *service.Service) {
@@ -1220,7 +1138,7 @@ func proxySystemRequestPath(c *gin.Context, svc *service.Service, user *model.Us
 	status := model.ApiCallStatusSucceeded
 	statusCode := 0
 	errorText := ""
-	resp, err := svc.OutboundHTTPClientForChannel(35*time.Minute, validatedTarget).Do(upstreamReq)
+	resp, err := svc.OutboundHTTPClientForChannel(35*time.Minute, validatedTarget, channel.ProxyURL).Do(upstreamReq)
 	if err != nil {
 		status = model.ApiCallStatusFailed
 		errorText = err.Error()

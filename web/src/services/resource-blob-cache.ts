@@ -13,17 +13,17 @@ type ResourceCacheMeta = {
     lastAccessedAt: number;
 };
 
-const blobStore = localforage.createInstance({ name: "infinite-canvas", storeName: "resource_blobs" });
-const metaStore = localforage.createInstance({ name: "infinite-canvas", storeName: "resource_blob_meta" });
+const blobStore = localforage.createInstance({ name: "yingce", storeName: "resource_blobs" });
+const metaStore = localforage.createInstance({ name: "yingce", storeName: "resource_blob_meta" });
 const objectUrls = new Map<string, string>();
 const sessionBlobs = new Map<string, Blob>();
-const inFlight = new Map<string, Promise<string>>();
-const scheduled = new Set<string>();
+const blobInFlight = new Map<string, Promise<Blob | null>>();
 const cacheMetaTouchWarnings = new Set<string>();
 const metaTouchedAt = new Map<string, number>();
 const downloadQueue: Array<() => void> = [];
 let activeDownloads = 0;
 let persistQueue: Promise<void> = Promise.resolve();
+let cacheGeneration = 0;
 const MAX_CACHE_BYTES = 2 * 1024 * 1024 * 1024;
 const FALLBACK_CACHE_BYTES = 512 * 1024 * 1024;
 const MIN_CACHE_BYTES = 64 * 1024 * 1024;
@@ -32,6 +32,18 @@ const TOUCH_INTERVAL_MS = 10 * 60 * 1000;
 const BUDGET_REFRESH_MS = 5 * 60 * 1000;
 // 现代浏览器对同源 HTTP/2 连接多路复用；上限给到 16 让大画布冷启动在 1~2 轮内完成并发拉取。
 const MAX_CONCURRENT_DOWNLOADS = 16;
+
+/** Release session-only byte resources during account/logout transitions. */
+export function clearResourceBlobCache() {
+    cacheGeneration += 1;
+    objectUrls.forEach((url) => URL.revokeObjectURL(url));
+    objectUrls.clear();
+    sessionBlobs.clear();
+    blobInFlight.clear();
+    metaTouchedAt.clear();
+    cacheMetaTouchWarnings.clear();
+    cacheStats = null;
+}
 
 export async function getCachedResourceObjectUrl(storageKey: string) {
     const target = await cacheTarget(storageKey);
@@ -53,45 +65,21 @@ export async function cacheResourceObjectUrl(storageKey: string) {
     if (!target) return "";
     const cached = await readCachedObjectUrl(target);
     if (cached) return cached;
-    const pending = inFlight.get(target.key);
-    if (pending) return pending;
 
-    const task = withDownloadSlot(() => downloadAndCacheResource(storageKey, target)).finally(() => inFlight.delete(target.key));
-    inFlight.set(target.key, task);
-    return task;
-}
-
-/**
- * 播放器先使用支持 Range 的资源 URL 起播；确认用户实际播放后，再延迟下载完整 Blob。
- * 这样不会让 IndexedDB 缓存阻塞首帧，同时后续打开可直接复用本地 Object URL。
- */
-export function scheduleResourceBlobCache(storageKey: string, delayMs = 4_000) {
-    if (!resourceIdFromStorageKey(storageKey) || scheduled.has(storageKey)) return;
-    scheduled.add(storageKey);
-    const run = () => {
-        void cacheResourceObjectUrl(storageKey)
-            .catch((error) => {
-                // 这是播放后的后台缓存优化，不应让播放器失败；但下载/持久化异常必须可观测。
-                console.warn("后台缓存资源 Blob 失败", { storageKey, error });
-                return "";
-            })
-            .finally(() => scheduled.delete(storageKey));
-    };
-    if (typeof window === "undefined") {
-        run();
-        return;
-    }
-    window.setTimeout(run, Math.max(0, delayMs));
+    const blob = await getOrDownloadResourceBlob(storageKey, target);
+    return blob ? objectUrl(target.key, blob) : "";
 }
 
 function withDownloadSlot<T>(task: () => Promise<T>) {
     return new Promise<T>((resolve, reject) => {
         downloadQueue.push(() => {
             activeDownloads += 1;
-            task().then(resolve, reject).finally(() => {
-                activeDownloads -= 1;
-                runDownloadQueue();
-            });
+            task()
+                .then(resolve, reject)
+                .finally(() => {
+                    activeDownloads -= 1;
+                    runDownloadQueue();
+                });
         });
         runDownloadQueue();
     });
@@ -113,43 +101,36 @@ export async function primeResourceBlobCache(storageKey: string, blob: Blob) {
 export async function getCachedResourceBlob(storageKey: string) {
     const target = await cacheTarget(storageKey);
     if (!target) return null;
+    const sessionBlob = sessionBlobs.get(target.key);
+    if (sessionBlob) return sessionBlob;
     const cached = await blobStore.getItem<Blob>(target.key);
     if (cached) {
+        sessionBlobs.set(target.key, cached);
         touchCacheMetaSafely(target);
         return cached;
     }
-    const sessionBlob = sessionBlobs.get(target.key);
-    if (sessionBlob) return sessionBlob;
-    const pending = inFlight.get(target.key);
-    if (pending) {
-        await pending.catch(() => "");
-        const downloaded = sessionBlobs.get(target.key) || await blobStore.getItem<Blob>(target.key);
-        if (downloaded) return downloaded;
-        return loadAndPersistProxyFallback(storageKey);
-    }
-    await cacheResourceObjectUrl(storageKey).catch(() => "");
-    const downloaded = sessionBlobs.get(target.key) || await blobStore.getItem<Blob>(target.key);
-    if (downloaded) return downloaded;
-    // Explicit byte consumers (exports/provider inputs) need a same-origin fallback
-    // when the OSS bucket does not expose CORS. Display-only cache fills never do.
-    return loadAndPersistProxyFallback(storageKey);
-}
-
-async function loadAndPersistProxyFallback(storageKey: string) {
-    const blob = await getResourceBlob(storageKey, { allowProxyFallback: true });
-    if (blob) await primeResourceBlobCache(storageKey, blob).catch(() => "");
+    const blob = await getOrDownloadResourceBlob(storageKey, target);
+    if (blob) objectUrl(target.key, blob);
     return blob;
 }
 
-async function downloadAndCacheResource(storageKey: string, target: ResourceCacheMeta) {
-    const blob = await downloadResourceBlob(storageKey, target);
-    if (!blob) return "";
-    return objectUrl(target.key, blob);
+async function getOrDownloadResourceBlob(storageKey: string, target: ResourceCacheMeta) {
+    const sessionBlob = sessionBlobs.get(target.key);
+    if (sessionBlob) return sessionBlob;
+    const pending = blobInFlight.get(target.key);
+    if (pending) return pending;
+
+    const generation = cacheGeneration;
+    const task = withDownloadSlot(() => downloadResourceBlob(storageKey, target, generation)).finally(() => {
+        if (blobInFlight.get(target.key) === task) blobInFlight.delete(target.key);
+    });
+    blobInFlight.set(target.key, task);
+    return task;
 }
 
-async function downloadResourceBlob(storageKey: string, target: ResourceCacheMeta) {
+async function downloadResourceBlob(storageKey: string, target: ResourceCacheMeta, generation: number) {
     const blob = await getResourceBlob(storageKey);
-    if (!blob) return null;
+    if (!blob || generation !== cacheGeneration) return null;
     sessionBlobs.set(target.key, blob);
     if (blob.size <= MAX_CACHE_BYTES) await enqueuePersist(target, blob);
     return blob;
@@ -216,8 +197,14 @@ async function readCachedObjectUrl(target: ResourceCacheMeta) {
         touchCacheMetaSafely(target);
         return existing;
     }
+    const sessionBlob = sessionBlobs.get(target.key);
+    if (sessionBlob) {
+        touchCacheMetaSafely(target);
+        return objectUrl(target.key, sessionBlob);
+    }
     const blob = await blobStore.getItem<Blob>(target.key);
     if (!blob) return "";
+    sessionBlobs.set(target.key, blob);
     touchCacheMetaSafely(target);
     return objectUrl(target.key, blob);
 }
@@ -252,7 +239,6 @@ async function touchCacheMeta(target: ResourceCacheMeta) {
     if (!current || now - current.lastAccessedAt < TOUCH_INTERVAL_MS) return;
     await metaStore.setItem(target.key, { ...current, lastAccessedAt: now });
 }
-
 
 function touchCacheMetaSafely(target: ResourceCacheMeta) {
     void touchCacheMeta(target).catch((error) => {

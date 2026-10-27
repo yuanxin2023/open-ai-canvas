@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { App, Button, Input, InputNumber, Modal, Segmented, Select } from "antd";
+import { App, Button, Input, InputNumber, Modal, Segmented } from "antd";
 import { AudioLines, Check, ListVideo, Plus, Scissors, SkipBack, SkipForward, Trash2 } from "lucide-react";
 import { nanoid } from "nanoid";
 
@@ -15,6 +15,7 @@ import { resolveMediaUrl } from "@/services/file-storage";
 import { modelDisplayName, type AiConfig } from "@/stores/use-config-store";
 import { type CanvasConnection, type CanvasNodeData, type CanvasVideoEditOperation } from "@/types/canvas";
 import type { TimelineProject } from "@/types/timeline";
+import { Select } from "@/components/ui/base/select";
 
 export type CanvasVideoSegmentItem = CanvasTimelineSegmentItem;
 
@@ -428,6 +429,7 @@ function videoOperationLabel(operation: CanvasVideoEditOperation) {
         audio_to_video: "音频生视频",
         compare_versions: "版本对比",
         concat: "拼接成片",
+        enhance: "画质增强",
     };
     return labels[operation] || operation;
 }

@@ -157,6 +157,8 @@ export type LinuxDOSetting = {
 
 export type RegistrationSetting = {
     enabled: boolean;
+    agreementTitle?: string;
+    agreementContent?: string;
     updatedBy?: string;
     createdAt?: string;
     updatedAt?: string;
@@ -265,6 +267,7 @@ export type BillingOrder = {
     chargeLimitMicrocredits?: number;
     actualAmountMicrocredits: number;
     refundedAmountMicrocredits: number;
+    refundRecoveryPending?: boolean;
     inputTokenPriceMicrocredits: number;
     outputTokenPriceMicrocredits: number;
     cachedTokenPriceMicrocredits: number;
@@ -303,6 +306,16 @@ export function updateAdminCreditPolicy(policy: CreditPolicy) {
     return http.patch<{ policy: CreditPolicy }>("/admin/settings/credits", policy);
 }
 
+export type BillingAutoRefundSetting = { enabled: boolean; updatedAt?: string };
+
+export function getAdminBillingAutoRefund() {
+    return http.get<{ setting: BillingAutoRefundSetting }>("/admin/settings/billing-auto-refund");
+}
+
+export function updateAdminBillingAutoRefund(enabled: boolean) {
+    return http.patch<{ setting: BillingAutoRefundSetting }>("/admin/settings/billing-auto-refund", { enabled });
+}
+
 export function getAdminLinuxDOSetting() {
     return http.get<{ setting: LinuxDOSetting }>("/admin/settings/linuxdo");
 }
@@ -315,8 +328,9 @@ export function getAdminRegistrationSetting() {
     return http.get<{ setting: RegistrationSetting }>("/admin/settings/registration");
 }
 
-export function updateAdminRegistrationSetting(enabled: boolean) {
-    return http.patch<{ setting: RegistrationSetting }>("/admin/settings/registration", { enabled });
+export function updateAdminRegistrationSetting(input: { enabled: boolean; agreementTitle?: string; agreementContent?: string } | boolean) {
+    const payload = typeof input === "boolean" ? { enabled: input } : input;
+    return http.patch<{ setting: RegistrationSetting }>("/admin/settings/registration", payload);
 }
 
 export function getAdminEmailSetting() {

@@ -13,6 +13,7 @@ import (
 
 func TestMigrationListCoversSchemaModels(t *testing.T) {
 	want := make(map[string]bool, len(database.Models()))
+	want["schema_migrations"] = false
 	cache := &sync.Map{}
 	for _, value := range database.Models() {
 		parsed, err := schema.Parse(value, cache, schema.NamingStrategy{})

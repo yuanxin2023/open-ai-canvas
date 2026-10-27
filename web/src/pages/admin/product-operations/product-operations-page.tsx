@@ -1,10 +1,13 @@
-import { App, Button, Form, Input, InputNumber, Tabs } from "antd";
+import { App, Button, DatePicker, Form, Input, InputNumber, Tabs } from "antd";
+import dayjs, { type Dayjs } from "dayjs";
 import type { ColumnsType } from "antd/es/table";
 import { Plus, RefreshCw } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { CreditProductCard, type CreditProductCardData } from "@/components/payments/credit-product-card";
 import { formatCredits } from "@/constant/credits";
+import { topupSaleDescription } from "@/lib/topup-sale-policy";
+import { Select } from "@/components/ui/base/select";
 import { AdminPageFrame } from "@/pages/admin/components/admin-shell";
 import { AdminDataTable, AdminStatusBadge, AdminTableEmpty } from "@/pages/admin/components/admin-ui";
 import { Switch } from "@/pages/admin/ui/controls";
@@ -31,6 +34,12 @@ type ProductFormValues = {
     credits: number;
     enabled: boolean;
     sortOrder: number;
+    saleStrategy: TopupProduct["saleStrategy"];
+    periodDays?: number;
+    periodPurchaseLimit?: number;
+    stockTotal?: number;
+    saleStartAt?: Dayjs;
+    saleEndAt?: Dayjs;
 };
 
 export default function ProductOperationsPage() {
@@ -106,8 +115,14 @@ export default function ProductOperationsPage() {
                       credits: product.creditsMicrocredits / 1_000_000,
                       enabled: product.enabled,
                       sortOrder: product.sortOrder,
+                      saleStrategy: product.saleStrategy || "unlimited",
+                      periodDays: product.periodDays,
+                      periodPurchaseLimit: product.periodPurchaseLimit,
+                      stockTotal: product.stockTotal,
+                      saleStartAt: product.saleStartAt ? dayjs(product.saleStartAt) : undefined,
+                      saleEndAt: product.saleEndAt ? dayjs(product.saleEndAt) : undefined,
                   }
-                : { enabled: true, featured: false, accentColor: "#D8FF4F", sortOrder: products.length * 10, amountYuan: 10, credits: 10, quotaCaption: "到账积分", actionText: "立即购买" },
+                : { enabled: true, featured: false, accentColor: "#D8FF4F", sortOrder: products.length * 10, amountYuan: 10, credits: 10, quotaCaption: "到账积分", actionText: "立即购买", saleStrategy: "unlimited" },
         );
         setProductDrawer(product || null);
     };
@@ -132,6 +147,12 @@ export default function ProductOperationsPage() {
             creditsMicrocredits: Math.round(values.credits * 1_000_000),
             enabled: values.enabled,
             sortOrder: values.sortOrder || 0,
+            saleStrategy: values.saleStrategy || "unlimited",
+            periodDays: values.periodDays || 0,
+            periodPurchaseLimit: values.periodPurchaseLimit || 0,
+            stockTotal: values.stockTotal || 0,
+            saleStartAt: values.saleStartAt?.toISOString(),
+            saleEndAt: values.saleEndAt?.toISOString(),
         };
         setProductSaving(true);
         try {
@@ -172,7 +193,14 @@ export default function ProductOperationsPage() {
         },
         { title: "到账积分", dataIndex: "creditsMicrocredits", width: 150, align: "right", render: (value) => <span className="tabular-nums">{formatCredits(value)}</span> },
         { title: "排序", dataIndex: "sortOrder", width: 90, align: "center" },
-        { title: "状态", dataIndex: "enabled", width: 100, align: "center", render: (value) => <AdminStatusBadge label={value ? "销售中" : "已停用"} tone={value ? "success" : "neutral"} /> },
+        { title: "售卖策略", key: "sale", width: 190, render: (_, product) => (product.saleStrategy === "inventory" ? `库存 ${product.stockRemaining ?? 0} / ${product.stockTotal ?? 0}` : topupSaleDescription(product)) },
+        {
+            title: "状态",
+            dataIndex: "enabled",
+            width: 100,
+            align: "center",
+            render: (value, product) => <AdminStatusBadge label={!value ? "已停用" : product.canPurchase ? "销售中" : "暂不可购买"} tone={value && product.canPurchase ? "success" : "neutral"} />,
+        },
         {
             title: "操作",
             key: "actions",
@@ -212,7 +240,7 @@ export default function ProductOperationsPage() {
                                         新增商品
                                     </Button>
                                 }
-                                table={{ rowKey: "id", loading, columns: productColumns, dataSource: products, pagination: false, scroll: { x: 820 } }}
+                                table={{ rowKey: "id", loading, columns: productColumns, dataSource: products, pagination: false, scroll: { x: 1010 } }}
                                 empty={<AdminTableEmpty title="还没有充值商品" />}
                             />
                         ),
@@ -321,6 +349,41 @@ export default function ProductOperationsPage() {
                             <Form.Item name="quotaDetail" label="积分区补充说明" rules={[{ max: 240 }]}>
                                 <Input placeholder="例如：可用于图片、视频与文本生成" />
                             </Form.Item>
+                            <Form.Item name="saleStrategy" label="售卖策略" rules={[{ required: true }]}>
+                                <Select
+                                    options={[
+                                        { value: "unlimited", label: "不限量（默认）" },
+                                        { value: "periodic", label: "滚动周期限购" },
+                                        { value: "inventory", label: "限量库存" },
+                                        { value: "timed", label: "定时售卖" },
+                                    ]}
+                                />
+                            </Form.Item>
+                            {watchedProduct?.saleStrategy === "periodic" ? (
+                                <div className="grid grid-cols-2 gap-3">
+                                    <Form.Item name="periodDays" label="滚动天数" rules={[{ required: true }, { type: "number", min: 1, max: 3650 }]}>
+                                        <InputNumber min={1} max={3650} precision={0} className="w-full" />
+                                    </Form.Item>
+                                    <Form.Item name="periodPurchaseLimit" label="每用户限购次数" extra="待支付及未确认关单占用名额。" rules={[{ required: true }, { type: "number", min: 1, max: 100000 }]}>
+                                        <InputNumber min={1} max={100000} precision={0} className="w-full" />
+                                    </Form.Item>
+                                </div>
+                            ) : null}
+                            {watchedProduct?.saleStrategy === "inventory" ? (
+                                <Form.Item name="stockTotal" label="总库存" extra="库存扣除已售和未决占用；有未决库存订单时不能切换策略。" rules={[{ required: true }, { type: "number", min: 1, max: 9_000_000_000 }]}>
+                                    <InputNumber min={1} max={9_000_000_000} precision={0} className="w-full" />
+                                </Form.Item>
+                            ) : null}
+                            {watchedProduct?.saleStrategy === "timed" ? (
+                                <div className="grid grid-cols-2 gap-3">
+                                    <Form.Item name="saleStartAt" label="开始发售" rules={[{ required: true }]}>
+                                        <DatePicker showTime className="w-full" />
+                                    </Form.Item>
+                                    <Form.Item name="saleEndAt" label="结束发售" rules={[{ required: true }]}>
+                                        <DatePicker showTime className="w-full" />
+                                    </Form.Item>
+                                </div>
+                            ) : null}
                             <Form.Item name="sortOrder" label="排序" rules={[{ required: true }]}>
                                 <InputNumber precision={0} className="w-full" />
                             </Form.Item>

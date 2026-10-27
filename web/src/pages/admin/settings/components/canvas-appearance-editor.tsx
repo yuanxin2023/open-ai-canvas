@@ -42,7 +42,7 @@ export function CanvasAppearanceEditor({ value, onChange, disabled, onUploading 
         <div className="grid gap-6 lg:grid-cols-2">
             <div>
                 <h3 className="mb-3 font-semibold">Agent 身份与文案</h3>
-                <p className="mb-4 text-sm text-foreground/60">独立于站点品牌。文案可使用 {"{agentName}"} 引用助手名称；这里只配置展示文字，不修改工具权限。</p>
+                <p className="mb-4 text-sm text-foreground/60">独立于站点品牌。助手名称同步用于界面文案和对话中的自我介绍；文案可使用 {"{agentName}"} 引用名称，不修改工具权限。</p>
                 <Form layout="vertical" disabled={disabled || uploading}>
                     {(
                         [
@@ -163,7 +163,7 @@ export function CanvasAppearanceEditor({ value, onChange, disabled, onUploading 
                         }
                     />
                 ) : null}
-                <p className="text-xs text-foreground/60">部署者需自行确认 Live2D 授权并安装 Cubism Core 至 /live2d/live2dcubismcore.min.js。未安装时名称、文案和默认动态球仍可使用。未启用的导入包可在资源管理中清理。</p>
+                <p className="text-xs text-foreground/60">项目已内置 Cubism Core，无需另行安装。使用前仍需确认 Live2D SDK 及模型素材的适用授权。未启用的导入包可在资源管理中清理。</p>
             </div>
         </div>
     );

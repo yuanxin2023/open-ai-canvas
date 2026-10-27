@@ -1,10 +1,32 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 
-import { collectCanvasMediaAssetIds, rebindInconsistentCanvasAssets, repairMissingCanvasAssets } from "@/services/canvas-asset-repair";
+import { collectCanvasMediaAssetIds, rebindInconsistentCanvasAssets, repairMissingCanvasAssets, repairMissingCanvasVideoPreviews } from "@/services/canvas-asset-repair";
+import { ApiError } from "@/services/api/request";
 import { useAssetStore, type Asset } from "@/stores/use-asset-store";
 import { useCanvasStore, type CanvasProject } from "@/stores/canvas/use-canvas-store";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 import type { TimelineClip } from "@/types/timeline";
+
+test("场景换图后的旧画布保留资产历史图片引用，不创建重复素材", () => {
+    const image: Asset = {
+        id: "scene",
+        kind: "image",
+        category: "environment",
+        title: "阁楼",
+        coverUrl: "",
+        tags: [],
+        createdAt: "",
+        updatedAt: "",
+        metadata: { projectAssetImageHistory: ["resource:old-image"] },
+        data: { dataUrl: "/api/resources/new-image/file", storageKey: "resource:new-image", width: 800, height: 600, bytes: 100, mimeType: "image/png" },
+    };
+    useAssetStore.setState({ assets: [image] });
+    const node = { ...videoNode("scene-node", "scene", "resource:old-image"), type: CanvasNodeType.Image };
+    useCanvasStore.setState({ projects: [project("canvas", [node])] });
+    expect(repairMissingCanvasAssets()).toEqual({ createdAssets: 0, updatedProjects: 0 });
+    expect(useCanvasStore.getState().projects[0].nodes[0].metadata?.storageKey).toBe("resource:old-image");
+    expect(useAssetStore.getState().assets).toHaveLength(1);
+});
 
 function videoAsset(id: string, storageKey?: string, url = ""): Asset {
     return {
@@ -135,5 +157,43 @@ describe("collectCanvasMediaAssetIds", () => {
         const projects = [project("canvas-1", [videoNode("node-1", "asset-a", "resource:R1"), textNode, pendingNode], [timelineClip("asset-b", "resource:R2")])];
 
         expect(collectCanvasMediaAssetIds(projects)).toEqual(new Set(["asset-a", "asset-b"]));
+    });
+});
+
+describe("repairMissingCanvasVideoPreviews", () => {
+    test("only clears confirmed missing preview resources, not network failures", async () => {
+        const node = { ...videoNode("node-1", "asset-1", "resource:video-1"), metadata: { ...videoNode("node-1", "asset-1", "resource:video-1").metadata, videoPreview: { storageKey: "resource:poster-1" } } };
+        useCanvasStore.setState({ projects: [project("canvas-1", [node])] });
+
+        await expect(
+            repairMissingCanvasVideoPreviews(undefined, async () => {
+                throw new Error("offline");
+            }),
+        ).rejects.toThrow("offline");
+        expect(useCanvasStore.getState().projects[0].nodes[0].metadata?.videoPreview).toBeDefined();
+
+        const result = await repairMissingCanvasVideoPreviews(undefined, async () => {
+            throw new ApiError("missing", { status: 404 });
+        });
+        expect(result).toEqual({ clearedPreviews: 1, updatedProjects: 1 });
+        expect(useCanvasStore.getState().projects[0].nodes[0].metadata?.videoPreview).toBeUndefined();
+    });
+
+    test("preserves edits made while resource lookup is pending", async () => {
+        const node = { ...videoNode("node-1", "asset-1", "resource:video-1"), metadata: { ...videoNode("node-1", "asset-1", "resource:video-1").metadata, videoPreview: { storageKey: "resource:poster-1" } } };
+        useCanvasStore.setState({ projects: [project("canvas-1", [node])] });
+        let rejectLookup!: (error: unknown) => void;
+        const repair = repairMissingCanvasVideoPreviews(
+            undefined,
+            () =>
+                new Promise((_, reject) => {
+                    rejectLookup = reject;
+                }),
+        );
+        useCanvasStore.getState().updateProject("canvas-1", { title: "user edit" });
+        rejectLookup(new ApiError("missing", { status: 404 }));
+        await repair;
+        expect(useCanvasStore.getState().projects[0].title).toBe("user edit");
+        expect(useCanvasStore.getState().projects[0].nodes[0].metadata?.videoPreview).toBeUndefined();
     });
 });

@@ -295,15 +295,7 @@ type CreateUserFormValues = {
     status: LocalUser["status"];
 };
 
-export function AdminUserCreateDrawer({
-    open,
-    onClose,
-    onCreated,
-}: {
-    open: boolean;
-    onClose: () => void;
-    onCreated: (user: AdminUser) => void;
-}) {
+export function AdminUserCreateDrawer({ open, onClose, onCreated }: { open: boolean; onClose: () => void; onCreated: (user: AdminUser) => void }) {
     const { message, modal } = App.useApp();
     const [saving, setSaving] = useState(false);
     const [form] = Form.useForm<CreateUserFormValues>();
@@ -360,7 +352,11 @@ export function AdminUserCreateDrawer({
             onClose={close}
             mask={{ closable: !saving }}
             destroyOnHidden
-            extra={<Button type="primary" loading={saving} onClick={() => void save()}>{"\u4fdd\u5b58"}</Button>}
+            extra={
+                <Button type="primary" loading={saving} onClick={() => void save()}>
+                    {"\u4fdd\u5b58"}
+                </Button>
+            }
         >
             <Form form={form} layout="vertical" requiredMark={false}>
                 <Form.Item name="username" label={"\u7528\u6237\u540d"} rules={[{ validator: (_, value?: string) => { const error = usernameValidationMessage(value || ""); return error ? Promise.reject(new Error(error)) : Promise.resolve(); } }]}>
@@ -376,7 +372,12 @@ export function AdminUserCreateDrawer({
                     <Input.Password placeholder={"\u81f3\u5c11 8 \u4f4d"} />
                 </Form.Item>
                 <Form.Item name="status" label={"\u8d26\u53f7\u72b6\u6001"}>
-                    <Select options={[{ label: "\u5df2\u542f\u7528", value: "active" }, { label: "\u5df2\u505c\u7528", value: "disabled" }]} />
+                    <Select
+                        options={[
+                            { label: "\u5df2\u542f\u7528", value: "active" },
+                            { label: "\u5df2\u505c\u7528", value: "disabled" },
+                        ]}
+                    />
                 </Form.Item>
             </Form>
         </Drawer>

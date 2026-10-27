@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"log"
+	"log/slog"
 	"math"
 	"strings"
 	"time"
@@ -47,8 +48,8 @@ func (s *Service) startResourceDeletionWorker(ctx context.Context) {
 }
 
 func (s *Service) cleanupExpiredUserLoginEvents() {
-	if err := s.repo.DeleteExpiredUserLoginEvents(time.Now().Add(-90 * 24 * time.Hour)); err != nil {
-		log.Printf("expired user login event cleanup failed: %v", err)
+	if err := s.repo.PruneLoginAudit(time.Now()); err != nil {
+		log.Printf("login audit cleanup failed: %v", err)
 	}
 }
 
@@ -142,7 +143,7 @@ func (s *Service) cleanupDetachedUserResources(userID string, candidates []model
 	if err := s.repo.DeleteDetachedResources(detached, deletionJobs); err != nil {
 		return err
 	}
-	log.Printf("detached resource cleanup: removed %d resource rows for user %s", len(detached), userID)
+	slog.Info("detached resource cleanup", "removed", len(detached), "user", userID)
 	if len(deletionJobs) > 0 {
 		s.runWorkerTask(func() { s.drainResourceDeletionJobs(len(deletionJobs)) })
 	}
@@ -182,7 +183,7 @@ func (s *Service) cleanupExpiredArchivedAssets() {
 		}
 	}
 	if deleted > 0 {
-		log.Printf("recycle bin cleanup: deleted %d expired assets using user retention policies", deleted)
+		slog.Info("recycle bin cleanup", "deleted", deleted, "retention_policy", "per-user")
 	}
 }
 

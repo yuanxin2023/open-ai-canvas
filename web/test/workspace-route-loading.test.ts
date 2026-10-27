@@ -37,8 +37,11 @@ describe("workspace route loading", () => {
         const navigation = source("../src/components/layout/workspace-sidebar-nav.tsx");
         const topBar = source("../src/components/layout/workspace-top-bar.tsx");
 
-        expect(router).toContain('{ path: "/", element: <RequireAuth>{deferred(<CreatePage />)}</RequireAuth> }');
-        expect(router).toContain('{ path: "/create", element: <RequireAuth>{deferred(<CreatePage />)}</RequireAuth> }');
+        expect(router).toContain('{ path: "/", element: deferred(<CreatePage />) }');
+        expect(router).toContain('{ path: "/create", element: deferred(<CreatePage />) }');
+        expect(router).toContain("<RequireAuth allowAnonymous={isGuestWorkspacePath(pathname)}>");
+        expect(router).toContain('{ path: "/assets", element: <RequireAuth>{deferred(<AssetsPage />)}</RequireAuth> }');
+        expect(router).toMatch(/path: "\/canvas\/:id",\s+element: \(\s+<RequireAuth>\s+<CanvasProjectPage \/>\s+<\/RequireAuth>\s+\),/);
         expect(router).not.toContain('path: "/home"');
         expect(router).not.toContain("HomePage");
         expect(navigation).toContain('{ ...toolItem("create", "/?home=1"), id: "home", title: "创作" }');
@@ -97,7 +100,6 @@ describe("workspace route loading", () => {
         expect(detail).toContain("新建画布");
     });
 
-
     test("keeps project asset refresh scoped to the latest user and project", () => {
         const editor = source("../src/pages/projects/detail/editor.tsx");
 
@@ -128,7 +130,7 @@ describe("workspace route loading", () => {
         expect(projectDetail).toContain('import("@/services/user-data-sync")');
         expect(projectDetail).not.toContain('import { createCanvasProjectWithRemoteSync } from "@/services/user-data-sync"');
         expect(workflow).not.toContain('from "@/lib/video-poster"');
-        expect(workflow).toContain('if (playing) return <video');
+        expect(workflow).toContain("if (playing) return <video");
     });
 
     test("uses a quiet workspace skeleton for initial hydration", () => {
@@ -161,9 +163,9 @@ describe("workspace wallet entry", () => {
         expect(router).not.toContain("WalletPage");
         expect(router).not.toContain("loadWalletPage");
         expect(modules).not.toContain("pages/wallet");
-        expect(host).toContain("pathname !== \"/wallet\"");
+        expect(host).toContain('pathname !== "/wallet"');
         expect(host).toContain("openWorkspaceWallet");
-        expect(palette).toContain('run: () => openWorkspaceWallet()');
+        expect(palette).toContain("run: () => openWorkspaceWallet()");
         expect(palette).not.toContain('"/wallet"');
         expect(canvasTopBar).toContain("<WorkspaceCreditPopover");
         expect(canvasTopBar).not.toContain("openWorkspaceWallet()");

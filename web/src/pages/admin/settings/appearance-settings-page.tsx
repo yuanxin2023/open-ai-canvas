@@ -1,9 +1,8 @@
-import { App, Button, ColorPicker, Form, Input, Skeleton, Slider, Tabs } from "antd";
+import { App, Button, ColorPicker, Form, Input, Slider, Tabs } from "antd";
 import { Switch } from "@/pages/admin/ui/controls";
-import { Copyright, Globe2, Image as ImageIcon, MonitorPlay, Moon, Palette, Plus, RefreshCw, RotateCcw, Save, Search, Sparkles, Sun, Undo2, Upload } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
+import { Copyright, Globe2, MonitorPlay, Moon, Palette, Plus, RefreshCw, RotateCcw, Save, Search, Sparkles, Sun, Undo2 } from "lucide-react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { useBlocker } from "react-router";
-
 import { AdminPageFrame } from "@/pages/admin/components/admin-shell";
 import { AdminStatusBadge, SettingsSectionCard } from "@/pages/admin/components/admin-ui";
 import { cn } from "@/lib/utils";
@@ -12,18 +11,14 @@ import { DEFAULT_CANVAS_APPEARANCE, type CanvasAppearance } from "@/lib/canvas/a
 import { deleteAdminResources } from "@/services/api/admin-storage";
 import { getAdminAppearance, resetAdminAppearance, updateAdminAppearance, uploadAppearanceAsset, type AdminAppearance, type AppearanceAssetSlot } from "@/services/api/appearance";
 import { commitPublicAppearance, DEFAULT_PUBLIC_APPEARANCE } from "@/stores/use-appearance-store";
+import { UpdateAnnouncementEditor } from "./components/update-announcement-editor";
+import { DEFAULT_UPDATE_ANNOUNCEMENT, normalizeUpdateAnnouncement, validateUpdateAnnouncement, type UpdateAnnouncement } from "@/lib/update-announcement";
+import { normalizeDraftCopy, normalizeSingleLine, hasUnsupportedControlCharacter, useAppearancePreviews, AppearanceSkeleton, AssetPicker, LogoThemePreview, type DraftFiles, FILE_RULES, type ResetState } from "./appearance-settings-parts";
 
-type DraftFiles = Record<AppearanceAssetSlot, File | null>;
-type ResetState = Record<AppearanceAssetSlot, boolean>;
+export { type DraftFiles, FILE_RULES, type ResetState } from "./appearance-settings-parts";
 
 const EMPTY_FILES: DraftFiles = { logo: null, "logo-dark": null, video: null, poster: null };
 const EMPTY_RESETS: ResetState = { logo: false, "logo-dark": false, video: false, poster: false };
-const FILE_RULES: Record<AppearanceAssetSlot, { accept: string; maxBytes: number; label: string }> = {
-    logo: { accept: "image/png,image/jpeg,image/webp", maxBytes: 5 << 20, label: "浅色模式 Logo" },
-    "logo-dark": { accept: "image/png,image/jpeg,image/webp", maxBytes: 5 << 20, label: "深色模式 Logo" },
-    poster: { accept: "image/png,image/jpeg,image/webp", maxBytes: 10 << 20, label: "视频封面" },
-    video: { accept: "video/mp4,video/webm", maxBytes: 256 << 20, label: "品牌视频" },
-};
 
 export default function AppearanceSettingsPage() {
     const { message, modal } = App.useApp();
@@ -31,6 +26,7 @@ export default function AppearanceSettingsPage() {
     const [setting, setSetting] = useState<AdminAppearance | null>(null);
     const [brandName, setBrandName] = useState("");
     const [canvas, setCanvas] = useState<CanvasAppearance>(DEFAULT_CANVAS_APPEARANCE);
+    const [updates, setUpdates] = useState<UpdateAnnouncement>(DEFAULT_UPDATE_ANNOUNCEMENT);
     const [canvasUploading, setCanvasUploading] = useState(false);
     const [brandSlug, setBrandSlug] = useState("");
     const [authHeroTitle, setAuthHeroTitle] = useState("");
@@ -66,7 +62,10 @@ export default function AppearanceSettingsPage() {
 
     const dirty =
         Boolean(setting) &&
-        (JSON.stringify(canvas) !== JSON.stringify(setting?.canvas || DEFAULT_CANVAS_APPEARANCE) || canvasUploading || brandName.trim() !== setting?.brandName ||
+        (JSON.stringify(updates) !== JSON.stringify(normalizeUpdateAnnouncement(setting?.updates)) ||
+            JSON.stringify(canvas) !== JSON.stringify(setting?.canvas || DEFAULT_CANVAS_APPEARANCE) ||
+            canvasUploading ||
+            brandName.trim() !== setting?.brandName ||
             brandSlug.trim().toLocaleLowerCase() !== setting?.brandSlug ||
             normalizeDraftCopy(authHeroTitle) !== setting?.authHeroTitle ||
             normalizeDraftCopy(authHeroDescription) !== setting?.authHeroDescription ||
@@ -92,6 +91,7 @@ export default function AppearanceSettingsPage() {
         setSetting(value);
         setBrandName(value.brandName);
         setCanvas(value.canvas || DEFAULT_CANVAS_APPEARANCE);
+        setUpdates(normalizeUpdateAnnouncement(value.updates));
         setBrandSlug(value.brandSlug);
         setAuthHeroTitle(value.authHeroTitle);
         setAuthHeroDescription(value.authHeroDescription);
@@ -148,7 +148,7 @@ export default function AppearanceSettingsPage() {
         if (blocker.state !== "blocked") return;
         modal.confirm({
             title: "放弃站点及外观调整？",
-            content: "当前品牌、创作首屏、画布 Agent、SEO、备案或媒体配置尚未保存，离开后草稿会丢失。线上站点不会改变。",
+            content: "当前品牌、创作首屏、画布 Agent、更新公告、SEO、备案或媒体配置尚未保存，离开后草稿会丢失。线上站点不会改变。",
             okText: "放弃并离开",
             cancelText: "继续编辑",
             okButtonProps: { danger: true },
@@ -205,6 +205,7 @@ export default function AppearanceSettingsPage() {
     const discardDraft = () => {
         if (!setting || saving || restoring || canvasUploading) return;
         setCanvas(setting.canvas || DEFAULT_CANVAS_APPEARANCE);
+        setUpdates(normalizeUpdateAnnouncement(setting.updates));
         setBrandName(setting.brandName);
         setBrandSlug(setting.brandSlug);
         setAuthHeroTitle(setting.authHeroTitle);
@@ -239,7 +240,7 @@ export default function AppearanceSettingsPage() {
         }
         modal.confirm({
             title: "放弃调整并重新读取？",
-            content: "重新读取会丢弃当前品牌、创作首屏、画布 Agent、SEO、备案和待上传文件。",
+            content: "重新读取会丢弃当前品牌、创作首屏、画布 Agent、更新公告、SEO、备案和待上传文件。",
             okText: "放弃并刷新",
             cancelText: "继续编辑",
             okButtonProps: { danger: true },
@@ -251,7 +252,7 @@ export default function AppearanceSettingsPage() {
         if (!setting?.configured || saving || refreshing || restoring || canvasUploading) return;
         modal.confirm({
             title: "恢复系统默认品牌标识？",
-            content: "品牌名称、英文标识、Logo、创作首屏光晕、画布 Agent 名称/文案/形象、登录页文案、视频、封面、SEO 和备案会立即恢复为项目内置值。已上传文件仍保留在存储资源中，不会被删除。",
+            content: "品牌名称、英文标识、Logo、创作首屏光晕、画布 Agent 名称/文案/形象、更新公告、登录页文案、视频、封面、SEO 和备案会立即恢复为项目内置值。已上传文件仍保留在存储资源中，不会被删除。",
             okText: "恢复默认",
             cancelText: "取消",
             okButtonProps: { danger: true },
@@ -278,6 +279,12 @@ export default function AppearanceSettingsPage() {
 
     const save = async () => {
         if (!setting || saving || restoring || canvasUploading) return;
+        const updatesError = validateUpdateAnnouncement(updates);
+        if (updatesError) {
+            setActiveTab("updates");
+            message.error(updatesError);
+            return;
+        }
         if (![canvas.agentName, canvas.panelTitle, canvas.welcomeTitle, canvas.inputPlaceholder].every((text) => text.trim())) {
             setActiveTab("canvas");
             message.error("请填写助手名称、面板标题、欢迎标题和输入框提示");
@@ -348,6 +355,7 @@ export default function AppearanceSettingsPage() {
             }
             const updated = await updateAdminAppearance({
                 canvas,
+                updates,
                 brandName: nextBrandName,
                 brandSlug: nextBrandSlug,
                 authHeroTitle: nextAuthHeroTitle,
@@ -427,7 +435,7 @@ export default function AppearanceSettingsPage() {
                                     <strong>{dirty ? "站点配置有调整待保存" : "站点及外观已与服务端同步"}</strong>
                                     <AdminStatusBadge label={dirty ? "尚未生效" : "服务端当前值"} tone={dirty ? "warning" : "neutral"} />
                                 </div>
-                                <p>{dirty ? "切换分类保留草稿；保存修改会一次应用品牌、创作首屏、登录页、画布 Agent、SEO 和备案调整。" : "按分类管理站点配置，所有修改统一保存。"}</p>
+                                <p>{dirty ? "切换分类保留草稿；保存修改会一次应用品牌、创作首屏、登录页、画布 Agent、更新公告、SEO 和备案调整。" : "按分类管理站点配置，所有修改统一保存。"}</p>
                             </div>
                         </div>
                         <div className="admin-appearance-command-actions">
@@ -784,133 +792,12 @@ export default function AppearanceSettingsPage() {
                                     </SettingsSectionCard>
                                 ),
                             },
-                            { key: "canvas", label: "画布配置", children: <CanvasAppearanceEditor value={canvas} onChange={setCanvas} disabled={saving || refreshing || restoring} onUploading={setCanvasUploading} /> },
+                            { key: "canvas", label: "画布配置", children: <CanvasAppearanceEditor value={canvas} onChange={setCanvas} disabled={saving || refreshing || restoring || canvasUploading} onUploading={setCanvasUploading} /> },
+                            { key: "updates", label: "更新公告", children: <UpdateAnnouncementEditor value={updates} onChange={setUpdates} disabled={saving || refreshing || restoring || canvasUploading} onUploading={setCanvasUploading} /> },
                         ]}
                     />
                 </div>
             )}
         </AdminPageFrame>
     );
-}
-
-function AssetPicker({
-    slot,
-    title,
-    description,
-    configured,
-    file,
-    inputRef,
-    onSelect,
-    onReset,
-    disabled,
-    emptyLabel,
-}: {
-    slot: AppearanceAssetSlot;
-    title: string;
-    description: string;
-    configured: boolean;
-    file: File | null;
-    inputRef: RefObject<HTMLInputElement | null>;
-    onSelect: (slot: AppearanceAssetSlot, file?: File) => void;
-    onReset: (slot: AppearanceAssetSlot) => void;
-    disabled: boolean;
-    emptyLabel?: string;
-}) {
-    const rule = FILE_RULES[slot];
-    return (
-        <div className="admin-appearance-asset-row">
-            <span className="admin-appearance-asset-icon">{slot === "video" ? <MonitorPlay /> : <ImageIcon />}</span>
-            <span className="admin-appearance-asset-copy">
-                <strong>{title}</strong>
-                <small>{description}</small>
-                <em>{file ? `${file.name} · ${formatBytes(file.size)}` : configured ? "已配置自定义文件" : emptyLabel || "使用项目原始文件"}</em>
-            </span>
-            <span className="admin-appearance-asset-actions">
-                <input ref={inputRef} type="file" accept={rule.accept} onChange={(event) => onSelect(slot, event.target.files?.[0])} />
-                <Button icon={<Upload className="size-3.5" />} disabled={disabled} onClick={() => inputRef.current?.click()}>
-                    选择文件
-                </Button>
-                <Button type="text" danger={configured || Boolean(file)} disabled={disabled || (!configured && !file)} onClick={() => onReset(slot)}>
-                    恢复原始
-                </Button>
-            </span>
-        </div>
-    );
-}
-
-function useAppearancePreviews(setting: AdminAppearance | null, files: DraftFiles, resets: ResetState) {
-    const logoObjectURL = useObjectURL(files.logo);
-    const darkLogoObjectURL = useObjectURL(files["logo-dark"]);
-    const videoObjectURL = useObjectURL(files.video);
-    const posterObjectURL = useObjectURL(files.poster);
-    return useMemo(() => {
-        if (!setting) return { logoLight: DEFAULT_PUBLIC_APPEARANCE.logoUrl, logoDark: DEFAULT_PUBLIC_APPEARANCE.darkLogoUrl, video: DEFAULT_PUBLIC_APPEARANCE.authVideoUrl, poster: DEFAULT_PUBLIC_APPEARANCE.authVideoPosterUrl };
-        const customVideo = Boolean(files.video || (!resets.video && setting.authVideoResourceId));
-        const lightLogo = logoObjectURL || (!resets.logo && setting.logoResourceId ? setting.public.logoUrl : "");
-        const darkLogo = darkLogoObjectURL || (!resets["logo-dark"] && setting.darkLogoResourceId ? setting.public.darkLogoUrl : "");
-        return {
-            logoLight: lightLogo || darkLogo || DEFAULT_PUBLIC_APPEARANCE.logoUrl,
-            logoDark: darkLogo || lightLogo || DEFAULT_PUBLIC_APPEARANCE.darkLogoUrl,
-            video: videoObjectURL || (resets.video ? DEFAULT_PUBLIC_APPEARANCE.authVideoUrl : setting.public.authVideoUrl),
-            poster: posterObjectURL || (resets.poster ? (customVideo ? "" : DEFAULT_PUBLIC_APPEARANCE.authVideoPosterUrl) : setting.public.authVideoPosterUrl),
-        };
-    }, [darkLogoObjectURL, files.video, logoObjectURL, posterObjectURL, resets, setting, videoObjectURL]);
-}
-
-function LogoThemePreview({ label, icon, src, dark, frameEnabled }: { label: string; icon: ReactNode; src: string; dark: boolean; frameEnabled: boolean }) {
-    return (
-        <div className={cn("admin-appearance-logo-preview", dark ? "is-dark" : "is-light")}>
-            <span className={cn("admin-appearance-logo-preview-mark", !frameEnabled && "is-unframed")}>
-                <img src={src} alt="" />
-            </span>
-            <span className="admin-appearance-logo-preview-label">
-                {icon}
-                {label}
-            </span>
-        </div>
-    );
-}
-
-function useObjectURL(file: File | null) {
-    const url = useMemo(() => (file ? URL.createObjectURL(file) : ""), [file]);
-    useEffect(
-        () => () => {
-            if (url) URL.revokeObjectURL(url);
-        },
-        [url],
-    );
-    return url;
-}
-
-function AppearanceSkeleton() {
-    return (
-        <div className="admin-settings-stack admin-appearance-settings" aria-label="正在读取外观配置" role="status">
-            <div className="admin-appearance-command-bar">
-                <Skeleton active title={{ width: 190 }} paragraph={false} />
-            </div>
-            <div className="admin-appearance-loading-card">
-                <Skeleton active paragraph={{ rows: 8 }} />
-            </div>
-            <div className="admin-appearance-loading-card">
-                <Skeleton active paragraph={{ rows: 10 }} />
-            </div>
-        </div>
-    );
-}
-
-function normalizeDraftCopy(value: string) {
-    return value.replace(/\r\n?/g, "\n").trim();
-}
-
-function normalizeSingleLine(value: string) {
-    return value.replace(/\r\n?/g, " ").trim();
-}
-
-function hasUnsupportedControlCharacter(value: string) {
-    return Array.from(value).some((character) => character !== "\n" && /[\u0000-\u001f\u007f]/.test(character));
-}
-
-function formatBytes(bytes: number) {
-    if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))}KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
 }

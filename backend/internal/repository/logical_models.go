@@ -17,8 +17,8 @@ type LogicalModelGraph struct {
 	ChannelModels []model.ChannelModel
 }
 
-var ErrLogicalModelInUse = errors.New("logical model is in use")
-var ErrLogicalModelUnavailable = errors.New("logical model is unavailable")
+var ErrLogicalModelInUse = errors.New("该模型正在被使用，无法删除或停用")
+var ErrLogicalModelUnavailable = errors.New("所选模型已停用或不可用，请重新选择")
 
 func (r *Repository) LogicalModels(includeDisabled bool) ([]model.LogicalModel, error) {
 	var items []model.LogicalModel
@@ -292,12 +292,23 @@ func (r *Repository) SwitchTaskLogicalRoute(taskID string, expectedRouteID strin
 		if billingOrderID == "" {
 			return nil
 		}
-		var order model.BillingOrder
-		if err := tx.First(&order, "id = ? AND task_id = ? AND status IN ?", billingOrderID, taskID, []model.BillingStatus{model.BillingStatusReserved, model.BillingStatusRunning}).Error; err != nil {
+		locked, err := lockBillingOrder(tx, billingOrderID)
+		if err != nil {
 			return err
+		}
+		order := *locked
+		if order.TaskID != taskID || (order.Status != model.BillingStatusReserved && order.Status != model.BillingStatusRunning) {
+			return ErrBillingStateConflict
 		}
 		now := time.Now()
 		updates := map[string]any{"channel_id": channelID, "channel_model_id": channelModelID, "updated_at": now}
+		if order.Capability == "audio" && order.BillingMode == "per_second" && !billingChargeLimitApplies(order) {
+			// Older audio orders have no explicit cap. Preserve the existing quote
+			// before a fallback can replace it with a new supplier price.
+			order.ChargeLimitSet = true
+			order.ChargeLimitMicrocredits = order.AmountMicrocredits
+			updates["charge_limit_set"], updates["charge_limit_microcredits"] = true, order.AmountMicrocredits
+		}
 		updates["cost_configured"] = cost.CostPricing.Configured
 		updates["cost_unit_price_microcredits"] = cost.CostPricing.UnitPriceMicrocredits
 		updates["cost_input_token_price_microcredits"] = cost.CostPricing.InputTokenPriceMicrocredits

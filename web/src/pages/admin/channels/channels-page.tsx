@@ -1,11 +1,12 @@
-import { App, Button, Form, Input, InputNumber, Modal, Select, Spin, Switch } from "antd";
-import { ChevronRight, Copy, Pencil, Plus, Power, Search, Trash2 } from "lucide-react";
+import { App, Button, Form, Input, InputNumber, Modal, Spin, Switch } from "antd";
+import { ChevronRight, Copy, Download, Pencil, Plus, Power, Search, Trash2, Upload } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
+import { AdminSearchInput } from "../components/admin-search-input";
 
 import { ChannelHeadersEditor, validateChannelHeaders } from "@/components/channel-headers-editor";
 import { refreshSystemChannels } from "@/lib/user-session";
-import { createAdminChannel, deleteAdminChannel, duplicateAdminChannel, listAdminChannels, updateAdminChannel } from "@/services/api/auth";
+import { createAdminChannel, deleteAdminChannel, duplicateAdminChannel, exportAdminChannels, importAdminChannels, listAdminChannels, updateAdminChannel, type SystemChannelExport } from "@/services/api/auth";
 import { type ChannelHeader, type ModelChannel } from "@/stores/use-config-store";
 import { useAdminContext } from "../admin-context";
 import { AdminPageFrame } from "../components/admin-shell";
@@ -14,6 +15,7 @@ import { ChannelModelManager } from "../components/channel-model-manager";
 import { ChannelOrderDialog } from "../components/channel-order-dialog";
 import { selectChannelWorkspace } from "./channel-workspace-state";
 import "./channels-page.css";
+import { Select } from "@/components/ui/base/select";
 
 type ChannelFormValues = {
     name: string;
@@ -24,6 +26,7 @@ type ChannelFormValues = {
     useGlobalConcurrency?: boolean;
     concurrencyLimit?: number;
     enabled?: boolean;
+    proxyUrl?: string;
 };
 
 export function adminChannelSavePayload(values: ChannelFormValues) {
@@ -36,6 +39,7 @@ export function adminChannelSavePayload(values: ChannelFormValues) {
         useGlobalConcurrency: values.useGlobalConcurrency !== false,
         concurrencyLimit: values.useGlobalConcurrency === false ? values.concurrencyLimit : undefined,
         enabled: values.enabled !== false,
+        proxyUrl: values.proxyUrl?.trim() || "",
     };
 }
 
@@ -53,6 +57,8 @@ export default function ChannelsPage() {
     const [editingChannel, setEditingChannel] = useState<ModelChannel | null>(null);
     const [saving, setSaving] = useState(false);
     const [duplicatingChannelId, setDuplicatingChannelId] = useState<string | null>(null);
+    const [transferring, setTransferring] = useState(false);
+    const importInputRef = useRef<HTMLInputElement>(null);
     const requestSequence = useRef(0);
     const [form] = Form.useForm<ChannelFormValues>();
     const useGlobalConcurrency = Form.useWatch("useGlobalConcurrency", form) !== false;
@@ -128,8 +134,9 @@ export default function ChannelsPage() {
                       useGlobalConcurrency: !channel.concurrencyLimit,
                       concurrencyLimit: channel.concurrencyLimit || undefined,
                       enabled: channel.enabled !== false,
+                      proxyUrl: channel.proxyUrl || "",
                   }
-                : { name: "", baseUrl: "", apiKey: "", secretKey: "", headers: [], useGlobalConcurrency: true, concurrencyLimit: undefined, enabled: true },
+                : { name: "", baseUrl: "", apiKey: "", secretKey: "", headers: [], useGlobalConcurrency: true, concurrencyLimit: undefined, enabled: true, proxyUrl: "" },
         );
         setDrawerOpen(true);
     };
@@ -199,6 +206,86 @@ export default function ChannelsPage() {
         }
     };
 
+    // 导出文件不含任何密钥；ids 为空时导出全部系统渠道。
+    const exportChannels = async (target?: ModelChannel) => {
+        setTransferring(true);
+        try {
+            const exported = await exportAdminChannels(target ? [target.id] : []);
+            const blob = new Blob([JSON.stringify(exported, null, 2)], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            const stamp = new Date().toISOString().slice(0, 10);
+            link.href = url;
+            link.download = target ? `system-channel-${target.name}-${stamp}.json` : `system-channels-${stamp}.json`;
+            link.click();
+            URL.revokeObjectURL(url);
+            message.success(`已导出 ${exported.channels.length} 个渠道（不含密钥）`);
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "导出系统渠道失败");
+        } finally {
+            setTransferring(false);
+        }
+    };
+
+    const importChannels = async (file: File) => {
+        let payload: SystemChannelExport;
+        try {
+            payload = JSON.parse(await file.text()) as SystemChannelExport;
+        } catch {
+            message.error("导入文件不是有效的 JSON");
+            return;
+        }
+        if (payload?.format !== "yingce.system-channels" || !Array.isArray(payload.channels)) {
+            message.error("不是系统渠道导出文件");
+            return;
+        }
+        const names = payload.channels.map((item) => item.name).filter(Boolean);
+        modal.confirm({
+            title: `导入 ${names.length} 个系统渠道？`,
+            content: (
+                <div className="space-y-2 text-sm">
+                    <p>
+                        {names.slice(0, 8).join("、")}
+                        {names.length > 8 ? ` 等 ${names.length} 个` : ""}
+                    </p>
+                    <p className="text-foreground/60">按渠道名称合并：同名渠道保留现有密钥和启停状态，只更新地址、并发和文件中的模型；新渠道创建为停用状态，填写 API Key 后再启用。文件中没有的模型保持不变。</p>
+                </div>
+            ),
+            okText: "开始导入",
+            onOk: async () => {
+                setTransferring(true);
+                try {
+                    const result = await importAdminChannels(payload);
+                    await syncChannels();
+                    await reload();
+                    const summary = `新建 ${result.createdChannels.length} 个、更新 ${result.updatedChannels.length} 个渠道，保存 ${result.savedModels} 个模型`;
+                    if (result.errors.length) {
+                        modal.warning({
+                            title: "导入完成，部分内容失败",
+                            width: 640,
+                            content: (
+                                <div className="space-y-2 text-sm">
+                                    <p>{summary}</p>
+                                    <ul className="max-h-64 list-disc space-y-1 overflow-auto pl-5 text-destructive">
+                                        {result.errors.map((item) => (
+                                            <li key={item}>{item}</li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            ),
+                        });
+                    } else {
+                        message.success(result.createdChannels.length ? `${summary}；新渠道需填写 API Key 后启用` : summary);
+                    }
+                } catch (error) {
+                    message.error(error instanceof Error ? error.message : "导入系统渠道失败");
+                } finally {
+                    setTransferring(false);
+                }
+            },
+        });
+    };
+
     const removeChannel = async (channel: ModelChannel) => {
         try {
             await deleteAdminChannel(channel.id);
@@ -215,6 +302,7 @@ export default function ChannelsPage() {
             primary={{ label: "编辑渠道", icon: <Pencil className="size-3.5" />, onClick: () => openDrawer(channel) }}
             actions={[
                 { key: "duplicate", label: "复制渠道", icon: <Copy className="size-3.5" />, disabled: Boolean(duplicatingChannelId), onClick: () => duplicateChannel(channel) },
+                { key: "export", label: "导出渠道（不含密钥）", icon: <Download className="size-3.5" />, disabled: transferring, onClick: () => exportChannels(channel) },
                 {
                     key: "toggle",
                     label: channel.enabled !== false ? "停用渠道" : "启用渠道",
@@ -251,7 +339,27 @@ export default function ChannelsPage() {
                         <Button block type="primary" icon={<Plus className="size-4" />} onClick={() => openDrawer()}>
                             新增渠道
                         </Button>
-                        <Input
+                        <div className="grid grid-cols-2 gap-2">
+                            <Button size="small" icon={<Upload className="size-3.5" />} loading={transferring} onClick={() => importInputRef.current?.click()}>
+                                导入
+                            </Button>
+                            <Button size="small" icon={<Download className="size-3.5" />} disabled={transferring || !channels.length} onClick={() => void exportChannels()} title="导出全部系统渠道，不含 API Key 等密钥">
+                                导出全部
+                            </Button>
+                        </div>
+                        <input
+                            ref={importInputRef}
+                            type="file"
+                            accept="application/json,.json"
+                            className="hidden"
+                            aria-label="选择系统渠道导入文件"
+                            onChange={(event) => {
+                                const file = event.target.files?.[0];
+                                event.target.value = "";
+                                if (file) void importChannels(file);
+                            }}
+                        />
+                        <AdminSearchInput
                             id="admin-channel-search"
                             aria-label="搜索系统渠道"
                             autoComplete="off"
@@ -259,7 +367,7 @@ export default function ChannelsPage() {
                             prefix={<Search className="size-4 text-foreground/40" />}
                             value={keyword}
                             placeholder="搜索渠道名称或地址"
-                            onChange={(event) => updateUrl({ filter: event.target.value }, true)}
+                            onValueChange={(value) => updateUrl({ filter: value }, true)}
                         />
                         <Select
                             aria-label="筛选渠道状态"
@@ -392,6 +500,9 @@ export default function ChannelsPage() {
                             <ChannelHeadersEditor />
                         </Form.Item>
                     </div>
+                    <Form.Item name="proxyUrl" label="代理地址" extra="为该渠道单独配置出站代理，支持 socks5://、socks5h://、http://、https://。留空则使用全局环境变量代理。">
+                        <Input placeholder="例如：socks5://127.0.0.1:1080 或 http://127.0.0.1:7890" />
+                    </Form.Item>
                     <Form.Item name="useGlobalConcurrency" label="跟随系统并发配置" valuePropName="checked">
                         <Switch />
                     </Form.Item>

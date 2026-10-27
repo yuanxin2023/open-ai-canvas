@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -15,7 +16,7 @@ import (
 	"gorm.io/gorm"
 )
 
-const CurrentSchemaVersion int64 = 51
+const CurrentSchemaVersion int64 = 83
 
 //go:embed seed/inspirations.json
 var inspirationSeedJSON []byte
@@ -55,103 +56,109 @@ type migration struct {
 	apply    func(*gorm.DB) error
 }
 
-var schemaMigrations = []migration{
-	{version: 1, name: "baseline_gorm_schema", checksum: baselineSchemaChecksum, apply: migrateSchemaV1},
-	{version: 2, name: "schema_migrations_applied_at_index", checksum: schemaMigrationAppliedAtIndexChecksum, apply: migrateSchemaV2},
-	{version: 3, name: "asset_taxonomy_candidate_identity", checksum: assetTaxonomyCandidateIdentityChecksum, apply: migrateSchemaV3},
-	{version: 4, name: "resource_upload_key", checksum: resourceUploadKeyChecksum, apply: migrateSchemaV4},
-	{version: 5, name: "payment_topup", checksum: paymentTopupChecksum, apply: migrateSchemaV5},
-	{version: 6, name: "resource_playback_variant", checksum: resourcePlaybackChecksum, apply: migrateSchemaV6},
-	{version: 7, name: "asset_library_folders", checksum: assetLibraryFoldersChecksum, apply: migrateSchemaV7},
-	{version: 8, name: "logical_model_active_code", checksum: logicalModelActiveCodeChecksum, apply: migrateSchemaV8},
-	{version: 9, name: "channel_presentation", checksum: "sha256:channel-presentation-v9-20260908", apply: migrateChannelPresentation},
-	{version: 10, name: "creation_runtime", checksum: creationRuntimeChecksum, apply: migrateSchemaV10},
-	{version: 11, name: "cloud_agent_runtime", checksum: "sha256:cloud-agent-runtime-v11-20260912", apply: func(tx *gorm.DB) error { return tx.AutoMigrate(&model.CloudAgentExecution{}) }},
-	{version: 12, name: "agent_token_charge_limit", checksum: "sha256:agent-token-charge-limit-v12-20260913", apply: migrateSchemaV12},
-	{version: 13, name: "cloud_agent_canvas_mutation", checksum: "sha256:cloud-agent-canvas-mutation-v13-20260913", apply: func(tx *gorm.DB) error {
-		return tx.AutoMigrate(&model.CloudAgentCanvasMutation{})
-	}},
-	{version: 14, name: "cloud_agent_recovery_control", checksum: "sha256:cloud-agent-recovery-control-v14", apply: migrateSchemaV14},
-	{version: 15, name: "agent_profiles", checksum: "sha256:agent-profiles-v15-20260914", apply: func(tx *gorm.DB) error {
-		return tx.AutoMigrate(&model.AgentProfile{})
-	}},
-	{version: 16, name: "agent_lessons", checksum: "sha256:agent-lessons-v16-20260917", apply: func(tx *gorm.DB) error {
-		return tx.AutoMigrate(&model.AgentLesson{})
-	}},
-	{version: 17, name: "agent_lessons_owner_index", checksum: "sha256:agent-lessons-owner-index-v17-20260917", apply: func(tx *gorm.DB) error {
-		return tx.AutoMigrate(&model.AgentLesson{})
-	}},
-	{version: 18, name: "agent_memory_settings", checksum: "sha256:agent-memory-settings-v18-20260917", apply: func(tx *gorm.DB) error {
-		return tx.AutoMigrate(&model.AgentMemorySetting{})
-	}},
-	{version: 19, name: "payment_plugin_version", checksum: "sha256:payment-plugin-version-v19-20260917", apply: migrateSchemaV19},
-	{version: 20, name: "banner_announcements", checksum: "sha256:banner-announcements-v20-20260917", apply: func(tx *gorm.DB) error {
-		return tx.AutoMigrate(&model.BannerAnnouncement{})
-	}},
-	{version: 21, name: "banner_announcement_title_runs", checksum: "sha256:banner-announcement-title-runs-v21-20260917", apply: func(tx *gorm.DB) error {
-		return tx.AutoMigrate(&model.BannerAnnouncement{})
-	}},
-	{version: 22, name: "banner_announcement_notice_type", checksum: "sha256:banner-announcement-notice-type-v22-20260917", apply: func(tx *gorm.DB) error {
-		return tx.AutoMigrate(&model.BannerAnnouncement{})
-	}},
-	{version: 23, name: "canvas_revision_history", checksum: "sha256:canvas-revision-history-v23-20260918", apply: func(tx *gorm.DB) error {
-		return tx.AutoMigrate(&model.CanvasProject{}, &model.CanvasSnapshot{}, &model.CanvasSnapshotResource{})
-	}},
-	{version: 24, name: "topup_product_benefits", checksum: legacyTopupProductBenefitsChecksum, apply: func(tx *gorm.DB) error {
-		if tx.Migrator().HasColumn(&model.TopupProduct{}, "Benefits") {
-			return nil
-		}
-		return tx.Migrator().AddColumn(&model.TopupProduct{}, "Benefits")
-	}},
-	{version: 25, name: "featured_inspirations", checksum: "sha256:featured-inspirations-v25-20260920", apply: migrateSchemaV25},
-	{version: 26, name: "user_prompt_library", checksum: "sha256:user-prompt-library-v26-20260920", apply: func(tx *gorm.DB) error {
-		return tx.AutoMigrate(&model.UserPrompt{})
-	}},
-	{version: 27, name: "inspiration_cover_dimensions", checksum: "sha256:inspiration-cover-dimensions-v27-20260921", apply: func(tx *gorm.DB) error {
-		return tx.AutoMigrate(&model.Inspiration{})
-	}},
-	{version: 28, name: "channel_model_label", checksum: "sha256:channel-model-label-v24", apply: migrateChannelModelLabel},
-	{version: 29, name: "video_token_formula_snapshot", checksum: "sha256:video-token-formula-snapshot-v25", apply: migrateVideoTokenFormulaSnapshot},
-	{version: 30, name: "channel_model_description", checksum: "sha256:channel-model-description-v26", apply: migrateChannelModelDescription},
-	{version: 31, name: "channel_credit_cost", checksum: "sha256:channel-credit-cost-v27", apply: migrateChannelCreditCost},
-	{version: 32, name: "agent_execution_journal", checksum: "sha256:agent-execution-journal-v28", apply: func(tx *gorm.DB) error {
-		return tx.AutoMigrate(&model.CloudAgentExecution{}, &model.CloudAgentEventRecord{}, &model.CloudAgentMessageRecord{}, &model.Task{}, &model.BillingOrder{})
-	}},
-	{version: 33, name: "agent_resource_leases", checksum: "sha256:agent-resource-leases-v29-20260919", apply: func(tx *gorm.DB) error {
-		return tx.AutoMigrate(&model.CloudAgentResourceLease{})
-	}},
-	{version: 34, name: "builtin_tools", checksum: "sha256:builtin-tools-v30", apply: func(tx *gorm.DB) error {
-		return tx.AutoMigrate(&model.Tool{})
-	}},
-	{version: 35, name: "tool_favorites", checksum: "sha256:tool-favorites-v31", apply: func(tx *gorm.DB) error {
-		return tx.AutoMigrate(&model.ToolFavorite{})
-	}},
-	{version: 36, name: "channel_model_tags", checksum: "sha256:channel-model-tags-v32", apply: migrateChannelModelTags},
-	{version: 37, name: "user_profiles", checksum: "sha256:user-profiles-v37-20260927", apply: migrateUserProfiles},
-	{version: 38, name: "user_login_names", checksum: "sha256:user-login-names-v38-20260927", apply: migrateUserLoginNames},
-	{version: 39, name: "user_login_environment", checksum: "sha256:user-login-environment-v39-20260930", apply: migrateUserLoginEnvironment},
-	{version: 40, name: "platform_skill_availability", checksum: "sha256:platform-skill-availability-v40-20260930", apply: func(tx *gorm.DB) error {
-		return tx.AutoMigrate(&model.SkillPlatformState{}, &model.SkillCategoryPlatformState{})
-	}},
-	{version: 41, name: "short_login_usernames", checksum: "sha256:short-login-usernames-v41-20261001", apply: migrateShortLoginUsernames},
-	{version: 42, name: "user_admin_remarks", checksum: "sha256:user-admin-remarks-v42-20261002", apply: migrateUserAdminRemarks},
-	{version: 43, name: "topup_product_card_fields", checksum: "sha256:topup-product-card-fields-v43-20261002", apply: func(tx *gorm.DB) error {
-		return tx.AutoMigrate(&model.TopupProduct{})
-	}},
-	{version: 44, name: "topup_product_accent_color", checksum: "sha256:topup-product-accent-color-v44-20261002", apply: func(tx *gorm.DB) error {
-		return tx.AutoMigrate(&model.TopupProduct{})
-	}},
-	{version: 45, name: "scoped_admin_permissions", checksum: "sha256:scoped-admin-permissions-v45-20261002", apply: migrateScopedAdminPermissions},
-	{version: 46, name: "payment_promotion_image_drafts", checksum: "sha256:payment-promotion-image-drafts-v46-20261003", apply: func(tx *gorm.DB) error {
-		return tx.AutoMigrate(&model.PaymentPromotionImageDraft{})
-	}},
-	{version: 47, name: "scoped_redeem_funding", checksum: "sha256:scoped-redeem-funding-v47-20261003", apply: migrateScopedRedeemFunding},
-	{version: 48, name: "redeem_batch_lifecycle", checksum: "sha256:redeem-batch-lifecycle-v48-20261005", apply: migrateRedeemBatchLifecycle},
-	{version: 49, name: "referral_rewards", checksum: "sha256:referral-rewards-v49-20261006", apply: func(tx *gorm.DB) error {
-		return tx.AutoMigrate(&model.ReferralProfile{}, &model.ReferralReward{}, &model.CreditLedgerEntry{})
-	}},
-	{version: 50, name: "six_character_referral_codes", checksum: "sha256:six-character-referral-codes-v50-20261006", apply: migrateSixCharacterReferralCodes},
-	{version: 51, name: "user_resource_quotas", checksum: "sha256:user-resource-quotas-v51", apply: func(tx *gorm.DB) error { return tx.AutoMigrate(&model.UserResourceQuota{}) }},
+var schemaMigrations = buildSchemaMigrationPlan()
+
+func buildSchemaMigrationPlan() []migration {
+	plan := []migration{
+		{version: 1, name: "baseline_gorm_schema", checksum: baselineSchemaChecksum, apply: migrateSchemaV1},
+		{version: 2, name: "schema_migrations_applied_at_index", checksum: schemaMigrationAppliedAtIndexChecksum, apply: migrateSchemaV2},
+		{version: 3, name: "asset_taxonomy_candidate_identity", checksum: assetTaxonomyCandidateIdentityChecksum, apply: migrateSchemaV3},
+		{version: 4, name: "resource_upload_key", checksum: resourceUploadKeyChecksum, apply: migrateSchemaV4},
+		{version: 5, name: "payment_topup", checksum: paymentTopupChecksum, apply: migrateSchemaV5},
+		{version: 6, name: "resource_playback_variant", checksum: resourcePlaybackChecksum, apply: migrateSchemaV6},
+		{version: 7, name: "asset_library_folders", checksum: assetLibraryFoldersChecksum, apply: migrateSchemaV7},
+		{version: 8, name: "logical_model_active_code", checksum: logicalModelActiveCodeChecksum, apply: migrateSchemaV8},
+		{version: 9, name: "channel_presentation", checksum: "sha256:channel-presentation-v9-20260908", apply: migrateChannelPresentation},
+		{version: 10, name: "creation_runtime", checksum: creationRuntimeChecksum, apply: migrateSchemaV10},
+		{version: 11, name: "cloud_agent_runtime", checksum: "sha256:cloud-agent-runtime-v11-20260912", apply: func(tx *gorm.DB) error { return tx.AutoMigrate(&model.CloudAgentExecution{}) }},
+		{version: 12, name: "agent_token_charge_limit", checksum: "sha256:agent-token-charge-limit-v12-20260913", apply: migrateSchemaV12},
+		{version: 13, name: "cloud_agent_canvas_mutation", checksum: "sha256:cloud-agent-canvas-mutation-v13-20260913", apply: func(tx *gorm.DB) error {
+			return tx.AutoMigrate(&model.CloudAgentCanvasMutation{})
+		}},
+		{version: 14, name: "cloud_agent_recovery_control", checksum: "sha256:cloud-agent-recovery-control-v14", apply: migrateSchemaV14},
+		{version: 15, name: "agent_profiles", checksum: "sha256:agent-profiles-v15-20260914", apply: func(tx *gorm.DB) error {
+			return tx.AutoMigrate(&model.AgentProfile{})
+		}},
+		{version: 16, name: "agent_lessons", checksum: "sha256:agent-lessons-v16-20260917", apply: func(tx *gorm.DB) error {
+			return tx.AutoMigrate(&model.AgentLesson{})
+		}},
+		{version: 17, name: "agent_lessons_owner_index", checksum: "sha256:agent-lessons-owner-index-v17-20260917", apply: func(tx *gorm.DB) error {
+			return tx.AutoMigrate(&model.AgentLesson{})
+		}},
+		{version: 18, name: "agent_memory_settings", checksum: "sha256:agent-memory-settings-v18-20260917", apply: func(tx *gorm.DB) error {
+			return tx.AutoMigrate(&model.AgentMemorySetting{})
+		}},
+		{version: 19, name: "payment_plugin_version", checksum: "sha256:payment-plugin-version-v19-20260917", apply: migrateSchemaV19},
+		{version: 20, name: "banner_announcements", checksum: "sha256:banner-announcements-v20-20260917", apply: func(tx *gorm.DB) error {
+			return tx.AutoMigrate(&model.BannerAnnouncement{})
+		}},
+		{version: 21, name: "banner_announcement_title_runs", checksum: "sha256:banner-announcement-title-runs-v21-20260917", apply: func(tx *gorm.DB) error {
+			return tx.AutoMigrate(&model.BannerAnnouncement{})
+		}},
+		{version: 22, name: "banner_announcement_notice_type", checksum: "sha256:banner-announcement-notice-type-v22-20260917", apply: func(tx *gorm.DB) error {
+			return tx.AutoMigrate(&model.BannerAnnouncement{})
+		}},
+		{version: 23, name: "canvas_revision_history", checksum: "sha256:canvas-revision-history-v23-20260918", apply: func(tx *gorm.DB) error {
+			return tx.AutoMigrate(&model.CanvasProject{}, &model.CanvasSnapshot{}, &model.CanvasSnapshotResource{})
+		}},
+		{version: 24, name: "topup_product_benefits", checksum: legacyTopupProductBenefitsChecksum, apply: func(tx *gorm.DB) error {
+			if tx.Migrator().HasColumn(&model.TopupProduct{}, "Benefits") {
+				return nil
+			}
+			return tx.Migrator().AddColumn(&model.TopupProduct{}, "Benefits")
+		}},
+		{version: 25, name: "featured_inspirations", checksum: "sha256:featured-inspirations-v25-20260920", apply: migrateSchemaV25},
+		{version: 26, name: "user_prompt_library", checksum: "sha256:user-prompt-library-v26-20260920", apply: func(tx *gorm.DB) error {
+			return tx.AutoMigrate(&model.UserPrompt{})
+		}},
+		{version: 27, name: "inspiration_cover_dimensions", checksum: "sha256:inspiration-cover-dimensions-v27-20260921", apply: func(tx *gorm.DB) error {
+			return tx.AutoMigrate(&model.Inspiration{})
+		}},
+		{version: 28, name: "channel_model_label", checksum: "sha256:channel-model-label-v24", apply: migrateChannelModelLabel},
+		{version: 29, name: "video_token_formula_snapshot", checksum: "sha256:video-token-formula-snapshot-v25", apply: migrateVideoTokenFormulaSnapshot},
+		{version: 30, name: "channel_model_description", checksum: "sha256:channel-model-description-v26", apply: migrateChannelModelDescription},
+		{version: 31, name: "channel_credit_cost", checksum: "sha256:channel-credit-cost-v27", apply: migrateChannelCreditCost},
+		{version: 32, name: "agent_execution_journal", checksum: "sha256:agent-execution-journal-v28", apply: func(tx *gorm.DB) error {
+			return tx.AutoMigrate(&model.CloudAgentExecution{}, &model.CloudAgentEventRecord{}, &model.CloudAgentMessageRecord{}, &model.Task{}, &model.BillingOrder{})
+		}},
+		{version: 33, name: "agent_resource_leases", checksum: "sha256:agent-resource-leases-v29-20260919", apply: func(tx *gorm.DB) error {
+			return tx.AutoMigrate(&model.CloudAgentResourceLease{})
+		}},
+		{version: 34, name: "builtin_tools", checksum: "sha256:builtin-tools-v30", apply: func(tx *gorm.DB) error {
+			return tx.AutoMigrate(&model.Tool{})
+		}},
+		{version: 35, name: "tool_favorites", checksum: "sha256:tool-favorites-v31", apply: func(tx *gorm.DB) error {
+			return tx.AutoMigrate(&model.ToolFavorite{})
+		}},
+		{version: 36, name: "channel_model_tags", checksum: "sha256:channel-model-tags-v32", apply: migrateChannelModelTags},
+		{version: 37, name: "user_profiles", checksum: "sha256:user-profiles-v37-20260927", apply: migrateUserProfiles},
+		{version: 38, name: "user_login_names", checksum: "sha256:user-login-names-v38-20260927", apply: migrateUserLoginNames},
+		{version: 39, name: "user_login_environment", checksum: "sha256:user-login-environment-v39-20260930", apply: migrateUserLoginEnvironment},
+		{version: 40, name: "platform_skill_availability", checksum: "sha256:platform-skill-availability-v40-20260930", apply: func(tx *gorm.DB) error {
+			return tx.AutoMigrate(&model.SkillPlatformState{}, &model.SkillCategoryPlatformState{})
+		}},
+		{version: 41, name: "short_login_usernames", checksum: "sha256:short-login-usernames-v41-20261001", apply: migrateShortLoginUsernames},
+		{version: 42, name: "user_admin_remarks", checksum: "sha256:user-admin-remarks-v42-20261002", apply: migrateUserAdminRemarks},
+		{version: 43, name: "topup_product_card_fields", checksum: "sha256:topup-product-card-fields-v43-20261002", apply: func(tx *gorm.DB) error {
+			return tx.AutoMigrate(&model.TopupProduct{})
+		}},
+		{version: 44, name: "topup_product_accent_color", checksum: "sha256:topup-product-accent-color-v44-20261002", apply: func(tx *gorm.DB) error {
+			return tx.AutoMigrate(&model.TopupProduct{})
+		}},
+		{version: 45, name: "scoped_admin_permissions", checksum: "sha256:scoped-admin-permissions-v45-20261002", apply: migrateScopedAdminPermissions},
+		{version: 46, name: "payment_promotion_image_drafts", checksum: "sha256:payment-promotion-image-drafts-v46-20261003", apply: func(tx *gorm.DB) error {
+			return tx.AutoMigrate(&model.PaymentPromotionImageDraft{})
+		}},
+		{version: 47, name: "scoped_redeem_funding", checksum: "sha256:scoped-redeem-funding-v47-20261003", apply: migrateScopedRedeemFunding},
+		{version: 48, name: "redeem_batch_lifecycle", checksum: "sha256:redeem-batch-lifecycle-v48-20261005", apply: migrateRedeemBatchLifecycle},
+		{version: 49, name: "referral_rewards", checksum: "sha256:referral-rewards-v49-20261006", apply: func(tx *gorm.DB) error {
+			return tx.AutoMigrate(&model.ReferralProfile{}, &model.ReferralReward{}, &model.CreditLedgerEntry{})
+		}},
+		{version: 50, name: "six_character_referral_codes", checksum: "sha256:six-character-referral-codes-v50-20261006", apply: migrateSixCharacterReferralCodes},
+		{version: 51, name: "user_resource_quotas", checksum: "sha256:user-resource-quotas-v51", apply: func(tx *gorm.DB) error { return tx.AutoMigrate(&model.UserResourceQuota{}) }},
+	}
+	plan = append(plan, upstreamV1692Migrations()...)
+	return append(plan, mergedBusinessMigrations()...)
 }
 
 func migrateSixCharacterReferralCodes(tx *gorm.DB) error {
@@ -509,24 +516,11 @@ func migrationsForDatabase(db *gorm.DB) ([]migration, error) {
 }
 
 func upstreamFirstMigrationPlan() []migration {
-	const sharedCount = 23
-	const localCount = 4
-	const commonTailCount = 15
-	plan := append([]migration(nil), schemaMigrations[:sharedCount]...)
-	middleEnd := len(schemaMigrations) - commonTailCount
-	for index, item := range schemaMigrations[sharedCount+localCount : middleEnd] {
-		item.version = int64(24 + index)
-		plan = append(plan, item)
+	plan := append([]migration(nil), schemaMigrations...)
+	for index := range plan {
+		plan[index].version = upstreamFirstMigrationVersion(plan[index].version)
 	}
-	nextVersion := int64(24 + middleEnd - sharedCount - localCount)
-	for index, item := range schemaMigrations[sharedCount : sharedCount+localCount] {
-		item.version = nextVersion + int64(index)
-		plan = append(plan, item)
-	}
-	for _, item := range schemaMigrations[middleEnd:] {
-		item.version = int64(len(plan) + 1)
-		plan = append(plan, item)
-	}
+	sort.Slice(plan, func(i, j int) bool { return plan[i].version < plan[j].version })
 	return plan
 }
 
@@ -699,15 +693,18 @@ func MigrateSchema(db *gorm.DB) error {
 				return fmt.Errorf("获取数据库迁移锁：%w", err)
 			}
 		}
-		if err := tx.AutoMigrate(&schemaMigration{}); err != nil {
+		plan := append([]migration(nil), schemaMigrations...)
+		if tx.Migrator().HasTable(&schemaMigration{}) {
+			var err error
+			plan, err = migrationsForDatabase(tx)
+			if err != nil {
+				return err
+			}
+			if err := validateAppliedMigrationRecords(tx, plan); err != nil {
+				return err
+			}
+		} else if err := tx.AutoMigrate(&schemaMigration{}); err != nil {
 			return fmt.Errorf("初始化数据库迁移记录：%w", err)
-		}
-		if err := normalizeLegacyTopupProductBenefitsMigration(tx); err != nil {
-			return err
-		}
-		plan, err := migrationsForDatabase(tx)
-		if err != nil {
-			return err
 		}
 		for _, item := range plan {
 			var applied schemaMigration
@@ -733,35 +730,17 @@ func MigrateSchema(db *gorm.DB) error {
 	})
 }
 
-func normalizeLegacyTopupProductBenefitsMigration(tx *gorm.DB) error {
-	var applied schemaMigration
-	err := tx.First(&applied, "version = ?", 16).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil
-	}
-	if err != nil {
-		return fmt.Errorf("读取旧版充值权益迁移：%w", err)
-	}
-	if applied.Name != "topup_product_benefits" || applied.Checksum != legacyTopupProductBenefitsChecksum {
-		return nil
-	}
-	var targetCount int64
-	if err := tx.Model(&schemaMigration{}).Where("version = ?", 24).Count(&targetCount).Error; err != nil {
-		return fmt.Errorf("检查充值权益迁移目标版本：%w", err)
-	}
-	if targetCount != 0 {
-		return errors.New("数据库同时包含旧版和新版充值权益迁移记录")
-	}
-	if err := tx.Model(&schemaMigration{}).Where("version = ?", 16).Update("version", 24).Error; err != nil {
-		return fmt.Errorf("迁移旧版充值权益版本记录：%w", err)
-	}
-	return nil
-}
-
 func ReadSchemaStatus(db *gorm.DB) (SchemaStatus, error) {
 	status := SchemaStatus{Expected: CurrentSchemaVersion}
 	if !db.Migrator().HasTable(&schemaMigration{}) {
 		return status, nil
+	}
+	plan, err := migrationsForDatabase(db)
+	if err != nil {
+		return status, err
+	}
+	if err := validateAppliedMigrationRecords(db, plan); err != nil {
+		return status, err
 	}
 	if err := db.Model(&schemaMigration{}).Select("COALESCE(MAX(version), 0)").Scan(&status.Current).Error; err != nil {
 		return status, fmt.Errorf("读取数据库结构版本：%w", err)
@@ -791,6 +770,52 @@ func validateMigrationRecords(db *gorm.DB) error {
 		}
 		if err := validateMigrationRecord(applied, item); err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+// Validate the entire recorded prefix before any schema/data migration. Reading a
+// known old identity never grants permission to renumber an applied ledger.
+func validateAppliedMigrationRecords(db *gorm.DB, plan []migration) error {
+	var records []schemaMigration
+	if err := db.Order("version ASC").Find(&records).Error; err != nil {
+		return fmt.Errorf("读取数据库迁移账本：%w", err)
+	}
+	expected := make(map[int64]migration, len(plan))
+	for _, item := range plan {
+		expected[item.version] = item
+	}
+	seen := make(map[int64]bool, len(records))
+	highest := int64(0)
+	for _, record := range records {
+		if record.Version == 16 && record.Name == "topup_product_benefits" && record.Checksum == legacyTopupProductBenefitsChecksum {
+			return errors.New("检测到极旧充值权益迁移账本 16，已停止升级且未改号；请基于副本另行确认修复")
+		}
+		if record.Version == 51 && record.Name == workbenchToolsMigrationName && record.Checksum == legacyWorkbenchToolsMigrationChecksum {
+			return errors.New("检测到极旧官方工作台迁移账本 51，已停止升级且未改号或更换校验和；不自动导入该历史")
+		}
+		item, exists := expected[record.Version]
+		if !exists {
+			if record.Version > CurrentSchemaVersion {
+				return fmt.Errorf("数据库结构版本 %d 高于程序支持的 %d，拒绝使用旧程序连接新数据库", record.Version, CurrentSchemaVersion)
+			}
+			return fmt.Errorf("数据库存在未注册迁移 %d（%s），停止升级", record.Version, record.Name)
+		}
+		if seen[record.Version] {
+			return fmt.Errorf("数据库迁移 %d 有重复记录，停止升级", record.Version)
+		}
+		if err := validateMigrationRecord(record, item); err != nil {
+			return err
+		}
+		seen[record.Version] = true
+		if record.Version > highest {
+			highest = record.Version
+		}
+	}
+	for _, item := range plan {
+		if item.version <= highest && !seen[item.version] {
+			return fmt.Errorf("数据库缺少迁移记录 %d（%s），停止升级并核对已有账本", item.version, item.name)
 		}
 	}
 	return nil

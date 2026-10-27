@@ -6,6 +6,8 @@ export type ModelSelection = { kind: "logical"; logicalModelId: string; channelI
 
 export type Options = {
     size?: string;
+    imageResolution?: string;
+    imageParameters?: string;
     quality?: string;
     count?: number;
     transparentBackground?: boolean;
@@ -16,6 +18,8 @@ export type Options = {
     audioVoice?: string;
     audioFormat?: string;
     audioSpeed?: string;
+    audioLanguage?: string;
+    audioDialect?: string;
     audioInstructions?: string;
 };
 
@@ -47,6 +51,20 @@ export const GENERATION_OPTION_FIELDS = [
         name: "size",
         node: "size",
         task: "size",
+    },
+    {
+        kind: "string",
+        modes: ["image"],
+        name: "imageResolution",
+        node: "imageResolution",
+        task: "imageResolution",
+    },
+    {
+        kind: "string",
+        modes: ["image"],
+        name: "imageParameters",
+        node: "imageParameters",
+        task: "imageParameters",
     },
     {
         kind: "string",
@@ -117,6 +135,20 @@ export const GENERATION_OPTION_FIELDS = [
         name: "audioSpeed",
         node: "audioSpeed",
         task: "audioSpeed",
+    },
+    {
+        kind: "string",
+        modes: ["audio"],
+        name: "audioLanguage",
+        node: "audioLanguage",
+        task: "audioLanguage",
+    },
+    {
+        kind: "string",
+        modes: ["audio"],
+        name: "audioDialect",
+        node: "audioDialect",
+        task: "audioDialect",
     },
     {
         kind: "string",

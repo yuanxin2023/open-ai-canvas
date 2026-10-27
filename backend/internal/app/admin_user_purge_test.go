@@ -54,6 +54,10 @@ func TestPurgeUserDeletesAccountAndUserScopedData(t *testing.T) {
 		&model.UserResourceQuota{UserID: other.ID, OverridesJSON: `{"storedFileGB":10}`, UpdatedBy: actor.ID},
 		&model.AuthSession{ID: "session-1", UserID: target.ID},
 		&model.UserLoginEvent{ID: "login-event-1", UserID: target.ID, SessionID: "session-1", LoginMethod: "password"},
+		&model.LoginLog{ID: "new-login-1", UserID: &target.ID, Event: "login", Result: "success"},
+		&model.UserAvatar{UserID: target.ID, Data: []byte("avatar")},
+		&model.LoginLog{ID: "other-login", UserID: &other.ID, Event: "login", Result: "success"},
+		&model.UserAvatar{UserID: other.ID, Data: []byte("other-avatar")},
 		&model.UserUsernameChange{ID: "username-change-1", UserID: target.ID, OldUsername: "oldone", NewUsername: target.Username, CountsTowardLimit: true},
 		&model.CreditAccount{UserID: target.ID, AvailableMicrocredits: 100},
 		&model.Project{ID: "project-1", UserID: target.ID, Name: "Project"},
@@ -84,11 +88,14 @@ func TestPurgeUserDeletesAccountAndUserScopedData(t *testing.T) {
 		{&model.TaskLog{}, "user_id = ?"}, {&model.Resource{}, "user_id = ?"},
 		{&model.Asset{}, "user_id = ?"}, {&model.UserPrompt{}, "user_id = ?"},
 		{&model.UserResourceQuota{}, "user_id = ?"},
+		{&model.LoginLog{}, "user_id = ?"}, {&model.UserAvatar{}, "user_id = ?"},
 	} {
 		assertUserPurgeCount(t, db, check.model, check.query, target.ID, 0)
 	}
 	assertUserPurgeCount(t, db, &model.CreditAccount{}, "user_id = ?", other.ID, 1)
 	assertUserPurgeCount(t, db, &model.UserResourceQuota{}, "user_id = ?", other.ID, 1)
+	assertUserPurgeCount(t, db, &model.LoginLog{}, "user_id = ?", other.ID, 1)
+	assertUserPurgeCount(t, db, &model.UserAvatar{}, "user_id = ?", other.ID, 1)
 	assertUserPurgeCount(t, db, &model.AdminAuditEvent{}, "action = ? AND target_id = ?", []any{"user.purge", target.ID}, 1)
 }
 

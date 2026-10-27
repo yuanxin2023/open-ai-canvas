@@ -1,5 +1,6 @@
 import { ImageSizePicker } from "@/components/image-size-picker";
-import { imageResolutionUsesQuality } from "@/lib/image-size-presets";
+import { ImageParameterFields } from "@/components/image-parameter-fields";
+import { imageResolutionUsesQuality, imageSizePresets } from "@/lib/image-size-presets";
 import { createPortal } from "react-dom";
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type PointerEvent, type ReactNode, type RefObject } from "react";
 import { App, Button, Dropdown, Popover } from "antd";
@@ -9,15 +10,12 @@ import { Tooltip } from "@/components/ui/base/tooltip";
 import { Reorder, LayoutGroup, motion, useReducedMotion } from "motion/react";
 import { ArrowDown, ArrowUp, Brain, ChevronDown, ChevronLeft, ChevronRight, Clapperboard, Clock3, Coins, Copy, Download, FileText, Film, Image as ImageIcon, LoaderCircle, Maximize2, MessageSquareText, Minimize2, MoreHorizontal, Music2, Pencil, Pin, Plus, RefreshCw, Search, SlidersHorizontal, Sparkles, Trash2, UserRound, WandSparkles, Waves, X } from "lucide-react";
 
-import { AIMessageMarkdown } from "@/components/ai/ai-message-markdown";
-import { GenerationToolCard, type GenerationToolStatus } from "@/components/ai/generation-tool-card";
-import { WorkingDots, WorkingGlow } from "@/components/ai/working-indicator";
-import { MessageReasoning } from "@/components/ai/message-reasoning";
-import { creationResultAssetIds } from "@/lib/canvas/canvas-asset-handoff";
-import { generationErrorMessage } from "@/lib/generation-error";
+import { WorkingGlow } from "@/components/ai/working-indicator";
 import { formatVideoResolutionLabel as videoResolutionLabel } from "@/lib/video-generation-options";
 import { useAssetStore } from "@/stores/use-asset-store";
 import { CachedResourceImage } from "@/components/cached-resource-image";
+import { UserAvatar } from "@/components/layout/user-avatar";
+import { MediaResult } from "./creation-workspace-messages";
 import { CanvasImagePreview } from "@/components/canvas/canvas-image-preview";
 import { CanvasResourceMentionTextarea, type CanvasSlashCommandGroup, type CanvasSlashCommandItem } from "@/components/canvas/canvas-resource-mention-textarea";
 import { VoiceRecordingButton } from "@/components/conversation/voice-recording-button";
@@ -28,23 +26,28 @@ import { aceternityMotion } from "@/lib/aceternity-motion";
 import { CreditSymbol, requestCreditCost } from "@/constant/credits";
 import { ASSET_CATEGORY_LABELS } from "@/lib/asset-category";
 import { formatShotOrdinal } from "@/lib/shot-label";
-import { useCopyText } from "@/hooks/use-copy-text";
 import { buildImageResolutionOptions, formatImageResolutionSize, supportsImageResolutionPresets } from "@/lib/image-resolution-tiers";
-import { modelCapabilityConfigFor, normalizeVideoValue, videoDurationOptions, type ImageCapabilityConfig, type VideoCapabilityConfig } from "@/lib/model-capabilities";
+import { normalizeVideoValue, videoDurationOptions, type ImageCapabilityConfig, type VideoCapabilityConfig } from "@/lib/model-capabilities";
 import { mergedImageCapabilityConfig, type ModelRequirements } from "@/lib/model-selection";
+import { imageQualityLabel } from "@/lib/image-quality";
 import { modelQuoteDescription, modelQuoteRequest } from "@/lib/model-pricing";
-import type { Skill } from "@/services/api/skills";
 import { quoteModel, type LogicalModelQuote } from "@/services/api/logical-models";
 import { resolveResourceUrl, resourceFileUrl } from "@/services/api/resources";
 import { modelOptionName, resolveModelChannel, type AiConfig } from "@/stores/use-config-store";
-import { useAppearanceStore } from "@/stores/use-appearance-store";
 import { useUserStore } from "@/stores/use-user-store";
 import type { PromptOptimizerProvider } from "@/lib/plugins/plugin-types";
 import { displayCreationPrompt, type CreationReference } from "./creation-references";
-import { creationAttachmentKind, creationMediaAspectRatio, removeCreationAttachment, type CreationAttachment, type CreationMode } from "./creation-assets";
+import { creationAttachmentKind, removeCreationAttachment, type CreationAttachment, type CreationMode } from "./creation-assets";
 import { creationConversationDisplayTitle, conversationTimestamp, isImageAttachment, isVideoAttachment } from "./creation-conversations";
 import { conversationTimeFormatter, countOptions, historyDayFormatter, messageTimeFormatter, modeLabels, qualityOptions, ratioOptions, resolutionOptions, shotScriptLabels, type CreationConversation, type CreationMessage, type CreationShotRailEntry, type CreationStatus } from "./creation-types";
 import { openWorkspaceCreditProducts } from "@/lib/workspace-wallet";
+import { useAppearanceStore } from "@/stores/use-appearance-store";
+import { useCopyText } from "@/hooks/use-copy-text";
+import { GenerationToolCard, type GenerationToolStatus } from "@/components/ai/generation-tool-card";
+import { MessageReasoning } from "@/components/ai/message-reasoning";
+import { AIMessageMarkdown } from "@/components/ai/ai-message-markdown";
+import { WorkingDots } from "@/components/ai/working-indicator";
+import { generationErrorMessage } from "@/lib/generation-error";
 import "./creation-product.css";
 import { inspirationCoverUrl, listInspirations, type Inspiration } from "@/services/api/inspirations";
 import { listUserPrompts, type UserPrompt } from "@/services/api/user-prompts";
@@ -261,9 +264,8 @@ function CreationUserMessage({ item, shotNumber, onEditUserMessage }: { item: Cr
     const copyText = useCopyText();
     const visiblePrompt = displayCreationPrompt(item.content, item.references || []);
     const user = useUserStore((state) => state.user);
-    const userAvatarUrl = user?.avatarUrl?.trim();
     return <article className="creation-user-message">
-        <div className="creation-user-message-meta">{shotNumber > 0 ? <span className="creation-shot-badge">镜 {shotNumber}</span> : null}{item.createdAt ? <time dateTime={item.createdAt}>{formatMessageTime(item.createdAt)}</time> : null}<strong>{user?.username || "你"}</strong><span className="creation-user-avatar">{userAvatarUrl ? <img src={userAvatarUrl} alt="" referrerPolicy="no-referrer" loading="lazy" decoding="async" /> : <UserRound />}</span></div>
+        <div className="creation-user-message-meta">{shotNumber > 0 ? <span className="creation-shot-badge">镜 {shotNumber}</span> : null}{item.createdAt ? <time dateTime={item.createdAt}>{formatMessageTime(item.createdAt)}</time> : null}<strong>{user?.username || "你"}</strong>{user ? <UserAvatar user={user} className="creation-user-avatar" /> : <span className="creation-user-avatar"><UserRound /></span>}</div>
         <div className="creation-user-message-copy-wrap"><p>{visiblePrompt}</p></div>
         {item.references?.length ? <CreationMessageReferences references={item.references} /> : null}
         {item.attachments?.length ? <div className="creation-user-message-attachments">{item.attachments.map((attachment) => {
@@ -277,29 +279,6 @@ function CreationUserMessage({ item, shotNumber, onEditUserMessage }: { item: Cr
         <div className="creation-user-message-actions"><Tooltip title="复制提示词"><button type="button" className="creation-user-message-copy" aria-label="复制提示词" onClick={() => copyText(visiblePrompt, "提示词已复制")}><Copy /></button></Tooltip><Tooltip title="编辑并重新发送"><button type="button" className="creation-user-message-edit" aria-label="编辑提示词" onClick={() => onEditUserMessage(visiblePrompt)}><Pencil /></button></Tooltip></div>
         <CreationMediaPreviewModal url={previewUrl} type={previewType} onClose={() => setPreviewUrl("")} />
     </article>;
-}
-
-function MediaResult({ item, onRetryFailure, onCreateVariant, onContinueCanvas, openingCanvas }: { item: CreationMessage; onRetryFailure: () => void; onCreateVariant: () => void; onContinueCanvas: (ids?: string[]) => void; openingCanvas: boolean }) {
-    const [previewUrl, setPreviewUrl] = useState("");
-    const [previewType, setPreviewType] = useState<"image" | "video">("image");
-    const assets = useAssetStore((state) => state.assets);
-    const resultUrls = item.resultUrls || [];
-    const resultAssetIds = resultUrls.length ? creationResultAssetIds(assets, { messageId: item.id, taskIds: item.taskIds || [], resultUrls }) : [];
-    const canContinueWithResults = resultUrls.length > 0 && resultAssetIds.length === resultUrls.length;
-    if (item.status === "pending") return <CreationMediaPending mode={item.mode || "image"} ratio={item.settings?.ratio} />;
-    if ((item.status === "error" || item.status === "cancelled") && !resultUrls.length) return <div className="creation-media-error"><span>{item.status === "cancelled" ? item.content || "已停止" : generationErrorMessage(item.error || "生成失败")}</span>{item.generationErrorReason === "insufficient_credits" ? <button type="button" className="is-purchase" onClick={openWorkspaceCreditProducts}><Coins aria-hidden />购买积分</button> : null}<button type="button" onClick={onRetryFailure}><RefreshCw />重新生成</button></div>;
-    if (!resultUrls.length) return <div className="creation-media-empty">没有返回可预览结果 <button type="button" onClick={onRetryFailure}>重试</button></div>;
-    const isVideo = item.mode === "video";
-    return <div className="creation-media-result">
-        {isVideo ? <button type="button" className="creation-video-result" onClick={() => { setPreviewType("video"); setPreviewUrl(resultUrls[0]); }} aria-label="预览生成视频"><video muted preload="metadata" src={resultUrls[0]} /><span><Maximize2 />预览视频</span></button> : <div className="creation-image-result-grid">{resultUrls.map((url) => <button key={url} type="button" className="creation-image-result" onClick={() => { setPreviewType("image"); setPreviewUrl(url); }} aria-label="预览生成图片"><img src={url} alt="生成结果" /><span><Maximize2 /></span></button>)}</div>}
-        <div className="creation-media-actions"><span>{isVideo ? "视频结果" : `${resultUrls.length} 张图片`}</span>{item.generationErrorReason === "insufficient_credits" ? <Button type="link" size="small" onClick={openWorkspaceCreditProducts}>部分图片因积分不足失败 · 购买积分</Button> : null}<Button type="link" size="small" loading={openingCanvas} disabled={!canContinueWithResults} title={canContinueWithResults ? undefined : "素材保存完成后才能转入画布"} onClick={() => onContinueCanvas(resultAssetIds)}>添加到画布</Button>{resultUrls.map((url, index) => <a key={`${url}-download`} href={url} download>{resultUrls.length > 1 ? `下载 ${index + 1}` : <><Download />下载</>}</a>)}</div>
-        <CreationMediaPreviewModal url={previewUrl} type={previewType} onClose={() => setPreviewUrl("")} />
-    </div>;
-}
-
-function CreationMediaPending({ mode, ratio }: { mode: CreationMode; ratio?: string }) {
-    const assistantName = useAppearanceStore((state) => state.appearance.canvas?.agentName || "创作助手");
-    return <div className={`creation-media-pending is-${mode}`} style={{ aspectRatio: creationMediaAspectRatio(ratio, mode) }} aria-live="polite"><span className="creation-media-pending-icon"><WorkingDots dotSize={7} gap={3} minOpacity={0.3} /></span><span className="sr-only">{assistantName}正在生成{mode === "video" ? "视频" : "图像"}</span></div>;
 }
 
 function CreationMessageReferences({ references }: { references: CreationReference[] }) {
@@ -369,6 +348,11 @@ type ComposerProps = {
     setSeconds: (value: string) => void;
     quality: string;
     setQuality: (value: string) => void;
+    imageResolution: string;
+    setImageResolution: (value: string) => void;
+    imageParameters?: string;
+    setImageParameters: (value: string) => void;
+    setTransparentBackground: (value: string) => void;
     videoQuality: string;
     setVideoQuality: (value: string) => void;
     count: string;
@@ -408,6 +392,7 @@ export function CreationComposer(props: ComposerProps) {
     const previousAttachmentCountRef = useRef(0);
     const interactionBusy = props.busy || props.referenceReplacementBusy || props.referenceUploadBusy;
     const canSubmit = Boolean(props.prompt.trim()) && !interactionBusy;
+    const userId = useUserStore((state) => state.user?.id || "");
     const creditsEnabled = useUserStore((state) => state.features.creditsEnabled);
     const priceChannel = resolveModelChannel(props.config, props.model);
     const quoteRequest = useMemo(() => modelQuoteRequest(props.config, props.model, props.mode, props.modelRequirements), [props.config, props.mode, props.model, props.modelRequirements]);
@@ -439,6 +424,10 @@ export function CreationComposer(props: ComposerProps) {
         ];
     }, [promptLibrary.personal, promptLibrary.public, props.mode]);
     const loadPromptLibrary = useCallback(() => {
+        if (!userId) {
+            setPromptLibrary({ personal: [], public: [], loading: false, loaded: false, error: "登录后可调用个人提示词与精选灵感" });
+            return;
+        }
         if (promptLibrary.loading || promptLibrary.loaded) return;
         promptLibraryRequestRef.current?.abort();
         const controller = new AbortController();
@@ -453,7 +442,11 @@ export function CreationComposer(props: ComposerProps) {
                 if (controller.signal.aborted) return;
                 setPromptLibrary((current) => ({ ...current, loading: false, loaded: false, error: "提示词加载失败，请关闭后重新输入 / 重试" }));
             });
-    }, [promptLibrary.loaded, promptLibrary.loading]);
+    }, [promptLibrary.loaded, promptLibrary.loading, userId]);
+    useEffect(() => {
+        promptLibraryRequestRef.current?.abort();
+        setPromptLibrary({ personal: [], public: [], loading: false, loaded: false, error: "" });
+    }, [userId]);
     useEffect(() => () => promptLibraryRequestRef.current?.abort(), []);
     const credits = requestCreditCost({
         channelMode: priceChannel.scope === "system" ? "remote" : "local",
@@ -496,7 +489,7 @@ export function CreationComposer(props: ComposerProps) {
             : "描述镜头内容、运动、光线与节奏";
     const emptyPlaceholder = "输入你的镜头、画面或故事。也可以添加或拖入参考图开始创作";
     const imageReferencesSupported = props.imageProfile.references.maxImages > 0;
-    const referencesSupported = props.mode === "image" ? imageReferencesSupported : props.mode !== "video" || props.videoProfile.operations.includes("image_to_video");
+    const referencesSupported = props.mode === "image" ? imageReferencesSupported : props.mode !== "video" || props.maxReferences > 0;
     const canAddMoreReferences = referencesSupported && props.attachments.length < props.maxReferences;
     const addReferenceLabel = interactionBusy ? (props.referenceUploadBusy ? "正在上传参考图" : props.referenceReplacementBusy ? "正在替换参考图" : "生成中暂不能添加参考内容") : canAddMoreReferences ? "添加更多参考内容" : `已达到当前模型的参考内容上限（${props.maxReferences} 个）`;
     const referenceCounts = useMemo(() => props.attachments.reduce((counts, attachment) => {
@@ -703,6 +696,7 @@ export function CreationComposer(props: ComposerProps) {
         <footer className="creation-chat-dock">
             <div className="creation-chat-controls">
                 {props.variant === "thread" ? <ModePicker mode={props.mode} onModeChange={props.onModeChange} /> : null}
+                {referencesSupported && !props.attachments.length ? <Tooltip title={addReferenceLabel}><button type="button" className="creation-chat-control" onClick={props.onOpenLibrary} disabled={interactionBusy || !canAddMoreReferences} aria-label={addReferenceLabel}><Plus aria-hidden="true" /><span>参考内容</span></button></Tooltip> : null}
                 <VoiceRecordingButton
                     className="creation-voice-trigger"
                     disabled={interactionBusy}
@@ -725,8 +719,20 @@ export function CreationComposer(props: ComposerProps) {
                 {props.mode === "video" || (props.mode === "image" && imageSettingsSupported) ? <GenerationSettingsMenu {...props} /> : null}
                 {props.mode === "video" ? <DurationMenu profile={props.videoProfile} seconds={props.seconds} onChange={props.setSeconds} /> : null}
                 {props.mode === "text" ? <>
-                    <Tooltip title={interactionBusy ? "生成中，此开关将在下次发送时生效" : (props.textStreaming ? "流式输出已开启" : "流式输出已关闭")}><button type="button" className="creation-chat-control" aria-pressed={props.textStreaming} disabled={interactionBusy} onClick={() => props.setTextStreaming(!props.textStreaming)}><Waves /><span>流式</span></button></Tooltip>
-                    <Tooltip title={interactionBusy ? "生成中，此开关将在下次发送时生效" : (props.textThinking ? "思考已开启，会展示模型返回的推理摘要" : "开启模型思考")}><button type="button" className="creation-chat-control" aria-pressed={props.textThinking} disabled={interactionBusy} onClick={() => props.setTextThinking(!props.textThinking)}><Brain /><span>思考</span></button></Tooltip>
+                    <Tooltip title={interactionBusy ? "生成中，此开关将在下次发送时生效" : (props.textStreaming ? "流式输出已开启" : "流式输出已关闭")}>
+                        <button type="button" className="creation-chat-control" aria-pressed={props.textStreaming} disabled={interactionBusy} onClick={() => props.setTextStreaming(!props.textStreaming)}>
+                            <Waves />
+                            <span>流式</span>
+                            {props.textStreaming ? <span className="size-1.5 rounded-full bg-blue-400 shrink-0 shadow-sm" /> : null}
+                        </button>
+                    </Tooltip>
+                    <Tooltip title={interactionBusy ? "生成中，此开关将在下次发送时生效" : (props.textThinking ? "思考已开启，会展示模型返回的推理摘要" : "开启模型思考")}>
+                        <button type="button" className="creation-chat-control" aria-pressed={props.textThinking} disabled={interactionBusy} onClick={() => props.setTextThinking(!props.textThinking)}>
+                            <Brain />
+                            <span>思考</span>
+                            {props.textThinking ? <span className="size-1.5 rounded-full bg-blue-400 shrink-0 shadow-sm" /> : null}
+                        </button>
+                    </Tooltip>
                 </> : null}
                 {props.prompt.trim() || props.attachments.length || props.references.some((reference) => reference.active) ? <Tooltip title="清空提示词和参考内容"><button type="button" className="creation-chat-control is-clear" onClick={props.onClearComposer} disabled={interactionBusy} aria-label="清空提示词和参考内容"><Trash2 /><span>清空</span></button></Tooltip> : null}
             </div>
@@ -807,7 +813,7 @@ function ModePicker({ mode, onModeChange }: { mode: CreationMode; onModeChange: 
 
 function GenerationSettingsMenu(props: ComposerProps) {
     const [open, setOpen] = useState(false);
-    const activeQualityOptions = props.imageProfile.quality.values.map((value) => qualityOptions.find((item) => item.value === value) || { value, label: value.toUpperCase(), description: "模型支持的质量/分辨率" });
+    const activeQualityOptions = props.imageProfile.quality.values.map((value) => qualityOptions.find((item) => item.value === value) || { value, label: imageQualityLabel(value), description: "模型支持的质量/分辨率" });
     const qualityLabel = activeQualityOptions.find((item) => item.value === props.quality)?.label || qualityOptions.find((item) => item.value === props.quality)?.label || props.quality || "自动";
     // 尺寸/比例/分辨率选项取同显示名分组内全部模型的并集，路由模型只决定发送参数。
     const mergedProfile = mergedImageCapabilityConfig(props.config, props.model || props.config.imageModel);
@@ -831,13 +837,16 @@ function GenerationSettingsMenu(props: ComposerProps) {
     ].join(" · ");
     const videoRatioSupported = props.mode === "video" && ratios.length > 0;
     const summary = props.mode === "video" ? [...(videoRatioSupported ? [props.ratio] : []), ...(videoResolutionSupported ? [videoResolutionLabel(props.videoQuality)] : [])].join(" · ") : imageSummary;
-    const panel = <div className="creation-parameter-menu">
-        {props.mode === "image" ? <ImageSizePicker profile={mergedProfile} size={props.ratio} quality={props.quality} onChange={(size, quality) => { props.setRatio(size); if (quality) props.setQuality(quality); }} /> : videoRatioSupported ? <SettingSection title="画幅" value={props.ratio}><div className="creation-choice-grid is-ratio">{ratios.map((value) => <button key={value} type="button" aria-pressed={value === props.ratio} className={value === props.ratio ? "is-selected" : ""} onClick={() => props.setRatio(value)}><span className="creation-ratio-preview"><span style={ratioPreviewStyle(value)} /></span><span>{value}</span></button>)}</div></SettingSection> : null}
+    const panel = props.mode === "image" && props.imageProfile.parameters ? <div className="creation-parameter-menu max-h-[65vh] overflow-y-auto"><ImageParameterFields profile={props.imageProfile} config={{ ...props.config, model: props.model, size: props.ratio, quality: props.quality, imageResolution: props.imageResolution, imageParameters: props.imageParameters, count: props.count }} onChange={(key, value) => {
+        const setters = { size: props.setRatio, quality: props.setQuality, imageResolution: props.setImageResolution, imageParameters: props.setImageParameters, count: props.setCount, transparentBackground: props.setTransparentBackground };
+        setters[key](value);
+    }} /></div> : <div className="creation-parameter-menu">
+        {props.mode === "image" ? <ImageSizePicker profile={mergedProfile} size={props.ratio} quality={props.quality} imageResolution={props.imageResolution} onChange={(size, quality, resolution) => { props.setRatio(size); if (quality) props.setQuality(quality); if (resolution) props.setImageResolution(resolution); }} /> : videoRatioSupported ? <SettingSection title="画幅" value={props.ratio}><div className="creation-choice-grid is-ratio">{ratios.map((value) => <button key={value} type="button" aria-pressed={value === props.ratio} className={value === props.ratio ? "is-selected" : ""} onClick={() => props.setRatio(value)}><span className="creation-ratio-preview"><span style={ratioPreviewStyle(value)} /></span><span>{value}</span></button>)}</div></SettingSection> : null}
         {props.mode === "image" && referenceImageSizeValue ? <button type="button" className="creation-custom-trigger" onClick={selectReferenceImageSize}>使用参考图尺寸 · {referenceImageSizeLabel}</button> : null}
         {props.mode === "video" ? (videoResolutionSupported ? <SettingSection title="清晰度" value={videoResolutionLabel(props.videoQuality)}><div className="creation-choice-grid is-resolution">{resolutions.map((option) => <button key={option.value} type="button" aria-pressed={option.value === props.videoQuality} className={option.value === props.videoQuality ? "is-selected" : ""} onClick={() => props.setVideoQuality(option.value)}>{option.label}</button>)}</div></SettingSection> : null) : <>
 
             {props.imageProfile.quality.supported && !imageResolutionUsesQuality(mergedProfile) ? <SettingSection title={activeQualityOptions.some((item) => item.value === "1k" || item.value === "2k") ? "分辨率" : "图片质量"} value={qualityLabel}><div className="creation-choice-grid is-quality">{activeQualityOptions.map((option) => <button key={option.value} type="button" aria-pressed={option.value === props.quality} className={option.value === props.quality ? "is-selected" : ""} onClick={() => props.setQuality(option.value)}><span>{option.label}</span><small>{option.description}</small></button>)}</div></SettingSection> : null}
-            {props.imageProfile.maxOutputs > 1 ? <SettingSection title="生成数量" value={`${props.count} 张`}><div className="creation-parameter-content"><div className="creation-choice-grid is-count">{countOptions.filter((option) => Number(option) <= props.imageProfile.maxOutputs).map((option) => <button key={option} type="button" aria-pressed={option === props.count} className={option === props.count ? "is-selected" : ""} onClick={() => props.setCount(option)}>{option}</button>)}</div><label className="creation-custom-value"><span>自定义</span><input inputMode="numeric" pattern="[0-9]*" value={props.count} onChange={(event) => props.setCount(String(Math.max(1, Math.min(props.imageProfile.maxOutputs, Number(event.target.value) || 1))))} aria-label={`生成数量，范围 1 到 ${props.imageProfile.maxOutputs}`} /><em>张</em></label></div></SettingSection> : null}
+            {props.imageProfile.maxOutputs > 1 ? <SettingSection title="生成张数" value={`${props.count} 张`}><div className="creation-parameter-content"><div className="creation-choice-grid is-count">{countOptions.filter((option) => Number(option) <= props.imageProfile.maxOutputs).map((option) => <button key={option} type="button" aria-pressed={option === props.count} className={option === props.count ? "is-selected" : ""} onClick={() => props.setCount(option)}>{option}</button>)}</div><label className="creation-custom-value"><span>自定义</span><input inputMode="numeric" pattern="[0-9]*" value={props.count} onChange={(event) => props.setCount(String(Math.max(1, Math.min(props.imageProfile.maxOutputs, Number(event.target.value) || 1))))} aria-label={`生成张数，范围 1 到 ${props.imageProfile.maxOutputs}`} /><em>张</em></label></div></SettingSection> : null}
         </>}
     </div>;
     return <Popover open={open} onOpenChange={setOpen} trigger="click" placement="bottom" arrow={false} classNames={{ root: "creation-control-popover", container: "creation-control-popover-surface", content: "creation-control-popover-content" }} content={panel}>
@@ -983,7 +992,8 @@ function CreationInspirationCard({ item, source, onStartPrompt }: { item: Creati
     </button>;
 }
 
-export function CreationFeaturedWorks({ onStartPrompt }: { onStartPrompt: (mode: CreationMode, prompt: string) => void }) {
+export function CreationFeaturedWorks({ onStartPrompt, onRequireLogin }: { onStartPrompt: (mode: CreationMode, prompt: string) => void; onRequireLogin: () => void }) {
+    const userId = useUserStore((state) => state.user?.id || "");
     const [source, setSource] = useState<CreationInspirationSource>("featured");
     const [promptEditorOpen, setPromptEditorOpen] = useState(false);
     const [filter, setFilter] = useState<"all" | CreationMode>("all");
@@ -1002,8 +1012,16 @@ export function CreationFeaturedWorks({ onStartPrompt }: { onStartPrompt: (mode:
         { value: "text" as const, label: modeLabels.text, icon: MessageSquareText },
     ];
     useEffect(() => {
+        if (!userId) {
+            setInspirations([]);
+            setLoading(false);
+            setError("");
+            setPromptEditorOpen(false);
+            return;
+        }
         let active = true;
         const controller = new AbortController();
+        setInspirations([]);
         setLoading(true);
         setError("");
         const request = source === "featured"
@@ -1020,7 +1038,7 @@ export function CreationFeaturedWorks({ onStartPrompt }: { onStartPrompt: (mode:
             active = false;
             controller.abort();
         };
-    }, [reloadToken, source]);
+    }, [reloadToken, source, userId]);
     const filtered = inspirations.filter((item) => filter === "all" || item.mode === filter);
     return <section className="creation-featured-works" aria-label="精选灵感">
         <div className="creation-inspiration-filters">
@@ -1041,10 +1059,10 @@ export function CreationFeaturedWorks({ onStartPrompt }: { onStartPrompt: (mode:
                     <span className="creation-inspiration-filter-label">{label}</span>
                     <span className="creation-inspiration-filter-count">{inspirations.filter((item) => item.mode === value).length}</span>
                 </button>)}
-                {source === "personal" ? <button type="button" className="creation-inspiration-add" aria-label="新增个人提示词" title="新增个人提示词" onClick={() => setPromptEditorOpen(true)}><Plus aria-hidden="true" /></button> : null}
+                {source === "personal" && userId ? <button type="button" className="creation-inspiration-add" aria-label="新增个人提示词" title="新增个人提示词" onClick={() => setPromptEditorOpen(true)}><Plus aria-hidden="true" /></button> : null}
             </div>
         </div>
-        {loading ? <div className="creation-inspiration-state">正在加载{source === "featured" ? "全部" : "个人"}灵感…</div> : error ? <div className="creation-inspiration-state"><span>{error}</span><Button onClick={() => setReloadToken((value) => value + 1)}>重新加载</Button></div> : !filtered.length ? <div className="creation-inspiration-state">当前分类暂无{source === "featured" ? "已启用的" : "个人"}灵感</div> : <div className="creation-featured-layout">
+        {!userId ? <div className="creation-inspiration-state"><span>登录后查看精选灵感和个人灵感</span><Button onClick={onRequireLogin}>登录</Button></div> : loading ? <div className="creation-inspiration-state">正在加载{source === "featured" ? "全部" : "个人"}灵感…</div> : error ? <div className="creation-inspiration-state"><span>{error}</span><Button onClick={() => setReloadToken((value) => value + 1)}>重新加载</Button></div> : !filtered.length ? <div className="creation-inspiration-state">当前分类暂无{source === "featured" ? "已启用的" : "个人"}灵感</div> : <div className="creation-featured-layout">
                 {filtered.slice(0, limit).map((item) => <CreationInspirationCard key={item.id} item={item} source={source} onStartPrompt={onStartPrompt} />)}
         </div>}
         {!loading && !error && filtered.length ? <footer className="creation-inspiration-footer">{limit < filtered.length ? <Button onClick={() => setLimit((count) => count + 12)}>展开更多灵感<ChevronDown /></Button> : <span>已展示全部 {filtered.length} 个创意</span>}</footer> : null}

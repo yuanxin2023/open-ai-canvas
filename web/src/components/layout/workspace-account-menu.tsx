@@ -1,6 +1,6 @@
 import { Popover } from "antd";
 import { Switch } from "@/components/ui/base/switch";
-import { LogIn, Moon, Sun } from "lucide-react";
+import { CircleUserRound, Moon, Sun } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router";
 
@@ -48,9 +48,5 @@ export function WorkspaceAccountMenu() {
                 <UserAvatar user={user} className="size-6" />
             </button>
         </Popover></>
-    ) : (
-        <Link to="/login" className="app-workspace-topbar-icon-button" aria-label="登录" title="登录">
-            <LogIn />
-        </Link>
-    );
+    ) : <Link to="/login" className="inline-flex items-center gap-1.5 px-1.5 text-xs text-foreground/55" aria-label="登录" title="登录"><CircleUserRound className="size-5" /><span className="hidden sm:inline">游客</span></Link>;
 }

@@ -5,6 +5,10 @@ import (
 	"testing"
 	"time"
 
+	"infinite-canvas/backend/internal/database"
+	"infinite-canvas/backend/internal/repository"
+	"infinite-canvas/backend/internal/service"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -16,6 +20,32 @@ func TestConfigureTrustedProxies(t *testing.T) {
 	t.Setenv("CANVAS_TRUSTED_PROXIES", "not-a-proxy")
 	if err := configureTrustedProxies(gin.New()); err == nil {
 		t.Fatal("invalid trusted proxy was accepted")
+	}
+}
+
+func TestEnsureBuiltinWorkbenchCatalogStartupWiring(t *testing.T) {
+	db, err := database.Open(database.Config{Driver: "sqlite", DSN: "file:workbench-startup?mode=memory&cache=shared"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := database.MigrateSchema(db); err != nil {
+		t.Fatal(err)
+	}
+	svc := service.New(repository.New(db), t.TempDir())
+	if err := ensureBuiltinWorkbenchCatalog(svc); err != nil {
+		t.Fatal(err)
+	}
+	tools, err := repository.New(db).WorkbenchTools("image", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tools) == 0 {
+		t.Fatal("startup initializer did not import image workbench tools")
+	}
+	for _, tool := range tools {
+		if tool.Enabled {
+			t.Fatal("startup published a new tool before administrator review")
+		}
 	}
 }
 

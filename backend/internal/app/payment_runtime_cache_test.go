@@ -3,8 +3,10 @@ package app
 import (
 	"archive/zip"
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"infinite-canvas/backend/internal/protocol"
@@ -81,55 +83,82 @@ func TestPaymentRuntimeReplacesInterruptedExtraction(t *testing.T) {
 	assertPaymentRuntimeProvider(t, runtimeDir, []byte("complete-provider"))
 }
 
-func TestBuiltInPaymentPackageUpgradeSelectsNewRuntimeDigest(t *testing.T) {
-	oldPackage := paymentRuntimePackage(t, []byte("old-provider"))
-	newPackage := paymentRuntimePackage(t, []byte("new-provider"))
-	oldDigest := pluginHash(oldPackage)
-	newDigest := pluginHash(newPackage)
-	oldPkg, err := protocol.ParsePluginPackage(oldPackage)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	dataDir := t.TempDir()
-	packageDir := filepath.Join(dataDir, "plugin-packages")
-	if err := os.MkdirAll(packageDir, 0o700); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(packageDir, oldDigest+".canvas-plugin"), oldPackage, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := materializePaymentBackend(packageDir, oldDigest, oldPkg); err != nil {
-		t.Fatal(err)
-	}
-	registry := []pluginRegistryRecord{{
-		ID: "test-payment-runtime", Raw: oldPkg.ManifestRaw, Source: PluginOriginOfficial,
-		FileName: "test-payment-runtime.canvas-plugin", PackagePath: oldDigest + ".canvas-plugin", PackageSHA256: oldDigest,
-	}}
-	if err := (&pluginRuntime{registryPath: filepath.Join(dataDir, "plugin_registry.json")}).writeRegistry(registry); err != nil {
-		t.Fatal(err)
-	}
-
-	officialDir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(officialDir, "test-payment-runtime.canvas-plugin"), newPackage, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("CANVAS_OFFICIAL_PLUGIN_DIR", officialDir)
-	center, err := newPluginRuntime(dataDir)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	assertPaymentRuntimeProvider(t, filepath.Join(packageDir, "runtime", newDigest), []byte("new-provider"))
-	for _, plugin := range center.list() {
-		if plugin.Manifest.ID == "test-payment-runtime" {
-			if plugin.SHA256 != newDigest {
-				t.Fatalf("upgraded plugin digest = %q, want %q", plugin.SHA256, newDigest)
+func TestBuiltInPaymentPackageUpgradeRespectsUnresolvedOrders(t *testing.T) {
+	for _, scenario := range []struct {
+		name                string
+		pending             int64
+		cause               error
+		noCounter, deferred bool
+	}{
+		{name: "no unresolved orders"},
+		{name: "unresolved orders preserve old runtime", pending: 1, deferred: true},
+		{name: "query error preserves old runtime", cause: errors.New("unavailable"), deferred: true},
+		{name: "missing counter preserves old runtime", noCounter: true, deferred: true},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			oldPackage := paymentRuntimePackage(t, []byte("old-provider"))
+			newPackage := paymentRuntimePackage(t, []byte("new-provider"))
+			oldDigest := pluginHash(oldPackage)
+			newDigest := pluginHash(newPackage)
+			oldPkg, err := protocol.ParsePluginPackage(oldPackage)
+			if err != nil {
+				t.Fatal(err)
 			}
-			return
-		}
+
+			dataDir := t.TempDir()
+			packageDir := filepath.Join(dataDir, "plugin-packages")
+			if err := os.MkdirAll(packageDir, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(packageDir, oldDigest+".canvas-plugin"), oldPackage, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := materializePaymentBackend(packageDir, oldDigest, oldPkg); err != nil {
+				t.Fatal(err)
+			}
+			registry := []pluginRegistryRecord{{
+				ID: "test-payment-runtime", Raw: oldPkg.ManifestRaw, Source: PluginOriginOfficial,
+				FileName: "test-payment-runtime.canvas-plugin", PackagePath: oldDigest + ".canvas-plugin", PackageSHA256: oldDigest,
+			}}
+			if err := (&pluginRuntime{registryPath: filepath.Join(dataDir, "plugin_registry.json")}).writeRegistry(registry); err != nil {
+				t.Fatal(err)
+			}
+
+			officialDir := t.TempDir()
+			if err := os.WriteFile(filepath.Join(officialDir, "test-payment-runtime.canvas-plugin"), newPackage, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv("CANVAS_OFFICIAL_PLUGIN_DIR", officialDir)
+			var counter paymentPluginOrderCounter = paymentOrderCounterFunc(func(id, version string) (int64, error) {
+				if id != "test-payment-runtime" || version != "1.0.0" {
+					t.Fatal("installed payment identity lost")
+				}
+				return scenario.pending, scenario.cause
+			})
+			if scenario.noCounter {
+				counter = nil
+			}
+			center, err := newPluginRuntime(dataDir, counter)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			wantDigest, wantProvider := newDigest, []byte("new-provider")
+			if scenario.deferred {
+				wantDigest, wantProvider = oldDigest, []byte("old-provider")
+			}
+			assertPaymentRuntimeProvider(t, filepath.Join(packageDir, "runtime", wantDigest), wantProvider)
+			for _, plugin := range center.list() {
+				if plugin.Manifest.ID == "test-payment-runtime" {
+					if plugin.SHA256 != wantDigest {
+						t.Fatalf("upgraded plugin digest = %q, want %q", plugin.SHA256, wantDigest)
+					}
+					return
+				}
+			}
+			t.Fatal("upgraded payment plugin is missing")
+		})
 	}
-	t.Fatal("upgraded payment plugin is missing")
 }
 
 func TestPaymentRuntimeRejectsInvalidDigest(t *testing.T) {
@@ -162,6 +191,35 @@ func TestPaymentRuntimeReadyAcceptsTaggedBackend(t *testing.T) {
 	}
 	if !paymentRuntimeReady(runtimeDir, pluginHash(packageData), "backend/provider") {
 		t.Fatal("tagged payment runtime was not marked ready")
+	}
+}
+
+// 启动时从插件包落盘支付运行目录只解压本机平台的可执行文件，其余平台产物不写盘；
+// 已就绪的同摘要目录直接复用，不重新解压。
+func TestPaymentRuntimeFromPackageExtractsOnlyHostArtifacts(t *testing.T) {
+	host := "backend/provider-" + runtime.GOOS + "-" + runtime.GOARCH
+	other := "backend/provider-plan9-386"
+	packageData := paymentRuntimePackageFiles(t, map[string][]byte{host: []byte("host-provider"), other: []byte("other-provider")})
+	packageDir := t.TempDir()
+	digest := pluginHash(packageData)
+	root, err := materializePaymentBackendFromPackage(packageDir, digest, "backend/provider", packageData)
+	if err != nil {
+		t.Fatal(err)
+	}
+	actual, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(host)))
+	if err != nil || string(actual) != "host-provider" {
+		t.Fatalf("host provider = %q err=%v", actual, err)
+	}
+	if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(other))); !os.IsNotExist(err) {
+		t.Fatalf("non-host provider must not be extracted: %v", err)
+	}
+	if !paymentRuntimeReady(root, digest, "backend/provider") {
+		t.Fatal("runtime must be marked ready")
+	}
+	// 就绪后即使传入损坏的包字节也直接复用：摘要与就绪标记一一对应，调用方已对原始字节校验摘要。
+	again, err := materializePaymentBackendFromPackage(packageDir, digest, "backend/provider", []byte("not a zip"))
+	if err != nil || again != root {
+		t.Fatalf("ready runtime was not reused: root=%q err=%v", again, err)
 	}
 }
 

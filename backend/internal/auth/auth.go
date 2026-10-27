@@ -31,15 +31,22 @@ const usernameChangeWindow = 30 * 24 * time.Hour
 type AuthError = kernel.AppError
 
 type RegisterRequest struct {
-	Email        string `json:"email"`
-	EmailCode    string `json:"emailCode"`
-	Password     string `json:"password"`
-	ReferralCode string `json:"referralCode"`
+	LoginContext  LoginContext `json:"-"`
+	Username      string       `json:"username,omitempty"`
+	Email         string       `json:"email"`
+	EmailCode     string       `json:"emailCode"`
+	Phone         string       `json:"phone,omitempty"`
+	SMSCode       string       `json:"smsCode,omitempty"`
+	Ticket        string       `json:"ticket,omitempty"`
+	Password      string       `json:"password"`
+	ReferralCode  string       `json:"referralCode,omitempty"`
+	AcceptedTerms bool         `json:"acceptedTerms"`
 }
 
 type LoginRequest struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
+	LoginContext LoginContext `json:"-"`
+	Username     string       `json:"username"`
+	Password     string       `json:"password"`
 }
 
 type LoginEnvironment struct {
@@ -55,6 +62,7 @@ type LoginEnvironment struct {
 type UpdateProfileRequest struct {
 	Username         string  `json:"username"`
 	AvatarResourceID *string `json:"avatarResourceId"`
+	AvatarPreset     *string `json:"avatarPreset"`
 }
 
 type ChangePasswordRequest struct {
@@ -63,13 +71,18 @@ type ChangePasswordRequest struct {
 }
 
 type PublicAuthSettings struct {
-	FirstUser              bool `json:"firstUser"`
-	RegistrationEnabled    bool `json:"registrationEnabled"`
-	LinuxDOEnabled         bool `json:"linuxdoEnabled"`
-	EmailEnabled           bool `json:"emailEnabled"`
-	EmailCodeRequired      bool `json:"emailCodeRequired"`
-	EmailFirstRegistration bool `json:"emailFirstRegistration"`
-	ReferralEnabled        bool `json:"referralEnabled"`
+	VerificationPolicy
+	SMSBindingAvailable    bool   `json:"smsBindingAvailable"`
+	EmailBindingAvailable  bool   `json:"emailBindingAvailable"`
+	FirstUser              bool   `json:"firstUser"`
+	RegistrationEnabled    bool   `json:"registrationEnabled"`
+	LinuxDOEnabled         bool   `json:"linuxdoEnabled"`
+	EmailEnabled           bool   `json:"emailEnabled"`
+	EmailCodeRequired      bool   `json:"emailCodeRequired"`
+	AgreementTitle         string `json:"agreementTitle,omitempty"`
+	AgreementContent       string `json:"agreementContent,omitempty"`
+	EmailFirstRegistration bool   `json:"emailFirstRegistration"`
+	ReferralEnabled        bool   `json:"referralEnabled"`
 }
 
 type AuthSessionResult struct {
@@ -109,11 +122,12 @@ func (s *Service) PublicAuthSettings() (*PublicAuthSettings, error) {
 		return nil, err
 	}
 	if count == 0 {
-		return &PublicAuthSettings{FirstUser: true, RegistrationEnabled: true, LinuxDOEnabled: false, EmailFirstRegistration: true}, nil
+		// 首个管理员同样要看到服务协议，不能因为跳过注册校验就丢失协议字段。
+		agreementTitle, agreementContent := s.RegistrationAgreement()
+		return &PublicAuthSettings{FirstUser: true, RegistrationEnabled: true, LinuxDOEnabled: false, AgreementTitle: agreementTitle, AgreementContent: agreementContent, EmailFirstRegistration: true}, nil
 	}
 	referralEnabled := false
 	if checker, ok := s.host.(interface{ ReferralEnabled() (bool, error) }); ok {
-		var err error
 		referralEnabled, err = checker.ReferralEnabled()
 		if err != nil {
 			return nil, err
@@ -127,24 +141,71 @@ func (s *Service) PublicAuthSettings() (*PublicAuthSettings, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &PublicAuthSettings{FirstUser: false, RegistrationEnabled: registrationEnabled, LinuxDOEnabled: s.LinuxDOEnabled(), EmailEnabled: emailEnabled, EmailCodeRequired: true, EmailFirstRegistration: true, ReferralEnabled: referralEnabled}, nil
+	p, err := s.verificationPolicy()
+	if err != nil {
+		return nil, err
+	}
+	smsLogin, err := s.smsAvailable("login")
+	if err != nil {
+		return nil, err
+	}
+	smsRegister, err := s.smsAvailable("register")
+	if err != nil {
+		return nil, err
+	}
+	smsBind, err := s.smsAvailable("bind")
+	if err != nil {
+		return nil, err
+	}
+	p.SMSLogin = p.SMSLogin && smsLogin
+	p.EmailLogin = p.EmailLogin && emailEnabled
+	p.SMSRegistration = p.SMSRegistration && smsRegister
+	p.EmailRegistration = p.EmailRegistration && emailEnabled
+	p.SMSAndEmailRegistration = p.SMSAndEmailRegistration && smsRegister && emailEnabled
+	agreementTitle, agreementContent := s.RegistrationAgreement()
+	return &PublicAuthSettings{
+		VerificationPolicy:     p,
+		EmailFirstRegistration: true,
+		ReferralEnabled:        referralEnabled,
+		SMSBindingAvailable:    smsBind,
+		EmailBindingAvailable:  emailEnabled,
+		FirstUser:              false,
+		RegistrationEnabled:    registrationEnabled,
+		LinuxDOEnabled:         s.LinuxDOEnabled(),
+		EmailEnabled:           emailEnabled,
+		EmailCodeRequired:      p.EmailRegistration || p.SMSAndEmailRegistration,
+		AgreementTitle:         agreementTitle,
+		AgreementContent:       agreementContent,
+	}, nil
 }
 
 func (s *Service) Register(req RegisterRequest) (*AuthSessionResult, error) {
-	return s.RegisterWithEnvironment(req, LoginEnvironment{})
+	return s.RegisterWithEnvironment(req, LoginEnvironment{
+		IPAddress: req.LoginContext.IP, UserAgent: req.LoginContext.UserAgent,
+		DeviceType: req.LoginContext.DeviceType, Browser: req.LoginContext.Browser,
+		BrowserVersion: req.LoginContext.BrowserVersion, OS: req.LoginContext.OS, OSVersion: req.LoginContext.OSVersion,
+	})
 }
 
 func (s *Service) RegisterWithEnvironment(req RegisterRequest, environment LoginEnvironment) (*AuthSessionResult, error) {
+	if !req.AcceptedTerms {
+		return nil, kernel.BadAuthRequest("请先同意" + s.AgreementTitleForMessage())
+	}
 	environment = normalizeLoginEnvironment(environment)
 	email := NormalizeEmail(req.Email)
-	if email == "" {
-		return nil, kernel.BadAuthRequest("请输入邮箱")
-	}
-	if err := ValidateEmail(email); err != nil {
-		return nil, err
+	if email != "" {
+		if err := ValidateEmail(email); err != nil {
+			return nil, err
+		}
 	}
 	if err := ValidatePassword(req.Password); err != nil {
 		return nil, err
+	}
+	requestedUsername := NormalizeUsername(req.Username)
+	if requestedUsername != "" {
+		if err := ValidateUsername(requestedUsername); err != nil {
+			return nil, err
+		}
 	}
 	s.registrationMu.Lock()
 	defer s.registrationMu.Unlock()
@@ -153,20 +214,54 @@ func (s *Service) RegisterWithEnvironment(req RegisterRequest, environment Login
 		return nil, err
 	}
 	var verifiedCode *model.EmailVerificationCode
+	var verification *model.AuthVerification
+	phone := ""
+	if count == 0 && email == "" {
+		return nil, kernel.BadAuthRequest("请输入邮箱")
+	}
 	if count > 0 {
-		registrationEnabled, err := s.RegistrationEnabled()
+		enabled, err := s.RegistrationEnabled()
 		if err != nil {
 			return nil, err
 		}
-		if !registrationEnabled {
+		if !enabled {
 			return nil, kernel.Forbidden("管理员未开放新用户注册")
 		}
-		if err := s.validateRegistrationEmailDomain(email); err != nil {
-			return nil, err
-		}
-		verifiedCode, err = s.VerifyRegistrationEmailCode(email, req.EmailCode)
-		if err != nil {
-			return nil, err
+		if req.Ticket != "" {
+			verification, err = s.verifyTicket("register", VerificationConfirm{Ticket: req.Ticket, EmailCode: req.EmailCode, SMSCode: req.SMSCode})
+			if err != nil {
+				return nil, err
+			}
+			if verification.Email != email || (verification.Phone != "" && strings.TrimSpace(req.Phone) != verification.Phone && "+86"+strings.TrimSpace(req.Phone) != verification.Phone) || (verification.Phone == "" && req.Phone != "") {
+				return nil, invalidVerification()
+			}
+			phone = verification.Phone
+			if email != "" {
+				if err := s.validateRegistrationEmailDomain(email); err != nil {
+					return nil, err
+				}
+			}
+			if err := s.contactAvailable(email, phone, ""); err != nil {
+				return nil, err
+			}
+		} else {
+			policy, err := s.verificationPolicy()
+			if err != nil {
+				return nil, err
+			}
+			if !policy.allows("register", "email") || req.Phone != "" {
+				return nil, kernel.BadAuthRequest("请先获取本次注册验证码")
+			}
+			if email == "" {
+				return nil, kernel.BadAuthRequest("请输入邮箱")
+			}
+			if err := s.validateRegistrationEmailDomain(email); err != nil {
+				return nil, err
+			}
+			verifiedCode, err = s.VerifyRegistrationEmailCode(email, req.EmailCode)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 	if strings.TrimSpace(req.ReferralCode) != "" {
@@ -182,40 +277,50 @@ func (s *Service) RegisterWithEnvironment(req RegisterRequest, environment Login
 			return nil, kernel.BadAuthRequest("邀请返利尚未开启")
 		}
 	}
-	if _, err := s.repo.UserByEmail(email); err == nil {
-		return nil, kernel.BadAuthRequest("邮箱已被注册")
-	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, err
+	if email != "" {
+		if err := s.repo.CheckEmailAvailable(email, ""); err != nil {
+			return nil, err
+		}
 	}
 	passwordHash, err := HashPassword(req.Password)
 	if err != nil {
 		return nil, err
 	}
 	now := time.Now()
-	userID := kernel.NewID()
 	user := model.User{
-		ID:             userID,
-		Email:          email,
-		Role:           model.UserRoleUser,
-		Status:         model.UserStatusActive,
-		PasswordHash:   passwordHash,
-		RegistrationIP: environment.IPAddress,
-		CreatedAt:      now,
-		UpdatedAt:      now,
+		ID: kernel.NewID(), Email: email, Phone: phone,
+		Role: model.UserRoleUser, Status: model.UserStatusActive,
+		PasswordHash: passwordHash, RegistrationIP: environment.IPAddress,
+		CreatedAt: now, UpdatedAt: now,
 	}
 	if count == 0 {
-		user.Role = model.UserRoleAdmin
-		user.AdminLevel = model.AdminLevelFull
+		user.Role, user.AdminLevel = model.UserRoleAdmin, model.AdminLevelFull
+	}
+	if verification != nil {
+		if email != "" {
+			user.EmailVerifiedAt = &now
+		}
+		if phone != "" {
+			user.PhoneVerifiedAt = &now
+		}
+	} else if verifiedCode != nil {
+		user.EmailVerifiedAt = &now
 	}
 	created := false
 	for attempt := 0; attempt < 32; attempt++ {
-		user.Username = kernel.DefaultLoginUsernameCandidate(email, userID, attempt)
-		user.DisplayName = user.Username
-		user.ProfileName = user.Username
-		if verifiedCode != nil {
-			err = s.repo.CreateUserWithEmailVerification(&user, verifiedCode.ID, time.Now(), req.ReferralCode)
+		if requestedUsername != "" {
+			user.Username = requestedUsername
+			user.UsernameCustomizedAt = &now
 		} else {
-			err = s.repo.Create(&user)
+			user.Username = kernel.DefaultLoginUsernameCandidate(email, user.ID, attempt)
+		}
+		user.DisplayName, user.ProfileName = user.Username, user.Username
+		if verification != nil {
+			err = s.repo.CreateUserWithVerification(&user, verification.ID, req.ReferralCode)
+		} else if verifiedCode != nil {
+			err = s.repo.CreateUserWithEmailVerification(&user, verifiedCode.ID, now, req.ReferralCode)
+		} else {
+			err = s.repo.CreateRegisteredUser(&user)
 		}
 		if err == nil {
 			created = true
@@ -227,6 +332,9 @@ func (s *Service) RegisterWithEnvironment(req RegisterRequest, environment Login
 		if !isUsernameUniqueViolation(err) {
 			return nil, err
 		}
+		if requestedUsername != "" {
+			return nil, kernel.BadAuthRequest("用户名已存在")
+		}
 	}
 	if !created {
 		return nil, kernel.WrapAppError(500, "无法生成唯一用户名", err)
@@ -234,15 +342,34 @@ func (s *Service) RegisterWithEnvironment(req RegisterRequest, environment Login
 	if err := s.host.EnsureSignupBonus(user.ID); err != nil {
 		return nil, err
 	}
-	return s.createAuthSession(&user, "email_register", environment)
+	event := NewLoginLog("password", "registration", loginContextFromEnvironment(environment))
+	result, err := s.createAuthSession(&user, event)
+	if err != nil {
+		return nil, s.recordLoginFailure(event, err)
+	}
+	return result, nil
 }
 
-func (s *Service) Login(req LoginRequest) (*AuthSessionResult, error) {
-	return s.LoginWithEnvironment(req, LoginEnvironment{})
+func (s *Service) LoginRateLimitSubject(account string) (string, error) {
+	account = strings.TrimSpace(account)
+	user, err := s.repo.UserByAccount(account)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return "input:" + strings.ToLower(account), nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return "user:" + user.ID, nil
 }
 
-func (s *Service) LoginWithEnvironment(req LoginRequest, environment LoginEnvironment) (*AuthSessionResult, error) {
-	environment = normalizeLoginEnvironment(environment)
+func (s *Service) Login(req LoginRequest) (result *AuthSessionResult, err error) {
+	event := NewLoginLog("password", "login", req.LoginContext)
+	event.Account = MaskLoginAccount(req.Username)
+	defer func() {
+		if err != nil {
+			err = s.recordLoginFailure(event, err)
+		}
+	}()
 	account := NormalizeUsername(req.Username)
 	user, err := s.repo.UserByAccount(account)
 	if err != nil {
@@ -251,6 +378,7 @@ func (s *Service) LoginWithEnvironment(req LoginRequest, environment LoginEnviro
 		}
 		return nil, err
 	}
+	loginLogUser(event, user)
 	if user.Status != model.UserStatusActive {
 		return nil, kernel.Forbidden("该账号已被禁用")
 	}
@@ -260,22 +388,39 @@ func (s *Service) LoginWithEnvironment(req LoginRequest, environment LoginEnviro
 	now := time.Now()
 	user.LastLoginAt = &now
 	user.UpdatedAt = now
-	if err := s.repo.Save(user); err != nil {
+	if err := s.repo.UpdateUserLoginTime(user.ID, now); err != nil {
 		return nil, err
 	}
 	if err := s.host.EnsureSignupBonus(user.ID); err != nil {
 		return nil, err
 	}
-	s.host.RecordActivity(user.ID, "login", 1)
-	return s.createAuthSession(user, "password", environment)
+	return s.createAuthSession(user, event)
 }
 
-func (s *Service) Logout(cookieValue string) error {
-	sessionID, _ := parseSessionCookie(cookieValue)
-	if sessionID == "" {
+func (s *Service) LoginWithEnvironment(req LoginRequest, environment LoginEnvironment) (*AuthSessionResult, error) {
+	environment = normalizeLoginEnvironment(environment)
+	req.LoginContext = loginContextFromEnvironment(environment)
+	return s.Login(req)
+}
+
+func (s *Service) Logout(cookieValue string, contexts ...LoginContext) (err error) {
+	sessionID, token := parseSessionCookie(cookieValue)
+	if sessionID == "" || token == "" {
 		return nil
 	}
-	return s.repo.DeleteAuthSession(sessionID)
+	var context LoginContext
+	if len(contexts) > 0 {
+		context = contexts[0]
+	}
+	event := NewLoginLog("unknown", "logout", context)
+	event.Event = "logout"
+	event.SessionRef = HashToken(sessionID)
+	defer func() {
+		if err != nil {
+			err = s.recordLoginFailure(event, err)
+		}
+	}()
+	return s.repo.RevokeAuthSessionWithLog(sessionID, HashToken(token), event)
 }
 
 func (s *Service) CurrentUser(cookieValue string) (*model.User, error) {
@@ -331,7 +476,9 @@ func (s *Service) PublicAuthUser(user *model.User) (AuthUser, error) {
 		result.UsernameChangePolicy.Remaining = &remaining
 		result.UsernameChangePolicy.NextAvailableAt = usage.NextAvailableAt
 	}
-	if user.AvatarResourceID != "" {
+	if user.AvatarMode == "custom" {
+		result.AvatarURL = profileAvatarURL(user)
+	} else if user.AvatarMode != "default" && user.AvatarResourceID != "" {
 		resource, err := s.repo.ResourceForUser(user.ID, user.AvatarResourceID)
 		if err == nil && resource.Status == model.ResourceStatusReady {
 			result.AvatarURL = "/api/resources/" + url.PathEscape(resource.ID) + "/file?direct=1"
@@ -353,6 +500,11 @@ func (s *Service) PublicAuthUser(user *model.User) (AuthUser, error) {
 }
 
 func (s *Service) UpdateProfile(user *model.User, req UpdateProfileRequest) (AuthUser, error) {
+	if req.AvatarPreset != nil {
+		if req.AvatarResourceID != nil || !validProfileAvatarPreset(*req.AvatarPreset) {
+			return AuthUser{}, kernel.BadAuthRequest("请选择一种有效的头像方式")
+		}
+	}
 	if user == nil || strings.TrimSpace(user.ID) == "" {
 		return AuthUser{}, kernel.Unauthorized("请先登录")
 	}
@@ -401,7 +553,7 @@ func (s *Service) UpdateProfile(user *model.User, req UpdateProfileRequest) (Aut
 	}
 	now := time.Now()
 	updated, usage, err := s.repo.UpdateUserProfile(repository.UpdateUserProfileInput{
-		UserID: stored.ID, Username: username, AvatarResourceID: avatarResourceID,
+		UserID: stored.ID, Username: username, AvatarResourceID: avatarResourceID, AvatarPreset: req.AvatarPreset,
 		ChangeID: kernel.NewID(), Now: now, Window: usernameChangeWindow, Limit: usernameChangeLimit,
 	})
 	if errors.Is(err, repository.ErrUsernameChangeLimit) {
@@ -431,38 +583,7 @@ func isUsernameUniqueViolation(err error) bool {
 }
 
 func (s *Service) ChangePassword(user *model.User, cookieValue string, req ChangePasswordRequest) error {
-	if user == nil || strings.TrimSpace(user.ID) == "" {
-		return kernel.Unauthorized("请先登录")
-	}
-	sessionID, token := parseSessionCookie(cookieValue)
-	if sessionID == "" || token == "" {
-		return kernel.Unauthorized("登录状态已失效")
-	}
-	session, err := s.repo.AuthSession(sessionID)
-	if err != nil || session.UserID != user.ID || time.Now().After(session.ExpiresAt) || session.TokenHash != HashToken(token) {
-		return kernel.Unauthorized("登录状态已失效")
-	}
-	stored, err := s.repo.User(user.ID)
-	if err != nil {
-		return err
-	}
-	if stored.Status != model.UserStatusActive {
-		return kernel.Forbidden("该账号已被禁用")
-	}
-	if strings.TrimSpace(stored.PasswordHash) == "" || !verifyPassword(req.CurrentPassword, stored.PasswordHash) {
-		return kernel.BadAuthRequest("当前密码不正确")
-	}
-	if err := ValidatePassword(req.NewPassword); err != nil {
-		return err
-	}
-	if verifyPassword(req.NewPassword, stored.PasswordHash) {
-		return kernel.BadAuthRequest("新密码不能与当前密码相同")
-	}
-	passwordHash, err := HashPassword(req.NewPassword)
-	if err != nil {
-		return err
-	}
-	return s.repo.ChangeUserPassword(stored.ID, sessionID, passwordHash, time.Now())
+	return s.ChangeProfilePassword(user, cookieValue, ProfilePasswordRequest{CurrentPassword: req.CurrentPassword, NewPassword: req.NewPassword})
 }
 
 func allowedProfileAvatarMIME(value string) bool {
@@ -474,7 +595,8 @@ func allowedProfileAvatarMIME(value string) bool {
 	}
 }
 
-func (s *Service) createAuthSession(user *model.User, loginMethod string, environment LoginEnvironment) (*AuthSessionResult, error) {
+func (s *Service) createAuthSession(user *model.User, event *model.LoginLog) (*AuthSessionResult, error) {
+	loginLogUser(event, user)
 	publicUser, err := s.PublicAuthUser(user)
 	if err != nil {
 		return nil, err
@@ -489,23 +611,12 @@ func (s *Service) createAuthSession(user *model.User, loginMethod string, enviro
 		CreatedAt: now,
 		UpdatedAt: now,
 	}
-	event := model.UserLoginEvent{
-		ID:             kernel.NewID(),
-		UserID:         user.ID,
-		SessionID:      session.ID,
-		LoginMethod:    truncateLoginEnvironment(loginMethod, 32),
-		IPAddress:      environment.IPAddress,
-		UserAgent:      environment.UserAgent,
-		DeviceType:     environment.DeviceType,
-		Browser:        environment.Browser,
-		BrowserVersion: environment.BrowserVersion,
-		OS:             environment.OS,
-		OSVersion:      environment.OSVersion,
-		CreatedAt:      now,
+	event.SessionRef = HashToken(session.ID)
+	event.CreatedAt = now.UTC()
+	if err := s.repo.CreateAuthSessionForUser(user, &session, event); err != nil {
+		return nil, profileWriteError(err)
 	}
-	if err := s.repo.CreateAuthSessionWithLoginEvent(&session, &event); err != nil {
-		return nil, err
-	}
+	s.host.RecordActivity(user.ID, "login", 1)
 	return &AuthSessionResult{User: publicUser, Session: session.ID + "." + token, MaxAgeSecs: int(sessionMaxAge.Seconds())}, nil
 }
 
@@ -602,4 +713,13 @@ func ValidateEmail(value string) error {
 		return kernel.BadAuthRequest("邮箱格式不正确")
 	}
 	return nil
+}
+
+func (s *Service) createAuthSessionWithEnvironment(user *model.User, method string, environment LoginEnvironment) (*AuthSessionResult, error) {
+	environment = normalizeLoginEnvironment(environment)
+	source := "login"
+	if method == "email_register" {
+		method, source = "password", "registration"
+	}
+	return s.createAuthSession(user, NewLoginLog(method, source, loginContextFromEnvironment(environment)))
 }

@@ -1,7 +1,9 @@
 package app
 
 import (
+	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"infinite-canvas/backend/internal/model"
@@ -100,8 +102,14 @@ func validateStructuredReplacementQuotaWithPolicy(usage repository.UserStorageUs
 
 func (s *Service) createTaskWithinStorageQuota(task *model.Task, billingOrder *model.BillingOrder, policy RuntimePolicySetting) error {
 	s.storageMu.Lock()
-	defer s.storageMu.Unlock()
-	return createTaskWithStorageQuotaRepository(s.repo, task, billingOrder, policy)
+	err := func() error {
+		defer s.storageMu.Unlock()
+		return createTaskWithStorageQuotaRepository(s.repo, task, billingOrder, policy)
+	}()
+	if err == nil {
+		s.wakeTaskDispatcher()
+	}
+	return err
 }
 
 func createTaskWithStorageQuotaRepository(repo *repository.Repository, task *model.Task, billingOrder *model.BillingOrder, policy RuntimePolicySetting) error {
@@ -163,7 +171,39 @@ func (s *Service) saveTaskCompletionWithinStorageQuota(task *model.Task, resultJ
 	completed.ResultJSON = string(resultJSON)
 	completed.InputJSON = publicInputJSON
 	completed.CompletedAt = ptr(time.Now())
-	if err := s.repo.SaveTaskCompletion(&completed, expectedStatus, results); err != nil {
+	var register func(*repository.Repository) error
+	visualImage := strings.Contains(task.InputJSON, "project_asset_image")
+	if task.MediaRecoveryJSON != "" || visualImage {
+		completed.MediaStage = "completed"
+		register = func(repo *repository.Repository) error {
+			writer := &Service{repo: repo, dataDir: s.dataDir}
+			if visualImage {
+				var result map[string]interface{}
+				if err := json.Unmarshal(resultJSON, &result); err != nil {
+					return err
+				}
+				if _, err := writer.finalizeProjectAssetImageTask(*task, result); err != nil {
+					return err
+				}
+				encoded, err := json.Marshal(result)
+				if err != nil {
+					return err
+				}
+				if err := validateTaskDataGrowthQuotaWithPolicy(usage, taskDelta+int64(len(encoded)-len(resultJSON)), policy.Resource); err != nil {
+					return err
+				}
+				completed.ResultJSON = string(encoded)
+			}
+			if task.MediaRecoveryJSON == "" {
+				return nil
+			}
+			if err := writer.RegisterTaskOutputFromTask(completed); err != nil {
+				return err
+			}
+			return writer.registerRecoveredMediaAssets(completed)
+		}
+	}
+	if err := s.repo.SaveTaskCompletionWithRegistration(&completed, expectedStatus, results, register); err != nil {
 		return err
 	}
 	*task = completed

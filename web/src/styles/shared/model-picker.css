@@ -53,7 +53,7 @@
         padding: 0 !important;
         backdrop-filter: blur(28px) saturate(140%);
         -webkit-backdrop-filter: blur(28px) saturate(140%);
-        animation: creation-popover-enter var(--motion-dur-fast-calc) var(--motion-ease-out) both;
+        animation: none;
     }
 
     .dark .creation-model-picker-surface {
@@ -69,8 +69,6 @@
     }
 
     .creation-model-picker-menu {
-        width: min(384px, calc(100vw - 24px)) !important;
-        max-height: min(460px, calc(100vh - 24px));
         overflow-x: hidden;
         overflow-y: auto;
         padding: 8px !important;
@@ -119,9 +117,7 @@
         min-height: 52px;
         border-radius: 9px;
         padding: 7px 9px;
-        transition:
-            background-color 150ms ease,
-            transform 120ms ease;
+        transition: none;
     }
 
     .creation-model-picker-menu .canvas-model-picker-option > span:first-child {
@@ -145,11 +141,6 @@
         font-size: 13px;
     }
 
-    .creation-model-picker-menu .canvas-model-picker-option > span:first-child > span:nth-child(2) > span:nth-child(2) {
-        margin-top: 5px;
-        font-size: 10px;
-    }
-
     .creation-model-picker.canvas-composer-model-picker {
         display: inline-flex;
         height: 48px;
@@ -166,10 +157,7 @@
         font-weight: 600;
         white-space: nowrap;
         box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.055);
-        transition:
-            transform 150ms var(--motion-ease-out),
-            border-color 150ms ease,
-            background-color 150ms ease;
+        transition: none;
     }
 
     html:not(.dark) .creation-model-picker.canvas-composer-model-picker {
@@ -183,7 +171,6 @@
     .creation-model-picker.canvas-composer-model-picker[aria-expanded="true"] {
         border-color: rgba(255, 255, 255, 0.25);
         background: #292d34;
-        transform: translateY(-1px);
     }
 
     html:not(.dark) .creation-model-picker.canvas-composer-model-picker:hover,
@@ -218,16 +205,12 @@
         font-weight: 600;
         white-space: nowrap;
         box-shadow: none;
-        transition:
-            border-color 140ms ease,
-            background-color 140ms ease,
-            transform 140ms var(--motion-ease-out);
+        transition: none;
     }
     .creation-chat-composer .creation-model-picker.canvas-composer-model-picker:hover,
     .creation-chat-composer .creation-model-picker.canvas-composer-model-picker[aria-expanded="true"] {
         border-color: rgba(255, 255, 255, 0.12);
         background: #272b32;
-        transform: translateY(-1px);
     }
     .creation-chat-composer .creation-model-picker.canvas-composer-model-picker {
         width: min(196px, 26vw);
@@ -263,9 +246,6 @@
             height: 34px;
         }
 
-        .creation-model-picker-menu {
-            width: min(440px, calc(100vw - 96px)) !important;
-        }
         .creation-model-picker.canvas-composer-model-picker {
             height: 42px;
             border-radius: 12px;
@@ -310,12 +290,10 @@
         line-height: 1;
         max-width: 100%;
         min-width: 0;
-        outline: none !important;
+        outline: none;
         padding: 0 9px;
         text-align: left;
-        transition:
-            background-color var(--motion-instant) ease-out,
-            color var(--motion-instant) ease-out;
+        transition: none;
     }
 
     .canvas-composer-model-picker:hover {
@@ -327,7 +305,11 @@
     .canvas-composer-model-picker[aria-expanded="true"] {
         background: color-mix(in srgb, var(--workspace-surface-strong) 84%, var(--workspace-accent) 16%);
         box-shadow: none !important;
-        outline: none !important;
+    }
+
+    .canvas-composer-model-picker:focus-visible {
+        outline: 2px solid var(--control-focus-ring);
+        outline-offset: 2px;
     }
 
     .canvas-model-picker-label {
@@ -349,7 +331,7 @@
         color: color-mix(in srgb, var(--foreground) 52%, transparent);
         flex: 0 0 14px;
         height: 14px;
-        transition: transform var(--motion-instant) ease-out;
+        transition: none;
         width: 14px;
     }
 
@@ -359,13 +341,16 @@
 
     .canvas-model-picker-popover {
         filter: none !important;
+        max-width: calc(100vw - 24px);
     }
 
     .canvas-model-picker-menu {
-        width: max-content !important;
-        min-width: max(var(--canvas-model-picker-trigger-width, 0px), 260px);
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
         max-width: calc(100vw - 24px);
-        max-height: min(420px, calc(100vh - 32px));
+        max-height: min(460px, calc(100dvh - 24px), calc(var(--canvas-model-picker-available-height) - 24px));
         overflow-x: hidden;
         overflow-y: auto;
         padding: 4px;
@@ -402,7 +387,7 @@
         overflow: hidden;
         padding: 6px 7px;
         text-align: left;
-        transition: background-color var(--motion-instant) ease-out;
+        transition: none;
         width: 100%;
     }
 
@@ -422,17 +407,6 @@
         display: flex;
         align-items: center;
         width: 100%;
-    }
-
-    .canvas-model-picker-popover .canvas-model-picker-option > span:first-child > span:nth-child(2) {
-        flex: 1 1 auto;
-        min-width: 0;
-        overflow: visible;
-    }
-
-    .canvas-model-picker-popover .canvas-model-picker-option > span:first-child > span:nth-child(2) > span {
-        overflow: visible;
-        text-overflow: clip;
     }
 
     .canvas-model-picker-option-check {
@@ -559,10 +533,7 @@
     font-size: 11px;
     font-weight: 500;
     box-shadow: none;
-    transition:
-        color var(--motion-state) ease,
-        background-color var(--motion-state) ease,
-        transform var(--motion-state) var(--motion-ease-out);
+    transition: none;
 }
 
 .creation-chat-composer .creation-model-picker.canvas-composer-model-picker:hover,
@@ -607,8 +578,6 @@ html:not(.dark) .creation-chat-composer .creation-model-picker.canvas-composer-m
 }
 
 .creation-model-picker-menu {
-    width: min(332px, calc(100vw - 24px)) !important;
-    max-height: min(420px, calc(100vh - 24px));
     padding: 7px !important;
     background: transparent !important;
     color: #f0f1f2 !important;
@@ -646,10 +615,6 @@ html:not(.dark) .creation-chat-composer .creation-model-picker.canvas-composer-m
 }
 .creation-model-picker-menu .canvas-model-picker-option > span:first-child > span:nth-child(2) > span:first-child {
     font-size: 11px;
-}
-.creation-model-picker-menu .canvas-model-picker-option > span:first-child > span:nth-child(2) > span:nth-child(2) {
-    margin-top: 3px;
-    font-size: 9px;
 }
 
 html:not(.dark) .creation-model-picker-surface {
@@ -750,12 +715,26 @@ html:not(.dark) .creation-home .creation-chat-composer .creation-model-picker.ca
     text-overflow: ellipsis;
     white-space: nowrap;
 }
-.canvas-model-picker-brand-copy small {
-    overflow: hidden;
+.canvas-model-picker-brand-copy small,
+.canvas-model-picker-brand-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
     color: color-mix(in srgb, currentColor 55%, transparent);
     font-size: 10px;
+    line-height: 1.4;
+}
+.canvas-model-picker-brand-subtext {
+    overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    min-width: 0;
+    flex: 1 1 auto;
+}
+.canvas-model-picker-brand-copy .model-picker-availability-track {
+    flex-shrink: 0;
+    padding: 0;
 }
 .canvas-model-picker-brand-arrow {
     width: 14px;
@@ -766,23 +745,30 @@ html:not(.dark) .creation-home .creation-chat-composer .creation-model-picker.ca
 }
 /* 品牌/模型两级菜单是 ModelPicker 默认结构，不能只写在 creation variant 下。 */
 .canvas-model-picker-menu.is-brand-list {
-    width: min(360px, calc(100vw - 24px)) !important;
+    width: min(360px, calc(100vw - 24px));
 }
 .canvas-model-picker-menu.is-model-list {
-    width: min(800px, calc(100vw - 24px)) !important;
+    width: min(800px, calc(100vw - 24px));
+    overflow: hidden;
 }
 .canvas-model-picker-two-pane {
     display: grid;
+    flex: 1 1 auto;
     width: 100%;
     grid-template-columns: 250px minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
     gap: 14px;
     min-width: 0;
-    align-items: start;
+    min-height: 0;
+    overflow: hidden;
 }
 .canvas-model-picker-menu.is-model-list .canvas-model-picker-brand-rail {
     display: grid;
+    min-height: 0;
     align-content: start;
     gap: 5px;
+    overflow-x: hidden;
+    overflow-y: auto;
     border-right: 1px solid var(--workspace-border);
     padding-right: 14px;
 }
@@ -791,10 +777,13 @@ html:not(.dark) .creation-home .creation-chat-composer .creation-model-picker.ca
 }
 .canvas-model-picker-model-pane {
     min-width: 0;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
 }
 @media (max-width: 720px) {
     .canvas-model-picker-menu:is(.is-brand-list, .is-model-list) {
-        width: calc(100vw - 24px) !important;
+        width: calc(100vw - 24px);
     }
     .canvas-model-picker-two-pane {
         grid-template-columns: minmax(0, 1fr);
@@ -841,10 +830,33 @@ html:not(.dark) .creation-home .creation-chat-composer .creation-model-picker.ca
     color: color-mix(in srgb, currentColor 52%, transparent);
     font-size: 10px;
 }
+.canvas-model-picker-option-heading {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 8px;
+}
+
+.canvas-model-picker-option-name {
+    flex: 1 1 10rem;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.canvas-model-picker-option-price {
+    min-width: 0;
+    max-width: 100%;
+}
+
 .canvas-model-picker-description {
-    height: 16px;
-    line-height: 16px;
+    font-size: var(--fs-caption);
+    min-height: 1.5em;
+    line-height: 1.5;
     margin-top: 5px !important;
+    white-space: normal;
+    overflow-wrap: anywhere;
     visibility: hidden;
     opacity: 0;
 }
@@ -879,6 +891,169 @@ html:not(.dark) .creation-home .creation-chat-composer .creation-model-picker.ca
     border-radius: var(--r-sm);
     background: color-mix(in srgb, var(--model-price-ink) 9%, transparent);
     padding: 2px 5px;
+    max-width: 100%;
+    flex-wrap: wrap;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
+.model-picker-availability {
+    display: inline-flex;
+    min-width: 0;
+    align-items: center;
+    gap: 4px;
+    border: 1px solid color-mix(in srgb, currentColor 16%, transparent);
+    border-radius: 999px;
+    padding: 2px 6px;
+    color: color-mix(in srgb, currentColor 68%, transparent);
+    font-size: 10px;
+    font-weight: 650;
+    line-height: 1.3;
+    white-space: nowrap;
+    cursor: help;
+}
+
+.model-picker-availability:focus-visible {
+    outline: 2px solid color-mix(in srgb, currentColor 45%, transparent);
+    outline-offset: 2px;
+}
+
+.model-picker-availability-track {
+    display: inline-flex;
+    align-items: center;
+    gap: 2.5px;
+    padding: 0 1px;
+}
+
+.model-picker-availability-pill {
+    width: 5px;
+    height: 5px;
+    flex: 0 0 5px;
+    border-radius: 50%;
+    transition:
+        transform 120ms ease,
+        background-color 120ms ease;
+}
+
+.model-picker-availability-pill.is-success {
+    background: #34c759;
+    box-shadow: 0 0 0 1px color-mix(in srgb, #34c759 25%, transparent);
+}
+
+.model-picker-availability-pill.is-failed {
+    background: #ff3b30;
+    box-shadow: 0 0 0 1px color-mix(in srgb, #ff3b30 25%, transparent);
+}
+
+.model-picker-availability-pill.is-empty {
+    background: color-mix(in srgb, currentColor 20%, transparent);
+}
+
+.model-picker-availability-track.in-popover {
+    display: flex;
+    align-items: center;
+    gap: 3.5px;
+    padding: 4px 6px;
+    border-radius: 6px;
+    background: color-mix(in srgb, currentColor 6%, transparent);
+}
+
+.model-picker-availability-pill.in-popover {
+    width: 7px;
+    height: 7px;
+    flex: 0 0 7px;
+}
+
+.model-picker-availability-popover-head span.has-failures {
+    color: #e5484d;
+}
+
+.model-picker-availability-dot {
+    width: 6px;
+    height: 6px;
+    flex: 0 0 6px;
+    border-radius: 50%;
+    background: #48a86a;
+    box-shadow: 0 0 0 2px color-mix(in srgb, #48a86a 15%, transparent);
+}
+
+.model-picker-availability.is-insufficient .model-picker-availability-dot {
+    background: #d59b35;
+    box-shadow: 0 0 0 2px color-mix(in srgb, #d59b35 15%, transparent);
+}
+
+.model-picker-availability.is-no_data,
+.model-picker-availability.is-unavailable {
+    color: color-mix(in srgb, currentColor 50%, transparent);
+}
+
+.model-picker-availability.is-no_data .model-picker-availability-dot,
+.model-picker-availability.is-unavailable .model-picker-availability-dot {
+    background: #9aa0a8;
+    box-shadow: 0 0 0 2px color-mix(in srgb, #9aa0a8 15%, transparent);
+}
+
+.model-picker-availability-popover {
+    width: 210px;
+    color: var(--user-ink, #20242a);
+}
+
+.model-picker-availability-popover-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 12px;
+}
+
+.model-picker-availability-popover-head span {
+    color: #2e8d58;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.model-picker-availability-popover-meta,
+.model-picker-availability-popover-foot {
+    color: color-mix(in srgb, currentColor 54%, transparent);
+    font-size: 10px;
+    line-height: 1.5;
+}
+
+.model-picker-availability-popover-meta {
+    margin-top: 4px;
+}
+.model-picker-availability-popover-foot {
+    margin-top: 6px;
+}
+
+.model-picker-availability-trend {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 4px;
+    margin-top: 10px;
+}
+
+.model-picker-availability-segment {
+    height: 20px;
+    border-radius: 4px;
+    background: #4aa96c;
+}
+
+.model-picker-availability-segment.is-insufficient {
+    background: #d59b35;
+}
+.model-picker-availability-segment.is-no_data {
+    background: color-mix(in srgb, currentColor 14%, transparent);
+}
+
+.dark .model-picker-availability-popover {
+    color: #f0f1f2;
+}
+.dark .model-picker-availability-popover-head span {
+    color: #7bd598;
+}
+.dark .model-picker-availability-segment.is-no_data {
+    background: rgba(255, 255, 255, 0.14);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -892,17 +1067,12 @@ html:not(.dark) .creation-home .creation-chat-composer .creation-model-picker.ca
     border-radius: 999px !important;
     background: var(--user-surface-muted) !important;
     color: var(--user-ink-muted) !important;
-    transition:
-        background var(--user-motion),
-        color var(--user-motion),
-        transform var(--user-motion),
-        box-shadow var(--user-motion) !important;
+    transition: none !important;
 }
 .app-user-workspace .creation-chat-composer .creation-model-picker.canvas-composer-model-picker:hover,
 .app-user-workspace .creation-chat-composer .creation-model-picker.canvas-composer-model-picker[aria-expanded="true"] {
     background: var(--user-surface-hover) !important;
     color: var(--user-ink) !important;
-    transform: translateY(-1px);
     box-shadow: 0 8px 18px color-mix(in srgb, var(--user-ink) 8%, transparent);
 }
 .app-user-workspace .creation-launchpad .creation-model-picker.canvas-composer-model-picker {
@@ -915,11 +1085,8 @@ html:not(.dark) .creation-home .creation-chat-composer .creation-model-picker.ca
 .app-user-workspace .creation-launchpad .creation-model-picker.canvas-composer-model-picker {
     width: min(232px, 60cqw) !important;
 }
-/* 模型选择器：先选品牌，再选模型；品牌列表保持完整可见，不用内部滚动条。 */
+/* 模型与渠道共用菜单高度约束，长列表在各自区域滚动。 */
 .app-user-workspace .creation-model-picker-menu.is-brand-list {
-    max-height: none !important;
-    overflow: visible !important;
-    width: min(360px, calc(100vw - 24px)) !important;
     padding: 10px !important;
 }
 .app-user-workspace .creation-model-picker-menu .canvas-model-picker-brands {
@@ -970,13 +1137,18 @@ html:not(.dark) .creation-home .creation-chat-composer .creation-model-picker.ca
     gap: 4px;
 }
 .app-user-workspace .creation-model-picker-menu .canvas-model-picker-brand-copy strong {
-    overflow: hidden;
     font-size: 13px;
     font-weight: 650;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    line-height: 1.35;
 }
 .app-user-workspace .creation-model-picker-menu .canvas-model-picker-brand-copy small {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
     color: var(--user-ink-muted);
     font-size: 10px;
 }
@@ -987,7 +1159,7 @@ html:not(.dark) .creation-home .creation-chat-composer .creation-model-picker.ca
     transform: rotate(-90deg);
 }
 .app-user-workspace .creation-model-picker-menu .canvas-model-picker-secondary-head {
-    display: none;
+    display: flex;
     align-items: center;
     gap: 8px;
     padding: 0 2px 9px;
@@ -1064,15 +1236,7 @@ html:not(.dark) .creation-home .creation-chat-composer .creation-model-picker.ca
     min-height: 32px !important;
     height: 32px !important;
 }
-.creation-model-picker-surface .creation-model-picker-menu.is-model-list {
-    max-height: min(460px, calc(100vh - 24px)) !important;
-    overflow-x: hidden !important;
-    overflow-y: auto !important;
-}
 .creation-model-picker-surface .creation-model-picker-menu.is-brand-list {
-    max-height: none !important;
-    overflow: visible !important;
-    width: min(360px, calc(100vw - 24px)) !important;
     padding: 10px !important;
 }
 .creation-model-picker-surface .canvas-model-picker-brands {
@@ -1123,13 +1287,18 @@ html:not(.dark) .creation-home .creation-chat-composer .creation-model-picker.ca
     gap: 4px;
 }
 .creation-model-picker-surface .canvas-model-picker-brand-copy strong {
-    overflow: hidden;
     font-size: 13px;
     font-weight: 650;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    line-height: 1.35;
 }
 .creation-model-picker-surface .canvas-model-picker-brand-copy small {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
     color: color-mix(in srgb, var(--foreground) 55%, transparent);
     font-size: 10px;
 }
@@ -1140,7 +1309,7 @@ html:not(.dark) .creation-home .creation-chat-composer .creation-model-picker.ca
     transform: rotate(-90deg);
 }
 .creation-model-picker-surface .canvas-model-picker-secondary-head {
-    display: none;
+    display: flex;
     align-items: center;
     gap: 8px;
     padding: 0 2px 9px;
@@ -1195,18 +1364,4 @@ html:not(.dark) .creation-home .creation-chat-composer .creation-model-picker.ca
 }
 .creation-model-picker-surface .canvas-model-picker-option .model-picker-price {
     font-size: var(--fs-tiny);
-}
-
-@media (max-width: 720px) {
-    .canvas-model-picker-menu.is-model-list .canvas-model-picker-secondary-head {
-        display: flex;
-    }
-
-    .app-user-workspace .creation-model-picker-menu.is-brand-list,
-    .creation-model-picker-surface .creation-model-picker-menu.is-brand-list {
-        max-height: min(460px, calc(100vh - 24px)) !important;
-        max-height: min(460px, calc(100dvh - 24px)) !important;
-        overflow-x: hidden !important;
-        overflow-y: auto !important;
-    }
 }

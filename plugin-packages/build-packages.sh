@@ -92,7 +92,7 @@ build_payment_provider() {
     CGO_ENABLED="$payment_cgo" \
       GOOS="$goos" \
       GOARCH="$goarch" \
-      go build -trimpath -ldflags='-s -w' -o "$temporary_file" "$command_path"
+      go build -buildvcs=false -trimpath -ldflags='-s -w' -o "$temporary_file" "$command_path"
   )
   mv "$temporary_file" "$output_file"
   chmod 0755 "$output_file"
@@ -152,6 +152,7 @@ if [ "$payments_only" = true ]; then
   for payment_plugin in $payment_plugins; do
     package_plugin "$payment_plugin"
   done
+	node "$root_dir/write-package-checksums.mjs"
   exit 0
 fi
 
@@ -167,3 +168,5 @@ for manifest in "$root_dir"/*/manifest.json; do
   esac
   package_plugin "$package_id"
 done
+
+node "$root_dir/write-package-checksums.mjs"

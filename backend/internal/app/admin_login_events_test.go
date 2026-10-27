@@ -55,7 +55,7 @@ func TestAdminUserLoginEventsReturnsFilteredTotal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Total != 1 || len(result.Events) != 1 || result.Events[0].ID != "event-1" {
+	if result.Total != 1 || len(result.Events) != 1 || result.Events[0].ID != "legacy:event-1" {
 		t.Fatalf("result = %+v", result)
 	}
 }
@@ -66,7 +66,7 @@ func newAdminLoginEventTestService(t *testing.T) (*Service, *model.User, *model.
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&model.User{}, &model.AdminPermissionGrant{}, &model.UserLoginEvent{}); err != nil {
+	if err := db.AutoMigrate(&model.User{}, &model.AdminPermissionGrant{}, &model.UserLoginEvent{}, &model.LoginLog{}); err != nil {
 		t.Fatal(err)
 	}
 	actor := &model.User{ID: "admin-1", Username: "admin", Role: model.UserRoleAdmin, Status: model.UserStatusActive}

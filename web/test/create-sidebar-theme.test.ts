@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 
 describe("create page sidebar theme", () => {
     test("keeps the shared workspace sidebar surface", () => {
-        const styles = readFileSync(resolve(import.meta.dir, "../src/styles/globals.css"), "utf8");
+        const styles = readFileSync(resolve(import.meta.dir, "../src/styles/globals.css"), "utf8").replace(/\r\n/g, "\n");
 
         expect(styles).not.toContain(".app-workspace-shell.is-creation-workspace .app-workspace-sidebar");
         expect(styles).toContain(".app-workspace-shell.is-creation-workspace .app-workspace-stage");
@@ -13,7 +13,7 @@ describe("create page sidebar theme", () => {
     });
 
     test("separates the user sidebar from the page with theme-aware neutral surfaces", () => {
-        const styles = readFileSync(resolve(import.meta.dir, "../src/styles/globals.css"), "utf8");
+        const styles = readFileSync(resolve(import.meta.dir, "../src/styles/globals.css"), "utf8").replace(/\r\n/g, "\n");
 
         expect(styles).toContain("--user-page-bg: #f8f8fa;\n    --user-sidebar-bg: #f3f3f5;");
         expect(styles).toContain("--user-page-bg: #151517;\n    --user-sidebar-bg: #1c1c1f;");
@@ -25,7 +25,7 @@ describe("create page sidebar theme", () => {
     });
 
     test("keeps the workspace brand link free of a filled click state", () => {
-        const styles = readFileSync(resolve(import.meta.dir, "../src/styles/globals.css"), "utf8");
+        const styles = readFileSync(resolve(import.meta.dir, "../src/styles/globals.css"), "utf8").replace(/\r\n/g, "\n");
 
         expect(styles).toContain(".app-workspace-sidebar-brand-button:active,");
         expect(styles).toContain("-webkit-tap-highlight-color: transparent;");
@@ -35,9 +35,9 @@ describe("create page sidebar theme", () => {
     });
 
     test("keeps a visible surface on the selected navigation item", () => {
-        const styles = readFileSync(resolve(import.meta.dir, "../src/styles/globals.css"), "utf8");
-        const productStyles = readFileSync(resolve(import.meta.dir, "../src/styles/workspace-product.css"), "utf8");
-        const navigation = readFileSync(resolve(import.meta.dir, "../src/components/layout/workspace-sidebar-nav.tsx"), "utf8");
+        const styles = readFileSync(resolve(import.meta.dir, "../src/styles/globals.css"), "utf8").replace(/\r\n/g, "\n");
+        const productStyles = readFileSync(resolve(import.meta.dir, "../src/styles/workspace-product.css"), "utf8").replace(/\r\n/g, "\n");
+        const navigation = readFileSync(resolve(import.meta.dir, "../src/components/layout/workspace-sidebar-nav.tsx"), "utf8").replace(/\r\n/g, "\n");
 
         expect(styles).toContain(".app-user-workspace .app-workspace-nav-link.is-active { color: var(--user-ink) !important;");
         expect(productStyles).toContain(".app-user-workspace .app-workspace-nav-active-pill {");
@@ -49,8 +49,8 @@ describe("create page sidebar theme", () => {
     });
 
     test("centers a single-line workspace brand beside the logo", () => {
-        const styles = readFileSync(resolve(import.meta.dir, "../src/styles/globals.css"), "utf8");
-        const navigation = readFileSync(resolve(import.meta.dir, "../src/components/layout/workspace-sidebar-nav.tsx"), "utf8");
+        const styles = readFileSync(resolve(import.meta.dir, "../src/styles/globals.css"), "utf8").replace(/\r\n/g, "\n");
+        const navigation = readFileSync(resolve(import.meta.dir, "../src/components/layout/workspace-sidebar-nav.tsx"), "utf8").replace(/\r\n/g, "\n");
 
         expect(navigation).not.toContain("创作工作台");
         expect(navigation).toContain('className="flex min-w-0 items-center gap-2"');

@@ -15,6 +15,19 @@ func IsReleaseVersion(raw string) bool {
 	return ok
 }
 
+func IsStableReleaseVersion(raw string) bool {
+	if raw != strings.TrimSpace(raw) || !strings.HasPrefix(raw, "v") || len(raw) > 128 || strings.ContainsAny(raw, "-+") {
+		return false
+	}
+	for _, char := range strings.TrimPrefix(raw, "v") {
+		if char != '.' && (char < '0' || char > '9') {
+			return false
+		}
+	}
+	parsed, ok := parseVersion(raw)
+	return ok && len(parsed.pre) == 0
+}
+
 func CompareVersions(left, right string) int {
 	a, aok := parseVersion(left)
 	b, bok := parseVersion(right)

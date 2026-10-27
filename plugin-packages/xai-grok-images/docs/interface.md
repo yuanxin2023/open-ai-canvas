@@ -1,5 +1,9 @@
 # xAI Grok Images 接口字段
 
+## 本地合并合同
+
+新参数使用独立 `imageResolution`。旧质量别名按既有模板等价转换：`low/standard/1k` 为 1K，`medium/hd/high/4k/2k` 为 2K；这里的旧 `4k` 不代表新增 4K 输出能力。`auto` 保留不指定分辨率的原请求行为。旧价格条件使用相同映射，金额不自动调整，冲突或未知值需先核对。
+
 ## 协议身份
 
 - 插件 ID：`xai-grok-images`。
@@ -81,7 +85,7 @@
   "apiVersion": "open-ai-canvas.plugin/v2",
   "id": "xai-grok-images",
   "name": "xAI Grok Images",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "author": "xAI / AI 创作工作台",
   "description": "xAI Grok Images 独立请求协议插件。",
   "documentation": "<当前插件的完整 documentation，由 README.md 与 docs/interface.md 拼接而成；为避免 JSON 递归，此处不重复展开正文。>",
@@ -120,6 +124,50 @@
           "type": "bearer",
           "field": "apiKey"
         },
+        "imageParameters": [
+          {
+            "name": "size",
+            "label": "画幅比例",
+            "type": "string",
+            "binding": "aspectRatio",
+            "encoding": "ratio",
+            "values": [
+              "1:1",
+              "16:9",
+              "9:16",
+              "4:3",
+              "3:4",
+              "3:2",
+              "2:3",
+              "2:1",
+              "1:2"
+            ],
+            "default": "1:1"
+          },
+          {
+            "name": "imageResolution",
+            "label": "分辨率",
+            "type": "string",
+            "binding": "resolution",
+            "values": [
+              "auto",
+              "1k",
+              "2k"
+            ],
+            "default": "1k",
+            "pricing": true
+          },
+          {
+            "name": "count",
+            "label": "生成数量",
+            "type": "integer",
+            "binding": "imageCount",
+            "min": 1,
+            "max": 10,
+            "step": 1,
+            "default": 1
+          }
+        ],
         "parameters": [
           {
             "name": "model",

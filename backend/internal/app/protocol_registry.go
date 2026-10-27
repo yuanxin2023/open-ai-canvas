@@ -19,12 +19,15 @@ type PluginProviderCatalogItem struct {
 	Vendor            string                      `json:"vendor"`
 	Categories        []protocol.Capability       `json:"categories"`
 	Scopes            []protocol.Surface          `json:"scopes"`
+	Kind              protocol.ProviderKind       `json:"kind,omitempty"`
 	Create            string                      `json:"create,omitempty"`
 	Poll              string                      `json:"poll,omitempty"`
 	ContentType       string                      `json:"contentType,omitempty"`
 	BaseURL           string                      `json:"baseUrl,omitempty"`
 	Enabled           bool                        `json:"enabled"`
 	UnavailableReason string                      `json:"unavailableReason,omitempty"`
+	Parameters        []protocol.Parameter        `json:"parameters,omitempty"`
+	ImageParameters   []protocol.ImageParameter   `json:"imageParameters,omitempty"`
 	Workflows         []protocol.ManifestWorkflow `json:"workflows,omitempty"`
 }
 
@@ -39,8 +42,10 @@ func (s *Service) PluginProviderCatalog(scope, capability string, includeUnavail
 			if !containsPluginSurface(provider.Scopes, wantScope) || (wantCapability != "" && !containsPluginCapability(provider.Capabilities, wantCapability)) {
 				continue
 			}
-			item := PluginProviderCatalogItem{ID: provider.ID, Version: plugin.Manifest.Version, Name: provider.Label, Vendor: plugin.Manifest.Author, Categories: provider.Capabilities, Scopes: provider.Scopes, BaseURL: provider.BaseURL, Enabled: plugin.Status == "enabled", UnavailableReason: plugin.Error, Workflows: workflowsForProvider(plugin.Manifest.Contributes.Workflows, provider.ID)}
+			item := PluginProviderCatalogItem{ID: provider.ID, Version: plugin.Manifest.Version, Name: provider.Label, Vendor: plugin.Manifest.Author, Categories: provider.Capabilities, Scopes: provider.Scopes, BaseURL: provider.BaseURL, Enabled: plugin.Status == "enabled", UnavailableReason: plugin.Error, Parameters: provider.Parameters, Workflows: workflowsForProvider(plugin.Manifest.Contributes.Workflows, provider.ID)}
 			item.Create, item.Poll, item.ContentType = operationSummary(provider.Create), operationSummaryPtr(provider.Poll), provider.Create.ContentType
+			item.ImageParameters = provider.ImageParameters
+			item.Kind = provider.Kind
 			// The registry metadata is the canonical provider projection. This keeps
 			// host-backed dispatch paths out of every user-facing catalog consumer.
 			if adapter, ok := canonicalProviderAdapter(s.protocolRegistry(), provider.ID); ok {
@@ -174,11 +179,12 @@ func (s *Service) InstallPlugin(data []byte, fileName string) (PluginView, error
 	if err != nil {
 		return PluginView{}, err
 	}
-	if err := s.ensurePaymentPluginLifecycle(parsed.Manifest); err != nil {
+	if err := s.ensurePaymentPluginLifecycle(parsed.Manifest, pluginHash(data)); err != nil {
 		return PluginView{}, err
 	}
 	plugin, err := s.pluginRuntime.install(data, fileName)
 	if err == nil {
+		s.invalidateRouteCatalog()
 		s.refreshPaymentRegistry()
 	}
 	return plugin, err
@@ -198,13 +204,24 @@ func (s *Service) InstallPluginForAdmin(actor *model.User, data []byte, fileName
 	if _, reserved := systemPaymentPolicies[parsed.Manifest.Metadata.ID]; reserved && !isPaymentPluginManifest(parsed.Manifest) {
 		return PluginView{}, fmt.Errorf("插件 ID %q 由系统支付插件保留", parsed.Manifest.Metadata.ID)
 	}
+	var previousPaymentState *model.PluginPlatformState
+	if isPaymentPluginManifest(parsed.Manifest) {
+		previousPaymentState, err = s.repo.PluginPlatformState(parsed.Manifest.Metadata.ID)
+		if err != nil {
+			return PluginView{}, fmt.Errorf("读取支付插件平台状态：%w", err)
+		}
+	}
 	plugin, err := s.InstallPlugin(data, fileName)
 	if err != nil {
 		return PluginView{}, err
 	}
 	plugin.Management = pluginManagementFromView(plugin)
 	now := time.Now()
-	state := &model.PluginPlatformState{PluginID: plugin.Manifest.ID, Available: plugin.Status == "enabled", UpdatedBy: actor.ID, CreatedAt: now, UpdatedAt: now}
+	available := plugin.Status == "enabled"
+	if previousPaymentState != nil {
+		available = previousPaymentState.Available
+	}
+	state := &model.PluginPlatformState{PluginID: plugin.Manifest.ID, Available: available, UpdatedBy: actor.ID, CreatedAt: now, UpdatedAt: now}
 	if err := s.repo.SavePluginPlatformState(state); err != nil {
 		return PluginView{}, fmt.Errorf("保存插件平台状态：%w", err)
 	}
@@ -240,6 +257,7 @@ func (s *Service) SetPluginEnabled(id string, enabled bool) (PluginView, error) 
 	}
 	plugin, err := s.pluginRuntime.setEnabled(id, enabled)
 	if err == nil {
+		s.invalidateRouteCatalog()
 		s.refreshPaymentRegistry()
 	}
 	return plugin, err
@@ -254,13 +272,14 @@ func (s *Service) UninstallPlugin(id string) error {
 	}
 	err := s.pluginRuntime.uninstall(id)
 	if err == nil {
+		s.invalidateRouteCatalog()
 		s.refreshPaymentRegistry()
 	}
 	return err
 }
 
-func (s *Service) ensurePaymentPluginLifecycle(next protocol.Manifest) error {
-	if s.repo == nil || s.pluginRuntime == nil || len(next.Contributes.PaymentProviders) == 0 {
+func (s *Service) ensurePaymentPluginLifecycle(next protocol.Manifest, nextPackageHash string) error {
+	if s.repo == nil || s.pluginRuntime == nil {
 		return nil
 	}
 	s.pluginRuntime.mu.RLock()
@@ -273,7 +292,12 @@ func (s *Service) ensurePaymentPluginLifecycle(next protocol.Manifest) error {
 	if err := json.Unmarshal(current.Raw, &currentManifest); err != nil {
 		return fmt.Errorf("读取现有插件 %q：%w", next.Metadata.ID, err)
 	}
-	if len(currentManifest.Contributes.PaymentProviders) == 0 || strings.TrimSpace(currentManifest.Metadata.Version) == strings.TrimSpace(next.Metadata.Version) {
+	if len(currentManifest.Contributes.PaymentProviders) == 0 {
+		return nil
+	}
+	// Only an identical package is a harmless reinstall. Reusing the version or
+	// dropping payment contributions must not bypass unresolved-order protection.
+	if nextPackageHash != "" && nextPackageHash == current.PackageSHA256 {
 		return nil
 	}
 	count, err := s.repo.ActivePaymentOrderCountForPlugin(currentManifest.Metadata.ID, currentManifest.Metadata.Version)

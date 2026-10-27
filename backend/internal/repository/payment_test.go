@@ -480,6 +480,7 @@ func openPaymentTestDB(t *testing.T) *gorm.DB {
 	if err := db.AutoMigrate(
 		&model.CreditAccount{}, &model.CreditLedgerEntry{}, &model.TopupProduct{},
 		&model.PaymentProviderConfig{}, &model.PaymentOrder{}, &model.PaymentNotification{},
+		&model.AdminAuditEvent{},
 	); err != nil {
 		t.Fatal(err)
 	}

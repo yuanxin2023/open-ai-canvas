@@ -17,6 +17,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"infinite-canvas/backend/internal/assets"
 	"infinite-canvas/backend/internal/model"
 
 	"gorm.io/gorm"
@@ -25,17 +26,20 @@ import (
 const appearanceSettingKey = "appearance"
 
 const (
-	AppearanceAssetLogo     = "logo"
-	AppearanceAssetDarkLogo = "logo-dark"
-	AppearanceAssetVideo    = "video"
-	AppearanceAssetPoster   = "poster"
+	AppearanceAssetLogo        = "logo"
+	AppearanceAssetDarkLogo    = "logo-dark"
+	AppearanceAssetVideo       = "video"
+	AppearanceAssetPoster      = "poster"
+	AppearanceAssetUpdateImage = "update-image"
+	AppearanceAssetUpdateVideo = "update-video"
 )
 
 const (
-	appearanceSchemaVersion        = 13
-	appearanceLogoMaxBytes   int64 = 5 << 20
-	appearancePosterMaxBytes int64 = 10 << 20
-	appearanceVideoMaxBytes  int64 = 256 << 20
+	appearanceSchemaVersion                     = 14
+	legacyAppearanceIdentitySchemaVersion       = 13
+	appearanceLogoMaxBytes                int64 = 5 << 20
+	appearancePosterMaxBytes              int64 = 10 << 20
+	appearanceVideoMaxBytes               int64 = 256 << 20
 )
 
 const (
@@ -54,64 +58,66 @@ const (
 )
 
 type AppearanceSetting struct {
-	Canvas                    CanvasAppearance `json:"canvas"`
-	SchemaVersion             int              `json:"schemaVersion"`
-	BrandName                 string           `json:"brandName"`
-	BrandSlug                 string           `json:"brandSlug"`
-	AuthHeroTitle             string           `json:"authHeroTitle"`
-	AuthHeroDescription       string           `json:"authHeroDescription"`
-	LogoResourceID            string           `json:"logoResourceId"`
-	DarkLogoResourceID        string           `json:"darkLogoResourceId"`
-	LogoFrameEnabled          bool             `json:"logoFrameEnabled"`
-	AuthVideoResourceID       string           `json:"authVideoResourceId"`
-	AuthVideoPosterResourceID string           `json:"authVideoPosterResourceId"`
-	AuthVideoAutoplay         bool             `json:"authVideoAutoplay"`
-	ComposerGlowColor         string           `json:"composerGlowColor"`
-	ComposerGlowEnabled       bool             `json:"composerGlowEnabled"`
-	ComposerGlowIntensity     int              `json:"composerGlowIntensity"`
-	ComposerGlowSize          int              `json:"composerGlowSize"`
-	ComposerGlowPositionX     int              `json:"composerGlowPositionX"`
-	ComposerGlowPositionY     int              `json:"composerGlowPositionY"`
-	SEOTitle                  string           `json:"seoTitle"`
-	SEODescription            string           `json:"seoDescription"`
-	SEOKeywords               string           `json:"seoKeywords"`
-	FooterCopyright           string           `json:"footerCopyright"`
-	ICPFilingEnabled          bool             `json:"icpFilingEnabled"`
-	ICPFilingNumber           string           `json:"icpFilingNumber"`
+	Updates                   UpdateAnnouncement `json:"updates"`
+	Canvas                    CanvasAppearance   `json:"canvas"`
+	SchemaVersion             int                `json:"schemaVersion"`
+	BrandName                 string             `json:"brandName"`
+	BrandSlug                 string             `json:"brandSlug"`
+	AuthHeroTitle             string             `json:"authHeroTitle"`
+	AuthHeroDescription       string             `json:"authHeroDescription"`
+	LogoResourceID            string             `json:"logoResourceId"`
+	DarkLogoResourceID        string             `json:"darkLogoResourceId"`
+	LogoFrameEnabled          bool               `json:"logoFrameEnabled"`
+	AuthVideoResourceID       string             `json:"authVideoResourceId"`
+	AuthVideoPosterResourceID string             `json:"authVideoPosterResourceId"`
+	AuthVideoAutoplay         bool               `json:"authVideoAutoplay"`
+	ComposerGlowColor         string             `json:"composerGlowColor"`
+	ComposerGlowEnabled       bool               `json:"composerGlowEnabled"`
+	ComposerGlowIntensity     int                `json:"composerGlowIntensity"`
+	ComposerGlowSize          int                `json:"composerGlowSize"`
+	ComposerGlowPositionX     int                `json:"composerGlowPositionX"`
+	ComposerGlowPositionY     int                `json:"composerGlowPositionY"`
+	SEOTitle                  string             `json:"seoTitle"`
+	SEODescription            string             `json:"seoDescription"`
+	SEOKeywords               string             `json:"seoKeywords"`
+	FooterCopyright           string             `json:"footerCopyright"`
+	ICPFilingEnabled          bool               `json:"icpFilingEnabled"`
+	ICPFilingNumber           string             `json:"icpFilingNumber"`
 }
 
 type PublicAppearanceSetting struct {
-	Canvas                    CanvasAppearance `json:"canvas"`
-	SchemaVersion             int              `json:"schemaVersion"`
-	BrandName                 string           `json:"brandName"`
-	BrandSlug                 string           `json:"brandSlug"`
-	AuthHeroTitle             string           `json:"authHeroTitle"`
-	AuthHeroDescription       string           `json:"authHeroDescription"`
-	LogoURL                   string           `json:"logoUrl"`
-	DarkLogoURL               string           `json:"darkLogoUrl"`
-	LogoFrameEnabled          bool             `json:"logoFrameEnabled"`
-	AuthVideoURL              string           `json:"authVideoUrl"`
-	AuthVideoPosterURL        string           `json:"authVideoPosterUrl"`
-	AuthVideoAutoplay         bool             `json:"authVideoAutoplay"`
-	ComposerGlowColor         string           `json:"composerGlowColor"`
-	ComposerGlowEnabled       bool             `json:"composerGlowEnabled"`
-	ComposerGlowIntensity     int              `json:"composerGlowIntensity"`
-	ComposerGlowSize          int              `json:"composerGlowSize"`
-	ComposerGlowPositionX     int              `json:"composerGlowPositionX"`
-	ComposerGlowPositionY     int              `json:"composerGlowPositionY"`
-	SEOTitle                  string           `json:"seoTitle"`
-	SEODescription            string           `json:"seoDescription"`
-	SEOKeywords               string           `json:"seoKeywords"`
-	FooterCopyright           string           `json:"footerCopyright"`
-	ICPFilingEnabled          bool             `json:"icpFilingEnabled"`
-	ICPFilingNumber           string           `json:"icpFilingNumber"`
-	LogoConfigured            bool             `json:"logoConfigured"`
-	DarkLogoConfigured        bool             `json:"darkLogoConfigured"`
-	AuthVideoConfigured       bool             `json:"authVideoConfigured"`
-	AuthVideoPosterConfigured bool             `json:"authVideoPosterConfigured"`
-	Configured                bool             `json:"configured"`
-	Revision                  string           `json:"revision"`
-	UpdatedAt                 time.Time        `json:"updatedAt,omitempty"`
+	Updates                   UpdateAnnouncement `json:"updates"`
+	Canvas                    CanvasAppearance   `json:"canvas"`
+	SchemaVersion             int                `json:"schemaVersion"`
+	BrandName                 string             `json:"brandName"`
+	BrandSlug                 string             `json:"brandSlug"`
+	AuthHeroTitle             string             `json:"authHeroTitle"`
+	AuthHeroDescription       string             `json:"authHeroDescription"`
+	LogoURL                   string             `json:"logoUrl"`
+	DarkLogoURL               string             `json:"darkLogoUrl"`
+	LogoFrameEnabled          bool               `json:"logoFrameEnabled"`
+	AuthVideoURL              string             `json:"authVideoUrl"`
+	AuthVideoPosterURL        string             `json:"authVideoPosterUrl"`
+	AuthVideoAutoplay         bool               `json:"authVideoAutoplay"`
+	ComposerGlowColor         string             `json:"composerGlowColor"`
+	ComposerGlowEnabled       bool               `json:"composerGlowEnabled"`
+	ComposerGlowIntensity     int                `json:"composerGlowIntensity"`
+	ComposerGlowSize          int                `json:"composerGlowSize"`
+	ComposerGlowPositionX     int                `json:"composerGlowPositionX"`
+	ComposerGlowPositionY     int                `json:"composerGlowPositionY"`
+	SEOTitle                  string             `json:"seoTitle"`
+	SEODescription            string             `json:"seoDescription"`
+	SEOKeywords               string             `json:"seoKeywords"`
+	FooterCopyright           string             `json:"footerCopyright"`
+	ICPFilingEnabled          bool               `json:"icpFilingEnabled"`
+	ICPFilingNumber           string             `json:"icpFilingNumber"`
+	LogoConfigured            bool               `json:"logoConfigured"`
+	DarkLogoConfigured        bool               `json:"darkLogoConfigured"`
+	AuthVideoConfigured       bool               `json:"authVideoConfigured"`
+	AuthVideoPosterConfigured bool               `json:"authVideoPosterConfigured"`
+	Configured                bool               `json:"configured"`
+	Revision                  string             `json:"revision"`
+	UpdatedAt                 time.Time          `json:"updatedAt,omitempty"`
 }
 
 type AdminAppearanceSetting struct {
@@ -125,6 +131,7 @@ type AdminAppearanceSetting struct {
 
 func defaultAppearanceSetting() AppearanceSetting {
 	return AppearanceSetting{
+		Updates:               UpdateAnnouncement{Releases: []UpdateRelease{}},
 		Canvas:                defaultCanvasAppearance(),
 		SchemaVersion:         appearanceSchemaVersion,
 		BrandName:             defaultAppearanceBrandName,
@@ -142,16 +149,25 @@ func defaultAppearanceSetting() AppearanceSetting {
 }
 
 func AppearanceAssetMaxBytes(slot string) (int64, error) {
+	slot = strings.TrimSpace(slot)
 	switch strings.TrimSpace(slot) {
 	case AppearanceAssetLogo, AppearanceAssetDarkLogo:
 		return appearanceLogoMaxBytes, nil
-	case AppearanceAssetPoster:
+	case AppearanceAssetPoster, AppearanceAssetUpdateImage:
 		return appearancePosterMaxBytes, nil
-	case AppearanceAssetVideo:
+	case AppearanceAssetVideo, AppearanceAssetUpdateVideo:
 		return appearanceVideoMaxBytes, nil
 	default:
 		return 0, BadAuthRequest("外观资源类型无效")
 	}
+}
+
+func appearanceSlotIsVideo(slot string) bool {
+	return slot == AppearanceAssetVideo || slot == AppearanceAssetUpdateVideo
+}
+
+func appearanceAssetSlots() []string {
+	return []string{AppearanceAssetLogo, AppearanceAssetDarkLogo, AppearanceAssetVideo, AppearanceAssetPoster}
 }
 
 func (s *Service) Appearance() (*PublicAppearanceSetting, error) {
@@ -195,6 +211,11 @@ func (s *Service) UpdateAppearance(actor *model.User, value AppearanceSetting) (
 		return nil, canvasErr
 	}
 	value.Canvas = canvas
+	updates, updatesErr := normalizeUpdateAnnouncement(value.Updates)
+	if updatesErr != nil {
+		return nil, updatesErr
+	}
+	value.Updates = updates
 	value.BrandName = strings.TrimSpace(value.BrandName)
 	value.BrandSlug = strings.ToLower(strings.TrimSpace(value.BrandSlug))
 	value.AuthHeroTitle = normalizeAppearanceCopy(value.AuthHeroTitle)
@@ -237,6 +258,9 @@ func (s *Service) UpdateAppearance(actor *model.User, value AppearanceSetting) (
 			return nil, err
 		}
 		value.Canvas.Live2DEntry = entry
+	}
+	if err := s.validateUpdateAnnouncementResources(actor, value.Updates, before.Updates); err != nil {
+		return nil, err
 	}
 	for _, candidate := range []struct {
 		slot       string
@@ -302,7 +326,7 @@ func (s *Service) UploadAppearanceAsset(actor *model.User, slot string, header *
 	// the sniffed value so the persisted resource contract matches the bytes.
 	header.Header.Set("Content-Type", mimeType)
 	kind := "image"
-	if slot == AppearanceAssetVideo {
+	if appearanceSlotIsVideo(slot) {
 		kind = "video"
 	}
 	var resource *model.Resource
@@ -343,6 +367,31 @@ func (s *Service) OpenAppearanceAsset(slot string, rangeHeader string) (*Resourc
 	return s.openResourceRange(resource.UserID, resource, rangeHeader)
 }
 
+func (s *Service) PrepareAppearanceAssetDelivery(slot string, options ResourceAccessOptions, rangeHeader string) (*ResourceDelivery, error) {
+	_, value, err := s.readAppearance()
+	if err != nil {
+		return nil, err
+	}
+	resourceID := appearanceResourceID(value, slot)
+	if resourceID == "" {
+		return nil, NotFound("未配置该外观资源")
+	}
+	resource, err := s.repo.Resource(resourceID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, NotFound("外观资源不存在")
+		}
+		return nil, err
+	}
+	if err := validateAppearanceResourceType(slot, resource); err != nil {
+		return nil, err
+	}
+	if options.Purpose == "" {
+		options.Purpose = assets.PurposeDisplay
+	}
+	return s.prepareResourceDelivery(resource.UserID, resource, options, rangeHeader)
+}
+
 func (s *Service) appearanceResourceReferences(resourceIDs []string) map[string][]AdminResourceReferenceView {
 	result := make(map[string][]AdminResourceReferenceView)
 	_, value, err := s.readAppearance()
@@ -363,6 +412,16 @@ func (s *Service) appearanceResourceReferences(resourceIDs []string) map[string]
 		{resourceID: value.AuthVideoResourceID, title: "登录页品牌视频"},
 		{resourceID: value.AuthVideoPosterResourceID, title: "登录页视频封面"},
 		{resourceID: value.Canvas.Live2DResourceID, title: "画布 Agent Live2D 形象"},
+	}
+	for _, release := range value.Updates.Releases {
+		for _, block := range release.Blocks {
+			if block.ResourceID != "" {
+				candidates = append(candidates, struct {
+					resourceID string
+					title      string
+				}{block.ResourceID, "更新公告 " + release.Version})
+			}
+		}
 	}
 	wanted := make(map[string]struct{}, len(resourceIDs))
 	for _, resourceID := range resourceIDs {
@@ -440,7 +499,7 @@ var legacyAppearanceBrandDigest = [sha256.Size]byte{51, 151, 165, 149, 79, 203, 
 var legacyAppearanceDescriptionDigest = [sha256.Size]byte{240, 227, 229, 210, 33, 112, 204, 181, 190, 18, 150, 120, 235, 24, 152, 41, 49, 31, 134, 95, 48, 186, 251, 2, 122, 139, 218, 191, 5, 129, 122, 148}
 
 func migrateLegacyAppearanceIdentity(value *AppearanceSetting) bool {
-	if value == nil || value.SchemaVersion >= appearanceSchemaVersion {
+	if value == nil || value.SchemaVersion >= legacyAppearanceIdentitySchemaVersion {
 		return false
 	}
 	if matchesAppearanceDigest(value.BrandName, legacyAppearanceBrandDigest) {
@@ -488,7 +547,7 @@ func migrateLegacyAppearanceCopyright(value *string) bool {
 // Remote objects are not probed on every appearance request; the frontend has
 // its own load-error fallback for objects that disappear outside the system.
 func (s *Service) resolveAvailableAppearanceAssets(value AppearanceSetting) AppearanceSetting {
-	for _, slot := range []string{AppearanceAssetLogo, AppearanceAssetDarkLogo, AppearanceAssetVideo, AppearanceAssetPoster} {
+	for _, slot := range appearanceAssetSlots() {
 		resourceID := appearanceResourceID(value, slot)
 		if resourceID == "" || s.appearanceAssetAvailable(slot, resourceID) {
 			continue
@@ -648,10 +707,10 @@ func validateAppearanceResourceType(slot string, resource *model.Resource) error
 	if _, exists := allowed[mimeType]; !exists {
 		return BadAuthRequest("外观资源文件类型不受支持")
 	}
-	if slot == AppearanceAssetVideo && resource.Kind != "video" {
-		return BadAuthRequest("登录页品牌视频必须是视频资源")
+	if appearanceSlotIsVideo(slot) && resource.Kind != "video" {
+		return BadAuthRequest("该外观资源必须是视频")
 	}
-	if slot != AppearanceAssetVideo && resource.Kind != "image" {
+	if !appearanceSlotIsVideo(slot) && resource.Kind != "image" {
 		return BadAuthRequest("Logo 和视频封面必须是图片资源")
 	}
 	return nil
@@ -684,7 +743,7 @@ func validateAppearanceUpload(slot string, header *multipart.FileHeader) (string
 
 func detectAppearanceMIME(slot string, data []byte, fileSize int64) string {
 	mimeType := strings.ToLower(strings.TrimSpace(strings.Split(http.DetectContentType(data), ";")[0]))
-	if slot != AppearanceAssetVideo || mimeType == "video/mp4" || len(data) < 12 {
+	if !appearanceSlotIsVideo(slot) || mimeType == "video/mp4" || len(data) < 12 {
 		return mimeType
 	}
 	// Go's generic sniffer only recognises a subset of MP4 compatible brands.
@@ -698,7 +757,7 @@ func detectAppearanceMIME(slot string, data []byte, fileSize int64) string {
 }
 
 func appearanceAllowedMIMETypes(slot string) map[string]struct{} {
-	if slot == AppearanceAssetVideo {
+	if appearanceSlotIsVideo(slot) {
 		return map[string]struct{}{"video/mp4": {}, "video/webm": {}}
 	}
 	return map[string]struct{}{"image/png": {}, "image/jpeg": {}, "image/webp": {}}
@@ -714,6 +773,10 @@ func appearanceAssetLabel(slot string) string {
 		return "视频封面"
 	case AppearanceAssetVideo:
 		return "品牌视频"
+	case AppearanceAssetUpdateImage:
+		return "公告图片"
+	case AppearanceAssetUpdateVideo:
+		return "公告视频"
 	default:
 		return "外观资源"
 	}
@@ -740,6 +803,7 @@ func publicAppearanceSetting(setting *model.SystemSetting, value AppearanceSetti
 		revision = strconv.FormatInt(setting.UpdatedAt.UTC().UnixNano(), 36)
 	}
 	result := &PublicAppearanceSetting{
+		Updates:               publicUpdateAnnouncement(value.Updates, revision),
 		Canvas:                value.Canvas,
 		SchemaVersion:         appearanceSchemaVersion,
 		BrandName:             value.BrandName,

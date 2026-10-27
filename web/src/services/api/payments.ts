@@ -15,6 +15,8 @@ export type PaymentProvider = {
     closeAfterMinutes: number;
 };
 
+export type TopupSaleStrategy = "unlimited" | "periodic" | "inventory" | "timed";
+
 export type TopupProduct = {
     id: string;
     name: string;
@@ -33,6 +35,15 @@ export type TopupProduct = {
     creditsMicrocredits: number;
     enabled: boolean;
     sortOrder: number;
+    saleStrategy: TopupSaleStrategy;
+    periodDays?: number;
+    periodPurchaseLimit?: number;
+    stockTotal?: number;
+    stockRemaining?: number;
+    saleStartAt?: string;
+    saleEndAt?: string;
+    saleStatus?: "disabled" | "on_sale" | "upcoming" | "ended" | "sold_out" | string;
+    canPurchase: boolean;
     createdBy: string;
     updatedBy: string;
     createdAt: string;
@@ -94,6 +105,7 @@ export type PaymentOrder = {
     currency: "CNY" | string;
     creditsMicrocredits: number;
     status: PaymentOrderStatus;
+    closurePending?: boolean;
     providerStatus?: string;
     providerTradeNo?: string;
     checkout: {
@@ -187,7 +199,16 @@ export function listAdminTopupProducts() {
 export type TopupProductInput = Pick<
     TopupProduct,
     "name" | "amountFen" | "creditsMicrocredits" | "enabled" | "sortOrder" | "ribbonText" | "badgeText" | "compareAmountFen" | "priceCaption" | "quotaCaption" | "quotaDetail" | "actionText" | "accentColor" | "featured"
-> & { description?: string; benefits?: string };
+> & {
+    description?: string;
+    benefits?: string;
+    saleStrategy?: TopupSaleStrategy;
+    periodDays?: number;
+    periodPurchaseLimit?: number;
+    stockTotal?: number;
+    saleStartAt?: string;
+    saleEndAt?: string;
+};
 
 export function createAdminTopupProduct(input: TopupProductInput) {
     return http.post<{ product: TopupProduct }>("/admin/payments/products", input);
@@ -218,6 +239,7 @@ export function discardAdminPaymentPromotionImage(id: string) {
 }
 
 export type AdminPaymentOrder = PaymentOrder & {
+    inventoryOversold?: boolean;
     user: { id: string; username: string; displayName: string; email: string } | null;
 };
 

@@ -34,29 +34,24 @@ func (s *Service) taskWorker() *taskWorkerCoordinator {
 	return newTaskWorkerCoordinator(s)
 }
 
+// wakeTaskDispatcher lets newly persisted work enter execution immediately;
+// the periodic scan remains the cross-process and missed-notification recovery path.
+func (s *Service) wakeTaskDispatcher() {
+	if s == nil || s.taskDispatcherWake == nil {
+		return
+	}
+	select {
+	case s.taskDispatcherWake <- struct{}{}:
+	default:
+	}
+}
+
 func (w *taskWorkerCoordinator) start(ctx context.Context) {
 	s := w.service
 	s.startTextReplayCleanup(ctx)
 	s.startProviderCancellationReconciliation(ctx)
 	s.startBillingReviewAudit(ctx)
 	s.startAgentMemoryCompactScheduler()
-	s.runWorkerLoop(func(ctx context.Context) {
-		ticker := time.NewTicker(2 * time.Second)
-		defer ticker.Stop()
-		for {
-			if ctx.Err() != nil {
-				return
-			}
-			if !s.IsDraining() {
-				s.advanceCloudAgents()
-			}
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-			}
-		}
-	})
 	s.runWorkerLoop(func(ctx context.Context) {
 		slots := make(chan struct{}, maxChannelConcurrencyLimit)
 		dispatch := func() {
@@ -90,7 +85,11 @@ func (w *taskWorkerCoordinator) start(ctx context.Context) {
 				}
 				slots <- struct{}{}
 				started := s.runWorkerTask(func() {
-					defer func() { <-slots; globalSlot.Release() }()
+					defer func() {
+						<-slots
+						globalSlot.Release()
+						s.wakeTaskDispatcher()
+					}()
 					if err := w.processClaimedTask(task, globalSlot); err != nil {
 						_ = s.log(task.UserID, task.ID, "error", "后台任务处理失败", err.Error())
 					}
@@ -111,6 +110,8 @@ func (w *taskWorkerCoordinator) start(ctx context.Context) {
 			select {
 			case <-ctx.Done():
 				return
+			case <-s.taskDispatcherWake:
+				dispatch()
 			case <-ticker.C:
 				dispatch()
 			}
@@ -137,7 +138,7 @@ func (w *taskWorkerCoordinator) processClaimedTask(task *model.Task, globalSlot 
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), taskExecutionTimeoutWithPolicy(task.Type, policy.Task))
+	ctx, cancel := context.WithTimeout(context.Background(), taskExecutionTimeout(task, policy.Task))
 	defer cancel()
 	leaseDone := make(chan struct{})
 	leaseLost := make(chan error, 1)
@@ -185,6 +186,38 @@ func (w *taskWorkerCoordinator) processClaimedTask(task *model.Task, globalSlot 
 	if task.Type == model.TaskTypeTimelineRender {
 		return w.processTimelineRender(task, ctx)
 	}
+	if task.MediaRecoveryJSON != "" {
+		result, recoveryErr := s.resumeTaskMedia(ctx, task)
+		return s.finishTaskMediaRecovery(task, result, recoveryErr)
+	}
+
+	// Creation and manual retry admission can precede execution by a long time.
+	// Re-read the feature policy before preparing or dispatching a model route.
+	decryptedInput, err := s.decryptTaskInputJSON(task.InputJSON)
+	if err != nil {
+		return err
+	}
+	var admissionInput map[string]any
+	if err := json.Unmarshal([]byte(decryptedInput), &admissionInput); err != nil {
+		return err
+	}
+	if err := s.requireCustomChannelsForTaskInput(admissionInput); err != nil {
+		// A reclaimed task may already have submitted upstream. Keep the existing
+		// review path for that evidence; only an unsent reservation is refundable.
+		attempts, readErr := s.repo.RouteAttempts(task.ID, task.RouteRun)
+		uncertain := readErr != nil || task.ProviderRequestID != "" || s.taskBilling().BillingFailureRequiresReview(task.BillingOrderID, task.ID, err)
+		for _, attempt := range attempts {
+			if attempt.DispatchState == "accepted" || attempt.DispatchState == "submission_unknown" {
+				uncertain = true
+			}
+		}
+		// Legacy tasks without an explicit new retry run retain their conservative
+		// submission handling, as in createDirectTaskAttempt.
+		if len(attempts) == 0 && task.RouteRun <= 1 && task.Attempts > 1 {
+			uncertain = true
+		}
+		return terminal.markPreparationFailure(task, "渠道不可用", errors.Join(err, readErr), uncertain, "自定义渠道已关闭，上游请求未发出")
+	}
 
 	s.markAgentMemoryCompactRunning(*task)
 	task.Stage = "调用生成模型"
@@ -192,7 +225,7 @@ func (w *taskWorkerCoordinator) processClaimedTask(task *model.Task, globalSlot 
 	if taskUsesUpstreamReportedProgress(task.Type) {
 		// 图片/视频百分比只能来自供应商状态响应。连接和提交阶段只展示文案，
 		// 不能再用统一的 35% 冒充真实生成进度。
-		task.Stage = "正在连接上游"
+		task.Stage = "作品创作中"
 		task.Progress = 0
 	}
 	if err := s.repo.UpdateTaskProgressForLease(task.ID, task.LeaseOwner, task.Stage, task.Progress); err != nil {
@@ -215,6 +248,16 @@ func (w *taskWorkerCoordinator) processClaimedTask(task *model.Task, globalSlot 
 	default:
 	}
 	result, canvasOps, err := routeResult.result, routeResult.canvasOps, routeResult.err
+	latestMedia, readErr := s.repo.Task(task.ID)
+	if readErr != nil {
+		return readErr
+	}
+	task.MediaRecoveryJSON, task.MediaStage = latestMedia.MediaRecoveryJSON, latestMedia.MediaStage
+	task.ProviderRequestID, task.PollStage = latestMedia.ProviderRequestID, latestMedia.PollStage
+	var deliveryFailure *mediaRecoveryError
+	if task.MediaRecoveryJSON != "" || errors.As(err, &deliveryFailure) {
+		return s.finishTaskMediaRecovery(task, result, err)
+	}
 	providerSucceeded := routeResult.providerSucceeded
 	if err == nil {
 		result, err = s.persistGeneratedMediaResult(task.UserID, result)
@@ -227,7 +270,9 @@ func (w *taskWorkerCoordinator) processClaimedTask(task *model.Task, globalSlot 
 		if code, _ := ChannelSlotFailureDetails(err); code != "" {
 			channelSlotFailedBeforeRequest = true
 		}
-		// 续租使用独立 context；即使执行同时超时，真实租约失效仍必须阻止写入。
+		// 续租使用独立 context；执行超时不能覆盖真实租约失效，否则旧 worker
+		// 可能在新 worker 接管后继续结算或写入终态。
+		deadlineExpired := errors.Is(ctx.Err(), context.DeadlineExceeded)
 		select {
 		case leaseErr := <-leaseLost:
 			_ = s.log(task.UserID, task.ID, "warn", "任务租约失效，等待其他 worker 恢复", leaseErr.Error())
@@ -235,9 +280,13 @@ func (w *taskWorkerCoordinator) processClaimedTask(task *model.Task, globalSlot 
 		default:
 		}
 		decryptedInput, decryptErr := s.decryptTaskInputJSON(task.InputJSON)
-		if decryptErr == nil && s.shouldDeferVideoProviderTask(*task, decryptedInput, err) {
+		if decryptErr == nil && s.shouldDeferProviderTask(*task, decryptedInput, err) {
 			stage := "后台仍在生成"
-			message := "前台等待结束，上游视频仍在生成，将继续回查原任务"
+			message := "前台等待结束，上游任务仍在生成，将继续回查原任务"
+			if strings.HasPrefix(task.Type, "canvas_image") {
+				stage = "后台仍在生成图片"
+				message = "前台等待结束，上游图片仍在生成，将继续回查原任务"
+			}
 			var pendingErr providerStatePendingError
 			if errors.As(err, &pendingErr) {
 				stage = "等待上游任务同步"
@@ -249,11 +298,17 @@ func (w *taskWorkerCoordinator) processClaimedTask(task *model.Task, globalSlot 
 			_ = s.log(task.UserID, task.ID, "info", message, task.PollStage)
 			return nil
 		}
-		if newAPIChannel2TaskSyncExpired(*task, err, time.Now()) {
+		if isVideoTaskType(task.Type) && newAPIChannel2TaskSyncExpired(*task, err, time.Now()) {
 			err = errors.New("上游任务长时间未同步，已停止自动查询，请确认渠道任务状态后重试。")
 		}
-		if errors.Is(err, context.DeadlineExceeded) {
-			err = errors.New(taskTimeoutMessage(task.Type))
+		if errors.Is(err, context.DeadlineExceeded) || deadlineExpired {
+			// 画布 Agent 的单步超时是可恢复事件（运行期会关思考重试同一步），
+			// 因此必须与"任务执行超时"区分开，否则只能整轮判死。
+			if cloudAgentModelOperation(task) {
+				err = errors.New(cloudAgentStepTimeoutError + "，已中止这一步")
+			} else {
+				err = errors.New(taskTimeoutMessage(task.Type))
+			}
 		}
 		s.noteAgentMemoryCompactTask(*task, nil, err)
 		return terminal.handleExecutionFailure(task, err, providerSucceeded, channelSlotFailedBeforeRequest)
@@ -295,7 +350,11 @@ func taskFailureMessage(err error) string {
 	if err == nil {
 		return "任务处理失败"
 	}
-	return truncateRunes(err.Error(), 2_000)
+	message := err.Error()
+	if denied := speechResourceDeniedUserMessage(message); denied != "" {
+		return denied
+	}
+	return truncateRunes(redactUpstreamAddress(message), 2_000)
 }
 
 // taskLeaseRenewContext 给续租单独一份"不继承父 context 取消/时限"的上下文（仅 5 秒上限）。
@@ -305,6 +364,21 @@ func taskFailureMessage(err error) string {
 // 租约过期后又被其它 worker 重跑（实测一次上游调用被重跑成三次）。
 func taskLeaseRenewContext(parent context.Context) (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.WithoutCancel(parent), 5*time.Second)
+}
+
+// taskExecutionTimeout 解析一次任务的执行墙钟：画布 Agent 的单步调用可以配秒级超时
+// （AgentStepTimeoutSeconds），没配时沿用文本任务超时。秒级粒度是必要的——一轮里每一步
+// 都是分钟级的调用，分钟粒度改不动"某一步卡住"的体验。
+// 超时的表现是任务错误里带 cloudAgentStepTimeoutError 标记，运行期据此关思考重试同一步，
+// 而不是把整轮判死（见 cloud_agent_step_timeout.go）。
+func taskExecutionTimeout(task *model.Task, policy RuntimeTaskPolicy) time.Duration {
+	if task != nil && cloudAgentModelOperation(task) && policy.AgentStepTimeoutSeconds > 0 {
+		return time.Duration(policy.AgentStepTimeoutSeconds) * time.Second
+	}
+	if task == nil {
+		return time.Duration(policy.DefaultTimeoutMinutes) * time.Minute
+	}
+	return taskExecutionTimeoutWithPolicy(task.Type, policy)
 }
 
 func taskExecutionTimeoutWithPolicy(taskType string, policy RuntimeTaskPolicy) time.Duration {
@@ -328,15 +402,18 @@ func taskExecutionTimeoutWithPolicy(taskType string, policy RuntimeTaskPolicy) t
 	}
 }
 
-func (s *Service) shouldDeferVideoProviderTask(task model.Task, decryptedInput string, err error) bool {
+func (s *Service) shouldDeferProviderTask(task model.Task, decryptedInput string, err error) bool {
 	providerRequestID := strings.TrimSpace(task.ProviderRequestID)
-	if providerRequestID == "" || (!strings.HasPrefix(task.Type, "canvas_video") && !strings.HasPrefix(task.Type, "video_")) {
+	if providerRequestID == "" {
 		return false
 	}
 	deferSignal := errors.Is(err, context.DeadlineExceeded)
 	var pendingErr providerStatePendingError
 	if errors.As(err, &pendingErr) {
-		deferSignal = strings.TrimSpace(pendingErr.TaskID) == providerRequestID && !newAPIChannel2TaskSyncExpired(task, err, time.Now())
+		deferSignal = strings.TrimSpace(pendingErr.TaskID) == providerRequestID
+		if deferSignal && isVideoTaskType(task.Type) {
+			deferSignal = !newAPIChannel2TaskSyncExpired(task, err, time.Now())
+		}
 	}
 	if !deferSignal {
 		return false
@@ -346,7 +423,34 @@ func (s *Service) shouldDeferVideoProviderTask(task model.Task, decryptedInput s
 		return false
 	}
 	resolved, resolveErr := s.resolveProviderConfig(input.Config)
-	return resolveErr == nil && resolved.InterfaceType == string(model.ChannelInterfaceNewAPIChannel2)
+	if resolveErr != nil {
+		return false
+	}
+	if isVideoTaskType(task.Type) || input.Mode == "video" {
+		return resolved.InterfaceType == string(model.ChannelInterfaceNewAPIChannel2)
+	}
+	if input.Mode != "image" && !strings.HasPrefix(task.Type, "canvas_image") {
+		return false
+	}
+	return s.imageProviderSupportsTaskResume(resolved.InterfaceType)
+}
+
+func isVideoTaskType(taskType string) bool {
+	return strings.HasPrefix(taskType, "canvas_video") || strings.HasPrefix(taskType, "video_")
+}
+
+// shouldDeferVideoProviderTask 保留给旧测试和内部调用方；新逻辑统一覆盖视频与异步图片。
+func (s *Service) shouldDeferVideoProviderTask(task model.Task, decryptedInput string, err error) bool {
+	return s.shouldDeferProviderTask(task, decryptedInput, err)
+}
+
+func (s *Service) imageProviderSupportsTaskResume(interfaceType string) bool {
+	interfaceType = strings.TrimSpace(interfaceType)
+	if isVolcengineJiMengProtocol(interfaceType) || isRunningHubInterface(interfaceType) {
+		return true
+	}
+	metadata, ok := s.protocolMetadata(interfaceType)
+	return ok && strings.TrimSpace(metadata.Poll) != ""
 }
 
 func newAPIChannel2TaskSyncExpired(task model.Task, err error, now time.Time) bool {

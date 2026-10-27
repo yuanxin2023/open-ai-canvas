@@ -1,8 +1,11 @@
 import { modelRequestOptions, resolveVideoOperation, type ModelRequirements } from "@/lib/model-selection";
 import { videoResolutionComparisonKey } from "@/lib/video-generation-options";
-import { buildImageResolutionOptions, imageResolutionOption } from "@/lib/image-resolution-tiers";
-import type { LogicalModelQuote, ModelQuoteRequest, ModelRequestIntent } from "@/services/api/logical-models";
+import { imagePriceSelector, normalizeImagePriceSelector } from "@/lib/image-pricing";
+import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
+import type { ModelQuoteRequest, ModelRequestIntent } from "@/services/api/logical-models";
 import { modelOptionName, resolveModelChannel, type AiConfig, type ModelCapability } from "@/stores/use-config-store";
+
+export { modelQuoteDescription } from "@/lib/model-quote-description";
 
 export type ModelPriceTier = NonNullable<NonNullable<AiConfig["channels"][number]["modelCosts"]>[number]["logicalPriceTiers"]>[number];
 
@@ -38,7 +41,7 @@ export function priceTiersForCurrentSelection(tiers: ModelPriceTier[], capabilit
     let bestScore = -1;
     let matched: ModelPriceTier[] = [];
     for (const tier of tiers) {
-        const selector = priceSelectorForTier(tier);
+        const selector = priceSelectorForTier(tier, Boolean(modelCapabilityConfigFor(config, config.model || config.imageModel).image?.parameters));
         const conditions = Object.entries(selector).filter(([, value]) => value && value !== "*");
         if (conditions.some(([key, value]) => requested[key] !== value)) continue;
         const score = conditions.length;
@@ -74,27 +77,13 @@ export function formatPriceRange(values: number[], suffix: string) {
     return unique.length === 1 ? `${format(unique[0])} ${suffix}` : `${format(unique[0])}-${format(unique[unique.length - 1])} ${suffix}`;
 }
 
-export function modelQuoteDescription(quote: LogicalModelQuote) {
-    const amount = (quote.amountMicrocredits / 1_000_000).toLocaleString("zh-CN", { maximumFractionDigits: 6 });
-    const descriptions = [`${quote.estimated ? "预计" : "本次"}消耗 ${amount} 积分`];
-    const estimate = quote.videoTokenEstimate;
-    if (estimate) {
-        descriptions.push(`公式预估 ${estimate.formulaTokens.toLocaleString("zh-CN")} 视频 Token，平台额外预留 ${estimate.reservationMarginPercent}%（共 ${estimate.reservedTokens.toLocaleString("zh-CN")} Token）`);
-        if (estimate.referenceDurationEstimated) descriptions.push("未知的参考视频时长按 15 秒估算");
-        if (estimate.dimensionsEstimated) descriptions.push("实际画幅尚未确定，尺寸按当前参数估算");
-    }
-    if (quote.billingMode === "token") descriptions.push(estimate
-        ? "预估金额并非费用上限，成功任务优先按有效的实际用量结算；未返回用量时按火山引擎公式结算，额外预留不计入公式结算，可能补扣或退回差额"
-        : "预估金额并非费用上限，最终以成功任务返回的实际用量结算，可能补扣或退回差额");
-    return descriptions.join("；");
-}
 
 export function modelQuoteRequest(config: AiConfig, value: string, capability?: ModelCapability, requirements?: ModelRequirements): ModelQuoteRequest | undefined {
     if (!capability || !value) return undefined;
     const channel = resolveModelChannel(config, value);
     if (channel.scope !== "system") return undefined;
     const cost = channel.modelCosts?.find((item) => item.model === modelOptionName(value));
-    if (!cost || (!cost.logicalModelId && capability !== "video")) return undefined;
+    if (!cost || (!cost.logicalModelId && capability !== "video" && capability !== "audio")) return undefined;
     const input = requirements?.input;
     const intent: ModelRequestIntent = {
         capability,
@@ -138,17 +127,17 @@ function priceSelectorForRequest(capability: ModelCapability | undefined, config
     }
     if (capability === "image") {
         requested.operation = imagePriceOperation(requirements);
-        const options = { ...modelRequestOptions(config, "image"), ...requirements?.options, ...(requirements?.imageSize ? { size: requirements.imageSize } : {}) };
+        const options: Record<string, unknown> = { ...modelRequestOptions(config, "image"), ...requirements?.options, ...(requirements?.imageSize ? { size: requirements.imageSize } : {}) };
+        const profile = modelCapabilityConfigFor(config, config.model || config.imageModel)?.image;
+        if (profile?.parameters) {
+            for (const field of profile.parameters) {
+                if (field.enabled !== false && field.pricing && options[field.name] !== undefined) requested[field.name] = String(options[field.name]);
+            }
+            return requested;
+        }
         const imageQuality = String(options.quality ?? "").trim().toLowerCase();
         const imageSize = String(options.size ?? "").trim();
-        if ((imageQuality === "" || imageQuality === "auto" || imageQuality === "any") && imageSize) {
-            const resolution = imageResolutionOption(buildImageResolutionOptions([imageSize]), imageSize)?.tier;
-            if (resolution) requested.quality = resolution;
-        }
-        for (const key of ["quality", "size"] as const) {
-            const value = String(options[key] ?? "").trim().toLowerCase();
-            if (value && value !== "auto" && value !== "any" && !requested[key]) requested[key] = value;
-        }
+        Object.assign(requested, imagePriceSelector(imageQuality, imageSize, modelCapabilityConfigFor(config, config.model || config.imageModel)?.image));
     }
     return requested;
 }
@@ -158,8 +147,8 @@ function imagePriceOperation(requirements?: ModelRequirements) {
     return (input?.imageCount || 0) + (input?.characterCount || 0) > 0 ? "image_to_image" : "text_to_image";
 }
 
-function priceSelectorForTier(tier: ModelPriceTier) {
-    const selector = { ...(tier.selector || {}) };
+function priceSelectorForTier(tier: ModelPriceTier, declaredParameters = false) {
+    const selector = normalizeImagePriceSelector({ ...(tier.selector || {}) }, declaredParameters);
     if (!Object.keys(selector).length) {
         const resolution = normalizeTierResolution(tier.resolution);
         if (resolution !== "*") selector.vquality = resolution;

@@ -397,7 +397,9 @@ export default function AdminPaymentsPage({ view = "providers" }: { view?: Admin
             width: 210,
             render: (_, order) => (
                 <div>
-                    <Typography.Text className="font-mono text-xs" title={order.merchantOrderNo} copyable={{ text: order.merchantOrderNo }}>{order.merchantOrderNo.length > 20 ? `${order.merchantOrderNo.slice(0, 10)}…${order.merchantOrderNo.slice(-6)}` : order.merchantOrderNo}</Typography.Text>
+                    <Typography.Text className="font-mono text-xs" title={order.merchantOrderNo} copyable={{ text: order.merchantOrderNo }}>
+                        {order.merchantOrderNo.length > 20 ? `${order.merchantOrderNo.slice(0, 10)}…${order.merchantOrderNo.slice(-6)}` : order.merchantOrderNo}
+                    </Typography.Text>
                     <div className="mt-1 truncate text-xs text-foreground/45" title={order.productName}>
                         {order.productName}
                     </div>
@@ -427,7 +429,7 @@ export default function AdminPaymentsPage({ view = "providers" }: { view?: Admin
                 </div>
             ),
         },
-        { title: "状态", dataIndex: "status", width: 110, align: "center", render: (value) => <AdminStatusBadge {...(paymentOrderStatus[value] || { label: value, tone: "neutral" as const })} /> },
+        { title: "状态", dataIndex: "status", width: 150, align: "center", render: (value, order) => <div className="space-y-1"><AdminStatusBadge {...(paymentOrderStatus[value] || { label: value, tone: "neutral" as const })} />{order.closurePending ? <div className="text-xs">渠道待确认</div> : null}{order.inventoryOversold ? <AdminStatusBadge label="库存超售待核对" tone="error" /> : null}</div> },
         { title: "创建时间", dataIndex: "createdAt", width: 130, render: (value) => <span title={formatDateTime(value)}>{dayjs(value).format("MM-DD HH:mm")}</span> },
         {
             title: "操作",
@@ -440,8 +442,15 @@ export default function AdminPaymentsPage({ view = "providers" }: { view?: Admin
                     primary={{ label: "详情", icon: <Eye className="size-3.5" />, onClick: () => setSelectedOrder(order) }}
                     visibleActionCount={0}
                     actions={[
-                        { key: "sync", label: "同步支付状态", icon: <RefreshCw className="size-3.5" />, disabled: Boolean(orderActionId) || ["credited", "closed"].includes(order.status), onClick: () => queryOrder(order) },
-                        { key: "close", label: "关闭订单", icon: <XCircle className="size-3.5" />, danger: true, disabled: Boolean(orderActionId) || !["created", "pending", "create_failed", "closing"].includes(order.status), onClick: () => closeOrder(order) },
+                        { key: "sync", label: "同步支付状态", icon: <RefreshCw className="size-3.5" />, disabled: Boolean(orderActionId) || order.status === "credited", onClick: () => queryOrder(order) },
+                        {
+                            key: "close",
+                            label: "关闭订单",
+                            icon: <XCircle className="size-3.5" />,
+                            danger: true,
+                            disabled: Boolean(orderActionId) || !["created", "pending", "create_failed", "closing"].includes(order.status),
+                            onClick: () => closeOrder(order),
+                        },
                     ]}
                 />
             ),
@@ -661,6 +670,8 @@ export default function AdminPaymentsPage({ view = "providers" }: { view?: Admin
                     { key: "channel", label: "支付渠道", children: providerNames[selectedOrder.providerId] || selectedOrder.providerId },
                     { key: "amount", label: "金额 / 积分", children: `¥ ${(selectedOrder.amountFen / 100).toFixed(2)} / ${formatCredits(selectedOrder.creditsMicrocredits)} 积分` },
                     { key: "status", label: "状态", children: paymentOrderStatus[selectedOrder.status]?.label || selectedOrder.status },
+                    { key: "closure", label: "关单确认", children: selectedOrder.status === "closed" ? selectedOrder.closurePending ? "站内已关闭，渠道尚未确认；库存或限购名额保留" : "渠道已确认关闭" : "--" },
+                    { key: "inventory", label: "库存核对", children: selectedOrder.inventoryOversold ? "迟到支付导致库存超售，已补记消耗并停止商品继续售卖，请核对" : "--" },
                     ...([{ key: "createdAt", label: "创建时间" }, { key: "expiresAt", label: "过期时间" }, { key: "providerPaidAt", label: "支付时间" }, { key: "creditedAt", label: "入账时间" }, { key: "closedAt", label: "关闭时间" }] as const).map(({ key, label }) => ({ key, label, children: selectedOrder[key] ? formatDateTime(selectedOrder[key]!) : "--" })),
                 ]} />}
             </AdminDrawer>

@@ -121,7 +121,7 @@ func newUserPromptTestServiceWithDB(t *testing.T) (*Service, *gorm.DB) {
 	}
 	sqlDB.SetMaxOpenConns(1)
 	t.Cleanup(func() { _ = sqlDB.Close() })
-	if err := db.AutoMigrate(&model.UserPrompt{}, &model.Resource{}); err != nil {
+	if err := db.AutoMigrate(&model.UserPrompt{}, &model.Resource{}, &model.UserInspirationLibrary{}); err != nil {
 		t.Fatal(err)
 	}
 	return New(repository.New(db), nil), db

@@ -1,12 +1,14 @@
-import { Fragment, useState, type CSSProperties, type ReactNode } from "react";
-import { Dropdown, Popover } from "antd";
-import { AlignLeft, ArrowRight, Bot, Check, ChevronDown, ChevronUp, Clapperboard, FolderKanban, Images, MoreHorizontal, Palette, Pencil, Plus, Sparkles, Type, Upload, X } from "lucide-react";
+import { Fragment, useEffect, useRef, useState, type CSSProperties, type RefObject } from "react";
+import { Popover } from "antd";
+import { AlignLeft, ArrowUp, Check, ChevronUp, Clapperboard, FolderKanban, Images, LayoutGrid, Palette, Pencil, Plus, Sparkles, Type, Upload, Workflow, X } from "lucide-react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { CanvasCreateMenu, type CanvasCreateCommand } from "@/components/canvas/canvas-create-menu";
 import type { CanvasShortDramaProgress, CanvasShortDramaStepId } from "@/lib/canvas/canvas-short-drama";
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import type { CanvasNodeData } from "@/types/canvas";
+
+import "./canvas-short-drama-entry.css";
 
 export function CanvasLinkedProjectEmptyState({ projectName, hasChapter, onAddFirstChapter, onOpenAssets, onAddText }: { projectName: string; hasChapter: boolean; onAddFirstChapter: () => void; onOpenAssets: () => void; onAddText: () => void }) {
     const theme = canvasThemes[useActiveTheme()];
@@ -24,74 +26,122 @@ export function CanvasLinkedProjectEmptyState({ projectName, hasChapter, onAddFi
     );
 }
 
-export function CanvasShortDramaEmptyState({ onCreatePipeline, onOpenAgent, onStartFreeform, onUpload, onAddText, onAddScript }: {
+const ENTRY_SUGGESTIONS = [
+    "一个外卖员意外捡到会说话的猫",
+    "都市甜宠：总裁和实习生的契约婚姻",
+    "古风悬疑：雨夜古宅里的第三声钟响",
+];
+
+export function CanvasShortDramaEmptyState({ onCreatePipeline, onSubmitPrompt, onStartFreeform, onUpload, onAddText, onAddScript }: {
     onCreatePipeline: () => void;
-    onOpenAgent: () => void;
+    /** 空字符串表示只打开 Agent，不自动提交。 */
+    onSubmitPrompt: (prompt: string) => void;
     onStartFreeform: () => void;
     onUpload: () => void;
     onAddText: () => void;
     onAddScript: () => void;
 }) {
     const theme = canvasThemes[useActiveTheme()];
-    const focusStyle = { "--tw-ring-color": theme.accent.primary } as CSSProperties;
+    const [prompt, setPrompt] = useState("");
+    const stageRef = useRef<HTMLDivElement>(null);
+    const entryStyle = {
+        "--canvas-entry-text": theme.node.text,
+        "--canvas-entry-muted": theme.node.muted,
+        "--canvas-entry-accent": theme.accent.primary,
+        "--canvas-entry-on-accent": theme.accent.onPrimary,
+        "--canvas-entry-surface": theme.spatial.elevated,
+        "--canvas-entry-border": theme.toolbar.border,
+        "--canvas-entry-shadow": theme.spatial.shadow,
+    } as CSSProperties;
+    const submit = () => {
+        const value = prompt.trim();
+        if (!value) return;
+        onSubmitPrompt(value);
+        setPrompt("");
+    };
+    useCanvasEntryClickRipple(stageRef);
     return (
-        <div className="pointer-events-none absolute inset-0 z-20 grid place-items-center px-4 pb-20 pt-24">
-            <div className="pointer-events-auto w-full max-w-[760px]" data-canvas-no-zoom>
-                <div className="mb-4 text-center">
-                    <h2 className="text-lg font-semibold">从哪里开始？</h2>
-                    <p className="mt-1 text-sm" style={{ color: theme.node.muted }}>选择一条主路径，之后仍可随时切换。</p>
-                </div>
-                <div className="grid gap-3 md:grid-cols-3">
-                    <PathCard
-                        icon={<Clapperboard className="size-5" />}
-                        title="自己创作"
-                        description="搭好短剧骨架，再逐镜头编辑和生成。"
-                        action="创建短剧流水线"
-                        accent={theme.accent.primary}
-                        theme={theme}
-                        focusStyle={focusStyle}
-                        onClick={onCreatePipeline}
-                    />
-                    <PathCard
-                        icon={<Bot className="size-5" />}
-                        title="交给 Agent"
-                        description="用一句话描述题材、角色和核心冲突。"
-                        action="一句话生成影视项目"
-                        accent={theme.node.activeStroke}
-                        theme={theme}
-                        focusStyle={focusStyle}
-                        onClick={onOpenAgent}
-                    />
-                    <PathCard
-                        icon={<Plus className="size-5" />}
-                        title="自由空白画布"
-                        description="不预设流程，自由添加文本、图片、音频和视频。"
-                        action="从空白画布开始"
-                        accent={theme.node.muted}
-                        theme={theme}
-                        focusStyle={focusStyle}
-                        onClick={onStartFreeform}
-                    />
-                </div>
-                <div className="mt-3 flex justify-center">
-                    <Dropdown
-                        trigger={["click"]}
-                        menu={{
-                            items: [
-                                { key: "upload", icon: <Upload className="size-4" />, label: "导入素材", onClick: onUpload },
-                                { key: "text", icon: <Type className="size-4" />, label: "新建文本", onClick: onAddText },
-                                { key: "storyboard", icon: <Clapperboard className="size-4" />, label: "新建空白分镜", onClick: onAddScript },
-                            ],
+        <div ref={stageRef} className="canvas-entry-stage" style={entryStyle}>
+            <CanvasEntryAmbientRipple />
+            <div className="canvas-entry-shell" data-canvas-no-zoom data-canvas-wheel-scroll>
+                <span className="canvas-entry-eyebrow"><Sparkles aria-hidden="true" />AI 短剧工作台</span>
+                <h2 className="canvas-entry-title">让灵感，<strong>开始成片。</strong></h2>
+                <p className="canvas-entry-subtitle">写下一句故事，Agent 帮你拆剧本、定角色、出分镜和视频。</p>
+                <form
+                    className="canvas-entry-composer"
+                    onSubmit={(event) => {
+                        event.preventDefault();
+                        submit();
+                    }}
+                >
+                    <textarea
+                        value={prompt}
+                        rows={2}
+                        placeholder="描述你想拍的故事…"
+                        aria-label="描述你想拍的故事"
+                        onChange={(event) => setPrompt(event.target.value)}
+                        onKeyDown={(event) => {
+                            if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+                                event.preventDefault();
+                                submit();
+                            }
                         }}
-                    >
-                        <button type="button" className="inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium outline-none transition hover:bg-black/5 focus-visible:ring-2 dark:hover:bg-white/10" style={{ color: theme.node.muted, ...focusStyle }}>
-                            <MoreHorizontal className="size-4" />其他起点<ChevronDown className="size-3" />
-                        </button>
-                    </Dropdown>
+                    />
+                    <div className="canvas-entry-composer-bar">
+                        <button type="button" className="canvas-entry-ghost" onClick={onUpload}><Upload aria-hidden="true" />导入素材</button>
+                        <span className="canvas-entry-hint">Enter 发送 · Shift+Enter 换行</span>
+                        <button type="submit" className="canvas-entry-send" disabled={!prompt.trim()} aria-label="交给 Agent"><ArrowUp aria-hidden="true" /></button>
+                    </div>
+                </form>
+                <div className="canvas-entry-suggestions" role="list" aria-label="灵感示例">
+                    {ENTRY_SUGGESTIONS.map((item) => (
+                        <button key={item} type="button" role="listitem" onClick={() => setPrompt(item)}>{item}</button>
+                    ))}
+                </div>
+                <div className="canvas-entry-paths">
+                    <button type="button" onClick={onCreatePipeline}><Workflow aria-hidden="true" /><span><strong>自己创作</strong><small>按短剧流程搭好节点</small></span></button>
+                    <button type="button" onClick={onAddScript}><Clapperboard aria-hidden="true" /><span><strong>空白分镜</strong><small>直接写分镜表</small></span></button>
+                    <button type="button" onClick={onAddText}><Type aria-hidden="true" /><span><strong>新建文本</strong><small>先记下想法</small></span></button>
+                    <button type="button" onClick={onStartFreeform}><LayoutGrid aria-hidden="true" /><span><strong>空白画布</strong><small>不预设流程</small></span></button>
                 </div>
             </div>
         </div>
     );
+}
+
+/** 背景常驻涟漪：只动 transform/opacity，走合成层，不触发布局。 */
+function CanvasEntryAmbientRipple() {
+    return (
+        <div className="canvas-entry-ripple" aria-hidden="true">
+            <span /><span /><span /><span />
+        </div>
+    );
+}
+
+/** 点击画布空白处时从点击位置扩散一圈涟漪；入口卡片内部的点击不触发。 */
+function useCanvasEntryClickRipple(stageRef: RefObject<HTMLDivElement | null>) {
+    useEffect(() => {
+        const stage = stageRef.current;
+        const viewport = stage?.closest<HTMLElement>("[data-canvas-viewport]") ?? stage?.parentElement;
+        if (!stage || !viewport) return;
+        if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+        const handle = (event: PointerEvent) => {
+            const target = event.target instanceof Element ? event.target : null;
+            if (target?.closest(".canvas-entry-shell,[data-canvas-no-zoom]") || event.button !== 0) return;
+            const rect = stage.getBoundingClientRect();
+            const x = event.clientX - rect.left;
+            const y = event.clientY - rect.top;
+            if (x < 0 || y < 0 || x > rect.width || y > rect.height) return;
+            const wave = document.createElement("span");
+            wave.className = "canvas-entry-click-ripple";
+            wave.style.left = `${x}px`;
+            wave.style.top = `${y}px`;
+            stage.appendChild(wave);
+            wave.addEventListener("animationend", () => wave.remove(), { once: true });
+        };
+        viewport.addEventListener("pointerdown", handle);
+        return () => viewport.removeEventListener("pointerdown", handle);
+    }, [stageRef]);
 }
 
 export function CanvasFreeformEmptyState({ commands }: { commands: CanvasCreateCommand[] }) {
@@ -129,28 +179,6 @@ export function CanvasFreeformEmptyState({ commands }: { commands: CanvasCreateC
                 <p className="mt-4 text-[var(--fs-label)]" style={{ color: theme.node.muted }}>点击 + 添加文本、图片、视频、音频或导入素材</p>
             </div>
         </div>
-    );
-}
-
-function PathCard({ icon, title, description, action, accent, theme, focusStyle, onClick }: {
-    icon: ReactNode;
-    title: string;
-    description: string;
-    action: string;
-    accent: string;
-    theme: (typeof canvasThemes)[keyof typeof canvasThemes];
-    focusStyle: CSSProperties;
-    onClick: () => void;
-}) {
-    return (
-        <section className="flex min-h-[176px] flex-col rounded-lg border p-4 shadow-sm backdrop-blur" style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.node.text }}>
-            <span className="grid size-9 place-items-center rounded-md" style={{ background: `${accent}16`, color: accent }}>{icon}</span>
-            <div className="mt-3 text-base font-semibold">{title}</div>
-            <p className="mt-1 min-h-10 text-sm leading-5" style={{ color: theme.node.muted }}>{description}</p>
-            <button type="button" className="mt-auto inline-flex h-9 w-full items-center justify-between rounded-md border px-3 text-sm font-semibold outline-none transition hover:brightness-105 focus-visible:ring-2" style={{ background: theme.node.fill, borderColor: theme.node.stroke, color: theme.node.text, ...focusStyle }} onClick={onClick}>
-                <span>{action}</span><ArrowRight className="size-4" />
-            </button>
-        </section>
     );
 }
 

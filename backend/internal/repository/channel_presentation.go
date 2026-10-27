@@ -23,7 +23,6 @@ func (r *Repository) UpdateSystemChannelPresentation(channelID string, sortOrder
 	return nil
 }
 
-// 排序是展示配置，不重写价格、能力版本或模型标识。
 func (r *Repository) UpdateChannelModelSort(channelID, modelID string, sortOrder int, now time.Time) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		if err := r.lockSystemChannelForModelMutation(tx, channelID); err != nil {

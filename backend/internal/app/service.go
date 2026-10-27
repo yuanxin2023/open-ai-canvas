@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
@@ -19,7 +20,9 @@ import (
 	"infinite-canvas/backend/internal/prompts"
 	"infinite-canvas/backend/internal/repository"
 	"infinite-canvas/backend/internal/skills"
+	"infinite-canvas/backend/internal/sms"
 	"infinite-canvas/backend/internal/tools"
+	"infinite-canvas/backend/internal/workbench"
 )
 
 type Service struct {
@@ -33,6 +36,9 @@ type Service struct {
 	storageTestMu            sync.Mutex
 	workerRuntimeMu          sync.Mutex
 	agentSchedulerMu         sync.Mutex
+	agentSchedulerWake       chan struct{}
+	taskDispatcherWake       chan struct{}
+	geminiCacheLockMu        sync.Mutex
 	agentSchedulerCursor     string
 	agentConflictStreak      map[string]int
 	activeStorageTests       map[string]bool
@@ -66,37 +72,71 @@ type Service struct {
 	concurrencyReadCache     *platform.BoundedReadCache[string, platform.RuntimeTaskPolicy]
 	textReplayReadCache      *platform.BoundedReadCache[textReplayCacheKey, *TextReplayResult]
 	routeVersionReadCache    *platform.BoundedReadCache[string, int64]
+	geminiCacheLocks         map[string]*geminiCacheKeyLock
 	routeCatalogRetryAt      time.Time
 	routeCatalogRefreshError error
 	skills                   *skills.Service
 	tools                    *tools.Service
 	prompts                  *prompts.Service
 	auth                     *auth.Service
+	sms                      *sms.Service
 	canvas                   *canvas.Service
+	canvasRealtime           *canvas.RealtimeHub
+	workbench                *workbench.Service
+	piRunnerMu               sync.Mutex
+	piRunnerWg               sync.WaitGroup
+	piRunners                map[string]context.CancelFunc
+	// piRunnerRestarts 记录审批恢复时旧会话仍在收尾的运行，旧会话退出后再启动一次。
+	piRunnerRestarts map[string]struct{}
+	piRunnersClosed  bool
+	disablePiRuntime bool
+	// legacyCloudAgentRootTask is enabled only by tests that exercise the pre-Pi
+	// model-worker path. Runtime availability must not change root task semantics.
+	legacyCloudAgentRootTask bool
+	approvedMediaMu          sync.Mutex
+	approvedMediaWg          sync.WaitGroup
+	approvedMediaWaiters     map[string]context.CancelFunc
+	approvedMediaClosed      bool
+	creditPolicyMu           sync.RWMutex
+	creditPolicyCache        *CreditPolicy
+	creditPolicyAt           time.Time
+	modelAvailabilityMu      sync.RWMutex
+	modelAvailabilityCache   map[publicModelAvailabilityKey]*PublicModelAvailability
+	modelAvailabilityAt      time.Time
 }
 
 const taskWorkerConcurrency = 3
 const taskLogPayloadLimit = 4000
 
 type CreateTaskRequest struct {
-	creationPrepare *creationTaskPreparation
-	admission       *taskAdmission
-	ProjectID       string         `json:"projectId"`
-	Type            string         `json:"type"`
-	Operation       string         `json:"operation"`
-	Prompt          string         `json:"prompt"`
-	Provider        string         `json:"provider"`
-	Model           string         `json:"model"`
-	LogicalModelID  string         `json:"logicalModelId"`
-	Input           map[string]any `json:"input"`
-	TraceID         string         `json:"-"`
-	RequestID       string         `json:"-"`
+	workbenchPreparation    *workbenchTaskPreparation
+	WorkbenchRequestKey     string `json:"workbenchRequestKey,omitempty"`
+	WorkbenchExpectedUserID string `json:"workbenchExpectedUserId,omitempty"`
+	WorkbenchRetryOf        string `json:"workbenchRetryOf,omitempty"`
+	WorkbenchRetryVersion   string `json:"workbenchRetryVersion,omitempty"`
+	creationPrepare         *creationTaskPreparation
+	admission               *taskAdmission
+	workbenchKind           string
+	// callerHoldsStorageMu 只给已经持有 Service.storageMu 的内部调用设置。
+	// 文件容量检查不能再锁一次，否则审批改参数会自锁。
+	callerHoldsStorageMu bool
+	ProjectID            string         `json:"projectId"`
+	Type                 string         `json:"type"`
+	Operation            string         `json:"operation"`
+	Prompt               string         `json:"prompt"`
+	Provider             string         `json:"provider"`
+	Model                string         `json:"model"`
+	LogicalModelID       string         `json:"logicalModelId"`
+	Input                map[string]any `json:"input"`
+	TraceID              string         `json:"-"`
+	RequestID            string         `json:"-"`
 }
 
 type TaskListOptions struct {
-	Limit      int
-	ProjectID  string
-	ActiveOnly bool
+	Limit         int
+	ProjectID     string
+	ActiveOnly    bool
+	WorkbenchKind string
 }
 
 func New(repo *repository.Repository, dataDir string) *Service {
@@ -105,14 +145,16 @@ func New(repo *repository.Repository, dataDir string) *Service {
 
 func newService(repo *repository.Repository, dataDir string) *Service {
 	coordinator, err := platform.NewCoordinator(repo.Dialect())
-	pluginRuntime, pluginRuntimeErr := newPluginRuntime(dataDir)
+	canvasRealtime := canvas.NewRealtimeHub(coordinator.Redis())
+	repo = repo.WithCanvasChangeNotifier(canvasRealtime.Changed)
+	pluginRuntime, pluginRuntimeErr := newPluginRuntime(dataDir, repo)
 	paymentRegistry, _ := payment.NewRegistry()
 	if pluginRuntime != nil {
 		if dynamic := pluginRuntime.paymentRegistrySnapshot(); dynamic != nil {
 			paymentRegistry = dynamic
 		}
 	}
-	service := &Service{repo: repo, dataDir: dataDir, activeStorageTests: make(map[string]bool), activeCancels: make(map[string]context.CancelFunc), agentConflictStreak: make(map[string]int), coordinator: coordinator, runtimeErr: err, pluginRuntime: pluginRuntime, pluginRuntimeErr: pluginRuntimeErr, paymentRegistry: paymentRegistry, workerID: newID(), routeCatalogTTL: 30 * time.Second, routeCatalogMaxStale: 5 * time.Minute, routeHealthBlocked: make(map[string]time.Time)}
+	service := &Service{repo: repo, dataDir: dataDir, activeStorageTests: make(map[string]bool), activeCancels: make(map[string]context.CancelFunc), agentConflictStreak: make(map[string]int), agentSchedulerWake: make(chan struct{}, 1), taskDispatcherWake: make(chan struct{}, 1), piRunners: make(map[string]context.CancelFunc), coordinator: coordinator, runtimeErr: err, pluginRuntime: pluginRuntime, pluginRuntimeErr: pluginRuntimeErr, paymentRegistry: paymentRegistry, workerID: newID(), routeCatalogTTL: 30 * time.Second, routeCatalogMaxStale: 5 * time.Minute, routeHealthBlocked: make(map[string]time.Time), geminiCacheLocks: make(map[string]*geminiCacheKeyLock)}
 	service.taskBillingCoordinator = newTaskBillingCoordinator(service.repo)
 	service.taskTerminalCoordinator = newTaskTerminalCoordinator(service)
 	service.taskRouteExecutor = newTaskRouteExecutor(service)
@@ -122,7 +164,11 @@ func newService(repo *repository.Repository, dataDir string) *Service {
 	service.tools = tools.New(service.repo)
 	service.prompts = prompts.New(service.repo, promptAdminGate{svc: service})
 	service.auth = auth.New(service.repo, authHost{svc: service}, nil)
+	service.sms = service.newSMSDomain()
+	service.auth.SetSMSDelivery(service.sms)
 	service.canvas = canvas.New(service.repo, canvasHost{svc: service})
+	service.canvasRealtime = canvasRealtime
+	service.workbench = workbench.New(service.repo, workbenchAdminGate{svc: service}, workbenchAdminGate{svc: service})
 	service.platform = platform.New(service.repo, coordinator, platformHost{svc: service})
 	return service
 }
@@ -146,6 +192,33 @@ func (s *Service) StartWorker() {
 	s.startSkillSyncWorker(ctx)
 	s.startPaymentWorker(ctx)
 	s.startRedeemExpirationWorker(ctx)
+	s.startBillingAutoRefundWorker()
+	go s.syncAgentSessionLimit()
+	s.runWorkerLoop(func(ctx context.Context) {
+		ticker := time.NewTicker(3 * time.Second)
+		defer ticker.Stop()
+		for {
+			s.recoverCloudAgentPiRunners()
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+			}
+		}
+	})
+}
+
+func (s *Service) syncAgentSessionLimit() {
+	policy, err := s.RuntimePolicy()
+	if err != nil {
+		slog.Warn("agent session limit load failed", "error", err)
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	if err := s.applyAgentSessionLimit(ctx, policy.Task.AgentMaxSessions); err != nil {
+		slog.Warn("agent session limit apply failed", "error", err)
+	}
 }
 
 func (s *Service) BeginDrain() { s.backgroundWorkers().BeginDrain() }
@@ -184,13 +257,35 @@ func (s *Service) Tasks(userID string, limit int) ([]TaskSummary, error) {
 }
 
 func (s *Service) TasksWithOptions(userID string, options TaskListOptions) ([]TaskSummary, error) {
-	tasks, err := s.repo.Tasks(userID, options.Limit, options.ProjectID, options.ActiveOnly)
+	tasks, err := s.repo.TasksWithWorkbenchKind(userID, options.Limit, options.ProjectID, options.ActiveOnly, options.WorkbenchKind)
 	if err != nil {
 		return nil, err
 	}
 	orders, err := s.repo.BillingOrdersByTaskIDs(userID, taskBillingTaskIDs(tasks))
 	if err != nil {
 		return nil, err
+	}
+	// Active task lists are the primary source for the canvas cancel affordance.
+	// The worker may have already logged an upstream request while the task row
+	// is waiting for its next lease update, so hydrate the list read model from
+	// the API log in one query instead of briefly exposing a stale cancel button.
+	taskIDs := make([]string, 0, len(tasks))
+	for _, task := range tasks {
+		taskIDs = append(taskIDs, task.ID)
+	}
+	providerRequestIDs, err := s.repo.LatestProviderRequestIDsForTasks(taskIDs)
+	if err != nil {
+		return nil, err
+	}
+	for index := range tasks {
+		if strings.TrimSpace(tasks[index].ProviderRequestID) != "" {
+			continue
+		}
+		if order, ok := orders[tasks[index].ID]; ok && strings.TrimSpace(order.ProviderRequestID) != "" {
+			tasks[index].ProviderRequestID = strings.TrimSpace(order.ProviderRequestID)
+			continue
+		}
+		tasks[index].ProviderRequestID = providerRequestIDs[tasks[index].ID]
 	}
 	return taskSummariesForOutputWithBilling(tasks, orders), nil
 }

@@ -80,7 +80,7 @@ Agnes 官方图像端点，同步返回。文生图与图生图共用 /v1/images
   "apiVersion": "open-ai-canvas.plugin/v2",
   "id": "agnes-image",
   "name": "Agnes Image",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "author": "Agnes AI / AI 创作工作台",
   "description": "Agnes Image 独立请求协议插件。",
   "documentation": "<当前插件的完整 documentation，由 README.md 与 docs/interface.md 拼接而成；为避免 JSON 递归，此处不重复展开正文。>",
@@ -119,6 +119,37 @@ Agnes 官方图像端点，同步返回。文生图与图生图共用 /v1/images
           "type": "bearer",
           "field": "apiKey"
         },
+        "imageParameters": [
+          {
+            "name": "size",
+            "label": "画幅 / 尺寸",
+            "type": "string",
+            "binding": "aspectRatio"
+          },
+          {
+            "name": "imageResolution",
+            "label": "分辨率",
+            "type": "string",
+            "binding": "resolution",
+            "values": [
+              "1k",
+              "2k",
+              "4k"
+            ],
+            "default": "1k",
+            "pricing": true
+          },
+          {
+            "name": "count",
+            "label": "生成数量",
+            "type": "integer",
+            "binding": "imageCount",
+            "min": 1,
+            "max": 100,
+            "step": 1,
+            "default": 1
+          }
+        ],
         "parameters": [
           {
             "name": "model",

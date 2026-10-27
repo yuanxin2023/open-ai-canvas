@@ -2,6 +2,7 @@ package database
 
 import (
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -23,8 +24,8 @@ func TestCurrentSchemaVersionMatchesMigrationPlan(t *testing.T) {
 			}
 		}
 		latest := plan[len(plan)-1]
-		if CurrentSchemaVersion != latest.version || latest.name != "user_resource_quotas" {
-			t.Fatalf("%s latest migration = %d/%q, want %d/user_resource_quotas", name, latest.version, latest.name, CurrentSchemaVersion)
+		if CurrentSchemaVersion != latest.version || latest.name != "feedback_versions_and_resource_references" {
+			t.Fatalf("%s latest migration = %d/%q, want %d/feedback_versions_and_resource_references", name, latest.version, latest.name, CurrentSchemaVersion)
 		}
 	}
 }
@@ -264,8 +265,8 @@ func TestMigrateSchemaSupportsLocalAndUpstreamPost23Lineages(t *testing.T) {
 		expectedV24Name  string
 		expectedTailName string
 	}{
-		{name: "local", plan: schemaMigrations, appliedThrough: 27, expectedV24Name: "topup_product_benefits", expectedTailName: "user_resource_quotas"},
-		{name: "upstream", plan: upstreamFirstMigrationPlan(), appliedThrough: 32, expectedV24Name: "channel_model_label", expectedTailName: "user_resource_quotas"},
+		{name: "local", plan: schemaMigrations, appliedThrough: 27, expectedV24Name: "topup_product_benefits", expectedTailName: "feedback_versions_and_resource_references"},
+		{name: "upstream", plan: upstreamFirstMigrationPlan(), appliedThrough: 32, expectedV24Name: "channel_model_label", expectedTailName: "feedback_versions_and_resource_references"},
 	} {
 		t.Run(scenario.name, func(t *testing.T) {
 			db, err := Open(Config{Driver: "sqlite", DSN: "file:" + t.Name() + "?mode=memory&cache=shared"})
@@ -389,7 +390,7 @@ func TestMigrateSchemaV24UpgradesExistingDatabase(t *testing.T) {
 	if err := db.Migrator().DropColumn(&model.TopupProduct{}, "Benefits"); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Where("version = ?", 24).Delete(&schemaMigration{}).Error; err != nil {
+	if err := db.Where("version >= ?", 24).Delete(&schemaMigration{}).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := MigrateSchema(db); err != nil {
@@ -404,7 +405,7 @@ func TestMigrateSchemaV24UpgradesExistingDatabase(t *testing.T) {
 	}
 }
 
-func TestMigrateSchemaRemapsLegacyTopupProductBenefitsV16(t *testing.T) {
+func TestMigrateSchemaStopsOnLegacyTopupProductBenefitsV16(t *testing.T) {
 	db, err := Open(Config{Driver: "sqlite", DSN: "file:migration-topup-product-benefits-legacy-v16?mode=memory&cache=shared"})
 	if err != nil {
 		t.Fatal(err)
@@ -421,20 +422,23 @@ func TestMigrateSchemaRemapsLegacyTopupProductBenefitsV16(t *testing.T) {
 	if err := db.Model(&schemaMigration{}).Where("version = ?", 24).Update("version", 16).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := MigrateSchema(db); err != nil {
-		t.Fatalf("upgrade legacy v16 record: %v", err)
+
+	var before []schemaMigration
+	if err := db.Order("version").Find(&before).Error; err != nil {
+		t.Fatal(err)
 	}
-	if !db.Migrator().HasTable(&model.AgentLesson{}) {
-		t.Fatal("official v16 migration was not applied after legacy record remap")
+	if err := MigrateSchema(db); err == nil || !strings.Contains(err.Error(), "极旧充值权益") {
+		t.Fatalf("legacy ledger must stop: %v", err)
 	}
-	for _, version := range []int64{16, 24} {
-		var count int64
-		if err := db.Model(&schemaMigration{}).Where("version = ?", version).Count(&count).Error; err != nil {
-			t.Fatal(err)
-		}
-		if count != 1 {
-			t.Fatalf("migration version %d count = %d, want 1", version, count)
-		}
+	var after []schemaMigration
+	if err := db.Order("version").Find(&after).Error; err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(before, after) {
+		t.Fatal("legacy ledger was changed")
+	}
+	if db.Migrator().HasTable(&model.AgentLesson{}) {
+		t.Fatal("migration ran before rejecting old ledger")
 	}
 }
 
@@ -449,7 +453,7 @@ func TestMigrateSchemaV15UpgradesExistingDatabase(t *testing.T) {
 	if err := db.Migrator().DropTable(&model.AgentProfile{}); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Where("version = ?", 15).Delete(&schemaMigration{}).Error; err != nil {
+	if err := db.Where("version >= ?", 15).Delete(&schemaMigration{}).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := MigrateSchema(db); err != nil {
@@ -475,7 +479,7 @@ func TestMigrateSchemaV16UpgradesExistingDatabase(t *testing.T) {
 	if err := db.Migrator().DropTable(&model.AgentLesson{}); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Where("version = ?", 16).Delete(&schemaMigration{}).Error; err != nil {
+	if err := db.Where("version >= ?", 16).Delete(&schemaMigration{}).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := MigrateSchema(db); err != nil {
@@ -501,7 +505,7 @@ func TestMigrateSchemaV17UpgradesExistingDatabase(t *testing.T) {
 	if err := db.Migrator().DropIndex(&model.AgentLesson{}, "idx_agent_lessons_author_status"); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Where("version = ?", 17).Delete(&schemaMigration{}).Error; err != nil {
+	if err := db.Where("version >= ?", 17).Delete(&schemaMigration{}).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := MigrateSchema(db); err != nil {
@@ -527,7 +531,7 @@ func TestMigrateSchemaV18UpgradesExistingDatabase(t *testing.T) {
 	if err := db.Migrator().DropTable(&model.AgentMemorySetting{}); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Where("version = ?", 18).Delete(&schemaMigration{}).Error; err != nil {
+	if err := db.Where("version >= ?", 18).Delete(&schemaMigration{}).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := MigrateSchema(db); err != nil {
@@ -556,7 +560,7 @@ func TestMigrateSchemaV19AddsPaymentPluginVersion(t *testing.T) {
 	if err := db.Migrator().DropColumn(&model.PaymentOrder{}, "PluginVersion"); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Where("version = ?", 19).Delete(&schemaMigration{}).Error; err != nil {
+	if err := db.Where("version >= ?", 19).Delete(&schemaMigration{}).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := MigrateSchema(db); err != nil {
@@ -589,7 +593,7 @@ func TestMigrateSchemaV20UpgradesExistingDatabaseWithBannerAnnouncements(t *test
 	if err := db.Migrator().DropTable(&model.BannerAnnouncement{}); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Where("version = ?", 20).Delete(&schemaMigration{}).Error; err != nil {
+	if err := db.Where("version >= ?", 20).Delete(&schemaMigration{}).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := MigrateSchema(db); err != nil {
@@ -622,7 +626,7 @@ func TestMigrateSchemaV21AddsBannerAnnouncementTitleRuns(t *testing.T) {
 	if err := db.Migrator().DropColumn(&model.BannerAnnouncement{}, "title_runs"); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Where("version = ?", 21).Delete(&schemaMigration{}).Error; err != nil {
+	if err := db.Where("version >= ?", 21).Delete(&schemaMigration{}).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := MigrateSchema(db); err != nil {
@@ -662,7 +666,7 @@ func TestMigrateSchemaV22AddsBannerAnnouncementNoticeType(t *testing.T) {
 	if err := db.Migrator().DropColumn(&model.BannerAnnouncement{}, "notice_type"); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Where("version = ?", 22).Delete(&schemaMigration{}).Error; err != nil {
+	if err := db.Where("version >= ?", 22).Delete(&schemaMigration{}).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := MigrateSchema(db); err != nil {
@@ -701,7 +705,7 @@ func TestMigrateSchemaV23BackfillsCanvasRevisions(t *testing.T) {
 	if err := db.Exec(`INSERT INTO canvas_projects (id, user_id, title, payload_json) VALUES ('legacy', 'owner', 'Existing canvas', '{"nodes":[]}')`).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Where("version = ?", 23).Delete(&schemaMigration{}).Error; err != nil {
+	if err := db.Where("version >= ?", 23).Delete(&schemaMigration{}).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := MigrateSchema(db); err != nil {
@@ -835,6 +839,9 @@ func TestMigrateSchemaV4AddsResourceUploadKeyToExistingSchema(t *testing.T) {
 		}
 	}
 
+	if err := db.AutoMigrate(&model.OAuthState{}); err != nil {
+		t.Fatal(err)
+	}
 	if err := MigrateSchema(db); err != nil {
 		t.Fatalf("migrate existing schema: %v", err)
 	}
@@ -882,6 +889,9 @@ func TestMigrateSchemaRepairsLegacyAssetFoldersMigrationOrder(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	if err := db.AutoMigrate(&model.OAuthState{}); err != nil {
+		t.Fatal(err)
+	}
 	if err := MigrateSchema(db); err != nil {
 		t.Fatalf("repair legacy migration order: %v", err)
 	}
@@ -1199,5 +1209,168 @@ func TestToolsUpgradeFromMain29PreservesMigrationChecksums(t *testing.T) {
 	}
 	if !db.Migrator().HasTable(&model.Tool{}) || !db.Migrator().HasTable(&model.ToolFavorite{}) {
 		t.Fatal("tools tables missing")
+	}
+}
+
+type channelModelProtocolV58 struct {
+	ID       string `gorm:"primaryKey;size:36"`
+	Protocol string `gorm:"size:32;index"`
+}
+
+func (channelModelProtocolV58) TableName() string { return "channel_models" }
+func TestMigrateChannelModelProtocolLengthPreservesExistingRows(t *testing.T) {
+	db, err := Open(Config{Driver: "sqlite", DSN: "file:migration-channel-protocol-length?mode=memory&cache=shared"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AutoMigrate(&channelModelProtocolV58{}); err != nil {
+		t.Fatal(err)
+	}
+	legacy := channelModelProtocolV58{ID: "existing", Protocol: "chat-completion"}
+	if err := db.Create(&legacy).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := migrateChannelModelProtocolLength(db); err != nil {
+		t.Fatalf("migrateChannelModelProtocolLength() error = %v", err)
+	}
+	statement := &gorm.Statement{DB: db}
+	if err := statement.Parse(&model.ChannelModel{}); err != nil {
+		t.Fatal(err)
+	}
+	protocolField := statement.Schema.LookUpField("Protocol")
+	if protocolField == nil || protocolField.Size != 64 {
+		t.Fatalf("protocol field size = %#v, want 64", protocolField)
+	}
+	var stored struct {
+		Protocol string
+	}
+	if err := db.Table("channel_models").Select("protocol").Where("id = ?", legacy.ID).Scan(&stored).Error; err != nil {
+		t.Fatal(err)
+	}
+	if stored.Protocol != legacy.Protocol {
+		t.Fatalf("existing protocol = %q, want %q", stored.Protocol, legacy.Protocol)
+	}
+}
+
+func TestAuthNotificationMigrationUpgradesExistingDatabase(t *testing.T) {
+	db, err := Open(Config{Driver: "sqlite", DSN: "file:migration-auth-notifications-v35?mode=memory&cache=shared"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := MigrateSchema(db); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, table := range []any{&model.AuthVerification{}, &model.NotificationQuota{}, &model.SMSChannel{}, &model.SMSRecord{}} {
+		if err := db.Migrator().DropTable(table); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, column := range []string{"phone", "email_verified_at", "phone_verified_at"} {
+		if err := db.Migrator().DropColumn(&model.User{}, column); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := db.Migrator().DropColumn(&model.EmailVerificationCode{}, "attempts"); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Where("version >= ?", 54).Delete(&schemaMigration{}).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	if err := MigrateSchema(db); err != nil {
+		t.Fatalf("upgrade from v34: %v", err)
+	}
+	for _, table := range []any{&model.AuthVerification{}, &model.NotificationQuota{}, &model.SMSChannel{}, &model.SMSRecord{}} {
+		if !db.Migrator().HasTable(table) {
+			t.Fatalf("migration v35 did not restore table %T", table)
+		}
+	}
+	for _, column := range []string{"phone", "email_verified_at", "phone_verified_at"} {
+		if !db.Migrator().HasColumn(&model.User{}, column) {
+			t.Fatalf("migration v35 did not restore users.%s", column)
+		}
+	}
+	if !db.Migrator().HasColumn(&model.EmailVerificationCode{}, "attempts") {
+		t.Fatal("migration v35 did not restore email verification attempts")
+	}
+}
+
+func TestSQLPerformanceMigrationUpgradesWithoutProviderCatalog(t *testing.T) {
+	db, err := Open(Config{Driver: "sqlite", DSN: "file:migration-sql-perf-v56?mode=memory&cache=shared"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := MigrateSchema(db); err != nil {
+		t.Fatal(err)
+	}
+	var catalogMigration schemaMigration
+	if err := db.First(&catalogMigration, "version = ?", 72).Error; err != nil {
+		t.Fatal(err)
+	}
+	if catalogMigration.Name != workbenchToolsMigrationName || catalogMigration.Checksum != workbenchToolsMigrationChecksum {
+		t.Fatalf("preceding workbench migration identity changed: %#v", catalogMigration)
+	}
+	for _, item := range []struct {
+		entity any
+		index  string
+	}{
+		{&model.ApiCallLog{}, "idx_api_logs_created_epoch"},
+		{&model.ApiCallLog{}, "idx_api_logs_user_created"},
+		{&model.Task{}, "idx_tasks_created_epoch"},
+		{&model.Task{}, "idx_tasks_user_project_created"},
+		{&model.CreditLedgerEntry{}, "idx_credit_ledger_user_type"},
+	} {
+		if err := db.Migrator().DropIndex(item.entity, item.index); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, entity := range []any{&model.ApiCallLog{}, &model.Task{}} {
+		if err := db.Migrator().DropColumn(entity, "CreatedAtEpoch"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := db.Where("version >= ?", 73).Delete(&schemaMigration{}).Error; err != nil {
+		t.Fatal(err)
+	}
+	createdAt := time.Date(2026, 10, 15, 12, 30, 0, 0, time.UTC)
+	for _, table := range []string{"api_call_logs", "tasks"} {
+		if err := db.Table(table).Create(map[string]any{"id": "legacy-" + table, "created_at": createdAt}).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := MigrateSchema(db); err != nil {
+		t.Fatalf("upgrade from preceding workbench v55: %v", err)
+	}
+	for _, table := range []string{"api_call_logs", "tasks"} {
+		var epoch int64
+		if err := db.Table(table).Select("created_at_epoch").Where("id = ?", "legacy-"+table).Scan(&epoch).Error; err != nil {
+			t.Fatal(err)
+		}
+		if epoch != createdAt.Unix() {
+			t.Fatalf("%s legacy timestamp = %d, want %d", table, epoch, createdAt.Unix())
+		}
+	}
+	for _, item := range []struct {
+		entity any
+		index  string
+	}{
+		{&model.ApiCallLog{}, "idx_api_logs_user_created"},
+		{&model.Task{}, "idx_tasks_user_project_created"},
+		{&model.CreditLedgerEntry{}, "idx_credit_ledger_user_type"},
+	} {
+		if !db.Migrator().HasIndex(item.entity, item.index) {
+			t.Fatalf("v56 did not restore %s", item.index)
+		}
+	}
+	var after schemaMigration
+	if err := db.First(&after, "version = ?", 72).Error; err != nil {
+		t.Fatal(err)
+	}
+	if after != catalogMigration {
+		t.Fatalf("v56 rewrote preceding workbench migration: before=%#v after=%#v", catalogMigration, after)
+	}
+	if err := MigrateSchema(db); err != nil {
+		t.Fatalf("v56 upgrade should be idempotent: %v", err)
 	}
 }

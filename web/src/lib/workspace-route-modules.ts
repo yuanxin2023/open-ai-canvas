@@ -19,6 +19,8 @@ export function preloadWorkspaceRoute(pathnameOrSlug: string) {
     const pathname = pathnameOrSlug.split(/[?#]/, 1)[0];
     const segments = pathname.replace(/^\//, "").split("/").filter(Boolean);
     const slug = segments[0] || "create";
+    // 具体画布项目由 /canvas/:id 自己加载；不要在认证恢复阶段额外预加载画布列表。
+    if (slug === "canvas" && segments.length > 1) return;
     if (slug === "projects" && segments.length > 1) {
         void workspaceRouteLoaders.projectDetail();
         return;

@@ -1,4 +1,4 @@
-import { configuredModelDisplayName, groupModelsByDisplayName, isDirectSystemModel, type DisplayModelGroup } from "@/lib/model-selection";
+import { groupModelsByDisplayName, isDirectSystemModel, type DisplayModelGroup } from "@/lib/model-selection";
 import { modelIcon, modelOptionName, PUBLIC_MODEL_CATALOG_ID, resolveModelChannel, type AiConfig } from "@/stores/use-config-store";
 
 export type ModelPickerGroup = {
@@ -22,14 +22,15 @@ export function modelChannelLabel(config: AiConfig, value: string) {
     return cost?.channelLabel?.trim() || channel.name || "未命名渠道";
 }
 
-// 一级按模型展示名跨渠道聚合；二级保留每条渠道模型的独立选择值、能力和售价。
+// 一级按已设置的模型展示名跨渠道聚合，空值归入未分类；二级保留独立调用与售价。
 export function groupModelsForPicker(config: AiConfig, options: string[]): ModelPickerGroup[] {
     const groups = new Map<string, ModelPickerGroup>();
     for (const channel of config.channels) {
         const models = options.filter((value) => resolveModelChannel(config, value).id === channel.id);
         const directModels = models.filter((value) => isDirectSystemModel(config, value));
         for (const value of directModels) {
-            const label = configuredModelDisplayName(config, value);
+            const cost = channel.modelCosts?.find((item) => item.model === modelOptionName(value));
+            const label = cost?.displayName?.trim() || "未分类";
             const key = JSON.stringify(["product", label]);
             let group = groups.get(key);
             if (!group) {
@@ -49,6 +50,14 @@ export function groupModelsForPicker(config: AiConfig, options: string[]): Model
                 kind: "channel",
                 models: groupModelsByDisplayName(config, otherModels),
             });
+        }
+    }
+    for (const group of groups.values()) {
+        if (group.kind !== "product") continue;
+        const identities = group.models.map((model) => `${resolveModelChannel(config, model.models[0]).id}\0${model.label}`);
+        for (const model of group.models) {
+            const identity = `${resolveModelChannel(config, model.models[0]).id}\0${model.label}`;
+            if (identities.filter((value) => value === identity).length > 1) model.label += ` · ${modelOptionName(model.models[0])}`;
         }
     }
     return Array.from(groups.values());

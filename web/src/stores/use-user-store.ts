@@ -7,11 +7,16 @@ export type LocalUser = {
     id: string;
     username: string;
     email?: string;
+    phone?: string;
+    emailVerifiedAt?: string;
+    phoneVerifiedAt?: string;
     displayName: string;
     profileName?: string;
     usernameChangePolicy: UsernameChangePolicy;
     avatarResourceId?: string;
     avatarUrl?: string;
+    avatarMode?: "custom" | "default" | "";
+    avatarPreset?: string;
     identityProvider?: string;
     identityId?: string;
     identityUsername?: string;
@@ -48,6 +53,12 @@ export type FeatureAvailability = {
     skillLibraryEnabled: boolean;
     pluginCenterEnabled: boolean;
     systemPluginsVisibleToUsers: boolean;
+    inspirationSourcesVisible: boolean;
+    inspirationHallEnabled: boolean;
+    inspirationGalleryEnabled: boolean;
+    userFeedbackEnabled: boolean;
+    imageWorkbenchEnabled: boolean;
+    videoWorkbenchEnabled: boolean;
     configured?: boolean;
     updatedBy?: string;
     updatedAt?: string;
@@ -63,6 +74,12 @@ export const defaultFeatureAvailability: FeatureAvailability = {
     skillLibraryEnabled: true,
     pluginCenterEnabled: true,
     systemPluginsVisibleToUsers: true,
+    inspirationSourcesVisible: true,
+    inspirationHallEnabled: false,
+    inspirationGalleryEnabled: false,
+    userFeedbackEnabled: false,
+    imageWorkbenchEnabled: false,
+    videoWorkbenchEnabled: false,
 };
 
 type UserStore = {

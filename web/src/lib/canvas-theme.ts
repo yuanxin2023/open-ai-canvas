@@ -1,8 +1,14 @@
 export type CanvasColorTheme = "light" | "dark";
 export type CanvasBackgroundMode = "dots" | "lines" | "blank";
+export const DEFAULT_CANVAS_COLOR_THEME: CanvasColorTheme = "dark";
+export const CANVAS_CONNECTION_STROKE_WIDTH = 1.4;
 
 export const canvasThemes = {
     light: {
+        connection: {
+            stroke: "#a3a3a3",
+            beam: "#404040",
+        },
         canvas: {
             background: "#f0f0f0",
             dot: "rgba(0,0,0,.80)",
@@ -70,10 +76,14 @@ export const canvasThemes = {
         },
     },
     dark: {
+        connection: {
+            stroke: "#737373",
+            beam: "#e5e5e5",
+        },
         canvas: {
             background: "#000000",
-            dot: "rgba(175,175,175,.80)",
-            line: "rgba(175,175,175,.80)",
+            dot: "rgba(255,255,255,.32)",
+            line: "rgba(255,255,255,.32)",
             selectionFill: "rgba(255,255,255,.12)",
         },
         node: {

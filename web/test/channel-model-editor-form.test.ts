@@ -1,13 +1,36 @@
 import { describe, expect, test } from "bun:test";
 import { defaultModelCapabilityConfig } from "../src/lib/model-capabilities";
 import type { ModelProtocolDefinition } from "../src/lib/model-protocols";
-import { changeChannelModelCapability, editorSectionForField, initialChannelModelValues, validateChannelModelPrices, validateChannelModelProtocol } from "../src/pages/admin/components/channel-model-editor-form";
+import {
+    changeChannelModelCapability,
+    duplicateChannelModelValues,
+    editorSectionForField,
+    initialChannelModelValues,
+    updateChannelModelUpstreamCapabilities,
+    validateChannelModelPrices,
+    validateChannelModelProtocol,
+} from "../src/pages/admin/components/channel-model-editor-form";
 import { defaultPriceTier } from "../src/pages/admin/components/channel-model-price-tier-form";
+import type { ChannelModel, ChannelModelPriceTier } from "../src/services/api/wallet";
 
 const definition = (value: string, capability: ModelProtocolDefinition["capability"], enabled = true): ModelProtocolDefinition => ({ value, capability, enabled, label: value, create: "POST /test", contentType: "application/json", media: "url" });
 const protocols = [definition("disabled-text", "text", false), definition("text", "text"), definition("image", "image"), definition("video", "video")];
+const protocolsWithAudio = [...protocols, definition("audio", "audio")];
 
 describe("channel model editor drafts", () => {
+    test("new drafts use 未分类 and imported drafts display the upstream ID without overwriting custom names", () => {
+        expect(initialChannelModelValues(null, protocols).displayName).toBe("未分类");
+        const imported = { modelKey: "product-id", providerModelKey: "upstream-id", displayName: "未分类", channelLabel: "", priceTiers: [] } as unknown as ChannelModel;
+        expect(initialChannelModelValues(imported, protocols)).toMatchObject({ displayName: "未分类", channelLabel: "upstream-id" });
+        expect(initialChannelModelValues({ ...imported, displayName: "product-id", channelLabel: "手动命名" }, protocols)).toMatchObject({ displayName: "product-id", channelLabel: "手动命名" });
+    });
+    test("Kemei Seedream selection initializes the image profile and preserves pricing", () => {
+        const draft = initialChannelModelValues(null, protocols);
+        draft.priceTiers[0].unitPrice = 19;
+        const next = changeChannelModelCapability({ ...draft, capability: "image", protocol: "km-kemei-seedream", modelKey: "doubao-seedream-5-0-pro-260628" }, [definition("km-kemei-seedream", "image")]);
+        expect(next.capabilityConfig?.image).toMatchObject({ references: { maxImages: 10, maskSupported: false }, maxOutputs: 1, size: { default: "2048x2048" } });
+        expect(next.priceTiers[0].unitPrice).toBe(19);
+    });
     test("new drafts select an enabled protocol and never share price state", () => {
         const first = initialChannelModelValues(null, protocols);
         first.priceTiers[0].unitPrice = 42;
@@ -17,6 +40,70 @@ describe("channel model editor drafts", () => {
         expect(second.priceTiers[0].unitPrice).toBe(0);
         expect(second.modelKey).toBe("");
         expect(second.tags).toEqual([]);
+    });
+    test("duplicate drafts clear model IDs and inherited tier IDs while preserving custom routing and configuration", () => {
+        const tier = (id: string, providerModelKey: string, unitPriceMicrocredits: number): ChannelModelPriceTier => ({
+            id,
+            channelModelId: "source-id",
+            selector: {},
+            selectorKey: "{}",
+            resolution: "*",
+            videoSeconds: 0,
+            providerModelKey,
+            billingMode: "fixed_request",
+            unitPriceMicrocredits,
+            inputTokenPriceMicrocredits: 0,
+            outputTokenPriceMicrocredits: 0,
+            cachedTokenPriceMicrocredits: 0,
+            priceConfigured: true,
+            enabled: true,
+            priceVersion: 1,
+            createdAt: "2026-08-29T00:00:00Z",
+            updatedAt: "2026-08-29T00:00:00Z",
+        });
+        const item: ChannelModel = {
+            id: "source-id",
+            channelId: "channel-id",
+            modelKey: "product-video",
+            providerModelKey: "models/vendor-video",
+            displayName: "视频模型组",
+            channelLabel: "原渠道",
+            tags: [{ text: "稳定", color: "green" }],
+            description: "视频生成配置",
+            icon: "",
+            capability: "video",
+            protocol: "video",
+            billingMode: "fixed_request",
+            unitPriceMicrocredits: 1_000_000,
+            inputTokenPriceMicrocredits: 0,
+            outputTokenPriceMicrocredits: 0,
+            cachedTokenPriceMicrocredits: 0,
+            priceConfigured: true,
+            enabled: false,
+            priceVersion: 1,
+            priceTiers: [tier("default-tier", "vendor-video", 5_000_000), tier("custom-tier", "vendor-video-hq", 8_000_000)],
+            createdAt: "2026-08-29T00:00:00Z",
+            updatedAt: "2026-08-29T00:00:00Z",
+        };
+
+        const draft = duplicateChannelModelValues(item, protocols);
+
+        expect(draft).toMatchObject({
+            modelKey: "",
+            providerModelKey: "",
+            displayName: "视频模型组",
+            channelLabel: "原渠道",
+            tags: [{ text: "稳定", color: "green" }],
+            description: "视频生成配置",
+            capability: "video",
+            protocol: "video",
+            enabled: false,
+            priceTiers: [
+                { providerModelKey: "", unitPrice: 5 },
+                { providerModelKey: "vendor-video-hq", unitPrice: 8 },
+            ],
+        });
+        expect(draft.tags).not.toBe(item.tags);
     });
     test("missing catalogs do not invent a protocol", () => {
         expect(initialChannelModelValues(null, []).protocol).toBeUndefined();
@@ -42,6 +129,48 @@ describe("channel model editor drafts", () => {
         const draft = initialChannelModelValues(null, protocols);
         expect(changeChannelModelCapability({ ...draft, capability: "audio" }, protocols).capabilityConfig).toBeUndefined();
     });
+    test("switching capability to a Midjourney protocol uses its image defaults without changing prices", () => {
+        const draft = initialChannelModelValues(null, protocols);
+        const next = changeChannelModelCapability({ ...draft, capability: "image", protocol: "cangyuan-midjourney-v7", modelKey: "midjourney-v7" }, [...protocols, definition("cangyuan-midjourney-v7", "image")]);
+        expect(next.capabilityConfig?.image).toMatchObject({ references: { promptMaxChars: 4000, maxImages: 5, maskSupported: false }, maxOutputs: 1 });
+        expect(next.priceTiers[0].unitPrice).toBe(0);
+    });
+    test("Kacang image protocol selection fills capabilities without changing prices", () => {
+        for (const protocol of ["kacang-midjourney-special", "kacang-midjourney-v7", "kacang-midjourney"]) {
+            const draft = initialChannelModelValues(null, protocols);
+            draft.priceTiers[0].unitPrice = 12;
+            const next = changeChannelModelCapability({ ...draft, capability: "image", protocol }, [definition(protocol, "image")]);
+            expect(next.protocol).toBe(protocol);
+            expect(next.capabilityConfig?.image?.maxOutputs).toBe(1);
+            expect(next.capabilityConfig?.image?.references.maxImages).toBe(protocol === "kacang-midjourney" ? 5 : 1);
+            expect(next.priceTiers[0].unitPrice).toBe(12);
+            expect(updateChannelModelUpstreamCapabilities(next)).toBe(next);
+        }
+    });
+    test("V8.2 upstream changes only retier presets and preserve administrator settings", () => {
+        const draft = initialChannelModelValues(null, protocols);
+        const capabilityConfig = defaultModelCapabilityConfig("cangyuan-midjourney-v82", "midjourney-1k");
+        capabilityConfig.image!.references.promptMaxChars = 12000;
+        capabilityConfig.image!.size.default = "6:11";
+        const next = updateChannelModelUpstreamCapabilities({ ...draft, capability: "image", protocol: "cangyuan-midjourney-v82", modelKey: "midjourney-1k", providerModelKey: "midjourney-2k", capabilityConfig });
+        expect(new Set(next.capabilityConfig!.image!.size.presets!.map((preset) => preset.tier))).toEqual(new Set(["2k"]));
+        expect(next.capabilityConfig!.image!.size.values).toEqual(capabilityConfig.image!.size.values);
+        expect(next.capabilityConfig!.image!.size.default).toBe("6:11");
+        expect(next.capabilityConfig!.image!.references.promptMaxChars).toBe(12000);
+        expect(next.priceTiers).toBe(draft.priceTiers);
+        expect(capabilityConfig.image!.size.presets![0].tier).toBe("1k");
+        expect(updateChannelModelUpstreamCapabilities(next)).toBe(next);
+        const back = updateChannelModelUpstreamCapabilities({ ...next, providerModelKey: "midjourney-1k" });
+        expect(back.capabilityConfig!.image!.size.presets![0].tier).toBe("1k");
+    });
+    test("existing model profiles retain saved custom capabilities on reopening", () => {
+        const capabilityConfig = defaultModelCapabilityConfig("cangyuan-midjourney-v7", "midjourney-v7");
+        capabilityConfig.image!.references.maxImages = 2;
+        const item = { modelKey: "midjourney-v7", providerModelKey: "midjourney-v7", capability: "image" as const, protocol: "cangyuan-midjourney-v7", capabilityConfig, enabled: true };
+        const reopened = initialChannelModelValues(item as Parameters<typeof initialChannelModelValues>[0], [definition("cangyuan-midjourney-v7", "image")]);
+        expect(reopened.capabilityConfig?.image?.references.maxImages).toBe(2);
+        expect(updateChannelModelUpstreamCapabilities(reopened)).toBe(reopened);
+    });
     test("validation errors map to their mounted tab", () => {
         expect(editorSectionForField(["priceTiers", 2, "unitPrice"])).toBe("pricing");
         expect(editorSectionForField(["capabilityConfig"])).toBe("capabilities");
@@ -52,6 +181,15 @@ describe("channel model editor drafts", () => {
 describe("pricing write validation", () => {
     const draft = initialChannelModelValues(null, protocols);
     test("accepts an explicit free/default price", () => expect(() => validateChannelModelPrices(draft)).not.toThrow());
+    test("accepts audio per-second pricing", () => {
+        const audioDraft = {
+            ...initialChannelModelValues(null, protocolsWithAudio),
+            capability: "audio" as const,
+            protocol: "audio",
+            priceTiers: [{ ...defaultPriceTier(), billingMode: "per_second" as const, unitPrice: 1 }],
+        };
+        expect(() => validateChannelModelPrices(audioDraft)).not.toThrow();
+    });
     test("requires prices and exactly one or zero fallback tiers", () => {
         expect(() => validateChannelModelPrices({ ...draft, priceTiers: [] })).toThrow("至少");
         expect(() => validateChannelModelPrices({ ...draft, priceTiers: [defaultPriceTier(), defaultPriceTier()] })).toThrow("只能");

@@ -1,10 +1,34 @@
 services:
+  yingce-agent:
+    image: open-ai-canvas-yingce-agent:local
+    build:
+      context: .
+      dockerfile: yingce-agent/Dockerfile
+      args:
+        BUILD_VERSION: ${CANVAS_BUILD_VERSION:-}
+        BUILD_COMMIT: ${CANVAS_BUILD_COMMIT:-unknown}
+        BUILD_TIME: ${CANVAS_BUILD_TIME:-unknown}
+    environment:
+      YINGCE_AGENT_TOKEN: ${YINGCE_AGENT_TOKEN:?请配置至少 32 字符的独立 Agent Token}
+      MAX_CONCURRENT_SESSIONS: ${YINGCE_AGENT_MAX_SESSIONS:-30}
+      NODE_MAX_OLD_SPACE_SIZE: ${YINGCE_AGENT_NODE_MEMORY_MB:-512}
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8081/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
   backend:
     image: open-ai-canvas-backend:local
     build:
       context: .
       dockerfile: backend/Dockerfile
       args:
+        BUILD_VERSION: ${CANVAS_BUILD_VERSION:-}
+        BUILD_COMMIT: ${CANVAS_BUILD_COMMIT:-unknown}
+        BUILD_TIME: ${CANVAS_BUILD_TIME:-unknown}
         GOPROXY: ${GOPROXY:-https://proxy.golang.org,direct}
     environment:
       CANVAS_BACKEND_ADDR: ":8080"
@@ -21,9 +45,17 @@ services:
       CANVAS_CORS_ORIGINS: ${CANVAS_CORS_ORIGINS:-http://localhost:3000}
       # 服务器访问地址：Agent 看图与生成参考图都靠它签发上游可取到的短时链接。
       CANVAS_PUBLIC_BASE_URL: ${CANVAS_PUBLIC_BASE_URL:-}
+      YINGCE_AGENT_URL: http://yingce-agent:8081
+      YINGCE_AGENT_TOKEN: ${YINGCE_AGENT_TOKEN:?请配置至少 32 字符的独立 Agent Token}
+      YINGCE_AGENT_BRIDGE_HOST: backend
+      CANVAS_LOG_LEVEL: ${CANVAS_LOG_LEVEL:-info}
+      CANVAS_LOG_FORMAT: ${CANVAS_LOG_FORMAT:-text}
       GIN_MODE: release
     volumes:
       - backend-data:/data
+    depends_on:
+      yingce-agent:
+        condition: service_healthy
     restart: unless-stopped
     stop_grace_period: ${CANVAS_SHUTDOWN_TIMEOUT:-10m}
 
@@ -32,6 +64,10 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        BUILD_VERSION: ${CANVAS_BUILD_VERSION:-}
+        BUILD_COMMIT: ${CANVAS_BUILD_COMMIT:-unknown}
+        BUILD_TIME: ${CANVAS_BUILD_TIME:-unknown}
     ports:
       - "3000:3000"
     depends_on:

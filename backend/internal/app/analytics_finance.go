@@ -77,14 +77,23 @@ func (finance *AnalyticsFinance) add(record analyticsFinancialRecord) {
 
 func applyAnalyticsFinance(overview *AnalyticsOverview, records map[string]analyticsFinancialRecord) {
 	rows := make(map[[2]string]*AnalyticsFinance, len(overview.Models))
+	days := make(map[string]*AnalyticsTrendPoint, len(overview.Trend))
+	for index := range overview.Trend {
+		point := &overview.Trend[index]
+		days[point.Day] = point
+	}
 	for index := range overview.Models {
 		row := &overview.Models[index]
 		rows[[2]string{row.Model, row.Capability}] = &row.Finance
 	}
 	for _, record := range records {
 		overview.KPI.Finance.add(record)
+		if point := days[record.Log.CreatedAt.UTC().Format("2006-01-02")]; point != nil {
+			point.ConsumedMicrocredits += record.Revenue
+		}
 		if row := rows[[2]string{firstNonEmpty(record.Log.Model, "未识别"), record.Log.Capability}]; row != nil {
 			row.add(record)
 		}
 	}
+	overview.KPI.TotalConsumedMicrocredits = overview.KPI.Finance.RevenueMicrocredits
 }

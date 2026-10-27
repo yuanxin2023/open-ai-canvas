@@ -25,13 +25,15 @@ async function writeText(path, content) {
 }
 
 function withoutGeneratedContract(document) {
-  const start = document.indexOf(contractStart);
-  if (start < 0) return document.trimEnd();
-  const end = document.indexOf(contractEnd, start);
-  if (end < 0) {
-    throw new Error("docs/interface.md contains an unterminated generated manifest contract");
+  for (const [startMarker, endMarker] of [[contractStart, contractEnd], ["<!-- YINGCE_MANIFEST_CONTRACT_START -->", "<!-- YINGCE_MANIFEST_CONTRACT_END -->"]]) {
+    let start;
+    while ((start = document.indexOf(startMarker)) >= 0) {
+      const end = document.indexOf(endMarker, start);
+      if (end < 0) throw new Error("docs/interface.md contains an unterminated generated manifest contract");
+      document = `${document.slice(0, start)}${document.slice(end + endMarker.length)}`;
+    }
   }
-  return `${document.slice(0, start)}${document.slice(end + contractEnd.length)}`.trimEnd();
+  return document.trimEnd();
 }
 
 function renderContract(manifest) {

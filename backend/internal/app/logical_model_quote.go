@@ -7,14 +7,16 @@ import (
 )
 
 // LogicalModelQuote 是创作端当前参数命中的实际供应线路报价。
-// Token 视频在上游返回真实 usage 前只能预估，创建任务仍以账务预留逻辑为准。
+// Token 用量和实际媒体时长只能预估，实测计费同时公开本次授权上限。
 type LogicalModelQuote struct {
-	LogicalModelID     string              `json:"logicalModelId"`
-	BillingMode        string              `json:"billingMode"`
-	Quantity           int64               `json:"quantity"`
-	AmountMicrocredits int64               `json:"amountMicrocredits"`
-	Estimated          bool                `json:"estimated"`
-	VideoTokenEstimate *VideoTokenEstimate `json:"videoTokenEstimate,omitempty"`
+	LogicalModelID          string              `json:"logicalModelId"`
+	BillingMode             string              `json:"billingMode"`
+	Quantity                int64               `json:"quantity"`
+	AmountMicrocredits      int64               `json:"amountMicrocredits"`
+	Estimated               bool                `json:"estimated"`
+	VideoTokenEstimate      *VideoTokenEstimate `json:"videoTokenEstimate,omitempty"`
+	SettlementBasis         string              `json:"settlementBasis,omitempty"`
+	ChargeLimitMicrocredits *int64              `json:"chargeLimitMicrocredits,omitempty"`
 }
 
 type ChannelModelQuoteRequest struct {
@@ -42,11 +44,11 @@ func (s *Service) QuoteChannelModel(req ChannelModelQuoteRequest) (*LogicalModel
 	config = input["config"].(map[string]any)
 	estimate := estimateTaskBillingTokens(input, req.Intent.Capability)
 	intent := ModelRequestIntentFromTaskInput(input, "canvas_"+req.Intent.Capability, req.Intent.Operation)
-	order, err := s.newBillingOrderWithPriceTier("", "", "quote", req.ChannelID, req.ModelKey, req.Intent.Capability, "model_quote", billingQuantity(req.Intent.Capability, config["videoSeconds"]), estimate, stringValue(config["priceTierId"]), intent)
+	order, err := s.newBillingOrderWithPriceTier("", "", "quote", req.ChannelID, req.ModelKey, req.Intent.Capability, "model_quote", requestedBillingQuantity(req.Intent.Capability, config), estimate, stringValue(config["priceTierId"]), intent)
 	if err != nil {
 		return nil, err
 	}
-	return quoteFromOrder("", order, estimate), nil
+	return quoteFromOrder("", order, estimate, req.Intent.Operation), nil
 }
 
 func validateQuoteIntent(intent ModelRequestIntent) error {
@@ -61,12 +63,23 @@ func validateQuoteIntent(intent ModelRequestIntent) error {
 	return nil
 }
 
-func quoteFromOrder(logicalModelID string, order *model.BillingOrder, estimate tokenBillingEstimate) *LogicalModelQuote {
+func quoteFromOrder(logicalModelID string, order *model.BillingOrder, estimate tokenBillingEstimate, operation string) *LogicalModelQuote {
 	quote := &LogicalModelQuote{LogicalModelID: logicalModelID, BillingMode: order.BillingMode, Quantity: order.Quantity, AmountMicrocredits: order.AmountMicrocredits, Estimated: order.BillingMode == "token"}
 	if order.BillingMode == "token" && order.Capability == "video" {
 		quote.VideoTokenEstimate = estimate.Video
 	}
+	quote.applyMeasuredSettlement(order.Capability, operation)
 	return quote
+}
+
+func (quote *LogicalModelQuote) applyMeasuredSettlement(capability, operation string) {
+	if !usesMeasuredMediaSettlement(quote.BillingMode, capability, operation) {
+		return
+	}
+	quote.Estimated = true
+	quote.SettlementBasis = "measured_duration"
+	limit := quote.AmountMicrocredits
+	quote.ChargeLimitMicrocredits = &limit
 }
 
 func (s *Service) QuoteLogicalModel(logicalModelID string, intent ModelRequestIntent) (*LogicalModelQuote, error) {
@@ -89,8 +102,9 @@ func (s *Service) QuoteLogicalModel(logicalModelID string, intent ModelRequestIn
 		providerModelKey = firstNonEmpty(routed.PriceTier.ProviderModelKey, providerModelKey)
 	}
 	input["config"].(map[string]any)["providerModelKey"] = providerModelKey
-	quantity := billingQuantity(capability, inputConfigValue(input, "videoSeconds"))
-	if capability != "video" {
+	config, _ := input["config"].(map[string]any)
+	quantity := requestedBillingQuantity(capability, config)
+	if capability != "video" && capability != "audio" {
 		quantity = 1
 	}
 	tokenEstimate := estimateTaskBillingTokens(input, capability)
@@ -100,11 +114,11 @@ func (s *Service) QuoteLogicalModel(logicalModelID string, intent ModelRequestIn
 		if routed.PriceTier != nil {
 			priceTierID = routed.PriceTier.ID
 		}
-		order, billingErr := s.newBillingOrderWithPriceTier("", "", "quote", routed.ChannelModel.ChannelID, routed.ChannelModel.ModelKey, capability, "model_quote", quantity, tokenEstimate, priceTierID)
+		order, billingErr := s.newBillingOrderWithPriceTier("", "", "quote", routed.ChannelModel.ChannelID, routed.ChannelModel.ModelKey, capability, "model_quote", quantity, tokenEstimate, priceTierID, resolvedIntent)
 		if billingErr != nil {
 			return nil, billingErr
 		}
-		return quoteFromOrder(routed.LogicalModel.ID, order, tokenEstimate), nil
+		return quoteFromOrder(routed.LogicalModel.ID, order, tokenEstimate, resolvedIntent.Operation), nil
 	}
 
 	if routed.LogicalModel.PricePolicy != "unified" {
@@ -116,7 +130,7 @@ func (s *Service) QuoteLogicalModel(logicalModelID string, intent ModelRequestIn
 		quantity = 1
 		amount, err = creditAmount(routed.LogicalModel.UnitPriceMicrocredits, quantity, 10_000)
 	case "per_second":
-		if capability != "video" || quantity <= 0 {
+		if (capability != "video" && capability != "audio") || quantity <= 0 {
 			return nil, BadAuthRequest("当前模型按时长计费，但请求未提供有效时长")
 		}
 		amount, err = creditAmount(routed.LogicalModel.UnitPriceMicrocredits, quantity, 10_000)
@@ -153,6 +167,7 @@ func (s *Service) QuoteLogicalModel(logicalModelID string, intent ModelRequestIn
 	if quote.Estimated && capability == "video" {
 		quote.VideoTokenEstimate = tokenEstimate.Video
 	}
+	quote.applyMeasuredSettlement(capability, resolvedIntent.Operation)
 	return quote, nil
 }
 

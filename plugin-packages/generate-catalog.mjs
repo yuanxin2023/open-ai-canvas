@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -7,6 +7,8 @@ const scopes = ["admin.system-channel", "user.custom-channel", "canvas", "creati
 const ref = (path) => ({ $ref: path });
 const omit = (value) => ({ $omitEmpty: value });
 const coalesce = (...values) => ({ $coalesce: values });
+const addNumbers = (...values) => ({ $add: values });
+const multiply = (...values) => ({ $multiply: values });
 const map = (from, as, body) => ({ $map: { from, as, in: body } });
 const filter = (from, as, where) => ({ $filter: { from, as, where } });
 const eq = (left, right) => ({ $eq: [left, right] });
@@ -234,6 +236,7 @@ for (const [id, name, vendor, baseUrl] of [
   ["nvidia-nim-chat", "NVIDIA NIM Chat", "NVIDIA", "https://integrate.api.nvidia.com"],
   ["openrouter-chat", "OpenRouter Chat", "OpenRouter", "https://openrouter.ai/api"],
   ["atlascloud-chat", "Atlas Cloud Chat", "Atlas Cloud", "https://api.atlascloud.ai"],
+  ["cheaperinference-chat", "Cheaper Inference Chat", "Cheaper Inference", "https://api.cheaperinference.com"],
   ["litellm-proxy-chat", "LiteLLM Proxy Chat", "LiteLLM", "http://127.0.0.1:4000"],
   ["newapi-chat", "NewAPI Chat", "NewAPI", "http://127.0.0.1:3000"],
   ["vllm-chat", "vLLM OpenAI-Compatible", "vLLM", "http://127.0.0.1:8000"],
@@ -602,6 +605,58 @@ add({
 });
 
 add({
+  id: "doubao-streaming-tts", providerId: "doubao-streaming-tts", name: "豆包音频生成", vendor: "Volcengine", capability: "audio",
+  baseUrl: "https://openspeech.bytedance.com", auth: { type: "header", field: "apiKey", header: "X-Api-Key" }, params: audioParams,
+  notes: "火山引擎 seed-audio-1.0 非流式音频生成。POST /api/v3/tts/create。不传 references 为纯文本生成；连接音频时写入 references 的 audio_url 或 audio_data，最多 3 段，参考音频少于 3 段且指定了音色时再追加一个 speaker；连接图片时写入 image_url 或 image_data，最多 1 张。图片和音频不能同时使用。没有参考素材时，speaker 只在用户明确指定音色时发送，且官方仅接受语音合成 2.0 音色或复刻音色。text_prompt 引用参考音频时使用 @Audio1、@Audio2。响应是单个 JSON，audio 为 Base64，url 两小时过期。",
+  create: jsonCreate("/api/v3/tts/create", {
+    model: ref("request.model"),
+    text_prompt: ref("request.prompt"),
+    references: omit(conditional(
+      gt(len(ref("request.images")), 0),
+      map(ref("request.images"), "media", {
+        image_url: omit(conditional(eq(ref("media.source.type"), "url"), ref("media.url"))),
+        image_data: omit(conditional(eq(ref("media.source.type"), "data"), { $dataPayload: ref("media.value") }))
+      }),
+      conditional(
+        gt(len(ref("request.audios")), 0),
+        {
+          $concatArrays: [
+            map(ref("request.audios"), "media", {
+              audio_url: omit(conditional(eq(ref("media.source.type"), "url"), ref("media.url"))),
+              audio_data: omit(conditional(eq(ref("media.source.type"), "data"), { $dataPayload: ref("media.value") }))
+            }),
+            conditional(and(ref("request.extra.audioVoice"), lt(len(ref("request.audios")), 3)), [{ speaker: ref("request.extra.audioVoice") }], [])
+          ]
+        },
+        conditional(ref("request.extra.audioVoice"), [{ speaker: ref("request.extra.audioVoice") }], null)
+      )
+    )),
+    audio_config: {
+      format: coalesce(ref("request.extra.audioFormat"), "mp3"),
+      speech_rate: omit(conditional(ne(toFloat(ref("request.extra.audioSpeed")), 0), addNumbers(multiply(toFloat(ref("request.extra.audioSpeed")), 100), -100)))
+    }
+  }, {
+    headers: {
+      "X-Api-Request-Id": ref("request.extra.idempotencyKey")
+    }
+  }),
+  response: {
+    errorPaths: ["code"],
+    messagePaths: ["message"],
+    status: "succeeded",
+    resultKind: "audio",
+    audios: conditional(
+      ref("response.url"),
+      { url: ref("response.url"), ephemeral: true },
+      conditional(ref("response.audio"), {
+        dataUrl: ref("response.audio"),
+        mimeType: conditional(eq(ref("request.extra.audioFormat"), "wav"), "audio/wav", conditional(eq(ref("request.extra.audioFormat"), "pcm"), "audio/pcm", conditional(eq(ref("request.extra.audioFormat"), "ogg_opus"), "audio/ogg", "audio/mpeg")))
+      })
+    )
+  }
+});
+
+add({
   id: "openai-audio", providerId: "openai-audio", name: "OpenAI Audio Speech", vendor: "OpenAI", capability: "audio",
   baseUrl: "https://api.openai.com", auth: bearer, params: audioParams,
   notes: "同步 /v1/audio/speech 返回原始音频流，由 binaryPayload 包装为统一音频结果。",
@@ -944,6 +999,81 @@ add({
   response: { status: "succeeded", images: coalesce(ref("response.data"), ref("response.images")), errorPaths: ["error.code"], messagePaths: ["error.message", "message"] }
 });
 
+const minimaxInputs = coalesce({ $concatArrays: [
+  ...[["images", "image"], ["videos", "video"], ["audios", "audio"]].map(([field, kind]) =>
+    map(ref(`request.${field}`), "media", { $merge: [ref("media"), { kind }] })
+  )
+] }, ref("request.inputs"));
+const minimaxMedia = (kind, roles) => filter(minimaxInputs, "media", and(
+  eq(ref("media.kind"), kind), ...(roles ? [{ $in: [ref("media.role"), roles] }] : [])
+));
+const minimaxKeyframes = filter(minimaxInputs, "media", { $in: [ref("media.role"), ["first_frame", "last_frame"]] });
+const minimaxRatio = ref("request.output.aspectRatio");
+
+add({
+  id: "dashscope-minimax-video", providerId: "dashscope-minimax-video", name: "百炼 MiniMax H3 Video", vendor: "Alibaba Cloud", capability: "video",
+  baseUrl: "", auth: bearer, requiresPublicMediaUrls: true,
+  params: [
+    ["model", "string", true, "model", "固定为 MiniMax/MiniMax-H3。"],
+    ["prompt", "string", true, "input.prompt", "中英文提示词，最多 7000 个字符。"],
+    ["images", "media[]", false, "input.media", "显式首帧、尾帧或参考图；支持仅尾帧。"],
+    ["videos", "media[]", false, "input.media[type=feature]", "最多 3 个参考视频。"],
+    ["audios", "media[]", false, "input.media[type=driving_audio]", "最多 3 个参考音频。"],
+    ["duration", "integer", true, "parameters.duration", "4-15 秒整数，不沿用原生 MiniMax 的 30 秒上限。"],
+    ["aspectRatio", "string", false, "parameters.ratio", "文生视频必须指定具体比例；首尾帧恒为 adaptive，多模态默认 adaptive。"],
+    ["resolution", "string", true, "parameters.resolution", "768P 或 2K。"],
+    ["watermark", "boolean", false, "parameters.watermark", "是否添加 AI 生成水印，默认关闭。"]
+  ],
+  validations: [
+    { assert: eq(ref("request.model"), "MiniMax/MiniMax-H3"), message: "百炼 MiniMax 视频仅支持 MiniMax/MiniMax-H3" },
+    { assert: and(gt(len(trim(ref("request.prompt"))), 0), lte(len(ref("request.prompt")), 7000)), message: "百炼 MiniMax 提示词不能为空且不能超过 7000 个字符" },
+    { assert: { $in: [ref("request.output.duration"), Array.from({ length: 12 }, (_, index) => index + 4)] }, message: "百炼 MiniMax duration 必须为 4-15 秒整数" },
+    { assert: { $in: [{ $upper: ref("request.output.resolution") }, ["768P", "2K"]] }, message: "百炼 MiniMax resolution 仅支持 768P 或 2K" },
+    { assert: eq(len(filter(minimaxInputs, "media", { $not: { $or: [
+      and(eq(ref("media.kind"), "image"), { $in: [ref("media.role"), ["", "first_frame", "last_frame", "reference_image", "subject_reference", "style_reference"]] }),
+      and(eq(ref("media.kind"), "video"), { $in: [ref("media.role"), ["", "reference_video"]] }),
+      and(eq(ref("media.kind"), "audio"), { $in: [ref("media.role"), ["", "reference_audio", "reference_voice"]] })
+    ] } })), 0), message: "百炼 MiniMax 媒体类型或角色不受支持" },
+    { assert: eq(len(filter(minimaxInputs, "media", { $not: { $in: [first(split(ref("media.value"), "://")), ["http", "https"]] } })), 0), message: "百炼 MiniMax 媒体必须使用 HTTP 或 HTTPS 公网 URL" },
+    { assert: lte(len(minimaxMedia("image")), 9), message: "百炼 MiniMax 最多支持 9 张参考图片" },
+    { assert: lte(len(minimaxMedia("video")), 3), message: "百炼 MiniMax 最多支持 3 个参考视频" },
+    { assert: lte(len(minimaxMedia("audio")), 3), message: "百炼 MiniMax 最多支持 3 个参考音频" },
+    ...[["first_frame", "首帧"], ["last_frame", "尾帧"]].map(([role, label]) => ({
+      assert: lte(len(minimaxMedia("image", [role])), 1), message: `百炼 MiniMax 最多只能有一个${label}`
+    })),
+    { assert: { $or: [eq(len(minimaxKeyframes), 0), eq(len(minimaxKeyframes), len(minimaxInputs))] }, message: "百炼 MiniMax 首尾帧不能与参考图片、视频或音频混用" },
+    { assert: { $or: [gt(len(minimaxKeyframes), 0), { $in: [coalesce(minimaxRatio, "adaptive"), ["adaptive", "16:9", "9:16", "1:1", "4:3", "3:4", "21:9"]] }] }, message: "百炼 MiniMax ratio 不受支持" },
+    { assert: { $or: [gt(len(minimaxInputs), 0), { $in: [minimaxRatio, ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9"]] }] }, message: "百炼 MiniMax 文生视频必须指定具体画幅比例，不能使用 adaptive" }
+  ],
+  create: jsonCreate("/api/v1/services/aigc/video-generation/video-synthesis", {
+    model: ref("request.model"),
+    input: {
+      prompt: ref("request.prompt"),
+      media: omit(map(sorted(minimaxInputs), "media", {
+        type: conditional(eq(ref("media.kind"), "image"),
+          conditional({ $in: [ref("media.role"), ["first_frame", "last_frame"]] }, ref("media.role"), "image_url"),
+          conditional(eq(ref("media.kind"), "video"), "feature", "driving_audio")),
+        url: ref("media.value")
+      }))
+    },
+    parameters: {
+      resolution: { $upper: ref("request.output.resolution") },
+      ratio: conditional(gt(len(minimaxKeyframes), 0), "adaptive", coalesce(minimaxRatio, "adaptive")),
+      duration: ref("request.output.duration"),
+      watermark: coalesce(ref("request.output.watermark"), false)
+    }
+  }, { headers: { "X-DashScope-Async": "enable" }, originPath: true }),
+  poll: { method: "GET", path: "/api/v1/tasks/{{taskId}}", originPath: true },
+  response: {
+    taskId: coalesce(ref("response.output.task_id"), ref("taskId")),
+    status: conditional(eq(ref("response.output.task_status"), "UNKNOWN"), "failed", ref("response.output.task_status")),
+    message: coalesce(ref("response.output.message"), ref("response.message"), conditional(eq(ref("response.output.task_status"), "UNKNOWN"), "百炼 MiniMax 任务不存在或已超过 24 小时查询有效期")),
+    videos: ref("response.output.video_url"), usage: ref("response.usage"),
+    errorPaths: ["code", "output.code"], resultEphemeral: true
+  },
+  notes: `适配阿里云百炼 MiniMax/MiniMax-H3，渠道 Base URL 使用百炼业务空间 Endpoint。\n\n首帧、尾帧各最多 1 张，支持仅尾帧；首尾帧与多模态参考互斥。参考图最多 9 张、每张 30 MB，JPG/JPEG/PNG/WEBP/HEIC/HEIF，宽高 256-5760、宽高比 0.4-2.5。参考视频最多 3 个、每个 50 MB、2-15 秒且总时长不超过 15 秒，MP4/MOV、23.976-60 fps，宽高和比例限制同图片。音频最多 3 个、每个 15 MB、2-15 秒且总时长不超过 15 秒，WAV/MP3。插件校验已提供的角色、数量、URL、提示词和生成规格；媒体编码、尺寸、帧率及参考总时长仍需满足上游限制，不在协议模板内执行媒体探测。\n\n不发送原生 content[]、generate_audio、seed 或 prompt_optimizer，也不开放绕过统一媒体校验的 raw media 扩展。创建任务后仅轮询原 task_id，UNKNOWN 终止为失败；任务查询有效期 24 小时，结果 URL 有效期 30 天，宿主持久化临时结果。usage 保留输入视频、输出视频和图片计数，不把供应商统计直接改写为本地计费规则。\n\n官方接口：[MiniMax 视频生成 API](https://docs.bailian.console.aliyun.com/zh/model-studio/minimax-video-generation-api-reference)。`
+});
+
 const wan3MediaType = coalesce(
   ref("media.role"),
   conditional(eq(ref("media.kind"), "image"), "reference_image", conditional(
@@ -1086,6 +1216,55 @@ add({
       enable_thinking: false,
       negative_prompt: omit(ref("request.providerOptions.dashscope-qwen-image.negative_prompt")),
       seed: omit(ref("request.providerOptions.dashscope-qwen-image.seed")),
+      watermark: omit(ref("request.watermark"))
+    }
+  }, { headers: { "X-DashScope-Async": "enable" }, originPath: true }),
+  poll: { method: "GET", path: "/api/v1/tasks/{{taskId}}", originPath: true },
+  response: asyncResponse("image", {
+    taskId: coalesce(ref("response.output.task_id"), ref("response.task_id"), ref("taskId")),
+    status: coalesce(ref("response.output.task_status"), ref("response.status"), "pending"),
+    message: coalesce(ref("response.output.message"), ref("response.message")),
+    images: map(ref("response.output.choices.0.message.content"), "item", { url: omit(ref("item.image")) }),
+    errorPaths: ["code", "output.code"], messagePaths: ["message", "output.message"]
+  })
+});
+
+// 千问 AI 平台（QianWenAI MAAS）是阿里独立的 MaaS 站点，网关域名是
+// maas.qianwenaiapi.com，与百炼的 dashscope.aliyuncs.com 不是同一入口，因此单列一个插件。
+// 它同样走多模态图像端点 multimodal-generation/generation，报文形状与百炼一致
+// （input.messages[].content[].image + text），但不能复用百炼插件：改 Base URL 后仍指向
+// dashscope.aliyuncs.com，请求会打到没有开通该模型的站点。
+const qianwenaiMaasImageSizes = [
+  ["1:1", "1024*1024"], ["3:4", "960*1280"], ["4:3", "1280*960"], ["2:3", "1024*1536"], ["3:2", "1536*1024"],
+  ["9:16", "864*1536"], ["16:9", "1536*864"],
+  ["1024x1024", "1024*1024"], ["1024x1536", "1024*1536"], ["1536x1024", "1536*1024"],
+  ["1024x1280", "1024*1280"], ["1280x1024", "1280*1024"], ["960x1280", "960*1280"], ["1280x960", "1280*960"]
+];
+
+add({
+  id: "qianwenai-maas-image", providerId: "qianwenai-maas-image", name: "QianWenAI MAAS", vendor: "Alibaba QianWenAI", capability: "image",
+  baseUrl: "https://maas.qianwenaiapi.com", auth: bearer, params: imageParams, requiresPublicMediaUrls: false,
+  notes: "千问 AI 平台（QianWenAI MAAS）多模态图像端点（multimodal-generation 异步任务）。文生图与图生图共用同一入口：不传 image 为文生图，传参考图为图生图。参考图通过 input.messages[].content[].image 传输（优先 Base64 data URL）。size 采用“宽*高”，未登记的档位省略并由模型自动推荐；enable_thinking 固定为 false，因为官方要求非流式调用关闭思考模式。",
+  create: jsonCreate("/api/v1/services/aigc/multimodal-generation/generation", {
+    model: ref("request.model"),
+    input: {
+      messages: [{
+        role: "user",
+        content: {
+          $concatArrays: [
+            map(sorted(ref("request.images")), "media", { image: coalesce(ref("media.dataUrl"), ref("media.url")) }),
+            [{ text: ref("request.prompt") }]
+          ]
+        }
+      }]
+    },
+    parameters: {
+      size: omit({ $switch: { cases: qianwenaiMaasImageSizes.map(([ratio, size]) => ({ when: eq(ref("request.aspectRatio"), ratio), then: size })), default: null } }),
+      n: conditional(gt({ $toInt: ref("request.imageCount") }, 0), { $toInt: ref("request.imageCount") }, 1),
+      prompt_extend: true,
+      enable_thinking: false,
+      negative_prompt: omit(ref("request.providerOptions.qianwenai-maas-image.negative_prompt")),
+      seed: omit(ref("request.providerOptions.qianwenai-maas-image.seed")),
       watermark: omit(ref("request.watermark"))
     }
   }, { headers: { "X-DashScope-Async": "enable" }, originPath: true }),
@@ -1289,7 +1468,19 @@ if (requestedPackageIDs.size > 0 && selectedSpecs.length !== requestedPackageIDs
   throw new Error(`unknown protocol package id(s): ${missing.join(", ")}`);
 }
 
+const missingSpecs = [];
 for (const spec of selectedSpecs) {
+  try {
+    JSON.parse(await readFile(join(root, spec.id, "manifest.json"), "utf8"));
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+    missingSpecs.push(spec);
+  }
+}
+
+// Maintained manifests are the build contract. This tool scaffolds new folders;
+// seed definitions must not overwrite reviewed parameters, IDs, or local changes.
+for (const spec of missingSpecs) {
   const dir = join(root, spec.id);
   await mkdir(join(dir, "docs"), { recursive: true });
   await writeFile(join(dir, "manifest.json"), JSON.stringify(manifestFor(spec), null, 2) + "\n");
@@ -1297,5 +1488,8 @@ for (const spec of selectedSpecs) {
   await writeFile(join(dir, "docs", "interface.md"), docsFor(spec));
 }
 
-console.log(`generated ${selectedSpecs.length} protocol packages`);
-await import("./embed-documentation.mjs");
+console.log(`generated ${missingSpecs.length} new protocol packages; preserved ${selectedSpecs.length - missingSpecs.length} maintained manifests`);
+if (missingSpecs.length > 0) {
+  process.argv = [...process.argv.slice(0, 2), ...missingSpecs.map((spec) => spec.id)];
+  await import("./embed-documentation.mjs");
+}

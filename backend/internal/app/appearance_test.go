@@ -55,7 +55,7 @@ func TestAppearanceContractsIgnoreLegacySkinFields(t *testing.T) {
 		if strings.Contains(string(encoded), "skinId") || strings.Contains(string(encoded), "skinThemes") || strings.Contains(string(encoded), "activeSkin") {
 			t.Fatalf("appearance response still exposes removed skin fields: %s", encoded)
 		}
-		if !strings.Contains(string(encoded), `"schemaVersion":13`) {
+		if !strings.Contains(string(encoded), `"schemaVersion":14`) {
 			t.Fatalf("appearance response schema version = %s", encoded)
 		}
 	}
@@ -112,7 +112,7 @@ func TestAppearanceBackfillsVersionEightFieldsAndIgnoresLegacySkin(t *testing.T)
 	if err := db.Where("key = ?", appearanceSettingKey).First(&saved).Error; err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(saved.ValueJSON, "skinId") || strings.Contains(saved.ValueJSON, "skinThemes") || !strings.Contains(saved.ValueJSON, `"schemaVersion":13`) {
+	if strings.Contains(saved.ValueJSON, "skinId") || strings.Contains(saved.ValueJSON, "skinThemes") || !strings.Contains(saved.ValueJSON, `"schemaVersion":14`) {
 		t.Fatalf("saved appearance retained removed skin fields: %s", saved.ValueJSON)
 	}
 }
@@ -121,7 +121,7 @@ func TestAppearanceMigratesEarlierBuiltInIdentity(t *testing.T) {
 	svc, db, _, _ := newAppearanceTestService(t)
 	earlierName := string([]rune{24433, 31574})
 	legacy := defaultAppearanceSetting()
-	legacy.SchemaVersion = appearanceSchemaVersion - 1
+	legacy.SchemaVersion = legacyAppearanceIdentitySchemaVersion - 1
 	legacy.BrandName = earlierName
 	legacy.Canvas.AgentName = earlierName
 	legacy.SEOTitle = earlierName
@@ -145,7 +145,7 @@ func TestAppearanceMigratesEarlierBuiltInIdentity(t *testing.T) {
 	if err := db.Where("key = ?", appearanceSettingKey).First(&saved).Error; err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(saved.ValueJSON, earlierName) || !strings.Contains(saved.ValueJSON, `"schemaVersion":13`) {
+	if strings.Contains(saved.ValueJSON, earlierName) || !strings.Contains(saved.ValueJSON, `"schemaVersion":14`) {
 		t.Fatalf("persisted appearance was not migrated: %s", saved.ValueJSON)
 	}
 }

@@ -202,6 +202,8 @@ export function AdminUserDetailModal({ userId, onClose, previousUserId, nextUser
                                             { key: "role", label: "角色", children: detail.user.role === "admin" ? "管理员" : "普通用户" },
                                             { key: "status", label: "状态", children: <AdminStatusBadge label={detail.user.status === "active" ? "启用" : "停用"} tone={detail.user.status === "active" ? "success" : "neutral"} /> },
                                             { key: "available", label: "可用积分", children: formatCredits(detail.account.availableMicrocredits) },
+                                            { key: "recharge", label: "累计充值积分", children: typeof detail.counts.rechargeMicrocredits === "number" ? formatCredits(detail.counts.rechargeMicrocredits) : "未提供" },
+                                            { key: "checkin", label: "累计签到积分", children: typeof detail.counts.checkinMicrocredits === "number" ? formatCredits(detail.counts.checkinMicrocredits) : "未提供" },
                                             { key: "reserved", label: "冻结积分", children: formatCredits(detail.account.reservedMicrocredits) },
                                             { key: "created", label: "注册时间", children: formatTime(detail.user.createdAt) },
                                             { key: "login", label: "最后登录", children: formatTime(detail.user.lastLoginAt) },
@@ -352,7 +354,9 @@ export function AdminUserDetailModal({ userId, onClose, previousUserId, nextUser
                                         pagination: false,
                                         tableLayout: "fixed",
                                         columns: [
-                                            { title: "登录时间", dataIndex: "createdAt", width: 170, render: formatTime },
+                                            { title: "事件时间", dataIndex: "createdAt", width: 170, render: formatTime },
+                                            { title: "事件", width: 100, render: (_, event) => event.event === "logout" ? "主动退出" : event.source === "registration" ? "注册登录" : "登录" },
+                                            { title: "结果", width: 85, render: (_, event) => <AdminStatusBadge tone={event.result === "failed" ? "error" : "success"} label={event.result === "failed" ? "失败" : "成功"} /> },
                                             { title: "登录方式", dataIndex: "loginMethod", width: 105, render: loginMethodLabel },
                                             { title: "IP 地址", dataIndex: "ipAddress", width: 145, ellipsis: true, render: (value) => <span className="font-mono text-xs" title={fallbackText(value)}>{fallbackText(value)}</span> },
                                             { title: "设备", dataIndex: "deviceType", width: 85, render: fallbackText },
@@ -375,7 +379,7 @@ export function AdminUserDetailModal({ userId, onClose, previousUserId, nextUser
                                             expandedRowRender: (event) => <LoginEventDetails event={event} />,
                                             onExpand: (expanded, event) => setExpandedLoginEventId(expanded ? event.id : ""),
                                         },
-                                        scroll: { x: 900 },
+                                        scroll: { x: 1085 },
                                     }}
                                     empty={<AdminTableEmpty filtered={loginFiltersActive} title="没有登录环境记录" />}
                                     footer={(
@@ -433,7 +437,9 @@ function LoginEventDetails({ event }: { event: AdminUserLoginEvent }) {
             size="small"
             column={{ xs: 1, sm: 2 }}
             items={[
-                { key: "createdAt", label: "登录时间", children: formatTime(event.createdAt) },
+                { key: "createdAt", label: "事件时间", children: formatTime(event.createdAt) },
+                { key: "event", label: "事件", children: event.event === "logout" ? "主动退出" : event.source === "registration" ? "注册登录" : "登录" },
+                { key: "result", label: "结果", children: event.result === "failed" ? "失败" : "成功" },
                 { key: "loginMethod", label: "登录方式", children: loginMethodLabel(event.loginMethod) },
                 { key: "ipAddress", label: "IP 地址", children: <span className="font-mono text-xs">{fallbackText(event.ipAddress)}</span> },
                 { key: "deviceType", label: "设备", children: fallbackText(event.deviceType) },
@@ -475,7 +481,7 @@ function environmentName(name?: string, version?: string) {
 }
 
 function loginMethodLabel(value?: string) {
-    return ({ email_register: "邮箱注册", password: "密码登录", linuxdo: "Linux.do" } as Record<string, string>)[value || ""] || value || "--";
+    return ({ email_register: "邮箱注册", password: "密码", email: "邮箱验证码", sms: "短信验证码", linuxdo: "Linux.do", verification: "验证码", unknown: "未记录" } as Record<string, string>)[value || ""] || value || "--";
 }
 
 function taskStatusTone(value?: string): AdminStatusTone {

@@ -47,7 +47,8 @@ func TestProviderPollingDeadlineDefaultsToOneHour(t *testing.T) {
 
 func TestOnlyResumableNewAPIChannel2VideoDeadlinesStayRunning(t *testing.T) {
 	svc := &Service{}
-	input, err := json.Marshal(canvasGenerationInput{Mode: "video", Config: providerConfig{BaseURL: "https://example.com", InterfaceType: string(model.ChannelInterfaceNewAPIChannel2)}})
+	// Only validate policy here; a public IP keeps SSRF checks without external DNS.
+	input, err := json.Marshal(canvasGenerationInput{Mode: "video", Config: providerConfig{BaseURL: "https://93.184.216.34", InterfaceType: string(model.ChannelInterfaceNewAPIChannel2)}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,12 +84,47 @@ func TestOnlyResumableNewAPIChannel2VideoDeadlinesStayRunning(t *testing.T) {
 	if svc.shouldDeferVideoProviderTask(base, string(input), providerHTTPError{StatusCode: 400, Body: `{"code":"task_not_exist"}`}) {
 		t.Fatal("untyped provider error must not be deferred")
 	}
-	other, err := json.Marshal(canvasGenerationInput{Mode: "video", Config: providerConfig{BaseURL: "https://example.com", InterfaceType: string(model.ChannelInterfaceNewAPIVideo)}})
+	other, err := json.Marshal(canvasGenerationInput{Mode: "video", Config: providerConfig{BaseURL: "https://93.184.216.34", InterfaceType: string(model.ChannelInterfaceNewAPIVideo)}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if svc.shouldDeferVideoProviderTask(base, string(other), context.DeadlineExceeded) {
 		t.Fatal("providers without a verified query-only resume contract must fail closed")
+	}
+}
+
+func TestResumableImageProviderDeadlineOnlyForAsyncProtocols(t *testing.T) {
+	svc := &Service{}
+	imageInput, err := json.Marshal(canvasGenerationInput{
+		Mode: "image",
+		Config: providerConfig{
+			BaseURL:       "https://93.184.216.34",
+			APIKey:        "test-key",
+			InterfaceType: string(model.ChannelInterfaceVolcengineJiMengImage),
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	startedAt := time.Now()
+	task := model.Task{ID: "image-task-1", Type: "canvas_image", ProviderRequestID: "image-provider-task-1", StartedAt: &startedAt}
+	if !svc.shouldDeferProviderTask(task, string(imageInput), context.DeadlineExceeded) {
+		t.Fatal("async image provider with a persisted task ID should remain queued for recovery")
+	}
+
+	syncInput, err := json.Marshal(canvasGenerationInput{
+		Mode: "image",
+		Config: providerConfig{
+			BaseURL:       "https://93.184.216.34",
+			APIKey:        "test-key",
+			InterfaceType: string(model.ChannelInterfaceOpenAIImage),
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if svc.shouldDeferProviderTask(task, string(syncInput), context.DeadlineExceeded) {
+		t.Fatal("synchronous image provider must fail on its execution deadline")
 	}
 }
 
@@ -102,7 +138,7 @@ func TestResumableVideoDeadlineUsesResolvedSystemChannelProtocol(t *testing.T) {
 	}
 	channel := model.ModelChannel{
 		ID: "channel-video", UserID: "admin", Scope: model.ChannelScopeSystem, Enabled: true, Name: "Video",
-		BaseURL: "https://example.com", APIKey: "test-key", APIFormat: "openai", ModelsJSON: `["video-model"]`,
+		BaseURL: "https://93.184.216.34", APIKey: "test-key", APIFormat: "openai", ModelsJSON: `["video-model"]`,
 	}
 	channelModel := model.ChannelModel{
 		ID: "model-video", ChannelID: channel.ID, ModelKey: "video-model", Capability: "video",

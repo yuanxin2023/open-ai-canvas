@@ -43,11 +43,17 @@ const (
 	FeatureCustomChannels              = app.FeatureCustomChannels
 	FeatureFrontendModels              = app.FeatureFrontendModels
 	FeatureSkillLibrary                = app.FeatureSkillLibrary
+	FeatureImageWorkbench              = app.FeatureImageWorkbench
 	FeaturePluginCenter                = app.FeaturePluginCenter
 	FeatureShortDrama                  = app.FeatureShortDrama
 	FeatureSystemPlugins               = app.FeatureSystemPlugins
+	FeatureInspirationSources          = app.FeatureInspirationSources
+	FeatureInspirationHall             = app.FeatureInspirationHall
+	FeatureInspirationGallery          = app.FeatureInspirationGallery
+	FeatureUserFeedback                = app.FeatureUserFeedback
 	FeatureTaskCenter                  = app.FeatureTaskCenter
 	FeatureTimelineTranscription       = app.FeatureTimelineTranscription
+	FeatureVideoWorkbench              = app.FeatureVideoWorkbench
 	ModelCatalogSourceSystem           = app.ModelCatalogSourceSystem
 	PaymentPluginAlipayPage            = app.PaymentPluginAlipayPage
 	PaymentPluginWeChatNative          = app.PaymentPluginWeChatNative
@@ -73,6 +79,7 @@ const (
 	ReasonBadGateway                   = app.ReasonBadGateway
 	ReasonUpstreamDNSFailed            = app.ReasonUpstreamDNSFailed
 	ReasonConflict                     = app.ReasonConflict
+	ReasonProjectNameConflict          = app.ReasonProjectNameConflict
 	ReasonFailedPrecondition           = app.ReasonFailedPrecondition
 	ReasonForbidden                    = app.ReasonForbidden
 	ReasonInternal                     = app.ReasonInternal

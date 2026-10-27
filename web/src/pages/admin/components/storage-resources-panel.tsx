@@ -1,4 +1,4 @@
-import { App, Button, Input, Modal, Select } from "antd";
+import { App, Button, Input, Modal } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { Download, Eye, Search, Trash2 } from "lucide-react";
 import { saveAs } from "file-saver";
@@ -10,6 +10,8 @@ import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { searchAdminUserReferences, type AdminUserReference } from "@/services/api/auth";
 import { adminResourceFileUrl, deleteAdminResources, downloadAdminResource, getAdminStorageStats, listAdminResources, previewAdminResourceDelete, type AdminStorageResource, type AdminStorageStats } from "@/services/api/admin-storage";
 import { AdminBatchBar, AdminDataTable, AdminFilterChip, AdminStatTile, AdminStatusBadge, AdminTableEmpty } from "./admin-ui";
+import { Select } from "@/components/ui/base/select";
+import { AdminSearchInput } from "./admin-search-input";
 
 const pageSizes = [20, 50, 100];
 
@@ -46,7 +48,7 @@ export default function StorageResourcesPanel() {
     const updateUrl = (patch: Record<string, string | number>, replace = false) => {
         const next = new URLSearchParams(searchParams);
         Object.entries(patch).forEach(([key, value]) => {
-            const isDefault = ((key === "filter" || key === "userId") && value === "") || (["kind", "status", "provider"].includes(key) && value === "all") || (key === "page" && value === 1) || (key === "pageSize" && value === 20);
+            const isDefault = ((key === "filter" || key === "user" || key === "userId") && value === "") || (["kind", "status", "provider"].includes(key) && value === "all") || (key === "page" && value === 1) || (key === "pageSize" && value === 20);
             if (isDefault) next.delete(key);
             else next.set(key, String(value));
         });
@@ -247,7 +249,7 @@ export default function StorageResourcesPanel() {
             <AdminDataTable
                 toolbar={
                     <div className="admin-storage-resource-filters">
-                        <Input
+                        <AdminSearchInput
                             aria-label="搜索资源"
                             autoComplete="off"
                             allowClear
@@ -255,7 +257,7 @@ export default function StorageResourcesPanel() {
                             prefix={<Search className="size-4 text-foreground/40" />}
                             value={keyword}
                             placeholder="资源 ID 或对象路径"
-                            onChange={(event) => updateUrl({ filter: event.target.value, page: 1 }, true)}
+                            onValueChange={(value) => updateUrl({ filter: value, page: 1 }, true)}
                         />
                         <Select
                             aria-label="按用户筛选"
@@ -288,7 +290,7 @@ export default function StorageResourcesPanel() {
                     </>
                 }
                 toolbarActive={hasFilters}
-                onReset={() => updateUrl({ filter: "", userId: "", kind: "all", status: "all", provider: "all", page: 1 })}
+                onReset={() => updateUrl({ filter: "", user: "", userId: "", kind: "all", status: "all", provider: "all", page: 1 })}
                 batchActions={
                     <AdminBatchBar count={selectedIds.length} onClear={() => setSelectedIds([])}>
                         <Button danger size="small" icon={<Trash2 className="size-3.5" />} loading={deleting} onClick={() => void confirmDelete(selectedIds)}>

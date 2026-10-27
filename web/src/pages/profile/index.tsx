@@ -6,9 +6,11 @@ import { useLocation, useNavigate } from "react-router";
 import { UserAvatar } from "@/components/layout/user-avatar";
 import { AppModal } from "@/components/ui/product/app-modal";
 import { normalizeUsername, usernameValidationMessage } from "@/lib/username";
-import { changePassword, updateProfile } from "@/services/api/auth";
+import { DEFAULT_USER_AVATARS, type DefaultUserAvatarID } from "@/lib/default-user-avatars";
+import { updateProfile } from "@/services/api/auth";
 import { resourceFileUrl, uploadResourceFile } from "@/services/api/resources";
 import { useUserStore, type LocalUser } from "@/stores/use-user-store";
+import { AccountSecurityPanel } from "./account-security-panel";
 
 const MAX_AVATAR_BYTES = 2 << 20;
 const AVATAR_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
@@ -23,29 +25,33 @@ export default function ProfilePage() {
     const [username, setUsername] = useState(initialUsername);
     const [avatarResourceId, setAvatarResourceId] = useState(user?.avatarResourceId || "");
     const [avatarUrl, setAvatarUrl] = useState(user?.avatarUrl || "");
+    const [avatarPreset, setAvatarPreset] = useState<DefaultUserAvatarID | null>(null);
+    const [showAvatarPresets, setShowAvatarPresets] = useState(false);
     const [saving, setSaving] = useState(false);
     const [uploading, setUploading] = useState(false);
-    const [changingPassword, setChangingPassword] = useState(false);
-    const [currentPassword, setCurrentPassword] = useState("");
-    const [newPassword, setNewPassword] = useState("");
-    const [confirmPassword, setConfirmPassword] = useState("");
+    const [securityBusy, setSecurityBusy] = useState(false);
     const [copied, setCopied] = useState(false);
-    const [activeSection, setActiveSection] = useState<"profile" | "password">("profile");
+    const [activeSection, setActiveSection] = useState<"profile" | "password">(new URLSearchParams(location.search).get("section") === "security" ? "password" : "profile");
 
     useEffect(() => {
         const nextUsername = user?.username || "";
         setUsername(nextUsername);
+    }, [user?.id, user?.username]);
+
+    useEffect(() => {
         setAvatarResourceId(user?.avatarResourceId || "");
         setAvatarUrl(user?.avatarUrl || "");
-    }, [user]);
+        setAvatarPreset(null);
+    }, [user?.id, user?.avatarResourceId, user?.avatarUrl, user?.avatarMode, user?.avatarPreset]);
 
     const normalizedUsername = normalizeUsername(username);
     const usernameChanged = normalizedUsername !== normalizeUsername(initialUsername);
     const usernameError = usernameChanged ? usernameValidationMessage(normalizedUsername) : "";
-    const unchanged = !usernameChanged && avatarResourceId === (user?.avatarResourceId || "");
+    const avatarUnchanged = avatarPreset === null ? avatarResourceId === (user?.avatarResourceId || "") : user?.avatarMode === "default" && (user.avatarPreset || "person") === avatarPreset;
+    const unchanged = !usernameChanged && avatarUnchanged;
     const registeredAt = useMemo(() => formatRegistrationTime(user?.createdAt), [user?.createdAt]);
     const returnTo = profileReturnPath(location.state);
-    const busy = saving || uploading || changingPassword;
+    const busy = saving || uploading || securityBusy;
 
     if (!user) return null;
 
@@ -57,7 +63,10 @@ export default function ProfilePage() {
     const saveProfile = async () => {
         setSaving(true);
         try {
-            const result = await updateProfile({ username: usernameChanged ? normalizedUsername : initialUsername, avatarResourceId });
+            const result = await updateProfile({
+                username: usernameChanged ? normalizedUsername : initialUsername,
+                ...(avatarPreset === null ? { avatarResourceId } : { avatarPreset }),
+            });
             setUser(result.user);
             message.success("个人资料已保存");
             navigate(returnTo, { replace: true });
@@ -90,39 +99,6 @@ export default function ProfilePage() {
         });
     };
 
-    const submitPassword = async (event: FormEvent<HTMLFormElement>) => {
-        event.preventDefault();
-        if (!currentPassword) {
-            message.warning("请输入当前密码");
-            return;
-        }
-        if ([...newPassword].length < 8) {
-            message.warning("新密码至少需要 8 个字符");
-            return;
-        }
-        if (newPassword !== confirmPassword) {
-            message.warning("两次输入的新密码不一致");
-            return;
-        }
-        if (newPassword === currentPassword) {
-            message.warning("新密码不能与当前密码相同");
-            return;
-        }
-
-        setChangingPassword(true);
-        try {
-            await changePassword({ currentPassword, newPassword });
-            setCurrentPassword("");
-            setNewPassword("");
-            setConfirmPassword("");
-            message.success("密码已修改，其他设备需要重新登录");
-        } catch (error) {
-            message.error(error instanceof Error ? error.message : "修改密码失败");
-        } finally {
-            setChangingPassword(false);
-        }
-    };
-
     const selectAvatar = async (event: ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         event.target.value = "";
@@ -143,6 +119,7 @@ export default function ProfilePage() {
             });
             setAvatarResourceId(resource.id);
             setAvatarUrl(resourceFileUrl(resource.id));
+            setAvatarPreset(null);
             message.success("头像已上传，保存资料后生效");
         } catch (error) {
             message.error(error instanceof Error ? error.message : "头像上传失败");
@@ -162,7 +139,12 @@ export default function ProfilePage() {
         }
     };
 
-    const previewUser = { ...user, avatarUrl: avatarUrl || undefined };
+    const previewUser = {
+        ...user,
+        avatarUrl: avatarUrl || undefined,
+        avatarMode: avatarPreset !== null ? ("default" as const) : avatarResourceId !== (user.avatarResourceId || "") ? ("" as const) : user.avatarMode,
+        avatarPreset: avatarPreset || user.avatarPreset,
+    };
 
     return (
         <AppModal flush centered open title={null} footer={null} width="min(960px, calc(100vw - 24px))" maskClosable={!busy} keyboard={!busy} closable={!busy} onCancel={close}>
@@ -216,18 +198,22 @@ export default function ProfilePage() {
                                             </div>
                                             <div className="flex shrink-0 flex-wrap gap-2">
                                                 <input ref={inputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => void selectAvatar(event)} />
-                                                <Button htmlType="button" icon={<Camera className="size-4" />} loading={uploading} onClick={() => inputRef.current?.click()}>
+                                                <Button htmlType="button" icon={<Camera className="size-4" />} loading={uploading} disabled={busy} onClick={() => inputRef.current?.click()}>
                                                     {avatarResourceId ? "更换头像" : "上传头像"}
+                                                </Button>
+                                                <Button htmlType="button" icon={<UserRound className="size-4" />} disabled={busy} onClick={() => setShowAvatarPresets((value) => !value)}>
+                                                    系统头像
                                                 </Button>
                                                 {avatarResourceId || avatarUrl ? (
                                                     <Button
                                                         htmlType="button"
                                                         danger
                                                         icon={<Trash2 className="size-4" />}
-                                                        disabled={uploading}
+                                                        disabled={busy}
                                                         onClick={() => {
                                                             setAvatarResourceId("");
                                                             setAvatarUrl("");
+                                                            setAvatarPreset("person");
                                                         }}
                                                     >
                                                         移除
@@ -235,6 +221,30 @@ export default function ProfilePage() {
                                                 ) : null}
                                             </div>
                                         </div>
+                                        {showAvatarPresets ? (
+                                            <div className="mt-5 grid grid-cols-4 gap-2 sm:grid-cols-8" role="group" aria-label="系统头像">
+                                                {DEFAULT_USER_AVATARS.map((preset) => {
+                                                    const selected = avatarPreset === preset.id || (avatarPreset === null && user.avatarMode === "default" && (user.avatarPreset || "person") === preset.id);
+                                                    return (
+                                                        <button
+                                                            key={preset.id}
+                                                            type="button"
+                                                            aria-pressed={selected}
+                                                            disabled={busy}
+                                                            className={`flex flex-col items-center gap-2 rounded-xl border p-3 text-xs focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${selected ? "border-[var(--control-selected-fg)] bg-[var(--control-selected-bg)] text-[var(--control-selected-fg)]" : "border-[var(--user-border)] text-[var(--user-ink-muted)] hover:bg-[var(--user-surface-hover)]"}`}
+                                                            onClick={() => {
+                                                                setAvatarPreset(preset.id);
+                                                                setAvatarResourceId("");
+                                                                setAvatarUrl("");
+                                                            }}
+                                                        >
+                                                            <UserAvatar user={{ ...user, avatarMode: "default", avatarPreset: preset.id }} className="size-7" />
+                                                            {preset.label}
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        ) : null}
                                     </section>
 
                                     <section className="border-t border-[var(--user-border)] p-5 sm:p-7">
@@ -258,7 +268,7 @@ export default function ProfilePage() {
 
                                     <section className="border-t border-[var(--user-border)] p-5 sm:p-7">
                                         <h3 className="text-base font-semibold">账户信息</h3>
-                                        <p className="mt-1 text-sm text-[var(--user-ink-muted)]">以下信息用于识别账户，不能在此修改。</p>
+                                        <p className="mt-1 text-sm text-[var(--user-ink-muted)]">以下信息用于识别账户；联系方式可在账号安全中验证和修改。</p>
                                         <dl className="mt-5 divide-y divide-[var(--user-border)] rounded-xl border border-[var(--user-border)] px-4">
                                             <InfoRow icon={<Mail />} label="邮箱" value={user.email || "未绑定邮箱"} />
                                             <InfoRow icon={<CalendarDays />} label="注册时间" value={registeredAt} />
@@ -285,41 +295,7 @@ export default function ProfilePage() {
                         </>
                     ) : (
                         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-5 sm:p-7">
-                            <form className="overflow-hidden rounded-xl border border-[var(--user-border)] bg-[var(--user-surface)]" onSubmit={submitPassword}>
-                                <div className="border-b border-[var(--user-border)] px-4 py-4 sm:px-5">
-                                    <div className="flex items-center gap-2">
-                                        <LockKeyhole className="size-4 text-[var(--user-ink-soft)]" />
-                                        <h3 className="text-base font-semibold">修改登录密码</h3>
-                                    </div>
-                                    <p className="mt-1 text-sm text-[var(--user-ink-muted)]">修改成功后保留当前登录，其他设备需要重新登录。</p>
-                                </div>
-                                <div className="space-y-5 bg-[var(--user-surface-muted)] p-4 sm:p-5">
-                                    <div>
-                                        <label htmlFor="current-password" className="mb-2 block text-sm font-medium">
-                                            当前密码
-                                        </label>
-                                        <Input.Password id="current-password" size="large" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} autoComplete="current-password" disabled={changingPassword} />
-                                    </div>
-                                    <div>
-                                        <label htmlFor="new-password" className="mb-2 block text-sm font-medium">
-                                            新密码
-                                        </label>
-                                        <Input.Password id="new-password" size="large" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} autoComplete="new-password" disabled={changingPassword} />
-                                        <p className="mt-2 text-xs text-[var(--user-ink-muted)]">密码至少需要 8 个字符。</p>
-                                    </div>
-                                    <div>
-                                        <label htmlFor="confirm-password" className="mb-2 block text-sm font-medium">
-                                            确认新密码
-                                        </label>
-                                        <Input.Password id="confirm-password" size="large" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} autoComplete="new-password" disabled={changingPassword} />
-                                    </div>
-                                    <div className="flex justify-end pt-1">
-                                        <Button type="primary" htmlType="submit" size="large" icon={<LockKeyhole className="size-4" />} loading={changingPassword} disabled={!currentPassword || !newPassword || !confirmPassword}>
-                                            修改密码
-                                        </Button>
-                                    </div>
-                                </div>
-                            </form>
+                            <AccountSecurityPanel key={user.id} onBusyChange={setSecurityBusy} />
                         </div>
                     )}
                 </main>

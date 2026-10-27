@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"infinite-canvas/backend/internal/kernel"
 	"infinite-canvas/backend/internal/model"
 
 	"gorm.io/gorm"
@@ -52,7 +53,16 @@ func validateCreditPolicy(policy CreditPolicy) error {
 	return nil
 }
 
+const creditPolicyCacheTTL = 5 * time.Minute
+
 func (s *Service) creditPolicy() (CreditPolicy, error) {
+	s.creditPolicyMu.RLock()
+	if s.creditPolicyCache != nil && time.Since(s.creditPolicyAt) < creditPolicyCacheTTL {
+		policy := *s.creditPolicyCache
+		s.creditPolicyMu.RUnlock()
+		return policy, nil
+	}
+	s.creditPolicyMu.RUnlock()
 	setting, err := s.repo.SystemSetting(creditPolicySettingKey)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return defaultCreditPolicy(), nil
@@ -70,6 +80,10 @@ func (s *Service) creditPolicy() (CreditPolicy, error) {
 	if err := validateCreditPolicy(policy); err != nil {
 		return CreditPolicy{}, err
 	}
+	s.creditPolicyMu.Lock()
+	s.creditPolicyCache = &policy
+	s.creditPolicyAt = time.Now()
+	s.creditPolicyMu.Unlock()
 	return policy, nil
 }
 
@@ -104,6 +118,9 @@ func (s *Service) UpdateCreditPolicy(actor *model.User, policy CreditPolicy) (Cr
 	if err := s.repo.SaveSystemSetting(&setting); err != nil {
 		return CreditPolicy{}, err
 	}
+	s.creditPolicyMu.Lock()
+	s.creditPolicyCache = nil
+	s.creditPolicyMu.Unlock()
 	if err := s.appendAdminAudit(actor, "credit_policy.update", "system_setting", creditPolicySettingKey, "更新积分策略", policy); err != nil {
 		return CreditPolicy{}, err
 	}
@@ -167,5 +184,5 @@ func creditAmount(unitPrice int64, quantity int64, multiplierBPS int64) (int64, 
 	if amount < 0 {
 		return 0, fmt.Errorf("积分计费金额无效：%d", amount)
 	}
-	return roundCreditAmountUp(amount)
+	return kernel.RoundCreditChargeUp(amount)
 }

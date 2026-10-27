@@ -1,5 +1,9 @@
 # SubRouter Gemini Image 接口字段
 
+## 本地合并合同
+
+保留 `subrouter-gemini-image` 插件、供应商身份和已有端点。新增参数合同沿用本插件的上游绑定；`imageResolution` 独立承载分辨率，旧 `quality=low/medium/high` 分别等价为 1K/2K/4K，`auto` 继续省略 `imageSize`。转换与价格条件同步，未知或冲突配置先拒绝执行。版本 2.2.0 表示本轮本地参数合同更新。
+
 ## 协议身份
 
 - 插件 ID：`subrouter-gemini-image`。
@@ -96,7 +100,7 @@
   "apiVersion": "open-ai-canvas.plugin/v2",
   "id": "subrouter-gemini-image",
   "name": "SubRouter Gemini Image",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "author": "SubRouter",
   "description": "SubRouter Gemini Image 独立请求协议插件。",
   "documentation": "<当前插件的完整 documentation，由 README.md 与 docs/interface.md 拼接而成；为避免 JSON 递归，此处不重复展开正文。>",
@@ -628,7 +632,69 @@
             "error.message"
           ],
           "resultEphemeral": true
-        }
+        },
+        "imageParameters": [
+          {
+            "name": "size",
+            "label": "画幅比例",
+            "type": "string",
+            "binding": "aspectRatio",
+            "encoding": "ratio",
+            "values": [
+              "1:1",
+              "2:3",
+              "3:2",
+              "3:4",
+              "4:3",
+              "4:5",
+              "5:4",
+              "9:16",
+              "16:9",
+              "21:9"
+            ],
+            "default": "1:1"
+          },
+          {
+            "name": "imageResolution",
+            "label": "分辨率",
+            "type": "string",
+            "binding": "resolution",
+            "values": [
+              "auto",
+              "1k",
+              "2k",
+              "4k"
+            ],
+            "default": "1k",
+            "pricing": true
+          },
+          {
+            "name": "count",
+            "label": "生成数量",
+            "type": "integer",
+            "binding": "imageCount",
+            "min": 1,
+            "max": 1,
+            "step": 1,
+            "default": 1
+          },
+          {
+            "name": "seed",
+            "label": "随机种子",
+            "type": "integer",
+            "binding": "providerOptions.subrouter-gemini-image.seed",
+            "enabled": false
+          },
+          {
+            "name": "temperature",
+            "label": "随机程度",
+            "type": "number",
+            "binding": "providerOptions.subrouter-gemini-image.temperature",
+            "min": 0,
+            "max": 2,
+            "enabled": false
+          }
+        ]
       }
     ]
   }

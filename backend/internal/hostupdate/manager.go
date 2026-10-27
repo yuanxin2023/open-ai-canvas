@@ -21,6 +21,8 @@ import (
 
 const maxReleaseResponseBytes = 4 << 20
 
+const DefaultRepository = "yuanxin2023/open-ai-canvas"
+
 type Config struct {
 	Repository   string
 	InstallDir   string
@@ -53,6 +55,7 @@ func (r execRunner) Run(ctx context.Context, name string, args, environment []st
 }
 
 type persistedState struct {
+	Repository      string    `json:"repository"`
 	LatestRelease   *Release  `json:"latestRelease,omitempty"`
 	LastBackup      *Backup   `json:"lastBackup,omitempty"`
 	RollbackVersion string    `json:"rollbackVersion,omitempty"`
@@ -70,7 +73,7 @@ type Manager struct {
 func NewManager(config Config) (*Manager, error) {
 	config.Repository = strings.TrimSpace(config.Repository)
 	if config.Repository == "" {
-		config.Repository = "ddcat-ai/open-ai-canvas"
+		config.Repository = DefaultRepository
 	}
 	if config.InstallDir == "" {
 		config.InstallDir = "/opt/open-ai-canvas"
@@ -108,6 +111,11 @@ func NewManager(config Config) (*Manager, error) {
 	if err := manager.loadState(); err != nil {
 		return nil, err
 	}
+	// A release checked against another source is not an approval for this source.
+	if manager.state.Repository != config.Repository {
+		manager.state.LatestRelease = nil
+		manager.state.Repository = config.Repository
+	}
 	if manager.state.Operation.Phase.Active() {
 		manager.state.Operation.Phase = PhaseManualIntervention
 		manager.state.Operation.Error = "更新器进程在操作期间退出，请检查容器与数据库状态后手动处理"
@@ -125,12 +133,13 @@ func (m *Manager) Snapshot() Status {
 
 func (m *Manager) Check(ctx context.Context) (Status, error) {
 	m.mu.Lock()
-	if m.state.Operation.Phase.Active() {
+	if m.state.Operation.Phase.Active() || m.state.Operation.Phase == PhaseChecking {
 		status := m.snapshotLocked()
 		m.mu.Unlock()
 		return status, errors.New("更新操作正在进行，暂时不能检查新版本")
 	}
 	m.state.Operation.Phase = PhaseChecking
+	m.state.Repository = m.config.Repository
 	m.state.Operation.Error = ""
 	m.appendLogLocked(PhaseChecking, "正在读取 GitHub Release")
 	_ = m.saveStateLocked()
@@ -173,10 +182,10 @@ func (m *Manager) StartUpdate(targetVersion string) (Status, error) {
 	targetVersion = strings.TrimSpace(targetVersion)
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if m.state.Operation.Phase.Active() {
+	if m.state.Operation.Phase.Active() || m.state.Operation.Phase == PhaseChecking {
 		return m.snapshotLocked(), errors.New("已有更新操作正在进行")
 	}
-	if m.state.LatestRelease == nil || m.state.LatestRelease.Version != targetVersion {
+	if m.state.Operation.Phase != PhaseReady || !IsStableReleaseVersion(targetVersion) || m.state.LatestRelease == nil || m.state.LatestRelease.Prerelease || m.state.LatestRelease.Version != targetVersion {
 		return m.snapshotLocked(), errors.New("目标版本与最近一次检查结果不一致，请重新检查更新")
 	}
 	current, err := m.currentVersion()
@@ -264,13 +273,19 @@ func (m *Manager) runUpdate(fromVersion, targetVersion string) {
 		m.failWithoutRollback(PhaseFailed, fmt.Errorf("保存旧 Compose 配置：%w", err))
 		return
 	}
+	if err := replaceFile(m.envPath(), m.previousEnvPath(), 0o600); err != nil {
+		m.failWithoutRollback(PhaseFailed, fmt.Errorf("保存旧部署环境：%w", err))
+		return
+	}
 
 	m.setPhase(PhasePulling, "拉取目标版本镜像")
-	if err := m.compose(nextCompose, targetVersion, m.config.StepTimeout, nil, "pull", "backend", "web"); err != nil {
+	targetImages := immutableImageRefs(m.config.Repository, targetVersion)
+	if err := m.composeWithImages(nextCompose, targetVersion, targetImages, m.config.StepTimeout, nil, "pull", "backend", "web", "yingce-agent"); err != nil {
 		m.failWithoutRollback(PhaseFailed, err)
 		return
 	}
-	if err := m.verifyImages(targetVersion); err != nil {
+	targetImages, err = m.verifyImages(targetVersion)
+	if err != nil {
 		m.failWithoutRollback(PhaseFailed, err)
 		return
 	}
@@ -282,13 +297,13 @@ func (m *Manager) runUpdate(fromVersion, targetVersion string) {
 	}
 
 	m.setPhase(PhaseMigrating, "执行目标版本数据库迁移")
-	if err := m.compose(nextCompose, targetVersion, m.config.StepTimeout, nil, "run", "--rm", "migrate"); err != nil {
+	if err := m.composeWithImages(nextCompose, targetVersion, targetImages, m.config.StepTimeout, nil, "run", "--rm", "migrate"); err != nil {
 		m.failWithRollback(err, fromVersion, backup)
 		return
 	}
 
 	m.setPhase(PhaseSwitching, "切换 Compose 配置与镜像版本")
-	if err := setEnvValue(m.envPath(), "CANVAS_IMAGE_TAG", strings.TrimPrefix(targetVersion, "v")); err != nil {
+	if err := setDeploymentImages(m.envPath(), targetVersion, targetImages); err != nil {
 		m.failWithRollback(err, fromVersion, backup)
 		return
 	}
@@ -297,7 +312,7 @@ func (m *Manager) runUpdate(fromVersion, targetVersion string) {
 		m.failWithRollback(err, fromVersion, backup)
 		return
 	}
-	if err := m.compose(m.composePath(), targetVersion, m.config.StepTimeout, nil, "up", "-d", "--remove-orphans", "--wait", "--wait-timeout", "600"); err != nil {
+	if err := m.composeWithImages(m.composePath(), targetVersion, targetImages, m.config.StepTimeout, nil, "up", "-d", "--remove-orphans", "--wait", "--wait-timeout", "600"); err != nil {
 		m.failWithRollback(err, fromVersion, backup)
 		return
 	}
@@ -368,10 +383,12 @@ func (m *Manager) runRollback(targetVersion string, backup Backup, automatic boo
 			failures = append(failures, fmt.Errorf("恢复旧 Compose 配置：%w", err))
 		}
 	}
-	if err := m.restoreDatabase(backup); err != nil {
-		failures = append(failures, err)
+	if _, err := os.Stat(m.previousEnvPath()); err == nil {
+		if err := replaceFile(m.previousEnvPath(), m.envPath(), 0o600); err != nil {
+			failures = append(failures, fmt.Errorf("恢复旧部署环境：%w", err))
+		}
 	}
-	if err := setEnvValue(m.envPath(), "CANVAS_IMAGE_TAG", strings.TrimPrefix(targetVersion, "v")); err != nil {
+	if err := m.restoreDatabase(backup); err != nil {
 		failures = append(failures, err)
 	}
 	started := true
@@ -417,7 +434,7 @@ func (m *Manager) snapshotLocked() Status {
 		RollbackVersion: m.state.RollbackVersion,
 		Operation:       cloneOperation(m.state.Operation),
 	}
-	if status.LatestRelease != nil && err == nil {
+	if status.LatestRelease != nil && !status.LatestRelease.Prerelease && IsStableReleaseVersion(status.LatestRelease.Version) && err == nil {
 		status.UpdateAvailable = CompareVersions(current, status.LatestRelease.Version) < 0
 	}
 	return status
@@ -428,7 +445,7 @@ func (m *Manager) checks(current string, currentErr error) []Check {
 		{Key: "updater", Label: "Host Updater", Status: "passed", Detail: runtime.GOOS + "/" + runtime.GOARCH, Blocking: true},
 		{Key: "version", Label: "当前版本", Status: "passed", Detail: current, Blocking: true},
 		{Key: "backup", Label: "数据库备份 ZIP", Status: "pending", Detail: "开始更新后自动创建并校验", Blocking: true},
-		{Key: "images", Label: "目标镜像", Status: "pending", Detail: "拉取后校验仓库摘要", Blocking: true},
+		{Key: "images", Label: "目标镜像", Status: "pending", Detail: "拉取后校验自有仓库摘要、版本、来源和匹配提交", Blocking: true},
 		{Key: "migration", Label: "数据库迁移", Status: "pending", Detail: "在旧服务完全停止后执行", Blocking: true},
 	}
 	if currentErr != nil {
@@ -512,6 +529,9 @@ func (m *Manager) composePath() string {
 func (m *Manager) envPath() string { return filepath.Join(m.config.InstallDir, m.config.EnvFile) }
 func (m *Manager) previousComposePath() string {
 	return filepath.Join(m.config.StateDir, "previous-compose.yml")
+}
+func (m *Manager) previousEnvPath() string {
+	return filepath.Join(m.config.StateDir, "previous.env")
 }
 
 func randomID() string {

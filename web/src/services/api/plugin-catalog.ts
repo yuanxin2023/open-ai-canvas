@@ -2,6 +2,7 @@ import { http } from "@/services/api/request";
 import type { ModelProtocolDefinition, ProtocolCapability } from "@/lib/model-protocols";
 
 type PluginProviderCatalogItem = {
+    imageParameters?: import("@/lib/image-parameters").ImageParameter[];
     id: string;
     version: string;
     name: string;
@@ -14,6 +15,14 @@ type PluginProviderCatalogItem = {
     enabled: boolean;
     unavailableReason?: string;
     baseUrl?: string;
+    parameters?: Array<{
+        name: string;
+        type: string;
+        required?: boolean;
+        description?: string;
+        values?: string[];
+        mapping?: string;
+    }>;
     workflows?: Array<{
         id: string;
         label: string;
@@ -41,6 +50,8 @@ function toProviderDefinition(item: PluginProviderCatalogItem): ModelProtocolDef
         media: `${item.vendor} · ${item.version}`,
         enabled: item.enabled && !item.unavailableReason,
         baseUrl: item.baseUrl,
+        parameters: item.parameters || [],
+        imageParameters: item.imageParameters,
         workflows: item.workflows || [],
     };
 }

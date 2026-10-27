@@ -7,7 +7,7 @@ import { WorkspaceErrorState, WorkspaceLoadingState, WorkspaceState } from "@/co
 import { refreshFeatureAvailability } from "@/lib/user-session";
 import { useUserStore } from "@/stores/use-user-store";
 
-type FeatureKey = "shortDramaEnabled" | "taskCenterEnabled" | "creditsEnabled" | "frontendModelsEnabled" | "skillLibraryEnabled" | "pluginCenterEnabled";
+type FeatureKey = "shortDramaEnabled" | "taskCenterEnabled" | "creditsEnabled" | "frontendModelsEnabled" | "skillLibraryEnabled" | "pluginCenterEnabled" | "imageWorkbenchEnabled" | "videoWorkbenchEnabled";
 
 const featureNames: Record<FeatureKey, string> = {
     shortDramaEnabled: "短剧创作",
@@ -16,6 +16,8 @@ const featureNames: Record<FeatureKey, string> = {
     frontendModelsEnabled: "前台模型",
     skillLibraryEnabled: "技能库",
     pluginCenterEnabled: "插件中心",
+    imageWorkbenchEnabled: "生图",
+    videoWorkbenchEnabled: "视频",
 };
 
 export function RequireFeature({ feature, children }: { feature: FeatureKey; children: ReactNode }) {
@@ -44,13 +46,22 @@ export function RequireFeature({ feature, children }: { feature: FeatureKey; chi
     if (error) return <WorkspacePage><WorkspaceErrorState title="无法确认功能状态" description={error} actionLabel="返回创作台" onRetry={() => navigate("/", { replace: true })} /></WorkspacePage>;
     if (!features[feature]) {
         // 管理员页面返回到管理后台首页，用户页面返回到创作台
-        const isAdminFeature = feature === "frontendModelsEnabled" || (feature === "pluginCenterEnabled" && user?.role === "admin");
+        const isAdminFeature = feature === "frontendModelsEnabled";
         const backPath = isAdminFeature ? "/admin" : "/";
         const backLabel = isAdminFeature ? "返回管理后台" : "返回创作台";
 
         return (
             <WorkspacePage>
-                <WorkspaceState icon="empty" title={`${featureNames[feature]}暂未开放`} description="当前功能已由平台管理员关闭。" action={<Button type="primary" onClick={() => navigate(backPath, { replace: true })}>{backLabel}</Button>} />
+                <WorkspaceState
+                    icon="empty"
+                    title={`${featureNames[feature]}暂未开放`}
+                    description="当前功能已由平台管理员关闭。"
+                    action={
+                        <Button type="primary" onClick={() => navigate(backPath, { replace: true })}>
+                            {backLabel}
+                        </Button>
+                    }
+                />
             </WorkspacePage>
         );
     }

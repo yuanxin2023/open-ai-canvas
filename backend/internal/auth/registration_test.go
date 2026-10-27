@@ -27,7 +27,7 @@ func TestRegisterFirstUserUsesEmailIdentityWithoutVerification(t *testing.T) {
 		t.Fatalf("public auth settings = %#v, err = %v", settings, err)
 	}
 
-	result, err := svc.RegisterWithEnvironment(RegisterRequest{Email: " Creator.Name@Example.com ", Password: "strong-password"}, LoginEnvironment{
+	result, err := svc.RegisterWithEnvironment(RegisterRequest{AcceptedTerms: true, Email: " Creator.Name@Example.com ", Password: "strong-password"}, LoginEnvironment{
 		IPAddress: "203.0.113.9", UserAgent: "test-agent", DeviceType: "电脑", Browser: "Chrome", BrowserVersion: "140", OS: "Windows", OSVersion: "11",
 	})
 	if err != nil {
@@ -67,11 +67,11 @@ func TestRegisterFirstUserUsesEmailIdentityWithoutVerification(t *testing.T) {
 			t.Fatalf("login with generated account %q failed: %v", account, err)
 		}
 	}
-	var loginEvent model.UserLoginEvent
-	if err := db.First(&loginEvent, "user_id = ? AND login_method = ?", user.ID, "email_register").Error; err != nil {
+	var loginEvent model.LoginLog
+	if err := db.First(&loginEvent, "user_id = ? AND source = ?", user.ID, "registration").Error; err != nil {
 		t.Fatal(err)
 	}
-	if loginEvent.LoginMethod != "email_register" || loginEvent.IPAddress != stored.RegistrationIP || loginEvent.Browser != "Chrome" || loginEvent.OS != "Windows" {
+	if loginEvent.Method != "password" || loginEvent.IP != stored.RegistrationIP || loginEvent.Browser != "Chrome" || loginEvent.OS != "Windows" {
 		t.Fatalf("registration login event = %#v", loginEvent)
 	}
 }
@@ -80,7 +80,7 @@ func TestRegisterGeneratesValidFallbackUsernames(t *testing.T) {
 	for _, email := range []string{"123456@example.com", "admin@example.com", "a.b+c@example.com", "verylongprefix@example.com"} {
 		t.Run(email, func(t *testing.T) {
 			svc, _ := newPasswordResetTestService(t)
-			result, err := svc.Register(RegisterRequest{Email: email, Password: "strong-password"})
+			result, err := svc.Register(RegisterRequest{AcceptedTerms: true, Email: email, Password: "strong-password"})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -98,10 +98,10 @@ func TestRegisterGeneratesValidFallbackUsernames(t *testing.T) {
 
 func TestRegisterRequiresEmailForFirstUser(t *testing.T) {
 	svc, _ := newPasswordResetTestService(t)
-	if _, err := svc.Register(RegisterRequest{Password: "strong-password"}); err == nil || !strings.Contains(err.Error(), "请输入邮箱") {
+	if _, err := svc.Register(RegisterRequest{AcceptedTerms: true, Password: "strong-password"}); err == nil || !strings.Contains(err.Error(), "请输入邮箱") {
 		t.Fatalf("missing email error = %v", err)
 	}
-	if _, err := svc.Register(RegisterRequest{Email: "invalid", Password: "strong-password"}); err == nil || !strings.Contains(err.Error(), "邮箱格式不正确") {
+	if _, err := svc.Register(RegisterRequest{AcceptedTerms: true, Email: "invalid", Password: "strong-password"}); err == nil || !strings.Contains(err.Error(), "邮箱格式不正确") {
 		t.Fatalf("invalid email error = %v", err)
 	}
 }
@@ -115,7 +115,7 @@ func TestRegisterOrdinaryUserConsumesEmailCode(t *testing.T) {
 	if err := db.Create(&model.SystemSetting{Key: registrationSettingKey, ValueJSON: `{"enabled":true}`}).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.Register(RegisterRequest{Email: "member@example.com", Password: "strong-password"}); err == nil || !strings.Contains(err.Error(), "验证码") {
+	if _, err := svc.Register(RegisterRequest{AcceptedTerms: true, Email: "member@example.com", Password: "strong-password"}); err == nil || !strings.Contains(err.Error(), "验证码") {
 		t.Fatalf("missing registration code error = %v", err)
 	}
 	var deliveredCode string
@@ -126,7 +126,7 @@ func TestRegisterOrdinaryUserConsumesEmailCode(t *testing.T) {
 	if err := svc.SendRegistrationEmailCode("member@example.com"); err != nil {
 		t.Fatal(err)
 	}
-	result, err := svc.Register(RegisterRequest{Email: "member@example.com", EmailCode: deliveredCode, Password: "strong-password"})
+	result, err := svc.Register(RegisterRequest{AcceptedTerms: true, Email: "member@example.com", EmailCode: deliveredCode, Password: "strong-password"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -159,7 +159,7 @@ func TestRegisterRetriesConflictingGeneratedUsername(t *testing.T) {
 	if err := svc.SendRegistrationEmailCode("member@example.com"); err != nil {
 		t.Fatal(err)
 	}
-	result, err := svc.Register(RegisterRequest{Email: "member@example.com", EmailCode: deliveredCode, Password: "strong-password"})
+	result, err := svc.Register(RegisterRequest{AcceptedTerms: true, Email: "member@example.com", EmailCode: deliveredCode, Password: "strong-password"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -179,7 +179,7 @@ func TestRegisterRejectsOrdinaryUserWhenRegistrationIsClosed(t *testing.T) {
 	if err := db.Create(&admin).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.Register(RegisterRequest{Email: "member@example.com", EmailCode: "123456", Password: "strong-password"}); err == nil || !strings.Contains(err.Error(), "未开放") {
+	if _, err := svc.Register(RegisterRequest{AcceptedTerms: true, Email: "member@example.com", EmailCode: "123456", Password: "strong-password"}); err == nil || !strings.Contains(err.Error(), "未开放") {
 		t.Fatalf("closed registration error = %v", err)
 	}
 	var count int64
@@ -205,7 +205,7 @@ func TestRegisterRejectsDuplicateEmailAfterVerification(t *testing.T) {
 	if err := db.Create(&code).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.Register(RegisterRequest{Email: "MEMBER@example.com", EmailCode: "123456", Password: "strong-password"}); err == nil || !strings.Contains(err.Error(), "邮箱已被注册") {
+	if _, err := svc.Register(RegisterRequest{AcceptedTerms: true, Email: "MEMBER@example.com", EmailCode: "123456", Password: "strong-password"}); err == nil || !strings.Contains(err.Error(), "邮箱已被注册") {
 		t.Fatalf("duplicate email error = %v", err)
 	}
 }
@@ -228,11 +228,11 @@ func TestLoginKeepsUsernameAndEmailCompatibility(t *testing.T) {
 	if _, err := svc.LoginWithEnvironment(LoginRequest{Username: user.Email, Password: "strong-password"}, LoginEnvironment{IPAddress: "2001:db8::8", DeviceType: "手机", Browser: "Safari", OS: "iOS"}); err != nil {
 		t.Fatal(err)
 	}
-	var event model.UserLoginEvent
+	var event model.LoginLog
 	if err := db.Where("user_id = ?", user.ID).Order("created_at desc").First(&event).Error; err != nil {
 		t.Fatal(err)
 	}
-	if event.LoginMethod != "password" || event.IPAddress != "2001:db8::8" || event.DeviceType != "手机" {
+	if event.Method != "password" || event.IP != "2001:db8::8" || event.DeviceType != "手机" {
 		t.Fatalf("login event = %#v", event)
 	}
 }

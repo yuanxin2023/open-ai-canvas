@@ -73,7 +73,7 @@
           "qr_code",
           "redirect"
         ],
-        "description": "qr_code 展示渠道返回的二维码图片 url_qrcode（约 5 分钟有效），钱包直接显示该图片；redirect 跳转手机端支付页 url。"
+        "description": "qr_code 使用 PC 扫码（url_qrcode，约 5 分钟有效）；redirect 跳转手机端支付页（url）。"
       }
     ]
   },

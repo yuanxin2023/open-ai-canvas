@@ -10,11 +10,12 @@ import type { OSSConnectionTestInput, OSSConnectionTestResult, OSSProvider, S3Pr
 import { resourceFileUrl } from "@/services/api/resources";
 import type { AdminAccess } from "@/lib/admin-permissions";
 
+import type { VerificationPolicy } from "./verification";
 
 let authSessionRequest: Promise<AuthSessionPayload> | null = null;
 let authSessionCache: { payload: AuthSessionPayload; expiresAt: number } | null = null;
 
-function invalidateAuthSessionCache() {
+export function invalidateAuthSessionCache() {
     authSessionCache = null;
 }
 
@@ -22,11 +23,16 @@ export type LocalUser = {
     id: string;
     username: string;
     email?: string;
+    phone?: string;
+    emailVerifiedAt?: string;
+    phoneVerifiedAt?: string;
     displayName: string;
     profileName?: string;
     usernameChangePolicy: UsernameChangePolicy;
     avatarResourceId?: string;
     avatarUrl?: string;
+    avatarMode?: "custom" | "default" | "";
+    avatarPreset?: string;
     identityProvider?: string;
     identityId?: string;
     identityUsername?: string;
@@ -59,6 +65,7 @@ export type AuthSessionPayload = {
 export type RuntimeLimits = {
     activeTaskLimit: number;
     resourceUploadMB: number;
+    storedFileGB: number;
     recycleBinRetentionDays?: number;
 };
 
@@ -71,6 +78,7 @@ export type ApiCallLog = {
     channelName: string;
     taskId?: string;
     taskStatus?: TaskStatus;
+    mediaStage?: GenerationTask["mediaStage"];
     billingOrderId?: string;
     billingStatus?: BillingOrder["status"];
     billingAmountMicrocredits: number;
@@ -78,7 +86,7 @@ export type ApiCallLog = {
     source: string;
     capability: "text" | "image" | "video" | "audio" | "";
     operation?: string;
-    requestKind: "create" | "poll" | "download" | "repair" | "";
+    requestKind: "create" | "poll" | "download" | "upload" | "local_save" | "register" | "repair" | "";
     billable: boolean;
     apiFormat: string;
     method: string;
@@ -136,7 +144,7 @@ export type AdminUserDetail = {
     user: AdminManagedUser;
     registrationIp?: string;
     account: { userId: string; availableMicrocredits: number; reservedMicrocredits: number; version: number };
-    counts: { ledgerEntries: number; tasks: number; apiCalls: number; auditEvents: number; loginEvents: number };
+    counts: { ledgerEntries: number; tasks: number; apiCalls: number; auditEvents: number; loginEvents: number; rechargeMicrocredits?: number; checkinMicrocredits?: number };
     storageUsage: {
         assetCount: number;
         assetBytes: number;
@@ -153,6 +161,9 @@ export type AdminUserDetail = {
 
 export type AdminUserLoginEvent = {
     id: string;
+    event?: "login" | "logout";
+    result?: "success" | "failed";
+    source?: "login" | "registration" | "logout" | "legacy";
     loginMethod: "email_register" | "password" | "linuxdo" | string;
     ipAddress?: string;
     userAgent?: string;
@@ -228,9 +239,11 @@ export type AdminAnalytics = {
         successRate: number;
         p95DurationMs: number;
         currentQueuedTasks: number;
+        totalBalanceMicrocredits?: number;
+        totalConsumedMicrocredits?: number;
         finance?: AnalyticsFinance | null;
     };
-    trend: Array<{ day: string; tasks: number; requests: number; activeUsers: number; requestSuccessRate: number }>;
+    trend: Array<{ day: string; tasks: number; requests: number; activeUsers: number; requestSuccessRate: number; consumedMicrocredits?: number }>;
     models: Array<{
         model: string;
         capability: string;
@@ -321,6 +334,9 @@ export type AdminOSSSetting = {
     region: string;
     endpoint: string;
     cdnBaseUrl: string;
+    cdnAuthMode: "" | "public" | "qiniu" | string;
+    requireCDN: boolean;
+    allowPrivateProxy: boolean;
     bucket: string;
     accessKeyId: string;
     accessKeySecret?: string;
@@ -393,6 +409,13 @@ export function patchAdministratorResourceQuota(userId: string, overrides: UserR
     return http.patch<UserResourceQuotaView>(`/admin/administrators/${encodeURIComponent(userId)}/resource-quota`, { overrides });
 }
 
+export type RuntimeStoragePolicy = {
+    transferTimeoutSeconds: number;
+    accessURLTTLSeconds: number;
+    providerAccessURLTTLSeconds: number;
+    nonSeekableBufferMB: number;
+    errorBodyKB: number;
+};
 export type RuntimeTaskPolicy = {
     workerConcurrency: number;
     channelConcurrency: number;
@@ -403,6 +426,12 @@ export type RuntimeTaskPolicy = {
     videoTimeoutMinutes: number;
     storyboardTimeoutMinutes: number;
     defaultTimeoutMinutes: number;
+    /** 画布 Agent 单步模型调用的输出上限（思考 + 正文 + 工具参数）；0 表示不限制。 */
+    agentStepMaxOutputTokens: number;
+    /** 画布 Agent 单步模型调用的秒级墙钟；0 表示沿用文本任务超时。 */
+    agentStepTimeoutSeconds: number;
+    /** 同时进行中的画布 Agent 轮次上限。审批等待不占用名额。 */
+    agentMaxSessions: number;
 };
 
 export type RuntimeRequestPolicy = {
@@ -429,6 +458,7 @@ export type RuntimeRequestPolicy = {
 
 export type RuntimePolicySetting = {
     resource: RuntimeResourcePolicy;
+    storage: RuntimeStoragePolicy;
     task: RuntimeTaskPolicy;
     request: RuntimeRequestPolicy;
     configured?: boolean;
@@ -438,19 +468,35 @@ export type RuntimePolicySetting = {
 };
 
 export function getAuthSettings() {
-    return http.get<{ firstUser: boolean; registrationEnabled: boolean; linuxdoEnabled: boolean; emailEnabled: boolean; emailCodeRequired: boolean; emailFirstRegistration?: boolean; referralEnabled?: boolean }>("/auth/settings");
+    return http.get<
+        VerificationPolicy & {
+            firstUser: boolean;
+            emailFirstRegistration: boolean;
+            referralEnabled: boolean;
+            registrationEnabled: boolean;
+            linuxdoEnabled: boolean;
+            emailEnabled: boolean;
+            emailCodeRequired: boolean;
+            smsBindingAvailable: boolean;
+            emailBindingAvailable: boolean;
+            agreementTitle?: string;
+            agreementContent?: string;
+        }
+    >("/auth/settings");
 }
 
-export function linuxDOLoginURL(next: string) {
+export function linuxDOLoginURL(next: string, acceptedTerms?: boolean) {
     const base = String(apiBaseURL).replace(/\/$/, "");
-    return `${base}/auth/linuxdo/start?next=${encodeURIComponent(next)}`;
+    const termsQuery = acceptedTerms === undefined ? "" : `&acceptedTerms=${acceptedTerms ? "true" : "false"}`;
+    return `${base}/auth/linuxdo/start?next=${encodeURIComponent(next)}${termsQuery}`;
 }
 
 export function getAuthSession() {
     const now = Date.now();
     if (authSessionCache && authSessionCache.expiresAt > now) return Promise.resolve(authSessionCache.payload);
     if (authSessionRequest) return authSessionRequest;
-    authSessionRequest = http.get<AuthSessionPayload>("/auth/session")
+    authSessionRequest = http
+        .get<AuthSessionPayload>("/auth/session")
         .then((payload) => {
             payload = { ...payload, user: normalizeUserAvatar(payload.user) };
             authSessionCache = { payload, expiresAt: Date.now() + 5_000 };
@@ -474,7 +520,9 @@ export function getAdminFeatureAvailability() {
     return http.get<{ features: FeatureAvailability }>("/admin/settings/features");
 }
 
-export function updateAdminFeatureAvailability(features: Partial<Pick<FeatureAvailability, "welcomeEnabled" | "shortDramaEnabled" | "taskCenterEnabled" | "creditsEnabled" | "customChannelsEnabled" | "frontendModelsEnabled" | "skillLibraryEnabled" | "pluginCenterEnabled" | "systemPluginsVisibleToUsers">>) {
+export function updateAdminFeatureAvailability(
+    features: Partial<Pick<FeatureAvailability, "welcomeEnabled" | "shortDramaEnabled" | "taskCenterEnabled" | "creditsEnabled" | "customChannelsEnabled" | "frontendModelsEnabled" | "skillLibraryEnabled" | "pluginCenterEnabled" | "systemPluginsVisibleToUsers" | "inspirationSourcesVisible" | "imageWorkbenchEnabled" | "videoWorkbenchEnabled" | "inspirationHallEnabled" | "inspirationGalleryEnabled" | "userFeedbackEnabled">>,
+) {
     return http.patch<{ features: FeatureAvailability }>("/admin/settings/features", features);
 }
 
@@ -497,7 +545,7 @@ export function resetPassword(input: { email: string; emailCode: string; passwor
     return http.post<{ reset: boolean }>("/auth/password-reset", input);
 }
 
-export async function register(input: { email: string; emailCode?: string; password: string; referralCode?: string }) {
+export async function register(input: { username?: string; email?: string; emailCode?: string; phone?: string; smsCode?: string; ticket?: string; password: string; referralCode?: string; acceptedTerms: boolean }) {
     const result = await http.post<{ user: LocalUser }>("/auth/register", input);
     invalidateAuthSessionCache();
     return { ...result, user: normalizeUserAvatar(result.user)! };
@@ -509,7 +557,7 @@ export async function logout() {
     return result;
 }
 
-export async function updateProfile(input: { username: string; avatarResourceId?: string }) {
+export async function updateProfile(input: { username: string; avatarResourceId?: string; avatarPreset?: string }) {
     const result = await http.patch<{ user: LocalUser }>("/auth/profile", input);
     invalidateAuthSessionCache();
     return { ...result, user: normalizeUserAvatar(result.user)! };
@@ -520,7 +568,7 @@ export function changePassword(input: { currentPassword: string; newPassword: st
 }
 
 function normalizeUserAvatar(user: LocalUser | null) {
-    if (!user?.avatarResourceId) return user;
+    if (!user?.avatarResourceId || user.avatarMode === "custom" || user.avatarMode === "default") return user;
     return { ...user, avatarUrl: resourceFileUrl(user.avatarResourceId) };
 }
 
@@ -615,6 +663,18 @@ export function duplicateAdminChannel(id: string) {
     return http.post<{ channel: ModelChannel }>(`/admin/channels/${encodeURIComponent(id)}/duplicate`);
 }
 
+/** 系统渠道导出文件：不含 API Key、Secret Key、自定义请求头和代理地址。 */
+export type SystemChannelExport = { format: string; version: number; exportedAt: string; channels: Array<{ name: string; models: unknown[] } & Record<string, unknown>> };
+export type SystemChannelImportResult = { createdChannels: string[]; updatedChannels: string[]; savedModels: number; errors: string[] };
+
+export function exportAdminChannels(ids?: string[]) {
+    return http.post<SystemChannelExport>("/admin/channels/export", { ids: ids || [] });
+}
+
+export function importAdminChannels(payload: SystemChannelExport) {
+    return http.post<SystemChannelImportResult>("/admin/channels/import", payload);
+}
+
 export function updateAdminChannel(id: string, input: Partial<ModelChannel> & { useGlobalConcurrency?: boolean }) {
     return http.patch<{ channel: ModelChannel }>(`/admin/channels/${encodeURIComponent(id)}`, input);
 }
@@ -679,7 +739,7 @@ export function getAdminSelfUseRuntimePolicy() {
     return http.get<{ setting: RuntimePolicySetting }>("/admin/settings/runtime-policy/self-use");
 }
 
-export function updateAdminRuntimePolicySetting(input: Pick<RuntimePolicySetting, "resource" | "task" | "request">) {
+export function updateAdminRuntimePolicySetting(input: Pick<RuntimePolicySetting, "resource" | "storage" | "task" | "request">) {
     return http.put<{ setting: RuntimePolicySetting }>("/admin/settings/runtime-policy", input);
 }
 
@@ -695,7 +755,7 @@ export function updateAdminDrawingEngineSetting(input: Pick<CanvasDrawingEngineS
     return http.patch<{ setting: CanvasDrawingEngineSetting }>("/admin/settings/drawing-engine", input);
 }
 
-export type AdminApiLogParams = AdminListParams & { recordType?: "request" | "download" | "all" };
+export type AdminApiLogParams = AdminListParams & { recordType?: "request" | "download" | "all"; capability?: "text" | "image" | "video" | "audio" };
 
 export function listAdminApiLogs(params: AdminApiLogParams = {}) {
     return http.get<{ logs: ApiCallLog[]; total: number; page: number; pageSize: number }>("/admin/api-logs", { params });
@@ -709,8 +769,16 @@ export function getAdminApiLogByBillingOrder(billingOrderId: string) {
     return http.get<{ log: ApiCallLog }>(`/admin/billing-orders/${encodeURIComponent(billingOrderId)}/api-log`);
 }
 
-export function queryAdminApiLogTask(id: string) {
-    return http.post<AdminProviderTaskQueryResult>(`/admin/api-logs/${encodeURIComponent(id)}/query-task`);
+export function queryAdminApiLogTask(id: string, providerRequestId?: string) {
+    return http.post<AdminProviderTaskQueryResult>(`/admin/api-logs/${encodeURIComponent(id)}/query-task`, providerRequestId ? { providerRequestId } : undefined, { timeout: 120_000 });
+}
+
+export function recoverAdminApiLogVideoByURL(id: string, url: string, providerRequestId?: string) {
+    return http.post<AdminProviderTaskQueryResult>(`/admin/api-logs/${encodeURIComponent(id)}/recover-url`, { url, providerRequestId }, { timeout: 120_000 });
+}
+
+export function batchRecoverAdminApiLogs(ids: string[]) {
+    return http.post<{ items: Array<{ logId: string; recovered: boolean; providerStatus?: string; error?: string }>; success: number; failed: number; skipped: number }>("/admin/api-logs/recover-batch", { ids }, { timeout: 180_000 });
 }
 
 export async function exportAdminApiLogs(params: AdminApiLogParams & { ids?: string[] } = {}) {

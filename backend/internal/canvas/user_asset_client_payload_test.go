@@ -11,7 +11,9 @@ import (
 func TestClientAssetPayloadRepairsWorkflowAssetDocument(t *testing.T) {
 	createdAt := time.Date(2026, 9, 9, 12, 0, 0, 0, time.UTC)
 	asset := model.Asset{
-		ID: "workflow-asset-test",
+		ID:   "workflow-asset-test",
+		Kind: "video", Title: "镜头01 · 视频",
+		Category: model.AssetCategoryMaterial, Status: model.AssetVersionStatusConfirmed,
 		PayloadJSON: `{
 			"id":"workflow-asset-test",
 			"kind":"video",
@@ -58,5 +60,55 @@ func TestClientAssetPayloadPreservesCompleteDocument(t *testing.T) {
 	afterJSON, _ := json.Marshal(after)
 	if string(beforeJSON) != string(afterJSON) {
 		t.Fatalf("payload changed: %s", raw)
+	}
+}
+
+func TestClientAssetPayloadUsesPersistedIdentity(t *testing.T) {
+	asset := model.Asset{
+		ID: "actual-id", Kind: "video", Title: "当前标题", Category: model.AssetCategoryMaterial,
+		Status: model.AssetVersionStatusConfirmed, PrimaryVersionID: "current-version",
+		PayloadJSON: `{"id":"stale-id","kind":"image","title":"旧标题","folderId":"removed-folder","primaryVersionId":"old-version","data":{"url":"/api/resources/video/file","width":1920,"height":1080,"bytes":1024,"mimeType":"video/mp4"}}`,
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(ClientAssetPayload(asset), &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload["id"] != "actual-id" || payload["kind"] != "video" || payload["title"] != "当前标题" || payload["primaryVersionId"] != "current-version" {
+		t.Fatalf("response returned stale payload identity: %#v", payload)
+	}
+	if _, exists := payload["folderId"]; exists {
+		t.Fatal("response restored a removed folder")
+	}
+}
+
+func TestClientAssetPayloadDoesNotInventMissingMedia(t *testing.T) {
+	asset := model.Asset{
+		ID: "broken-video", Kind: "video", Title: "缺少资源信息",
+		PayloadJSON: `{"data":{"width":1920,"height":1080,"mimeType":"video/mp4"}}`,
+	}
+	raw := ClientAssetPayload(asset)
+	if _, err := AssetFromJSON("owner", raw); err == nil {
+		t.Fatalf("invalid media unexpectedly became writable: %s", raw)
+	}
+}
+
+func TestClientAssetListPayloadDropsVerboseMetadata(t *testing.T) {
+	asset := model.Asset{PayloadJSON: `{"id":"asset-1","kind":"image","title":"列表","coverUrl":"https://example.com/a.png","tags":[],"data":{"dataUrl":"https://example.com/a.png","width":2,"height":3,"bytes":1,"mimeType":"image/png"},"metadata":{"prompt":"很长的生成提示词","nodeId":"node-1","projectIds":["project-1"]}}`}
+	var payload map[string]any
+	if err := json.Unmarshal(ClientAssetListPayload(asset), &payload); err != nil {
+		t.Fatal(err)
+	}
+	metadata := payload["metadata"].(map[string]any)
+	if _, found := metadata["prompt"]; found {
+		t.Fatalf("list payload still contains prompt: %#v", metadata)
+	}
+	if _, found := metadata["nodeId"]; found {
+		t.Fatalf("list payload still contains node metadata: %#v", metadata)
+	}
+	if metadata["projectIds"].([]any)[0] != "project-1" {
+		t.Fatalf("list payload dropped useful metadata: %#v", metadata)
+	}
+	if payload["coverUrl"] != "" {
+		t.Fatalf("duplicate cover URL was not removed: %#v", payload["coverUrl"])
 	}
 }

@@ -31,7 +31,7 @@ func TestCloudAgentCanvasPatchesPersistDraftSubmissionAndAllTerminalStates(t *te
 	for _, status := range []model.TaskStatus{model.TaskStatusSucceeded, model.TaskStatusFailed, model.TaskStatusCancelled} {
 		t.Run(string(status), func(t *testing.T) {
 			s, db, args := agentMediaFixture(t)
-			run, _ := agentMediaRun(t, s, args, "auto")
+			run, _ := agentMediaRun(t, s, args, "request_approval")
 			if err := s.advanceCloudAgentByID("user", run.ID); err != nil {
 				t.Fatal(err)
 			}
@@ -96,9 +96,9 @@ func TestCloudAgentCanvasPatchesPersistDraftSubmissionAndAllTerminalStates(t *te
 				}
 				previousRevision = delta["revision"]
 			}
-			history, err := s.CanvasHistory("user", "agent-canvas")
-			if err != nil || len(history.Snapshots) == 0 || float64(history.CurrentRevision) != previousRevision {
-				t.Fatalf("Agent save did not retain history/revision: %+v %v", history, err)
+			canvas, err := s.repo.CanvasProjectForUser("user", "agent-canvas")
+			if err != nil || float64(canvas.Revision) != previousRevision {
+				t.Fatalf("Agent save did not retain current revision: %+v %v", canvas, err)
 			}
 			changes = creationMaps(completion["nodes"])
 			if len(changes) != 1 || len(creationMaps(completion["connections"])) != 0 {
@@ -126,9 +126,21 @@ func TestCloudAgentCanvasPatchesPersistDraftSubmissionAndAllTerminalStates(t *te
 	}
 }
 
+func TestCloudAgentPatchCoversProjectedRowMetadata(t *testing.T) {
+	before := map[string]any{"nodes": []any{}, "connections": []any{}}
+	after := map[string]any{"id": "canvas", "revision": float64(2), "createdAt": "2026-10-11T00:00:00Z", "updatedAt": "2026-10-11T01:00:00Z", "title": "", "projectId": "", "nodes": []any{}, "connections": []any{}}
+	if !cloudAgentPatchCoversDocument(before, after) {
+		t.Fatal("database row metadata and empty projected fields should not force a refresh")
+	}
+	after["title"] = "新标题"
+	if cloudAgentPatchCoversDocument(before, after) {
+		t.Fatal("a changed canvas title must still force a refresh")
+	}
+}
+
 func TestCloudAgentMediaImageSourceHasActionableCorrection(t *testing.T) {
 	s, _, args := agentMediaFixture(t)
-	run, state := agentMediaRun(t, s, args, "auto")
+	run, state := agentMediaRun(t, s, args, "request_approval")
 	args.SourceNodeID = "cat"
 	if _, _, err := s.prepareCloudAgentMedia(run, &state, agentMediaCall(args)); err == nil || !strings.Contains(err.Error(), "referenceNodeIds") {
 		t.Fatalf("image source must point to the correct field: %v", err)
@@ -193,6 +205,38 @@ func TestCloudAgentCanvasOperationTraceSharesToolCallID(t *testing.T) {
 	if trace["callId"] != call.ID || last.Type != "tool_completed" || last.Payload["callId"] != call.ID {
 		t.Fatalf("canvas delta and tool result cannot be deduplicated: %+v / %+v", trace, last)
 	}
+	result := last.Payload["result"].(map[string]any)
+	if result["committed"] != true {
+		t.Fatalf("canvas_apply_ops result did not acknowledge persistence: %+v", result)
+	}
+	preview := result["preview"].(map[string]any)
+	if preview["status"] != "applied" || strings.Contains(stringValue(preview["description"]), "批准后才会写入") {
+		t.Fatalf("canvas_apply_ops result still looks like an approval preview: %+v", preview)
+	}
+	canvas, err := s.repo.CanvasProjectForUser("user", "agent-canvas")
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc, err := creationDocument(canvas.PayloadJSON)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cat map[string]any
+	for _, node := range creationMaps(doc["nodes"]) {
+		if stringValue(node["id"]) == "cat" {
+			cat = node
+			break
+		}
+	}
+	if cat == nil || stringValue(cat["title"]) != "叮当猫飞行参考" {
+		t.Fatalf("canvas_apply_ops did not persist the requested prompt contract: %+v", cat)
+	}
+	metadata := cat["metadata"].(map[string]any)
+	generationSpec := metadata["generationSpec"].(map[string]any)
+	if stringValue(generationSpec["prompt"]) != "下一版参考图提示词" {
+		t.Fatalf("canvas_apply_ops did not persist the requested prompt contract: %+v", cat)
+	}
+
 	actions := creationMaps(trace["actions"])
 	byActionAndNode := map[string]map[string]any{}
 	for _, action := range actions {
@@ -211,7 +255,7 @@ func TestCloudAgentCanvasOperationTraceSharesToolCallID(t *testing.T) {
 			fieldValues = append(fieldValues, stringValue(field))
 		}
 	}
-	if len(fieldValues) != 2 || fieldValues[0] != "节点名称" || fieldValues[1] != "下一版提示词" {
+	if len(fieldValues) != 2 || fieldValues[0] != "节点名称" || fieldValues[1] != "提示词" {
 		t.Fatalf("canvas operation trace lost updated fields: %+v", updated)
 	}
 	created := byActionAndNode["created:trace-video"]
@@ -226,7 +270,7 @@ func TestCloudAgentCanvasOperationTraceSharesToolCallID(t *testing.T) {
 
 func TestCloudAgentMissingCanvasStillCheckpointsMediaFailure(t *testing.T) {
 	s, db, args := agentMediaFixture(t)
-	run, _ := agentMediaRun(t, s, args, "auto")
+	run, _ := agentMediaRun(t, s, args, "request_approval")
 	if err := s.advanceCloudAgentByID("user", run.ID); err != nil {
 		t.Fatal(err)
 	}
@@ -255,12 +299,12 @@ func TestCloudAgentMissingCanvasStillCheckpointsMediaFailure(t *testing.T) {
 }
 
 func TestCloudAgentMediaPolicyAllowsDefaultsWithoutBypassingApproval(t *testing.T) {
-	_, media, err := prompts.LoadAgentPolicies()
+	system, _, err := prompts.LoadAgentPolicies()
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, text := range []string{"安全默认", "不要求四项逐个确认", "一次性询问", "界面独立审批", "失败不得自动重提"} {
-		if !strings.Contains(media.Text, text) {
+	for _, text := range []string{"安全默认", "不要求四项逐个确认", "一次性询问", "界面独立审批", "不得自动重提"} {
+		if !strings.Contains(system.Text, text) {
 			t.Fatalf("media policy lost %q", text)
 		}
 	}

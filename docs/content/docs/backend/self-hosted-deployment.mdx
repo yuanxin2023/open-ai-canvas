@@ -1,0 +1,26 @@
+---
+title: 自有构建与独立 Agent
+description: 匹配构建、自有正式发布源与后台手动更新
+---
+
+本地定制版本使用同一源码提交构建 Web、Backend、迁移程序和独立 Agent。migrate 与 Backend 共用镜像，生产使用 PostgreSQL、Redis 及内部 Agent 服务；只有 Web 对外提供应用入口。官方成品业务镜像不得作为默认回退来源。
+
+`docker-compose.deploy.yml` 要求显式提供三类自有镜像引用，发布时固定 digest。源码构建可叠加 `docker-compose.build.yml`；默认/local/server/dev 编排也已补齐自有 Agent 构建和 Backend 桥接。`CANVAS_BUILD_VERSION`、`CANVAS_BUILD_COMMIT`、`CANVAS_BUILD_TIME` 由匹配发布注入，各镜像具有对应 OCI 标签；生产验收须核对真实提交、构建版本及 Backend 中的迁移程序，不能将 unknown 当成匹配发布证据。
+
+`YINGCE_AGENT_URL` 在容器网络中为 `http://yingce-agent:8081`，`YINGCE_AGENT_BRIDGE_HOST` 为 `backend`。`YINGCE_AGENT_TOKEN` 由部署环境提供，至少 32 字符，两端一致且独立于 Updater Token；源码和示例中不填真实值。Agent 不发布端口，Backend 等待其健康检查。宿主机开发保留未配置远程地址时的内嵌路径；Docker 开发使用独立服务，运行时依赖变化后重建 Agent。Web 保留 Bun 锁文件，Agent 的独立 Node 运行时保留其 package-lock。
+
+## 后台正式版本更新
+
+唯一正式更新源为 `yuanxin2023/open-ai-canvas`。修改代码可触发 GitHub Actions 检查/构建；推送新版本标签后，匹配镜像发布成功再生成正式 Release，后台才能提供手动确认更新。普通提交、预发布、草稿及缺少完整发布文件的版本不进入可更新清单。每个版本须更新 VERSION、对应更新日志及版本标签，不重复改写已发布标签。自有标签必须指向包含本地定制的合并提交，不能直接复用指向纯官方代码的上游标签；本轮没有创建发布标签。
+
+发布文件包括两个 Linux 架构的 Host Updater、SHA256SUMS 和 docker-compose.deploy.yml；镜像为自有 GHCR 的 `open-ai-canvas-web`、`open-ai-canvas-backend`、`open-ai-canvas-yingce-agent`，迁移复用 Backend。升级前校验镜像仓库 digest、版本、源码来源及三者一致的有效提交；缺失或不匹配时停止，不停旧服务或执行迁移。更换来源后清除旧来源的新版本缓存，保留既有备份。
+
+生产服务器首次须安装并配置自有 Host Updater，服务环境中的 `CANVAS_UPDATER_REPOSITORY` 为本仓库；镜像安装脚本会传递选定仓库并按同一版本标签下载 Compose 和安装脚本，不能仅修改一个下载链接。后台显示更新器实际连接的仓库，停止提供官方来源兜底。首次启用还须确认服务器能够读取自有 GHCR 镜像；如需认证，凭据只配置在服务器，不写入源码。
+
+在线更新适用于使用自有正式 Release 镜像、PostgreSQL/Redis 和 Host Updater 的受管 Linux 部署。纯源码/本地 SQLite 构建仍走手工更新。拥有 `admin.settings.system_update` 的管理员才能读取及操作后台；写请求带预期账号头，切换账号时旧弹窗失效。检查不自动升级，只有用户再次确认才发起更新；失败后恢复也须依据已校验备份，恢复未完成时明确提示人工处理。
+
+## 验收状态
+
+6 组 Compose 配置和 7 组负向配置通过；Host Updater 完整包已在无外网、只读源码的隔离 Linux 容器通过，包含文件权限及新增发布源/镜像合同检查。前端 API 与组件模拟检查通过，安装脚本语法及临时环境合同检查通过。这些不代表已完成真实镜像构建或生产升级。
+
+实际镜像构建、首次安装、内部桥接、审批、SSE、取消、重连、完整历史数据库迁移和备份恢复仍待隔离环境验收。迁移总表确认和副本演练通过前，不启动候选访问旧数据库。本轮未推送代码、创建标签/Release、发布镜像、启动应用或安装更新器。详见仓库 `docs/plans/upstream-v1.6.9.2-operations.md`。

@@ -17,11 +17,17 @@ func TestRegisterCanvasAPIExposesOpenAPIAndProjects(t *testing.T) {
 	RegisterCanvasAPI(router.Group("/api"), &service.Service{})
 
 	wanted := map[string]bool{
-		"GET /api/openapi.yaml":    false,
-		"PATCH /api/auth/password": false,
-		"GET /api/projects":        false,
-		"POST /api/tasks":          false,
-		"GET /api/resources":       false,
+		"PATCH /api/auth/password":          false,
+		"GET /api/openapi.yaml":             false,
+		"GET /api/workbench/tools":          false,
+		"GET /api/workbench/tasks":          false,
+		"POST /api/workbench/tasks":         false,
+		"GET /api/projects":                 false,
+		"POST /api/tasks":                   false,
+		"POST /api/tasks/:id/recover-media": false,
+		"GET /api/resources":                false,
+		"GET /api/skills/presets":           false,
+		"GET /api/agent/skills/usage":       false,
 	}
 	for _, route := range router.Routes() {
 		key := route.Method + " " + route.Path
@@ -39,5 +45,11 @@ func TestRegisterCanvasAPIExposesOpenAPIAndProjects(t *testing.T) {
 	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/openapi.yaml", nil))
 	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), "openapi: 3.0.3") || !strings.Contains(recorder.Body.String(), "url: /api") {
 		t.Fatalf("openapi.yaml status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+
+	recorder = httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/skills/presets", nil))
+	if recorder.Code != http.StatusUnauthorized || !strings.Contains(recorder.Body.String(), `"reason":"unauthorized"`) {
+		t.Fatalf("skills presets status=%d body=%s", recorder.Code, recorder.Body.String())
 	}
 }

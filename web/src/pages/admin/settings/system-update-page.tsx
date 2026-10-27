@@ -3,6 +3,8 @@ import { AlertTriangle, Archive, BadgeCheck, Circle, ExternalLink, History, Refr
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { checkSystemUpdate, getSystemUpdateStatus, rollbackSystemUpdate, startSystemUpdate, type SystemUpdateStatus, type UpdatePhase } from "@/services/api/system-update";
+import { hasAdminPermission } from "@/lib/admin-permissions";
+import { useUserStore } from "@/stores/use-user-store";
 import { AdminPageFrame } from "../components/admin-shell";
 import { AdminStatusBadge, SettingsSectionCard } from "../components/admin-ui";
 
@@ -28,6 +30,12 @@ const phaseLabels: Record<UpdatePhase, string> = {
 };
 
 export default function SystemUpdatePage() {
+    const user = useUserStore((state) => state.user);
+    if (!user?.id || user.role !== "admin" || !hasAdminPermission(user.adminAccess, "admin.settings.system_update")) return <p role="alert">没有系统更新权限</p>;
+    return <SystemUpdateContent key={user.id} actorId={user.id} />;
+}
+
+function SystemUpdateContent({ actorId }: { actorId: string }) {
     const { message, modal } = App.useApp();
     const [status, setStatus] = useState<SystemUpdateStatus | null>(null);
     const [loading, setLoading] = useState(true);
@@ -36,30 +44,36 @@ export default function SystemUpdatePage() {
     const [reconnecting, setReconnecting] = useState(false);
     const [loadError, setLoadError] = useState("");
     const mountedRef = useRef(true);
+    const confirmations = useRef<Array<{ destroy: () => void }>>([]);
+    const current = useCallback(() => {
+        const user = useUserStore.getState().user;
+        return mountedRef.current && user?.id === actorId && user.role === "admin" && hasAdminPermission(user.adminAccess, "admin.settings.system_update");
+    }, [actorId]);
 
     const load = useCallback(async (initial = false) => {
         if (initial) setLoading(true);
         try {
             const next = await getSystemUpdateStatus();
-            if (!mountedRef.current) return;
+            if (!current()) return;
             setStatus(next);
             setLoadError("");
             setReconnecting(false);
         } catch (error) {
-            if (!mountedRef.current) return;
+            if (!current()) return;
             const errorMessage = error instanceof Error ? error.message : "读取系统更新状态失败";
             setLoadError(errorMessage);
             if (status && activePhases.has(status.operation.phase)) setReconnecting(true);
         } finally {
-            if (mountedRef.current && initial) setLoading(false);
+            if (current() && initial) setLoading(false);
         }
-    }, [status]);
+    }, [status, current]);
 
     useEffect(() => {
         mountedRef.current = true;
         void load(true);
         return () => {
             mountedRef.current = false;
+            confirmations.current.forEach((confirmation) => confirmation.destroy());
         };
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -73,53 +87,58 @@ export default function SystemUpdatePage() {
     const blockingCheckFailed = status?.checks.some((check) => check.blocking && check.status === "failed") ?? true;
 
     const requestCheck = async () => {
+        if (!current() || checking || operationActive) return;
         setChecking(true);
         try {
-            const next = await checkSystemUpdate();
+            const next = await checkSystemUpdate(actorId);
+            if (!current()) return;
             setStatus(next);
             message.success(next.updateAvailable ? `发现新版本 ${next.latestRelease?.version}` : "当前已是最新版本");
         } catch (error) {
+            if (!current()) return;
             message.error(error instanceof Error ? error.message : "检查更新失败");
             await load(false);
         } finally {
-            setChecking(false);
+            if (current()) setChecking(false);
         }
     };
 
     const requestStart = () => {
-        if (!status?.latestRelease) return;
+        if (!current() || !status?.latestRelease || status.latestRelease.prerelease || !status.updateAvailable || operationActive || starting || blockingCheckFailed) return;
         const target = status.latestRelease.version;
-        modal.confirm({
+        confirmations.current.push(modal.confirm({
             title: `更新到 ${target}？`,
             width: 560,
             content: (
                 <div className="space-y-3 text-sm text-foreground/70">
                     <p>系统会先创建并校验数据库 ZIP 与数据目录备份，再停止旧服务、执行迁移并切换镜像。</p>
-                    <p>更新期间站点会短暂不可用。任何前置检查失败都不会切换服务；切换后验证失败会自动恢复旧版本和数据库。</p>
+                    <p>更新期间站点会短暂不可用。前置检查失败时停止升级；切换后验证失败会尝试按备份恢复，恢复未完成时会提示人工处理。</p>
                 </div>
             ),
             okText: "确认并开始更新",
             cancelText: "取消",
             onOk: async () => {
+                if (!current()) throw new Error("管理员账号已变化，请重新打开更新页面");
                 setStarting(true);
                 try {
-                    const next = await startSystemUpdate(target);
+                    const next = await startSystemUpdate(target, actorId);
+                    if (!current()) return;
                     setStatus(next);
                     message.success("更新任务已启动，页面会自动重连并显示进度");
                 } catch (error) {
-                    message.error(error instanceof Error ? error.message : "无法开始更新");
+                    if (current()) message.error(error instanceof Error ? error.message : "无法开始更新");
                     throw error;
                 } finally {
-                    setStarting(false);
+                    if (current()) setStarting(false);
                 }
             },
-        });
+        }));
     };
 
     const requestRollback = () => {
-        if (!status?.rollbackVersion) return;
+        if (!current() || !status?.rollbackVersion || operationActive) return;
         let reason = "";
-        modal.confirm({
+        confirmations.current.push(modal.confirm({
             title: `回退到 ${status.rollbackVersion}？`,
             width: 520,
             content: (
@@ -132,20 +151,22 @@ export default function SystemUpdatePage() {
             okButtonProps: { danger: true },
             cancelText: "取消",
             onOk: async () => {
+                if (!current()) throw new Error("管理员账号已变化，请重新打开更新页面");
                 if (!reason.trim()) {
                     message.warning("请填写回退原因");
                     throw new Error("rollback reason required");
                 }
-                const next = await rollbackSystemUpdate(reason.trim());
+                const next = await rollbackSystemUpdate(reason.trim(), actorId);
+                if (!current()) return;
                 setStatus(next);
                 message.success("回退任务已启动");
             },
-        });
+        }));
     };
 
     if (loading) {
         return (
-            <AdminPageFrame title="系统更新" description="检查发布版本，并在备份、迁移和健康验证保护下完成在线更新。" scroll>
+            <AdminPageFrame title="系统更新" description="检查自有仓库的完整正式 Release，由管理员确认后执行升级。" scroll>
                 <div className="admin-settings-stack admin-system-update"><Skeleton active paragraph={{ rows: 12 }} /></div>
             </AdminPageFrame>
         );
@@ -154,7 +175,7 @@ export default function SystemUpdatePage() {
     return (
         <AdminPageFrame
             title="系统更新"
-            description="检查 GitHub Release，并在完成备份、迁移和健康验证后切换版本。"
+            description="检查自有仓库的完整正式 Release，由管理员确认后执行升级。"
             scroll
             actions={
                 <Button icon={<RefreshCw className="size-4" />} loading={checking} disabled={operationActive || !status?.supported} onClick={() => void requestCheck()}>
@@ -178,7 +199,7 @@ export default function SystemUpdatePage() {
                         layout="stacked"
                         icon={<ServerCog className="size-4" />}
                         title="可用版本"
-                        description={status?.updateAvailable ? `当前运行 ${status.currentVersion}，可更新到 ${status.latestRelease?.version}。` : "检查 GitHub Release 与当前运行的镜像标签。"}
+                        description={status?.updateAvailable ? `当前运行 ${status.currentVersion}，可更新到 ${status.latestRelease?.version}。` : "只检查自有仓库的完整正式 Release；普通提交和预发布不会自动上线。"}
                         status={<PhaseBadge phase={status?.operation.phase ?? "idle"} />}
                         footer={
                             <>
@@ -213,7 +234,7 @@ export default function SystemUpdatePage() {
                             <dl className="admin-system-update-facts">
                                 <dt>部署方式</dt><dd>{status?.deployment || "未知"}</dd>
                                 <dt>发布时间</dt><dd>{formatDate(status?.latestRelease?.publishedAt)}</dd>
-                                <dt>代码仓库</dt><dd>{status?.repository || "ddcat-ai/open-ai-canvas"}</dd>
+                                <dt>代码仓库</dt><dd>{status?.repository || "尚未连接自有更新源"}</dd>
                             </dl>
                             {status?.latestRelease ? (
                                 <div className="admin-system-update-notes">

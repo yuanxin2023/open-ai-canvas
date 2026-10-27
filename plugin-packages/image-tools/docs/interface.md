@@ -24,7 +24,7 @@
   "apiVersion": "open-ai-canvas.plugin/v2",
   "id": "image-tools",
   "name": "Image Tools",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": "AI 创作工作台",
   "description": "图片去背景与图层拆分工具协议插件。",
   "permissions": [
@@ -245,7 +245,8 @@
               "$omitEmpty": {
                 "$ref": "request.prompt"
               }
-            }
+            },
+            "output_format": "png"
           }
         },
         "poll": {

@@ -17,6 +17,7 @@ export const ADMIN_PERMISSION_GROUPS = [
             { permission: "admin.platform.plugins", label: "插件管理", path: "/admin/plugins" },
             { permission: "admin.platform.skills", label: "技能管理", path: "/admin/skills" },
             { permission: "admin.platform.prompt_templates", label: "提示词模板", path: "/admin/prompt-templates" },
+            { permission: "admin.platform.workbench_tools", label: "工作台工具", path: "/admin/workbench-tools" },
         ],
     },
     {
@@ -24,6 +25,7 @@ export const ADMIN_PERMISSION_GROUPS = [
         items: [
             { permission: "admin.users.accounts", label: "用户管理", path: "/admin/users" },
             { permission: "admin.users.customer_service", label: "客服配置", path: "/admin/customer-service" },
+            { permission: "admin.users.feedbacks", label: "用户反馈", path: "/admin/feedbacks" },
             { permission: "admin.users.agent_lessons", label: "Agent 记忆", path: "/admin/agent-lessons" },
         ],
     },
@@ -61,6 +63,7 @@ export const ADMIN_PERMISSION_GROUPS = [
             { permission: "admin.settings.system_performance", label: "系统性能", path: "/admin/settings/system-performance" },
             { permission: "admin.settings.access", label: "登录与注册", path: "/admin/settings/access" },
             { permission: "admin.settings.email", label: "邮件服务", path: "/admin/settings/email" },
+            { permission: "admin.settings.sms", label: "短信服务", path: null },
             { permission: "admin.settings.ark_private_assets", label: "方舟素材库", path: "/admin/settings/ark-private-assets" },
             { permission: "admin.settings.response_interception", label: "模型响应拦截", path: "/admin/settings/response-interception" },
             { permission: "admin.settings.third_party", label: "第三方参数配置", path: "/admin/settings/third-party" },
@@ -101,5 +104,5 @@ export function hasAdminPermission(access: AdminAccess | undefined, permission: 
 }
 
 export function firstAdminPath(access: AdminAccess | undefined) {
-    return ALL_ADMIN_PERMISSION_ITEMS.find((item) => hasAdminPermission(access, item.permission))?.path || "/";
+    return ALL_ADMIN_PERMISSION_ITEMS.find((item) => item.path && hasAdminPermission(access, item.permission))?.path || "/";
 }

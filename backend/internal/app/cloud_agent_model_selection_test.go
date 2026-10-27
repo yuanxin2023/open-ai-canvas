@@ -3,6 +3,7 @@ package app
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -88,6 +89,34 @@ func TestCloudAgentMediaToolsDeclareExclusiveModelSelection(t *testing.T) {
 		parameters := function["parameters"].(map[string]any)
 		if !strings.Contains(function["description"].(string), cloudAgentModelSelectionDescription) || parameters["additionalProperties"] != false {
 			t.Fatalf("incomplete model selection schema: %#v", parameters)
+		}
+		oneOfValues, ok := parameters["oneOf"].([]any)
+		oneOf := make([]map[string]any, 0, len(oneOfValues))
+		for _, value := range oneOfValues {
+			branch, isObject := value.(map[string]any)
+			if !isObject {
+				t.Fatalf("model selection branch is not an object: %#v", value)
+			}
+			oneOf = append(oneOf, branch)
+		}
+		wantBranches := 2
+		if function["name"] == "generate_media" {
+			wantBranches = 3 // omission is resolved only from a draft or a unique catalog result
+		}
+		if !ok || len(oneOf) != wantBranches {
+			t.Fatalf("model selection must be explicit and mutually exclusive: %#v", parameters["oneOf"])
+		}
+		if got := oneOf[0]["required"]; !strings.Contains(fmt.Sprint(got), "logicalModelId") {
+			t.Fatalf("logical model branch missing: %#v", oneOf)
+		}
+		if got := oneOf[1]["required"]; !strings.Contains(fmt.Sprint(got), "channelId") || !strings.Contains(fmt.Sprint(got), "channelModelKey") {
+			t.Fatalf("channel model branch missing: %#v", oneOf)
+		}
+		if _, ok := oneOf[0]["not"]; !ok {
+			t.Fatalf("logical model branch must reject mixed channel fields: %#v", oneOf[0])
+		}
+		if _, ok := oneOf[1]["not"]; !ok {
+			t.Fatalf("channel model branch must reject logicalModelId: %#v", oneOf[1])
 		}
 		props := parameters["properties"].(map[string]any)
 		for _, field := range []string{"logicalModelId", "channelId", "channelModelKey"} {

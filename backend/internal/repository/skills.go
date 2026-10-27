@@ -12,13 +12,18 @@ import (
 )
 
 type SkillListFilter struct {
-	UserID string
-	Scope  string
-	Search string
-	Tag    string
-	Sort   string
-	Limit  int
-	Offset int
+	PlatformRootID        string
+	PlatformCategoryID    string
+	PlatformUncategorized bool
+	UserID                string
+	Scope                 string
+	Search                string
+	Tag                   string
+	LibraryCategoryID     string
+	LibraryUncategorized  bool
+	Sort                  string
+	Limit                 int
+	Offset                int
 }
 
 type SkillMetrics struct {
@@ -38,6 +43,30 @@ func withPlatformSkillAvailability(query *gorm.DB) *gorm.DB {
 	)`, model.SkillSourceUser, false, false)
 }
 
+type SkillCategoryCount struct {
+	Tag   string
+	Count int64
+}
+
+// PublicSkillCategoryCounts 返回技能广场中已启用公开技能的共享分类数量。
+func (r *Repository) PublicSkillCategoryCounts() (map[string]int64, error) {
+	var rows []SkillCategoryCount
+	err := withPlatformSkillAvailability(r.db.Model(&model.Skill{})).
+		Select("tag, COUNT(*) AS count").
+		Where("status = ? AND is_private = ?", 1, false).
+		Group("tag").
+		Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+
+	counts := make(map[string]int64, len(rows))
+	for _, row := range rows {
+		counts[row.Tag] = row.Count
+	}
+	return counts, nil
+}
+
 func (r *Repository) Skills(filter SkillListFilter) ([]model.Skill, int64, error) {
 	query := withPlatformSkillAvailability(r.db.Model(&model.Skill{}).Where("skills.status = ?", model.SkillStatusEnabled))
 	switch filter.Scope {
@@ -46,6 +75,9 @@ func (r *Repository) Skills(filter SkillListFilter) ([]model.Skill, int64, error
 			Where("skills.owner_id = ? OR (user_skill_states.added = ? AND skills.is_private = ?)", filter.UserID, true, false)
 	case "created":
 		query = query.Where("skills.owner_id = ?", filter.UserID)
+		if filter.LibraryCategoryID != "" || filter.LibraryUncategorized {
+			query = query.Joins("LEFT JOIN user_skill_states ON user_skill_states.skill_id = skills.id AND user_skill_states.user_id = ?", filter.UserID)
+		}
 	case "favorites":
 		query = query.Joins("JOIN user_skill_states ON user_skill_states.skill_id = skills.id AND user_skill_states.user_id = ? AND user_skill_states.liked = ?", filter.UserID, true).
 			Where("skills.owner_id = ? OR skills.is_private = ?", filter.UserID, false)
@@ -55,10 +87,24 @@ func (r *Repository) Skills(filter SkillListFilter) ([]model.Skill, int64, error
 	if filter.Search != "" {
 		pattern := "%" + strings.ToLower(filter.Search) + "%"
 		query = query.Joins("LEFT JOIN users skill_owners ON skill_owners.id = skills.owner_id").
-			Where("lower(skills.name) LIKE ? OR lower(skills.description) LIKE ? OR lower(skills.author_name) LIKE ? OR lower(skill_owners.username) LIKE ?", pattern, pattern, pattern, pattern)
+			Where("lower(skills.name) LIKE ? OR lower(skills.description) LIKE ? OR lower(skills.instruction) LIKE ? OR lower(skills.extra_info) LIKE ? OR lower(skills.author_name) LIKE ? OR lower(skill_owners.username) LIKE ?", pattern, pattern, pattern, pattern, pattern, pattern)
 	}
 	if filter.Tag != "" {
 		query = query.Where("skills.tag = ?", filter.Tag)
+	}
+	if filter.PlatformRootID != "" {
+		query = query.Where(effectiveCurationRoot+" = ?", filter.PlatformRootID)
+	}
+	if filter.PlatformCategoryID != "" {
+		query = query.Where("EXISTS ("+effectiveCurationCategory+" AND c.id = ?)", filter.PlatformCategoryID)
+	}
+	if filter.PlatformUncategorized {
+		query = query.Where("NOT EXISTS (" + effectiveCurationCategory + ")")
+	}
+	if filter.LibraryCategoryID != "" {
+		query = query.Where("user_skill_states.library_category_id = ?", filter.LibraryCategoryID)
+	} else if filter.LibraryUncategorized {
+		query = query.Where("COALESCE(user_skill_states.library_category_id, '') = ''")
 	}
 	// 用户状态按用户和技能唯一，列表 JOIN 不会重复；不要设置 DISTINCT，避免 GORM 将其带入 PostgreSQL 的热门排序查询。
 	var total int64
@@ -75,20 +121,6 @@ func (r *Repository) Skills(filter SkillListFilter) ([]model.Skill, int64, error
 	var skills []model.Skill
 	err := query.Select("skills.*").Order(order).Limit(filter.Limit).Offset(filter.Offset).Find(&skills).Error
 	return skills, total, err
-}
-
-// 内置技能使用稳定的外部技能 ID 幂等更新，用户加入和收藏关系保留在独立状态表中。
-func (r *Repository) UpsertBuiltinSkills(skills []model.Skill) error {
-	if len(skills) == 0 {
-		return errors.New("builtin skills are empty")
-	}
-	return r.db.Clauses(clause.OnConflict{
-		Columns: []clause.Column{{Name: "id"}},
-		DoUpdates: clause.AssignmentColumns([]string{
-			"owner_id", "author_name", "author_avatar_url", "name", "description", "instruction", "status", "source", "tag", "sort_weight", "is_private",
-			"markdown_url", "showcase_media_json", "extra_info", "initial_like_count", "initial_added_count", "created_at", "updated_at",
-		}),
-	}).Create(&skills).Error
 }
 
 func (r *Repository) Skill(id string) (*model.Skill, error) {
@@ -205,6 +237,16 @@ func (r *Repository) CreateSkill(skill *model.Skill, ownerState *model.UserSkill
 
 func (r *Repository) DeleteSkill(id string) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
+		var locked model.Skill
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&locked, "id = ?", id).Error; err != nil {
+			return err
+		}
+		if err := tx.Delete(&model.SkillCurationAssignment{}, "skill_id = ?", id).Error; err != nil {
+			return err
+		}
+		if err := tx.Delete(&model.SkillCurationRootAssignment{}, "skill_id = ?", id).Error; err != nil {
+			return err
+		}
 		if err := tx.Delete(&model.UserSkillState{}, "skill_id = ?", id).Error; err != nil {
 			return err
 		}
@@ -251,7 +293,7 @@ func (r *Repository) UserSkillStatesBySkillIDs(userID string, skillIDs []string)
 func (r *Repository) SetUserSkillAdded(state *model.UserSkillState) error {
 	return r.db.Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "user_id"}, {Name: "skill_id"}},
-		DoUpdates: clause.AssignmentColumns([]string{"added", "installed_version_id", "auto_update", "updated_at"}),
+		DoUpdates: clause.AssignmentColumns([]string{"added", "installed_version_id", "auto_update", "library_category_id", "updated_at"}),
 	}).Create(state).Error
 }
 

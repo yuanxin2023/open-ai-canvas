@@ -40,6 +40,7 @@ const (
 	ReasonInternal            = kernel.ReasonInternal
 	ReasonBadGateway          = kernel.ReasonBadGateway
 	ReasonUpstreamDNSFailed   = kernel.ReasonUpstreamDNSFailed
+	ReasonProjectNameConflict = kernel.ReasonProjectNameConflict
 )
 
 func ReasonForStatus(status int) ErrorReason {

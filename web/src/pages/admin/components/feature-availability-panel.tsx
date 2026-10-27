@@ -8,7 +8,21 @@ import { getAdminFeatureAvailability, updateAdminFeatureAvailability } from "@/s
 import { useUserStore, type FeatureAvailability } from "@/stores/use-user-store";
 import { AdminStatusBadge } from "./admin-ui";
 
-type FeatureKey = "shortDramaEnabled" | "taskCenterEnabled" | "creditsEnabled" | "customChannelsEnabled" | "frontendModelsEnabled" | "skillLibraryEnabled" | "pluginCenterEnabled" | "systemPluginsVisibleToUsers";
+type FeatureKey =
+    | "shortDramaEnabled"
+    | "taskCenterEnabled"
+    | "creditsEnabled"
+    | "customChannelsEnabled"
+    | "frontendModelsEnabled"
+    | "skillLibraryEnabled"
+    | "pluginCenterEnabled"
+    | "systemPluginsVisibleToUsers"
+    | "inspirationSourcesVisible"
+    | "imageWorkbenchEnabled"
+    | "videoWorkbenchEnabled"
+    | "inspirationHallEnabled"
+    | "inspirationGalleryEnabled"
+    | "userFeedbackEnabled";
 type FeatureChangeCopy = {
     title: string;
     operation: string;
@@ -27,9 +41,54 @@ type FeatureRow = {
     };
 };
 
-const editableFeatureKeys: FeatureKey[] = ["shortDramaEnabled", "taskCenterEnabled", "creditsEnabled", "customChannelsEnabled", "frontendModelsEnabled", "skillLibraryEnabled", "pluginCenterEnabled", "systemPluginsVisibleToUsers"];
+const editableFeatureKeys: FeatureKey[] = [
+    "shortDramaEnabled",
+    "taskCenterEnabled",
+    "creditsEnabled",
+    "customChannelsEnabled",
+    "frontendModelsEnabled",
+    "skillLibraryEnabled",
+    "pluginCenterEnabled",
+    "systemPluginsVisibleToUsers",
+    "inspirationSourcesVisible",
+    "imageWorkbenchEnabled",
+    "videoWorkbenchEnabled",
+    "inspirationHallEnabled",
+    "inspirationGalleryEnabled",
+    "userFeedbackEnabled",
+];
 
 const workspaceFeatureRows: FeatureRow[] = [
+    {
+        key: "userFeedbackEnabled",
+        title: "用户反馈",
+        description: "在设置中开放我的反馈，保留现有客服入口，诊断信息须用户主动选择。",
+        icon: <BookOpenCheck className="size-4" aria-hidden="true" />,
+        changeCopy: {
+            enabled: { title: "确认开启用户反馈？", operation: "开放文字、图片和视频反馈及本人历史。", userImpact: "诊断默认不附带；管理员须具备独立反馈权限才能处理。", okText: "确认开启" },
+            disabled: { title: "确认关闭用户反馈？", operation: "隐藏设置入口并停止新提交和附件上传。", userImpact: "已有反馈、附件和站内答复保留，后台仍可处理。", okText: "确认关闭" },
+        },
+    },
+    {
+        key: "inspirationHallEnabled",
+        title: "灵感大厅",
+        description: "在现有精选灵感下方开放目录浏览和个人收藏；选择内容只预填草稿。",
+        icon: <Sparkles className="size-4" aria-hidden="true" />,
+        changeCopy: {
+            enabled: { title: "确认开启灵感大厅？", operation: "开放可选灵感目录与个人收藏。", userImpact: "用户选用后仍需确认模型并手动发送，不自动生成或扣费。", okText: "确认开启" },
+            disabled: { title: "确认关闭灵感大厅？", operation: "隐藏新大厅并停止其写入，不删除个人提示词和收藏。", userImpact: "现有精选灵感和个人提示词库继续可用。", okText: "确认关闭" },
+        },
+    },
+    {
+        key: "inspirationGalleryEnabled",
+        title: "灵感画廊",
+        description: "在创作首页额外显示动态画廊，保留原有精选和创作入口。",
+        icon: <Sparkles className="size-4" aria-hidden="true" />,
+        changeCopy: {
+            enabled: { title: "确认开启灵感画廊？", operation: "加载本地缩略图画廊。", userImpact: "点击卡片只预填草稿，需用户手动发送。", okText: "确认开启" },
+            disabled: { title: "确认关闭灵感画廊？", operation: "隐藏画廊并停止轮播。", userImpact: "既有草稿、个人内容和精选灵感保留。", okText: "确认关闭" },
+        },
+    },
     {
         key: "shortDramaEnabled",
         title: "短剧创作",
@@ -128,6 +187,36 @@ const workspaceFeatureRows: FeatureRow[] = [
                 userImpact: "普通用户将无法进入或调用技能库；重新开启后可继续使用原有技能。",
                 okText: "确认关闭",
             },
+        },
+    },
+    {
+        key: "inspirationSourcesVisible",
+        title: "素材来源署名",
+        description: "显示创作首页的素材来源说明；关闭后隐藏该面板。",
+        icon: <Sparkles className="size-4" aria-hidden="true" />,
+        changeCopy: {
+            enabled: { title: "确认显示素材来源？", operation: "显示素材来源说明。", userImpact: "用户可以查看素材来源说明。", okText: "确认显示" },
+            disabled: { title: "确认隐藏素材来源？", operation: "隐藏素材来源说明。", userImpact: "已有内容保留，来源说明面板隐藏。", okText: "确认隐藏" },
+        },
+    },
+    {
+        key: "imageWorkbenchEnabled",
+        title: "图片生成",
+        description: "开放生图入口并允许创建新的工作台图片任务；关闭不删除结果和历史。",
+        icon: <Sparkles className="size-4" aria-hidden="true" />,
+        changeCopy: {
+            enabled: { title: "确认开启图片生成？", operation: "开放独立图片工作台及其任务接口。", userImpact: "用户可以主动提交图片任务，继续遵守现有积分与配额规则。", okText: "确认开启" },
+            disabled: { title: "确认关闭图片生成？", operation: "关闭独立图片工作台入口和接口。", userImpact: "已有任务、结果和历史保留；创作首页与自由画布继续使用各自规则。", okText: "确认关闭" },
+        },
+    },
+    {
+        key: "videoWorkbenchEnabled",
+        title: "视频生成",
+        description: "开放视频入口并允许创建新的工作台视频任务；关闭不删除结果和历史。",
+        icon: <Clapperboard className="size-4" aria-hidden="true" />,
+        changeCopy: {
+            enabled: { title: "确认开启视频生成？", operation: "开放独立视频工作台及其任务接口。", userImpact: "用户可以主动提交视频任务，继续遵守现有积分与配额规则。", okText: "确认开启" },
+            disabled: { title: "确认关闭视频生成？", operation: "关闭独立视频工作台入口和接口。", userImpact: "已有任务、结果和历史保留；创作首页与自由画布继续使用各自规则。", okText: "确认关闭" },
         },
     },
 ];
@@ -475,6 +564,12 @@ function toEditablePayload(features: FeatureAvailability) {
         taskCenterEnabled: features.taskCenterEnabled,
         creditsEnabled: features.creditsEnabled,
         customChannelsEnabled: features.customChannelsEnabled,
+        inspirationSourcesVisible: features.inspirationSourcesVisible,
+        inspirationHallEnabled: features.inspirationHallEnabled,
+        inspirationGalleryEnabled: features.inspirationGalleryEnabled,
+        userFeedbackEnabled: features.userFeedbackEnabled,
+        imageWorkbenchEnabled: features.imageWorkbenchEnabled,
+        videoWorkbenchEnabled: features.videoWorkbenchEnabled,
         frontendModelsEnabled: features.frontendModelsEnabled,
         skillLibraryEnabled: features.skillLibraryEnabled,
         pluginCenterEnabled: features.pluginCenterEnabled,
@@ -498,6 +593,12 @@ function parseFeatureAvailability(value: unknown): FeatureAvailability {
         taskCenterEnabled: record.taskCenterEnabled as boolean,
         creditsEnabled: record.creditsEnabled as boolean,
         customChannelsEnabled: record.customChannelsEnabled as boolean,
+        inspirationSourcesVisible: record.inspirationSourcesVisible as boolean,
+        inspirationHallEnabled: record.inspirationHallEnabled as boolean,
+        inspirationGalleryEnabled: record.inspirationGalleryEnabled as boolean,
+        userFeedbackEnabled: record.userFeedbackEnabled as boolean,
+        imageWorkbenchEnabled: record.imageWorkbenchEnabled as boolean,
+        videoWorkbenchEnabled: record.videoWorkbenchEnabled as boolean,
         frontendModelsEnabled: record.frontendModelsEnabled as boolean,
         skillLibraryEnabled: record.skillLibraryEnabled as boolean,
         pluginCenterEnabled: record.pluginCenterEnabled as boolean,
