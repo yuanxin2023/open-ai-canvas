@@ -14,6 +14,24 @@ function sourceSection(source: string, startMarker: string, endMarker: string) {
     return source.slice(start, end);
 }
 
+test("admin sidebar keeps its edge collapse control available in both states", async () => {
+    const [shellSource, chromeCss] = await Promise.all([
+        Bun.file(new URL("../src/pages/admin/components/admin-shell.tsx", import.meta.url)).text(),
+        Bun.file(new URL("../src/pages/admin/theme/admin-chrome.css", import.meta.url)).text(),
+    ]);
+    const toggleCss = sourceSection(chromeCss, "[data-admin-root] .admin-sidebar-edge-toggle {", "[data-admin-root] .admin-page-root,");
+
+    expect(shellSource).toContain('className={cn("admin-sidebar-edge-toggle hidden lg:grid", collapsed && "is-collapsed")}');
+    expect(shellSource).toContain('aria-label={collapsed ? "展开侧栏" : "收起侧栏"}');
+    expect(shellSource).toContain("collapsed ? <ChevronRight");
+    expect(shellSource).toContain(": <ChevronLeft");
+    expect(shellSource).not.toContain("admin-sidebar-collapse-toggle");
+    expect(toggleCss).toContain("position: absolute;");
+    expect(toggleCss).toContain("top: 50%;");
+    expect(toggleCss).toContain("left: calc(var(--admin-sidebar-width) - 11px);");
+    expect(toggleCss).toContain("left: calc(var(--admin-sidebar-collapsed) - 11px);");
+});
+
 test("announcement editor preserves image and pinned fields through edit and save", async () => {
     const [panelSource, safetySource] = await Promise.all([
         Promise.resolve(moduleGroupSource("pages/admin/components/admin-announcements-panel.tsx")),

@@ -277,7 +277,7 @@
 
 [data-admin-root] .admin-nav-link:focus-visible,
 [data-admin-root] .admin-icon-button:focus-visible,
-[data-admin-root] .admin-sidebar-collapse-toggle:focus-visible {
+[data-admin-root] .admin-sidebar-edge-toggle:focus-visible {
     outline: 2px solid var(--admin-focus);
     outline-offset: 1px;
 }
@@ -314,32 +314,27 @@
     flex: 1 1 auto;
 }
 
-[data-admin-root] .admin-sidebar-collapse-toggle {
-    display: grid;
-    width: 40px;
-    height: 40px;
-    flex: 0 0 40px;
+[data-admin-root] .admin-sidebar-edge-toggle {
+    position: absolute;
+    top: 50%;
+    left: calc(var(--admin-sidebar-width) - 11px);
+    z-index: 4;
+    width: 22px;
+    height: 36px;
     place-items: center;
-    border: 0;
-    border-radius: 8px;
-    background: transparent;
-    color: var(--admin-text-secondary);
+    border: 1px solid var(--admin-border);
+    border-radius: 999px;
+    background: var(--admin-surface);
+    color: var(--admin-text-muted);
+    transform: translateY(-50%);
 }
 
-[data-admin-root] .admin-sidebar-collapse-toggle:hover {
-    background: var(--admin-nav-hover);
+[data-admin-root] .admin-sidebar-edge-toggle.is-collapsed {
+    left: calc(var(--admin-sidebar-collapsed) - 11px);
+}
+
+[data-admin-root] .admin-sidebar-edge-toggle:hover {
     color: var(--admin-text);
-}
-
-[data-admin-root] .admin-sidebar-collapse-toggle svg {
-    width: 18px;
-    height: 18px;
-}
-
-[data-admin-root] .admin-sidebar-collapse-toggle.is-collapsed {
-    width: 48px;
-    height: 48px;
-    flex: 0 0 48px;
 }
 
 [data-admin-root] .admin-page-root,
