@@ -3,8 +3,9 @@ import { Alert, App, Button, Form, Input, InputNumber, Radio } from "antd";
 import { ExternalLink, Upload } from "lucide-react";
 import { useReducedMotion } from "motion/react";
 import { Live2DAvatar } from "@/components/canvas/live2d-avatar";
+import { AgentAvatarVideo } from "@/components/canvas/agent-avatar-video";
 import { FluidOrb } from "@/components/ui/fluid-orb";
-import { agentCopy, type CanvasAppearance } from "@/lib/canvas/agent-appearance";
+import { agentCopy, builtInAgentAvatarURL, type CanvasAppearance } from "@/lib/canvas/agent-appearance";
 import { live2DModelURL, uploadLive2D } from "@/services/api/appearance";
 
 export function CanvasAppearanceEditor({ value, onChange, disabled, onUploading }: { value: CanvasAppearance; onChange: (value: CanvasAppearance) => void; disabled: boolean; onUploading: (value: boolean) => void }) {
@@ -15,6 +16,8 @@ export function CanvasAppearanceEditor({ value, onChange, disabled, onUploading 
     const [readyURL, setReadyURL] = useState("");
     const [error, setError] = useState("");
     const [attempt, setAttempt] = useState(0);
+    const [animationFailed, setAnimationFailed] = useState(false);
+    const [previewLive2D, setPreviewLive2D] = useState(false);
     const url = value.live2dResourceId ? live2DModelURL(value.live2dResourceId, value.live2dEntry, true) : "";
     const change = (patch: Partial<CanvasAppearance>) => onChange({ ...value, ...patch });
     async function upload(file?: File) {
@@ -65,12 +68,18 @@ export function CanvasAppearanceEditor({ value, onChange, disabled, onUploading 
                 <Radio.Group
                     value={value.avatarType}
                     disabled={disabled || uploading}
-                    onChange={(event) => change({ avatarType: event.target.value })}
+                    onChange={(event) => {
+                        setAnimationFailed(false);
+                        setPreviewLive2D(false);
+                        change({ avatarType: event.target.value });
+                    }}
                     options={[
-                        { label: "默认动态球", value: "orb" },
+                        { label: "官方默认形象", value: "bundle" },
+                        { label: "动态球", value: "orb" },
                         { label: "Live2D", value: "live2d", disabled: !url || readyURL !== url },
                     ]}
                 />
+                <p className="text-sm text-foreground/60">官方默认形象随应用提供，按 Agent 状态切换动画，无需上传。动态球和已有 Live2D 仍可单独选择；保存后生效。</p>
                 <p className="text-sm text-foreground/60">上传有授权的 Cubism 3/4 运行时 ZIP：一个 model3.json、moc3、PNG 纹理及可选动作/表情 JSON。首期不支持音频、旧版模型和编辑工程。模型会发送到浏览器，无法保证防下载。</p>
                 <div className="grid gap-2 text-sm">
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
@@ -102,11 +111,16 @@ export function CanvasAppearanceEditor({ value, onChange, disabled, onUploading 
                     <Button icon={<Upload className="size-4" />} loading={uploading} disabled={disabled} onClick={() => input.current?.click()}>
                         导入 Live2D 模型（最大 128 MiB）
                     </Button>
+                    {url && value.avatarType === "bundle" && !previewLive2D ? (
+                        <Button disabled={disabled || uploading} onClick={() => setPreviewLive2D(true)}>
+                            预览已有 Live2D
+                        </Button>
+                    ) : null}
                     {url ? (
                         <Button
                             disabled={disabled || uploading}
                             onClick={() => {
-                                change({ avatarType: "orb", live2dResourceId: "", live2dEntry: "" });
+                                change({ avatarType: value.avatarType === "live2d" ? "orb" : value.avatarType, live2dResourceId: "", live2dEntry: "" });
                                 setError("");
                             }}
                         >
@@ -120,7 +134,11 @@ export function CanvasAppearanceEditor({ value, onChange, disabled, onUploading 
                     px
                 </label>
                 <div className="grid justify-items-center gap-3 rounded-xl border border-border bg-background p-5" aria-label="Agent 形象预览">
-                    {url ? (
+                    {value.avatarType === "bundle" && !previewLive2D && !animationFailed ? (
+                        <div className="relative" style={{ width: Math.round((value.avatarHeight * 480) / 432), height: value.avatarHeight }}>
+                            <AgentAvatarVideo src={builtInAgentAvatarURL("mascot-idle.mp4")} onError={() => setAnimationFailed(true)} />
+                        </div>
+                    ) : url && (value.avatarType !== "bundle" || previewLive2D) ? (
                         <Live2DAvatar
                             key={`${url}-${attempt}`}
                             url={url}
@@ -144,6 +162,7 @@ export function CanvasAppearanceEditor({ value, onChange, disabled, onUploading 
                     )}
                     <strong>{agentCopy(value.welcomeTitle, value.agentName)}</strong>
                     <p className="text-sm text-foreground/60">{agentCopy(value.welcomeDescription, value.agentName)}</p>
+                    {animationFailed && value.avatarType === "bundle" ? <small role="status">默认动画加载失败，请检查静态资源后重新选择形象重试。</small> : null}
                     {url ? <small>{readyURL === url ? "预览已就绪，可选择 Live2D 并保存启用" : "等待模型预览就绪"}</small> : null}
                 </div>
                 {error ? (

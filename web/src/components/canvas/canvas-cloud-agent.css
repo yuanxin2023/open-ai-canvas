@@ -1783,6 +1783,30 @@
     display: none;
 }
 
+.canvas-agent-launcher.canvas-agent-launcher-media {
+    overflow: visible;
+    border-radius: var(--radius-lg);
+    box-shadow: none;
+}
+
+.canvas-agent-launcher-media::before {
+    display: none;
+}
+
+.canvas-agent-launcher-media .canvas-agent-keyed-video {
+    border-radius: var(--radius-lg);
+    transform: scale(1.18);
+}
+
+.canvas-agent-launcher-media > .canvas-agent-launcher-label {
+    bottom: 0;
+}
+
+.canvas-agent-launcher-media > .canvas-agent-launcher-status {
+    top: 28%;
+    right: 22%;
+}
+
 .canvas-agent-launcher-status {
     position: absolute;
     top: 6px;

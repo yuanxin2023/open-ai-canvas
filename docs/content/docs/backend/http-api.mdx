@@ -365,6 +365,8 @@ CANVAS_BACKEND_DATA_DIR=/明确的数据目录 ./migrate-schema repair-canvas-re
 
 ## 画布配置、更新公告与 Live2D（外观合同版本 14）
 
+`GET /public/appearance` 的 `data.appearance.canvas.avatarType` 与管理员外观读取/保存合同支持 `bundle`（官方内置动画）、`orb`（动态球）、`live2d`（已导入模型）。管理员从当前完整配置修改 `canvas.avatarType` 后，通过 `PATCH /admin/settings/appearance` 保存，沿用现有外观权限检查；切换不会清除 Live2D 引用或改变其他外观字段。新安装默认 `bundle`，既有明确配置不自动改写。内置 `/doll/avatar.json` 和 MP4 是前端静态资源，不增加后端上传 API 或数据库 Schema。
+
 外观设置新增 `updates: { enabled, currentVersion, releases }`，由管理员通过 `PATCH /admin/settings/appearance` 保存；关闭开关保留草稿，但 `GET /public/appearance` 返回关闭状态与空公告列表，前端恢复内置更新日志。开启时公开版本与内容块，当前版本须对应公告版本。媒体上传、管理员预览、公开引用读取及限制详见 [自定义更新公告](/docs/backend/update-announcements)。JSON 请求上限为 512KB；无数据表迁移。
 
 `GET /public/appearance` 和管理员 `GET /admin/settings/appearance` 返回 `canvas`；管理员通过 `PATCH /admin/settings/appearance` 随外观配置统一保存。字段为 `agentName`（1–24 字）、`launcherLabel`（0–24 字）、`panelTitle`（1–40 字）、`welcomeTitle`（1–100 字）、`welcomeDescription`（0–200 字）、`inputPlaceholder`（1–160 字）、`avatarType`（`orb|live2d`）、`avatarHeight`（120–360 整数）、`live2dResourceId` 和 `live2dEntry`。默认名称为“创作助手”，默认形象为动态球，已有 Live2D 配置保留。名称以数据形式投影到每轮 Agent 执行上下文，不提供自由系统提示词配置，也不改变工具权限。

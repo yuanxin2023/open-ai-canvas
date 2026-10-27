@@ -577,6 +577,44 @@ paths:
         "401": {$ref: "#/components/responses/Error"}
         "403": {$ref: "#/components/responses/Error"}
         "404": {$ref: "#/components/responses/Error"}
+  /public/appearance:
+    get:
+      tags: [public]
+      summary: 读取公开站点与 Agent 外观
+      description: 标准信封 data.appearance.canvas.avatarType 为 bundle（官方内置动画）、orb（动态球）或 live2d。内置动画由前端同源 /doll/ 静态资源提供。
+      responses:
+        "200": {description: 标准信封 data 包含 appearance}
+        "500": {$ref: "#/components/responses/Error"}
+  /admin/settings/appearance:
+    get:
+      tags: [admin]
+      summary: 读取管理员外观配置
+      responses:
+        "200": {description: 标准信封 data 包含 setting}
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+    patch:
+      tags: [admin]
+      summary: 保存站点与 Agent 外观
+      description: 需要外观管理权限。以当前完整配置修改并保存；canvas.avatarType 可选择官方内置形象，已有动态球和 Live2D 不自动切换。不支持自定义动画 ZIP。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+              properties:
+                canvas:
+                  type: object
+                  additionalProperties: true
+                  properties:
+                    avatarType: {type: string, enum: [bundle, orb, live2d]}
+      responses:
+        "200": {description: 标准信封 data 包含 setting}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
   /admin/settings/appearance/live2d:
     post:
       tags: [admin]

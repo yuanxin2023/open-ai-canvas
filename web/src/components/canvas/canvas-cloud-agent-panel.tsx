@@ -1319,7 +1319,7 @@ export const CanvasCloudAgentPanel = memo(function CanvasCloudAgentPanel() {
 
     return (
         <>
-            <AgentLauncher theme={theme} statusColor={statusColor} approvalPending={Boolean(approval)} reducedMotion={Boolean(reducedMotion)} hidden={open} onOpen={onOpen} />
+            <AgentLauncher theme={theme} status={status} statusColor={statusColor} approvalPending={Boolean(approval)} reducedMotion={Boolean(reducedMotion)} hidden={open} onOpen={onOpen} />
             <AnimatePresence>
                 {open ? (
                     <motion.aside
