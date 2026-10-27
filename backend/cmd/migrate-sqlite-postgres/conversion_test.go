@@ -298,7 +298,7 @@ func TestConversionRejectsOldAndInvalidSources(t *testing.T) {
 	if root == "" {
 		t.Skip("CANVAS_TEST_MIGRATION_FIXTURES is not configured")
 	}
-	if _, err := runConversion(filepath.Join(root, "sqlite_local_51.db"), "postgres://must-not-connect.invalid/unreachable"); err == nil || !strings.Contains(err.Error(), "83") {
+	if _, err := runConversion(filepath.Join(root, "sqlite_local_51.db"), "postgres://must-not-connect.invalid/unreachable"); err == nil || !strings.Contains(err.Error(), "94") {
 		t.Fatalf("old source was not rejected first: %v", err)
 	}
 	for _, scenario := range []string{"checksum", "extra_column", "foreign_key", "empty_source", "extra_view", "extra_trigger"} {
@@ -410,7 +410,7 @@ func TestConversionExecutable(t *testing.T) {
 		return command.CombinedOutput()
 	}
 	old := filepath.Join(os.Getenv("CANVAS_TEST_MIGRATION_FIXTURES"), "sqlite_local_51.db")
-	if output, err := run(old, dsn); err == nil || !strings.Contains(string(output), "83") {
+	if output, err := run(old, dsn); err == nil || !strings.Contains(string(output), "94") {
 		t.Fatalf("old source command accepted: %v %s", err, output)
 	}
 	if output, err := run(path, dsn); err != nil || !strings.Contains(string(output), "转库事务已提交") {

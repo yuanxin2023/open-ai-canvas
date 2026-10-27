@@ -156,7 +156,7 @@ export function getAntThemeConfig(dark: boolean): ThemeConfig {
                 borderRadius: 6,
                 paddingInline: 14,
                 paddingInlineLG: 16,
-                paddingInlineSM: 10,
+                paddingInlineSM: 8,
                 colorPrimary: color.solidBg,
                 colorPrimaryHover: color.solidHoverBg,
                 colorPrimaryActive: color.solidActiveBg,
@@ -211,6 +211,8 @@ export function getAntThemeConfig(dark: boolean): ThemeConfig {
                 colorPrimary: color.checkBg,
                 colorPrimaryActive: color.checkActiveBg,
                 colorPrimaryHover: color.checkHoverBg,
+                // antd 用 colorWhite 画勾；暗色主题勾选底接近白色，必须跟随前景色，否则白勾压白底看不见。
+                colorWhite: color.checkFg,
                 controlOutline: color.controlFocus,
             },
             Radio: {
@@ -250,7 +252,7 @@ export function getAntThemeConfig(dark: boolean): ThemeConfig {
                 selectorBg: elevatedBackground,
                 optionHeight: 40,
                 optionPadding: "8px 12px",
-                multipleItemHeight: 26,
+                multipleItemHeight: 24,
                 activeBorderColor: interactiveBorder,
                 hoverBorderColor: interactiveBorder,
                 activeOutlineColor: "transparent",
@@ -279,7 +281,7 @@ export function getAntThemeConfig(dark: boolean): ThemeConfig {
             Segmented: {
                 borderRadius: 5,
                 trackBg: subtleBackground,
-                trackPadding: 3,
+                trackPadding: 2,
                 itemColor: color.controlDisabledFg,
                 itemHoverColor: color.selectedFg,
                 itemHoverBg: color.selectedBg,
@@ -295,12 +297,13 @@ export function getAntThemeConfig(dark: boolean): ThemeConfig {
                 titleFontSize: 16,
             },
             Form: {
-                itemMarginBottom: 18,
+                // 24px 正好容纳一行报错（12px × 1.57 ≈ 19px + 间距），出现报错时不推动下方输入框。
+                itemMarginBottom: 24,
                 labelFontSize: 12,
-                verticalLabelPadding: "0 0 6px",
+                verticalLabelPadding: "0 0 8px",
             },
             Dropdown: {
-                paddingBlock: 6,
+                paddingBlock: 8,
             },
             Skeleton: {
                 gradientFromColor: dark ? "rgba(255, 255, 255, 0.055)" : "rgba(15, 23, 42, 0.055)",
@@ -309,12 +312,12 @@ export function getAntThemeConfig(dark: boolean): ThemeConfig {
             Card: {
                 borderRadiusLG: 8,
                 headerBg: "transparent",
-                headerFontSize: 15,
-                bodyPadding: 18,
+                headerFontSize: 16,
+                bodyPadding: 16,
             },
             Message: {
                 contentBg: elevatedBackground,
-                contentPadding: "10px 18px",
+                contentPadding: "8px 16px",
             },
             Notification: {
                 colorBgElevated: elevatedBackground,
@@ -336,49 +339,64 @@ export function getAntThemeConfig(dark: boolean): ThemeConfig {
 /** 用户端与后台共享业务控件，但使用独立的产品尺寸和柔和表面。 */
 export function getWorkspaceAntThemeConfig(): ThemeConfig {
     return {
+        // 控件尺度与 globals.css 的 --user-control-height / --user-radius-button 保持同值：
+        // 34px 常规、28px 紧凑、8px 圆角；按钮、输入框、选择器在同一工具栏里等高对齐。
         token: {
-            borderRadius: 12, borderRadiusLG: 16, borderRadiusSM: 8,
-            controlHeight: 38, controlHeightSM: 30, controlHeightLG: 44,
-            motionDurationFast: "0.12s", motionDurationMid: "0.18s", motionDurationSlow: "0.36s",
+            borderRadius: 8, borderRadiusLG: 12, borderRadiusSM: 4,
+            controlHeight: 34, controlHeightSM: 28, controlHeightLG: 40,
+            // 进入 150–250ms；antd 的 Slow 用于浮层进出，不超过 250ms。
+            motionDurationFast: "0.15s", motionDurationMid: "0.2s", motionDurationSlow: "0.25s",
             motionEaseInOut: "cubic-bezier(0.16, 1, 0.3, 1)",
             motionEaseOut: "cubic-bezier(0.16, 1, 0.3, 1)",
+            // antd 默认 Back 曲线会越界（Checkbox 勾选、Badge 弹出像回弹），工作台统一不越界。
+            motionEaseOutBack: "cubic-bezier(0.16, 1, 0.3, 1)",
+            motionEaseInBack: "cubic-bezier(0.7, 0, 0.84, 0)",
         },
         components: {
+            // 用户工作台按钮的唯一几何与配色来源。主按钮颜色仍由皮肤（primary-buttons.css）决定；
+            // 次要按钮为透明底 + 1px 细线，文字按钮为透明底 + 弱化文字，hover 只换表面。
             Button: {
-                borderRadius: 12, borderRadiusSM: 8, borderRadiusLG: 14, fontWeight: 550,
-                defaultBg: "var(--user-surface-muted)", defaultColor: "var(--user-ink)", defaultBorderColor: "transparent",
-                defaultHoverBg: "var(--user-surface-hover)", defaultHoverColor: "var(--user-ink)", defaultHoverBorderColor: "transparent",
-                defaultActiveBg: "var(--user-control-pressed)", defaultActiveColor: "var(--user-ink)", defaultActiveBorderColor: "transparent",
+                borderRadius: 8, borderRadiusSM: 8, borderRadiusLG: 8,
+                fontWeight: 500, contentFontSize: 13, contentFontSizeSM: 12, contentFontSizeLG: 14,
+                paddingInline: 12, paddingInlineSM: 8, paddingInlineLG: 16,
+                iconGap: 8, onlyIconSize: 16, onlyIconSizeSM: 14, onlyIconSizeLG: 16,
+                defaultBg: "transparent", defaultColor: "var(--user-ink)", defaultBorderColor: "var(--user-border)",
+                defaultHoverBg: "var(--user-surface-muted)", defaultHoverColor: "var(--user-ink)", defaultHoverBorderColor: "var(--user-border-strong)",
+                defaultActiveBg: "var(--user-surface-hover)", defaultActiveColor: "var(--user-ink)", defaultActiveBorderColor: "var(--user-border-strong)",
+                textTextColor: "var(--user-ink-muted)", textTextHoverColor: "var(--user-ink)", textTextActiveColor: "var(--user-ink)",
+                // antd 6 文字按钮按下态取 colorFill（color-light-active）。
+                textHoverBg: "var(--user-surface-muted)", colorFill: "var(--user-surface-hover)",
+                // 禁用的次要按钮保持透明底，整体透明度由 workspace-product.css 统一降低。
+                defaultBgDisabled: "transparent",
                 defaultShadow: "none", primaryShadow: "none", dangerShadow: "none",
-                paddingInline: 14, paddingInlineSM: 10,
             },
             Input: {
-                borderRadius: 12,
+                borderRadius: 8,
                 paddingInline: 12,
                 activeBorderColor: "transparent",
                 hoverBorderColor: "transparent",
                 activeShadow: "none",
             },
             InputNumber: {
-                borderRadius: 12,
+                borderRadius: 8,
                 activeBorderColor: "transparent",
                 hoverBorderColor: "transparent",
                 activeShadow: "none",
             },
             Select: {
-                borderRadius: 12,
+                borderRadius: 8,
                 colorBgElevated: "var(--user-surface-raised)", boxShadowSecondary: "none",
                 colorFillTertiary: "var(--user-surface-muted)", colorFillSecondary: "var(--user-surface-hover)",
                 activeOutlineColor: "transparent",
                 optionSelectedBg: "var(--user-surface-hover)", optionSelectedColor: "var(--user-ink)",
-                optionActiveBg: "var(--user-surface-muted)", optionPadding: "9px 12px",
+                optionActiveBg: "var(--user-surface-muted)", optionPadding: "8px 12px",
             },
-            Dropdown: { borderRadiusLG: 16, colorBgElevated: "var(--user-surface-raised)", boxShadowSecondary: "none", controlItemBgHover: "var(--user-surface-muted)", paddingBlock: 6 },
-            Popover: { borderRadiusLG: 16, colorBgElevated: "var(--user-surface-raised)", boxShadowSecondary: "none" },
-            Modal: { borderRadiusLG: 20 },
-            Popconfirm: { borderRadiusLG: 16 },
-            Message: { borderRadiusLG: 14, contentPadding: "10px 18px" },
-            Notification: { borderRadiusLG: 18 },
+            Dropdown: { borderRadiusLG: 12, colorBgElevated: "var(--user-surface-raised)", boxShadowSecondary: "none", controlItemBgHover: "var(--user-surface-muted)", paddingBlock: 8 },
+            Popover: { borderRadiusLG: 12, colorBgElevated: "var(--user-surface-raised)", boxShadowSecondary: "none" },
+            Modal: { borderRadiusLG: 16 },
+            Popconfirm: { borderRadiusLG: 12 },
+            Message: { borderRadiusLG: 12, contentPadding: "8px 16px" },
+            Notification: { borderRadiusLG: 12 },
             Tooltip: { borderRadius: 8 },
         },
     };
@@ -414,7 +432,8 @@ export function getAdminAntThemeConfig(dark: boolean): ThemeConfig {
             },
             Form: {
                 ...base.components?.Form,
-                itemMarginBottom: 16,
+                // 一行报错约 20px，留足位置，出现报错时不推动下方字段。
+                itemMarginBottom: 20,
             },
             Menu: {
                 ...base.components?.Menu,

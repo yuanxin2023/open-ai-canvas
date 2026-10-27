@@ -180,5 +180,6 @@ func (s *Service) patchAdminAccountResourceQuota(actor *model.User, userID strin
 	if err != nil {
 		return nil, err
 	}
+	s.invalidateStorageStatus(userID)
 	return s.adminAccountResourceQuota(actor, userID, role)
 }

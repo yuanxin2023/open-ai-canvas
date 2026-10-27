@@ -134,6 +134,11 @@ func (r *Repository) ResourceReferenceSnapshotExcludingAssets(userID string, exc
 	if len(resourceIDs) == 0 {
 		return snapshot, nil
 	}
+	drama, err := r.dramaResourceReferences(userID, resourceIDs)
+	if err != nil {
+		return snapshot, err
+	}
+	snapshot.Direct = append(snapshot.Direct, drama...)
 	feedbacks, feedbackErr := r.feedbackReferenceDocuments(userID)
 	if feedbackErr != nil {
 		return snapshot, feedbackErr

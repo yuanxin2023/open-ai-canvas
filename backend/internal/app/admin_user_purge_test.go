@@ -50,6 +50,10 @@ func TestPurgeUserDeletesAccountAndUserScopedData(t *testing.T) {
 		t.Fatal(err)
 	}
 	rows := []any{
+		&model.UserStorageGrant{ID: "storage-grant", UserID: target.ID, Bytes: 1 << 30},
+		&model.UserStorageState{UserID: target.ID},
+		&model.ResourceOffloadJob{ID: "offload", UserID: target.ID, ResourceID: "resource-1"},
+		&model.DramaProduction{ProjectID: "project-1", UserID: target.ID},
 		&model.UserResourceQuota{UserID: target.ID, OverridesJSON: `{"storedFileGB":5}`, UpdatedBy: actor.ID},
 		&model.UserResourceQuota{UserID: other.ID, OverridesJSON: `{"storedFileGB":10}`, UpdatedBy: actor.ID},
 		&model.AuthSession{ID: "session-1", UserID: target.ID},
@@ -88,6 +92,8 @@ func TestPurgeUserDeletesAccountAndUserScopedData(t *testing.T) {
 		{&model.TaskLog{}, "user_id = ?"}, {&model.Resource{}, "user_id = ?"},
 		{&model.Asset{}, "user_id = ?"}, {&model.UserPrompt{}, "user_id = ?"},
 		{&model.UserResourceQuota{}, "user_id = ?"},
+		{&model.UserStorageGrant{}, "user_id = ?"}, {&model.UserStorageState{}, "user_id = ?"},
+		{&model.ResourceOffloadJob{}, "user_id = ?"}, {&model.DramaProduction{}, "user_id = ?"},
 		{&model.LoginLog{}, "user_id = ?"}, {&model.UserAvatar{}, "user_id = ?"},
 	} {
 		assertUserPurgeCount(t, db, check.model, check.query, target.ID, 0)

@@ -1,4 +1,4 @@
-import { App, ConfigProvider, Dropdown } from "antd";
+import { ConfigProvider, Dropdown } from "antd";
 import type { MenuProps } from "antd";
 import {
     Activity,
@@ -53,6 +53,7 @@ import { Link, NavLink, Outlet, useLocation } from "react-router";
 import { AppChangelogButton } from "@/components/layout/app-changelog-modal";
 import { BrandLogoFrame } from "@/components/brand/brand-logo";
 import { publishWorkspaceSidebarCollapsed, readWorkspaceSidebarCollapsed, subscribeWorkspaceSidebarCollapsed } from "@/components/layout/workspace-sidebar-state";
+import { AppFeedbackProvider } from "@/components/layout/app-feedback";
 import { cn } from "@/lib/utils";
 import { ADMIN_PERMISSION_GROUPS, hasAdminPermission, type AdminAccess } from "@/lib/admin-permissions";
 import { useThemeStore } from "@/stores/use-theme-store";
@@ -69,6 +70,8 @@ import "../theme/admin-chrome.css";
 type AdminNavigationItem = {
     path: string;
     label: string;
+    /** 折叠侧栏图标下方的两字名称，与用户端折叠导航保持一致。 */
+    shortLabel: string;
     description: string;
     icon: ReactNode;
     requireFeature?: "frontendModelsEnabled";
@@ -88,9 +91,9 @@ const adminNavigation: AdminNavigationGroup[] = [
         label: "经营分析",
         collapsible: true,
         items: [
-            { path: "/admin", label: "数据概览", description: "活跃、调用与成本趋势", icon: <BarChart3 className="size-4" /> },
-            { path: "/admin/control-preview", label: "控制预览", description: "积分流向、消费排行与模型使用", icon: <Activity className="size-4" /> },
-            { path: "/admin/logs", label: "请求明细", description: "上游调用与费用", icon: <FileClock className="size-4" /> },
+            { path: "/admin", label: "数据概览", shortLabel: "数据", description: "活跃、调用与成本趋势", icon: <BarChart3 className="size-4" /> },
+            { path: "/admin/control-preview", label: "控制预览", shortLabel: "控制", description: "积分流向、消费排行与模型使用", icon: <Activity className="size-4" /> },
+            { path: "/admin/logs", label: "请求明细", shortLabel: "请求", description: "上游调用与费用", icon: <FileClock className="size-4" /> },
         ],
     },
     {
@@ -98,13 +101,13 @@ const adminNavigation: AdminNavigationGroup[] = [
         label: "平台资源",
         collapsible: true,
         items: [
-            { path: "/admin/channels", label: "系统渠道", description: "渠道、模型与售价", icon: <RadioTower className="size-4" /> },
-            { path: "/admin/models", label: "前台模型", description: "展示、线路与用户价格", icon: <Layers3 className="size-4" />, requireFeature: "frontendModelsEnabled" },
-            { path: "/admin/plugins", label: "插件管理", description: "平台可用性、上传与卸载", icon: <PlugZap className="size-4" /> },
-            { path: "/admin/skills", label: "技能管理", description: "公共技能与分类开放", icon: <BookOpenCheck className="size-4" /> },
-            { path: "/admin/skill-curation", label: "技能分类", description: "平台策展与分类维护", icon: <BookOpenCheck className="size-4" /> },
-            { path: "/admin/prompt-templates", label: "提示词模板", description: "平台创作策略版本", icon: <MessageSquareText className="size-4" /> },
-            { path: "/admin/workbench-tools", label: "工作台工具", description: "生图/视频工具与预设", icon: <WandSparkles className="size-4" /> },
+            { path: "/admin/channels", label: "系统渠道", shortLabel: "系统", description: "渠道、模型与售价", icon: <RadioTower className="size-4" /> },
+            { path: "/admin/models", label: "前台模型", shortLabel: "前台", description: "展示、线路与用户价格", icon: <Layers3 className="size-4" />, requireFeature: "frontendModelsEnabled" },
+            { path: "/admin/plugins", label: "插件管理", shortLabel: "插件", description: "平台可用性、上传与卸载", icon: <PlugZap className="size-4" /> },
+            { path: "/admin/skills", label: "技能管理", shortLabel: "技能", description: "公共技能与分类开放", icon: <BookOpenCheck className="size-4" /> },
+            { path: "/admin/skill-curation", label: "技能分类", shortLabel: "技能", description: "平台策展与分类维护", icon: <BookOpenCheck className="size-4" /> },
+            { path: "/admin/prompt-templates", label: "提示词模板", shortLabel: "提示", description: "平台创作策略版本", icon: <MessageSquareText className="size-4" /> },
+            { path: "/admin/workbench-tools", label: "工作台工具", shortLabel: "工作", description: "生图/视频工具与预设", icon: <WandSparkles className="size-4" /> },
         ],
     },
     {
@@ -112,12 +115,12 @@ const adminNavigation: AdminNavigationGroup[] = [
         label: "用户与服务",
         collapsible: true,
         items: [
-            { path: "/admin/users", label: "用户管理", description: "普通用户账号与状态", icon: <UsersRound className="size-4" /> },
-            { path: "/admin/administrators", label: "管理员配置", description: "管理员账号与模块权限", icon: <UserCog className="size-4" />, fullAdminOnly: true },
-            { path: "/admin/customer-service", label: "客服配置", description: "客服入口、样式与移动", icon: <Headphones className="size-4" /> },
-            { path: "/admin/login-logs", label: "用户登录日志", description: "登录、失败与主动退出", icon: <FileClock className="size-4" /> },
-            { path: "/admin/feedbacks", label: "用户反馈", description: "Bug、功能提议与收件箱答复", icon: <Inbox className="size-4" /> },
-            { path: "/admin/agent-lessons", label: "Agent 记忆", description: "按用户查看个人记忆", icon: <Sparkles className="size-4" /> },
+            { path: "/admin/users", label: "用户管理", shortLabel: "用户", description: "普通用户账号与状态", icon: <UsersRound className="size-4" /> },
+            { path: "/admin/administrators", label: "管理员配置", shortLabel: "管理", description: "管理员账号与模块权限", icon: <UserCog className="size-4" />, fullAdminOnly: true },
+            { path: "/admin/customer-service", label: "客服配置", shortLabel: "客服", description: "客服入口、样式与移动", icon: <Headphones className="size-4" /> },
+            { path: "/admin/login-logs", label: "用户登录日志", shortLabel: "用户", description: "登录、失败与主动退出", icon: <FileClock className="size-4" /> },
+            { path: "/admin/feedbacks", label: "用户反馈", shortLabel: "用户", description: "Bug、功能提议与收件箱答复", icon: <Inbox className="size-4" /> },
+            { path: "/admin/agent-lessons", label: "Agent 记忆", shortLabel: "Ag", description: "按用户查看个人记忆", icon: <Sparkles className="size-4" /> },
         ],
     },
     {
@@ -125,8 +128,8 @@ const adminNavigation: AdminNavigationGroup[] = [
         label: "商品运营",
         collapsible: true,
         items: [
-            { path: "/admin/product-operations", label: "商品管理", description: "充值套餐与销售配置", icon: <ShoppingBag className="size-4" /> },
-            { path: "/admin/redemption-codes", label: "兑换码", description: "生成与查看兑换码批次", icon: <TicketCheck className="size-4" /> },
+            { path: "/admin/product-operations", label: "商品管理", shortLabel: "商品", description: "充值套餐与销售配置", icon: <ShoppingBag className="size-4" /> },
+            { path: "/admin/redemption-codes", label: "兑换码", shortLabel: "兑换", description: "生成与查看兑换码批次", icon: <TicketCheck className="size-4" /> },
         ],
     },
     {
@@ -134,11 +137,11 @@ const adminNavigation: AdminNavigationGroup[] = [
         label: "财务管理",
         collapsible: true,
         items: [
-            { path: "/admin/payments", label: "支付渠道", description: "支付渠道配置", icon: <CreditCard className="size-4" /> },
-            { path: "/admin/payment-orders", label: "支付订单", description: "订单查询与状态同步", icon: <ReceiptText className="size-4" /> },
-            { path: "/admin/payment-reconciliation", label: "支付对账", description: "账单执行与异常核对", icon: <ClipboardCheck className="size-4" /> },
-            { path: "/admin/credit-operations", label: "积分运营", description: "人工调账与异常计费", icon: <Coins className="size-4" /> },
-            { path: "/admin/referrals", label: "邀请返利", description: "推广规则与逐笔审核", icon: <KeyRound className="size-4" /> },
+            { path: "/admin/payments", label: "支付渠道", shortLabel: "支付", description: "支付渠道配置", icon: <CreditCard className="size-4" /> },
+            { path: "/admin/payment-orders", label: "支付订单", shortLabel: "支付", description: "订单查询与状态同步", icon: <ReceiptText className="size-4" /> },
+            { path: "/admin/payment-reconciliation", label: "支付对账", shortLabel: "支付", description: "账单执行与异常核对", icon: <ClipboardCheck className="size-4" /> },
+            { path: "/admin/credit-operations", label: "积分运营", shortLabel: "积分", description: "人工调账与异常计费", icon: <Coins className="size-4" /> },
+            { path: "/admin/referrals", label: "邀请返利", shortLabel: "邀请", description: "推广规则与逐笔审核", icon: <KeyRound className="size-4" /> },
         ],
     },
     {
@@ -146,9 +149,9 @@ const adminNavigation: AdminNavigationGroup[] = [
         label: "内容与通知",
         collapsible: true,
         items: [
-            { path: "/admin/inspirations", label: "提示词运营", description: "维护首页精选灵感", icon: <MessageSquareText className="size-4" /> },
-            { path: "/admin/announcements", label: "系统公告", description: "发布、关闭与历史公告", icon: <BellRing className="size-4" /> },
-            { path: "/admin/banner-announcements", label: "常驻通知", description: "首页顶部常驻滚动通知", icon: <Megaphone className="size-4" /> },
+            { path: "/admin/inspirations", label: "提示词运营", shortLabel: "提示", description: "维护首页精选灵感", icon: <MessageSquareText className="size-4" /> },
+            { path: "/admin/announcements", label: "系统公告", shortLabel: "系统", description: "发布、关闭与历史公告", icon: <BellRing className="size-4" /> },
+            { path: "/admin/banner-announcements", label: "常驻通知", shortLabel: "常驻", description: "首页顶部常驻滚动通知", icon: <Megaphone className="size-4" /> },
         ],
     },
     {
@@ -156,16 +159,16 @@ const adminNavigation: AdminNavigationGroup[] = [
         label: "系统配置",
         collapsible: true,
         items: [
-            { path: "/admin/settings/appearance", label: "站点及外观", description: "品牌、Canvas/Live2D、更新公告、SEO 与备案", icon: <Palette className="size-4" /> },
-            { path: "/admin/settings/features", label: "功能开放", description: "工作台、插件与模型能力", icon: <ToggleLeft className="size-4" /> },
-            { path: "/admin/settings/drawing-engine", label: "绘图工具", description: "画布绘图节点默认引擎", icon: <Paintbrush className="size-4" /> },
-            { path: "/admin/settings/system-performance", label: "系统性能", description: "主机、数据库与缓存状态", icon: <Activity className="size-4" /> },
-            { path: "/admin/settings/access", label: "登录与注册", description: "账号创建与第三方登录", icon: <ShieldCheck className="size-4" /> },
-            { path: "/admin/settings/email", label: "邮件服务", description: "注册验证码与 SMTP", icon: <Mail className="size-4" /> },
-            { path: "/admin/settings/ark-private-assets", label: "方舟素材库", description: "Seedance 可信参考素材", icon: <CloudUpload className="size-4" /> },
-            { path: "/admin/settings/response-interception", label: "模型响应拦截", description: "先启用策略，再配置替换规则", icon: <ShieldAlert className="size-4" /> },
-            { path: "/admin/settings/third-party", label: "第三方参数配置", description: "先配置凭据，再开放用户入口", icon: <KeyRound className="size-4" /> },
-            { path: "/admin/settings/system-update", label: "系统更新", description: "检查版本、备份与安全更新", icon: <RefreshCw className="size-4" /> },
+            { path: "/admin/settings/appearance", label: "站点及外观", shortLabel: "站点", description: "品牌、Canvas/Live2D、更新公告、SEO 与备案", icon: <Palette className="size-4" /> },
+            { path: "/admin/settings/features", label: "功能开放", shortLabel: "功能", description: "工作台、插件与模型能力", icon: <ToggleLeft className="size-4" /> },
+            { path: "/admin/settings/drawing-engine", label: "绘图工具", shortLabel: "绘图", description: "画布绘图节点默认引擎", icon: <Paintbrush className="size-4" /> },
+            { path: "/admin/settings/system-performance", label: "系统性能", shortLabel: "系统", description: "主机、数据库与缓存状态", icon: <Activity className="size-4" /> },
+            { path: "/admin/settings/access", label: "登录与注册", shortLabel: "登录", description: "账号创建与第三方登录", icon: <ShieldCheck className="size-4" /> },
+            { path: "/admin/settings/email", label: "邮件服务", shortLabel: "邮件", description: "注册验证码与 SMTP", icon: <Mail className="size-4" /> },
+            { path: "/admin/settings/ark-private-assets", label: "方舟素材库", shortLabel: "方舟", description: "Seedance 可信参考素材", icon: <CloudUpload className="size-4" /> },
+            { path: "/admin/settings/response-interception", label: "模型响应拦截", shortLabel: "模型", description: "先启用策略，再配置替换规则", icon: <ShieldAlert className="size-4" /> },
+            { path: "/admin/settings/third-party", label: "第三方参数配置", shortLabel: "第三", description: "先配置凭据，再开放用户入口", icon: <KeyRound className="size-4" /> },
+            { path: "/admin/settings/system-update", label: "系统更新", shortLabel: "系统", description: "检查版本、备份与安全更新", icon: <RefreshCw className="size-4" /> },
         ],
     },
     {
@@ -173,9 +176,9 @@ const adminNavigation: AdminNavigationGroup[] = [
         label: "存储与备份",
         collapsible: true,
         items: [
-            { path: "/admin/resources", label: "存储资源", description: "资源列表、容量与预览", icon: <Database className="size-4" /> },
-            { path: "/admin/settings/runtime-policy", label: "资源与策略", description: "配额、并发、频控与超时", icon: <Settings2 className="size-4" /> },
-            { path: "/admin/settings/storage", label: "存储服务", description: "对象存储与资源存储", icon: <HardDrive className="size-4" /> },
+            { path: "/admin/resources", label: "存储资源", shortLabel: "存储", description: "资源列表、容量与预览", icon: <Database className="size-4" /> },
+            { path: "/admin/settings/runtime-policy", label: "资源与策略", shortLabel: "资源", description: "配额、并发、频控与超时", icon: <Settings2 className="size-4" /> },
+            { path: "/admin/settings/storage", label: "存储服务", shortLabel: "存储", description: "对象存储与资源存储", icon: <HardDrive className="size-4" /> },
         ],
     },
 ];
@@ -238,7 +241,7 @@ function AdminShellLayout() {
 
     return (
         <ConfigProvider theme={getIsolatedAdminAntTheme(dark)} getPopupContainer={(node) => adminPopupContainer(node)}>
-            <App>
+            <AppFeedbackProvider>
                 <main id="admin-root" data-admin-root data-admin-density={density} className="admin-shell flex h-full min-h-0 overflow-hidden">
                     <aside className={cn("admin-sidebar hidden shrink-0 flex-col overflow-hidden lg:flex", collapsed && "is-collapsed")}>
                         <div className="admin-sidebar-identity shrink-0">
@@ -260,7 +263,7 @@ function AdminShellLayout() {
                                 <AdminTooltip title={collapsed ? "返回创作台" : undefined} placement="right">
                                     <NavLink to="/" aria-label={collapsed ? "返回创作台" : undefined} className={cn("admin-nav-link", collapsed && "is-collapsed")}>
                                         <Home className="size-4" strokeWidth={1.6} />
-                                        {!collapsed ? <span>返回创作台</span> : null}
+                                        {collapsed ? <span className="admin-nav-short-label">返回</span> : <span>返回创作台</span>}
                                     </NavLink>
                                 </AdminTooltip>
                                 {!collapsed ? (
@@ -289,7 +292,7 @@ function AdminShellLayout() {
                         </Suspense>
                     </section>
                 </main>
-            </App>
+            </AppFeedbackProvider>
         </ConfigProvider>
     );
 }
@@ -305,7 +308,7 @@ export function AdminPageFrame({ title, description, actions, back, scroll = fal
         <div className={cn("admin-page-root", scroll && "admin-page-root-scrollable")}>
             <div className={cn("admin-page-frame", scroll && "admin-page-frame-scrollable")}>
                 <header className="admin-page-header flex shrink-0 flex-col sm:flex-row sm:items-center sm:justify-between">
-                    <div className="flex min-w-0 items-center gap-2.5">
+                    <div className="flex min-w-0 items-center gap-2">
                         {back ? (
                             <AdminTooltip title={back.label}>
                                 <button type="button" className="admin-icon-button shrink-0" aria-label={back.label} onClick={back.onClick}>
@@ -441,7 +444,7 @@ function AdminNavigation({ collapsed }: { collapsed: boolean }) {
                     <AdminTooltip key={item.path} delay={100} title={collapsed ? item.label : undefined} placement="right">
                         <NavLink to={item.path} end={item.path === "/admin"} aria-label={collapsed ? item.label : undefined} className={({ isActive }) => cn("admin-nav-link", collapsed && "is-collapsed", isActive && "is-active")}>
                             {item.icon}
-                            {!collapsed ? <span className="truncate">{item.label}</span> : null}
+                            {collapsed ? <span className="admin-nav-short-label">{item.shortLabel}</span> : <span className="truncate">{item.label}</span>}
                         </NavLink>
                     </AdminTooltip>
                 ));

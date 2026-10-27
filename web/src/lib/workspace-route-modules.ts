@@ -5,6 +5,8 @@ const workspaceRouteLoaders = {
     projects: () => import("@/pages/projects"),
     projectDetail: () => import("@/pages/projects/detail"),
     prompts: () => import("@/pages/prompts"),
+    projectCreate: () => import("@/pages/projects/create"),
+    skillWorkbench: () => import("@/pages/skills/workbench"),
 };
 
 export const loadAssetsPage = workspaceRouteLoaders.assets;
@@ -13,6 +15,8 @@ export const loadCanvasProjectPage = () => import("@/pages/canvas/project");
 export const loadCreatePage = workspaceRouteLoaders.create;
 export const loadProjectDetailPage = workspaceRouteLoaders.projectDetail;
 export const loadProjectsPage = workspaceRouteLoaders.projects;
+export const loadProjectCreatePage = workspaceRouteLoaders.projectCreate;
+export const loadSkillWorkbenchPage = workspaceRouteLoaders.skillWorkbench;
 
 export function preloadWorkspaceRoute(pathnameOrSlug: string) {
     // 根路径就是创作页，预加载时仍映射到其内部模块名。
@@ -22,7 +26,11 @@ export function preloadWorkspaceRoute(pathnameOrSlug: string) {
     // 具体画布项目由 /canvas/:id 自己加载；不要在认证恢复阶段额外预加载画布列表。
     if (slug === "canvas" && segments.length > 1) return;
     if (slug === "projects" && segments.length > 1) {
-        void workspaceRouteLoaders.projectDetail();
+        void (segments[1] === "new" ? workspaceRouteLoaders.projectCreate() : workspaceRouteLoaders.projectDetail());
+        return;
+    }
+    if (slug === "skills" && segments[2] === "edit") {
+        void workspaceRouteLoaders.skillWorkbench();
         return;
     }
     const load = workspaceRouteLoaders[slug as keyof typeof workspaceRouteLoaders];

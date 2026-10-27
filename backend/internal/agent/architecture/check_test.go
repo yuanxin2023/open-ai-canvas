@@ -11,7 +11,7 @@ import (
 func testBackend(t *testing.T, files map[string]string) string {
 	t.Helper()
 	root := t.TempDir()
-	files["go.mod"] = "module yingce/backend\n\ngo 1.25.0\n"
+	files["go.mod"] = "module infinite-canvas/backend\n\ngo 1.25.0\n"
 	for path, body := range files {
 		path = filepath.Join(root, filepath.FromSlash(path))
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
@@ -36,8 +36,8 @@ func hasRule(findings []Finding, rule string) bool {
 func TestRejectsAgentToAppAndServiceImports(t *testing.T) {
 	root := testBackend(t, map[string]string{"internal/agent/bad/bad.go": `package bad
 import (
- _ "yingce/backend/internal/app"
- _ "yingce/backend/internal/service/nested"
+ _ "infinite-canvas/backend/internal/app"
+ _ "infinite-canvas/backend/internal/service/nested"
 )
 `})
 	findings, err := Check(root, Baseline{Version: 1})
@@ -70,7 +70,7 @@ func Accept(value Request) json.RawMessage { return value.Raw }
 func TestRejectsProtocolMapsBehindImportedAlias(t *testing.T) {
 	root := testBackend(t, map[string]string{
 		"internal/agent/a/type.go": `package a; type Payload map[string]any`,
-		"internal/agent/b/type.go": `package b; import "yingce/backend/internal/agent/a"; func Send(value a.Payload) {}`,
+		"internal/agent/b/type.go": `package b; import "infinite-canvas/backend/internal/agent/a"; func Send(value a.Payload) {}`,
 	})
 	findings, err := Check(root, Baseline{Version: 1})
 	if err != nil {

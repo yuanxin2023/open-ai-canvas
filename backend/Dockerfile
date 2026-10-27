@@ -74,7 +74,7 @@ LABEL org.opencontainers.image.version="${BUILD_VERSION}" \
     org.opencontainers.image.revision="${BUILD_COMMIT}" \
     org.opencontainers.image.created="${BUILD_TIME}"
 
-RUN apk add --no-cache ca-certificates tzdata wget \
+RUN apk add --no-cache ca-certificates tzdata wget ffmpeg \
     && addgroup -S app \
     && adduser -S app -G app
 

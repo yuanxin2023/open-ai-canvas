@@ -325,6 +325,11 @@ func (r *Repository) PurgeUserData(userID string, expectedResourceIDs []string, 
 		if err := deleteWhereIn(tx, &model.ProductionTaskLink{}, "project_id", projectIDs, false); err != nil {
 			return err
 		}
+		for _, owned := range []any{&model.DramaJob{}, &model.DramaTake{}, &model.DramaSegment{}, &model.DramaShot{}, &model.DramaEpisode{}, &model.DramaCast{}, &model.DramaProduction{}} {
+			if err := deleteWhereIn(tx, owned, "project_id", projectIDs, false); err != nil {
+				return err
+			}
+		}
 		if err := tx.Where("user_id = ?", userID).Delete(&model.Project{}).Error; err != nil {
 			return err
 		}
@@ -428,6 +433,8 @@ func (r *Repository) PurgeUserData(userID string, expectedResourceIDs []string, 
 			{&model.UserAnnouncementRead{}, "user_id = ?"}, {&model.UserPluginState{}, "user_id = ?"},
 			{&model.UserDailyActivity{}, "user_id = ?"}, {&model.UserDailyUploadUsage{}, "user_id = ?"},
 			{&model.UserResourceQuota{}, "user_id = ?"},
+			{&model.UserStorageGrant{}, "user_id = ?"}, {&model.UserStorageState{}, "user_id = ?"},
+			{&model.ResourceOffloadJob{}, "user_id = ?"},
 			{&model.ArkPrivateAssetBinding{}, "user_id = ?"}, {&model.UserOSSSetting{}, "user_id = ?"},
 			{&model.AnnouncementImageDraft{}, "user_id = ?"},
 			{&model.InspirationCoverDraft{}, "user_id = ?"}, {&model.PaymentPromotionImageDraft{}, "user_id = ?"}, {&model.UserIdentity{}, "user_id = ?"},

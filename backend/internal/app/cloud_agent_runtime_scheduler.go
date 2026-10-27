@@ -325,6 +325,9 @@ func (s *Service) advanceCloudAgent(run *model.CloudAgentExecution) (err error) 
 			if len(calls) > 0 {
 				state.Canonical.Messages = append(state.Canonical.Messages, map[string]any{"role": "assistant", "content": result.Text, "tool_calls": calls})
 			}
+			if strings.TrimSpace(result.Text) != "" {
+				cloudAgentConsumeInspectedImages(&state.Canonical)
+			}
 			if len(calls) == 0 {
 				if len(state.PendingInterjections) > 0 {
 					if !cloudAgentStepBudgetExhausted(&state) {

@@ -25,6 +25,10 @@ func InsufficientCredits() *AppError {
 	return kernel.InsufficientCredits()
 }
 
+func StorageCapacityExceeded(message string) *AppError {
+	return kernel.StorageCapacityExceeded(message)
+}
+
 // AuthError 保留为兼容别名。
 type AuthError = AppError
 

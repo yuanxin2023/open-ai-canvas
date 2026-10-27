@@ -18,6 +18,7 @@ const (
 
 	CodeQuotaExceeded          = 40301
 	CodeInsufficientCredits    = 40001
+	CodeStorageReadOnly        = 40302
 	CodeIdempotencyConflict    = 40901
 	CodeRateLimited            = 42901
 	CodeUsernameChangeLimit    = 42902
@@ -53,6 +54,9 @@ const (
 	ReasonInspirationLibraryChanged      ErrorReason = "inspiration_library_changed"
 	ReasonFeedbackChanged                ErrorReason = "feedback_changed"
 	ReasonFeedbackSubmissionConflict     ErrorReason = "feedback_submission_conflict"
+	ReasonSkillVersionConflict           ErrorReason = "skill_version_conflict"
+	ReasonStorageCapacityExceeded        ErrorReason = "storage_capacity_exceeded"
+	ReasonStorageReadOnly                ErrorReason = "storage_read_only"
 )
 
 func ReasonForStatus(status int) ErrorReason {

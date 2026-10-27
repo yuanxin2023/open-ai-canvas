@@ -229,7 +229,7 @@ func (s *Service) AdminReviewReferralReward(actor *model.User, id string, approv
 }
 
 func (s *Service) referralRewardDraft(order *model.PaymentOrder) (*model.ReferralReward, error) {
-	if order == nil || order.AmountFen <= 0 || order.Currency != "CNY" {
+	if order == nil || order.ProductKind == model.TopupProductKindStorage || order.AmountFen <= 0 || order.Currency != "CNY" {
 		return nil, nil
 	}
 	policy, err := s.referralPolicy()

@@ -77,6 +77,7 @@ type Props = Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, "onChange" | "val
     slashCommandError?: string;
     slashCommandMenuWidth?: number;
     onSlashCommandOpen?: () => void;
+    mentionMenuLabels?: { connected?: string; search?: string };
 };
 
 // 回车提交语义由调用方决定：false 只在 ⌘/Ctrl+Enter 提交，"both" 两种都提交；Shift+Enter 始终换行。
@@ -89,7 +90,7 @@ function shouldSubmitOnEnter(event: { key: string; ctrlKey: boolean; metaKey: bo
 }
 
 export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Props>(function CanvasResourceMentionTextarea(
-    { value, references, onSelectReference, onChange, onSubmit, onKeyDown, className, containerClassName, style, highlightLabels = true, mentionMenuWidth = 320, sendOnEnter = true, onContentSizeChange, includeAssetLibrary = false, activeDropReferenceId, onReferenceFilesDrop, autoLinkEnabled = false, slashCommandGroups = [], slashCommandItems = [], slashCommandLoading = false, slashCommandError, slashCommandMenuWidth = 400, onSlashCommandOpen, ...props },
+    { value, references, onSelectReference, onChange, onSubmit, onKeyDown, className, containerClassName, style, highlightLabels = true, mentionMenuWidth = 320, sendOnEnter = true, onContentSizeChange, includeAssetLibrary = false, activeDropReferenceId, onReferenceFilesDrop, autoLinkEnabled = false, slashCommandGroups = [], slashCommandItems = [], slashCommandLoading = false, slashCommandError, slashCommandMenuWidth = 400, onSlashCommandOpen, mentionMenuLabels, ...props },
     forwardedRef,
 ) {
     const rawTheme = useActiveTheme();
@@ -386,7 +387,7 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
             ref={autoLinkSuggestionRef}
             type="button"
             data-canvas-no-zoom
-            className="fixed z-[var(--z-tooltip)] inline-flex max-w-[min(360px,calc(100vw-24px))] items-center gap-1.5 rounded-md border border-current/15 px-2 py-1 text-[var(--fs-micro)] shadow-sm"
+            className="fixed z-[var(--z-tooltip)] inline-flex max-w-[min(360px,calc(100vw-24px))] items-center gap-2 rounded-md border border-current/15 px-2 py-1 text-[var(--fs-micro)] shadow-sm"
             style={{ ...autoLinkPosition, visibility: autoLinkPosition ? "visible" : "hidden", background: theme.node.panel, color: theme.node.text }}
             onPointerDown={(event) => event.stopPropagation()}
             onMouseDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
@@ -454,6 +455,7 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
             onQueryChange={(query) => setMention((current) => current ? { ...current, query } : current)}
             onClose={closeMention}
             onSelect={insertReference}
+            labels={mentionMenuLabels}
         />
     ) : null;
     const slashMenu = slashCommand && slashCommandGroups.length && menuAnchor ? (

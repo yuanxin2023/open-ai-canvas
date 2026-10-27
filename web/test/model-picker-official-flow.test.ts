@@ -30,7 +30,7 @@ describe("official model picker flow", () => {
             "../src/components/canvas/canvas-agent-image-approval-settings.tsx",
             "../src/components/canvas/canvas-cloud-agent-panel.tsx",
             "../src/components/canvas/canvas-cloud-agent-settings.tsx",
-            "../src/components/canvas/canvas-node-mask-edit-dialog.tsx",
+            "../src/components/canvas/canvas-node-region-edit-dialog.tsx",
             "../src/components/canvas/canvas-node-prompt-panel.tsx",
             "../src/components/canvas/canvas-prompt-optimizer-drawer.tsx",
             "../src/components/canvas/canvas-script-node.tsx",

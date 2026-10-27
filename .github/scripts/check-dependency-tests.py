@@ -13,6 +13,10 @@ REQUIRED = {
     ("database", "TestUpgradeOriginalSchema51Fixtures/sqlite_upstream"),
     ("database", "TestUpgradeOriginalSchema51Fixtures/postgres_local"),
     ("database", "TestUpgradeOriginalSchema51Fixtures/postgres_upstream"),
+    ("database", "TestUpgradeOriginalSchema83Fixtures/sqlite_local"),
+    ("database", "TestUpgradeOriginalSchema83Fixtures/sqlite_upstream"),
+    ("database", "TestUpgradeOriginalSchema83Fixtures/postgres_local"),
+    ("database", "TestUpgradeOriginalSchema83Fixtures/postgres_upstream"),
     ("skills", "TestBuiltinSyncRetainsDeployedOfficialImageIdentities/postgres"),
     ("skills", "TestBuiltinImageHistoryRejectsUnverifiedRecords/postgres"),
 }

@@ -7,6 +7,7 @@ import { WorkspaceSidebarNav } from "@/components/layout/workspace-sidebar-nav";
 import { readWorkspaceSidebarCollapsed, subscribeWorkspaceSidebarCollapsed, writeWorkspaceSidebarCollapsed } from "@/components/layout/workspace-sidebar-state";
 import { WorkspaceTopBar } from "@/components/layout/workspace-top-bar";
 import { WorkspaceTopBarExtensionProvider } from "@/components/layout/workspace-top-bar-extension";
+import { WorkspaceStorageLimitNotice } from "@/components/layout/workspace-storage-limit-notice";
 import { WorkspaceWalletHost } from "@/components/layout/workspace-wallet-modal";
 import { ImageCreditShortfallHost } from "@/components/layout/image-credit-shortfall-host";
 import { cn } from "@/lib/utils";
@@ -117,6 +118,7 @@ export function AppWorkspaceShell({ children }: { children: ReactNode }) {
             </WorkspaceTopBarExtensionProvider>
             <WorkspaceWalletHost />
             <ImageCreditShortfallHost />
+            <WorkspaceStorageLimitNotice />
             <ModelSetupGuide hidden={pathname === "/login" || pathname === "/register" || pathname.startsWith("/admin")} />
         </>
     );

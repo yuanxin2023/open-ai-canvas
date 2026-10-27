@@ -7,7 +7,7 @@ import { commitCanvasGenerationResult } from "@/lib/canvas/canvas-generation-res
 import { reconcileImageBatchRoot } from "@/lib/canvas/canvas-image-batch-retry";
 import { canvasTaskBindingStatus, markCanvasTaskRecoveryUnconfirmed } from "@/lib/canvas/canvas-task-state";
 import { applyCanvasGenerationTaskNodeEffect, CanvasGenerationDurableAckError, isCanvasGenerationDurableAckError } from "@/services/canvas-generation-consumer";
-import { consumeGenerationTaskNode, ensureCanvasNodeAsset, retryCanvasAssetSyncAfterRateLimit } from "@/services/project-asset-sync";
+import { consumeGenerationTaskNode, ensureCanvasNodeAsset, retryCanvasAssetSyncAfterRateLimit, subscribeCanvasProjectAssetLinkFailures } from "@/services/project-asset-sync";
 import { listGenerationTasks, listTaskLogs, queryGenerationTask, subscribeGenerationTasks, type GenerationTask, type TaskLog } from "@/services/api/task-center";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 import { useCanvasStore } from "@/stores/canvas/use-canvas-store";
@@ -291,8 +291,28 @@ export function useCanvasGeneration({ projectId, domainProjectId, projectLoaded,
                 ),
             );
             if (domainProjectId) await queryClient.invalidateQueries({ queryKey: ["project", domainProjectId] });
+            if (result.syncPending) {
+                message.info({
+                    key: `canvas-asset-sync:${projectId}`,
+                    content: domainProjectId ? "生成结果已保存到本地，云端项目资产正在自动同步" : "生成结果已保存到本地，云端素材正在自动同步",
+                    duration: 4,
+                });
+            }
         },
-        [domainProjectId, projectId, queryClient, setNodes],
+        [domainProjectId, message, projectId, queryClient, setNodes],
+    );
+
+    useEffect(
+        () =>
+            subscribeCanvasProjectAssetLinkFailures((failure) => {
+                if (!domainProjectId || failure.domainProjectId !== domainProjectId) return;
+                message.warning({
+                    key: `canvas-asset-sync:${projectId}`,
+                    content: `本地素材已保存，但云端项目资产同步失败：${failure.message}`,
+                    duration: 6,
+                });
+            }),
+        [domainProjectId, message, projectId],
     );
 
     const applyGenerationTaskResult = useCallback(
@@ -545,7 +565,7 @@ export function useCanvasGeneration({ projectId, domainProjectId, projectLoaded,
                 autoSavedTaskIdsRef.current.delete(saveKey);
                 if (error instanceof Error && error.name === "AbortError") return;
                 const detail = error instanceof Error ? error.message : "未知错误";
-                const content = hasRemoteUserDataSyncSession() ? `生成结果已保留，本地素材已保存，云端项目资产稍后重试：${detail}` : "生成结果已保留在本地素材库，登录后会继续同步到云端";
+                const content = hasRemoteUserDataSyncSession() ? `生成结果已保留，本地素材已保存，${domainProjectId ? "云端项目资产" : "云端素材"}同步失败：${detail}` : "生成结果已保留在本地素材库，登录后会继续同步到云端";
                 message.warning({
                     key: `canvas-asset-sync:${projectId}`,
                     content,

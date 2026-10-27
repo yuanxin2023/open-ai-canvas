@@ -1,6 +1,7 @@
 import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { useLocation } from "react-router";
 
+import { TopbarFeedbackButton } from "@/components/feedback/topbar-feedback-button";
 import { SystemAnnouncementCenter } from "@/components/layout/system-announcement-center";
 import { WorkspaceAccountMenu } from "@/components/layout/workspace-account-menu";
 import { WorkspaceCreditPopover } from "@/components/layout/workspace-credit-popover";
@@ -42,6 +43,7 @@ export function WorkspaceTopBar({ sidebarOpen, onToggleSidebar }: { sidebarOpen:
             </div>
             <WorkspaceTopBarExtensionSlot />
             <div className="app-workspace-topbar-actions">
+                {user ? <TopbarFeedbackButton /> : null}
                 {user && creditsEnabled ? <WorkspaceCreditPopover userId={user.id} /> : null}
                 {user ? <SystemAnnouncementCenter userId={user.id} className="app-workspace-topbar-icon-button" autoOpen /> : null}
                 <AnimatedThemeToggler className="app-workspace-topbar-icon-button" theme={theme} onThemeChange={setTheme} aria-label="切换主题" />

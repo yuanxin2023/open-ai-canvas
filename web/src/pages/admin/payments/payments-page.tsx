@@ -9,7 +9,9 @@ import { Eye, RefreshCw, Search, Settings2, XCircle } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { PaginationBar } from "@/pages/admin/components/admin-ui";
+import { paymentOrderGrantLabel } from "@/lib/payment-order-grant";
 import { formatCredits } from "@/constant/credits";
+import { formatStorageCapacity, formatStorageDuration } from "@/lib/account-storage-usage";
 import {
     closeAdminPaymentOrder,
     exportAdminPaymentOrders,
@@ -348,7 +350,7 @@ export default function AdminPaymentsPage({ view = "providers" }: { view?: Admin
             width: 180,
             align: "center",
             render: (_, provider) => (
-                <div className="flex flex-col items-center gap-1.5">
+                <div className="flex flex-col items-center gap-2">
                     <AdminStatusBadge label={provider.enabled ? "可用" : "不可用"} tone={provider.enabled ? "success" : "neutral"} />
                     <span className="text-xs text-foreground/45">
                         插件{provider.pluginEnabled ? "已开放" : "已停用"} · 配置{provider.configEnabled ? "已启用" : "已停用"}
@@ -418,14 +420,14 @@ export default function AdminPaymentsPage({ view = "providers" }: { view?: Admin
             ),
         },
         {
-            title: "金额 / 积分",
+            title: "金额 / 权益",
             key: "amount",
-            width: 130,
+            width: 170,
             align: "right",
             render: (_, order) => (
                 <div>
                     <div className="font-medium tabular-nums">¥ {(order.amountFen / 100).toFixed(2)}</div>
-                    <div className="text-xs text-foreground/45">{formatCredits(order.creditsMicrocredits)} 积分</div>
+                    <div className="text-xs text-foreground/45">{paymentOrderGrantLabel(order)}</div>
                 </div>
             ),
         },

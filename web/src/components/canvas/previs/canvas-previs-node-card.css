@@ -6,8 +6,8 @@
     min-width: 0;
     min-height: 0;
     flex-direction: column;
-    gap: 10px;
-    padding: 16px 16px 14px;
+    gap: 8px;
+    padding: 16px 16px 16px;
     overflow: hidden;
     background: linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.018));
 }
@@ -17,7 +17,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 10px;
+    gap: 8px;
 }
 .previs-node-card-kicker,
 .previs-node-card-status,
@@ -25,13 +25,13 @@
 .previs-node-card-duration {
     display: inline-flex;
     align-items: center;
-    gap: 5px;
+    gap: 4px;
     white-space: nowrap;
 }
 .previs-node-card-kicker {
     color: color-mix(in srgb, currentColor 62%, transparent);
-    font-size: 9px;
-    font-weight: 700;
+    font-size: 11px;
+    font-weight: 600;
     letter-spacing: 0.14em;
 }
 .previs-node-card-mark {
@@ -46,7 +46,7 @@
 }
 .previs-node-card-status {
     color: color-mix(in srgb, currentColor 62%, transparent);
-    font-size: 10px;
+    font-size: 11px;
 }
 .previs-node-card-title-row {
     align-items: flex-end;
@@ -56,7 +56,7 @@
     overflow: hidden;
     color: currentColor;
     font-size: 16px;
-    font-weight: 700;
+    font-weight: 600;
     line-height: 1.15;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -71,7 +71,7 @@
 }
 .previs-node-card-duration {
     color: color-mix(in srgb, currentColor 65%, transparent);
-    font-size: 10px;
+    font-size: 11px;
 }
 .previs-node-preview {
     position: relative;
@@ -81,7 +81,7 @@
     width: 100%;
     overflow: hidden;
     border: 1px solid;
-    border-radius: 14px;
+    border-radius: 12px;
     text-align: left;
     cursor: pointer;
 }
@@ -101,10 +101,10 @@
     height: 38px;
     align-items: center;
     justify-content: center;
-    gap: 6px;
+    gap: 8px;
     opacity: 0;
     font-size: 11px;
-    font-weight: 700;
+    font-weight: 600;
     transition: opacity 160ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 .previs-node-preview:focus-visible {
@@ -114,9 +114,9 @@
 .previs-node-card-footer {
     min-height: 24px;
     border-top: 1px solid;
-    padding-top: 9px;
+    padding-top: 8px;
     color: color-mix(in srgb, currentColor 62%, transparent);
-    font-size: 10px;
+    font-size: 11px;
 }
 .previs-node-card-footer b {
     color: currentColor;

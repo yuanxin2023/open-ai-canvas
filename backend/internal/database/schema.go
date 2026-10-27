@@ -65,6 +65,8 @@ func Models() []any {
 		&model.PaymentNotification{},
 		&model.PaymentReconciliationRun{},
 		&model.PaymentReconciliationItem{},
+		&model.UserStorageGrant{},
+		&model.UserStorageState{},
 		&model.RedeemBatch{},
 		&model.RedeemCode{},
 		&model.AdminAuditEvent{},
@@ -94,6 +96,7 @@ func Models() []any {
 		&model.ToolFavorite{},
 		&model.Resource{},
 		&model.ResourceDeletionJob{},
+		&model.ResourceOffloadJob{},
 		&model.AnnouncementImageDraft{},
 		&model.InspirationCoverDraft{},
 		&model.PaymentPromotionImageDraft{},
@@ -143,6 +146,13 @@ func Models() []any {
 		&model.Result{},
 		&model.UserFeedback{},
 		&model.FeedbackResourceReference{},
+		&model.DramaProduction{},
+		&model.DramaCast{},
+		&model.DramaEpisode{},
+		&model.DramaShot{},
+		&model.DramaTake{},
+		&model.DramaSegment{},
+		&model.DramaJob{},
 	}
 }
 

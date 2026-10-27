@@ -13,7 +13,7 @@
         border-radius: 8px;
         background: color-mix(in srgb, var(--creation-surface-muted) 70%, transparent);
         color: var(--creation-text);
-        padding: 0 9px;
+        padding: 0 8px;
         font-size: 11px;
         font-weight: 600;
     }
@@ -39,7 +39,7 @@
     .creation-model-picker .canvas-model-picker-trigger-icon {
         width: 22px;
         height: 22px;
-        border-radius: 6px;
+        border-radius: 8px;
     }
 
     .creation-model-picker-surface {
@@ -82,7 +82,7 @@
     }
 
     .creation-model-picker-menu .canvas-model-picker-group-label {
-        padding: 7px 8px 6px;
+        padding: 8px 8px 8px;
         font-size: 11px;
     }
 
@@ -90,8 +90,8 @@
         display: flex;
         min-width: 0;
         align-items: center;
-        gap: 7px;
-        padding: 3px 8px 9px;
+        gap: 8px;
+        padding: 4px 8px 8px;
         color: #929aa5;
         font-size: 12px;
     }
@@ -100,7 +100,7 @@
         min-width: 0;
         overflow: hidden;
         color: #17191d;
-        font-weight: 520;
+        font-weight: 500;
         text-overflow: ellipsis;
         white-space: nowrap;
     }
@@ -115,8 +115,8 @@
 
     .creation-model-picker-menu .canvas-model-picker-option {
         min-height: 52px;
-        border-radius: 9px;
-        padding: 7px 9px;
+        border-radius: 8px;
+        padding: 8px 8px;
         transition: none;
     }
 
@@ -152,7 +152,7 @@
         border-radius: 14px;
         background: #202329;
         color: #f1f3f5;
-        padding: 0 15px;
+        padding: 0 16px;
         font-size: 14px;
         font-weight: 600;
         white-space: nowrap;
@@ -182,7 +182,7 @@
     .creation-model-picker.canvas-composer-model-picker {
         width: min(328px, 30vw);
         justify-content: flex-start;
-        font-size: 15px;
+        font-size: 14px;
     }
     .creation-model-picker .canvas-model-picker-trigger-icon {
         width: 25px;
@@ -200,7 +200,7 @@
         border-radius: 8px;
         background: rgba(30, 33, 39, 0.78);
         color: #e6e9ed;
-        padding: 0 9px;
+        padding: 0 8px;
         font-size: 11px;
         font-weight: 600;
         white-space: nowrap;
@@ -267,7 +267,7 @@
     }
 
     .canvas-composer-tools .canvas-composer-model-picker {
-        padding-inline: 7px !important;
+        padding-inline: 8px !important;
     }
 
     .canvas-composer-tools .canvas-model-picker-label {
@@ -279,7 +279,7 @@
         appearance: none;
         background: color-mix(in srgb, var(--workspace-surface-strong) 94%, var(--workspace-accent) 6%);
         border: 0;
-        border-radius: 9px;
+        border-radius: 8px;
         color: var(--foreground);
         cursor: pointer;
         display: flex;
@@ -291,7 +291,7 @@
         max-width: 100%;
         min-width: 0;
         outline: none;
-        padding: 0 9px;
+        padding: 0 8px;
         text-align: left;
         transition: none;
     }
@@ -319,12 +319,16 @@
 
     .canvas-model-picker-trigger-icon {
         align-items: center;
-        border-radius: 6px;
+        border-radius: 8px;
         display: inline-flex;
         flex: 0 0 22px;
         height: 22px;
         justify-content: center;
         width: 22px;
+    }
+    /* 提示词面板底栏的模型胶囊：图标随胶囊取全圆角。 */
+    .canvas-node-composer-footer .canvas-node-composer-model-trigger .canvas-model-picker-trigger-icon {
+        border-radius: var(--r-full);
     }
 
     .canvas-model-picker-chevron {
@@ -358,25 +362,25 @@
 
     .canvas-model-picker-group + .canvas-model-picker-group {
         border-top: 1px solid var(--workspace-border);
-        margin-top: 5px;
-        padding-top: 5px;
+        margin-top: 4px;
+        padding-top: 4px;
     }
 
     .canvas-model-picker-group-label {
         align-items: center;
         display: flex;
-        font-size: 10px;
+        font-size: 11px;
         font-weight: 600;
-        gap: 6px;
+        gap: 8px;
         letter-spacing: 0.02em;
         min-width: 0;
-        padding: 5px 7px 4px;
+        padding: 4px 8px 4px;
     }
 
     .canvas-model-picker-option {
         align-items: center;
         border: 0;
-        border-radius: 7px;
+        border-radius: 8px;
         cursor: pointer;
         display: flex;
         gap: 8px;
@@ -385,7 +389,7 @@
         min-width: 0;
         outline: none;
         overflow: hidden;
-        padding: 6px 7px;
+        padding: 8px 8px;
         text-align: left;
         transition: none;
         width: 100%;
@@ -417,7 +421,7 @@
 
     .canvas-model-picker-empty {
         font-size: 11px;
-        padding: 22px 12px;
+        padding: 24px 12px;
         text-align: center;
     }
 
@@ -438,7 +442,7 @@
         }
 
         .canvas-composer-tools .canvas-composer-model-picker {
-            padding-inline: 10px !important;
+            padding-inline: 8px !important;
         }
 
         .canvas-composer-tools .canvas-model-picker-label > span:nth-child(n + 2) {
@@ -460,7 +464,7 @@
         border-color: transparent !important;
         border-radius: var(--r-md) !important;
         background: transparent !important;
-        padding: 0 6px !important;
+        padding: 0 8px !important;
         color: color-mix(in srgb, var(--foreground) 62%, transparent) !important;
         font-size: var(--fs-micro) !important;
     }
@@ -475,11 +479,11 @@
     .canvas-prompt-optimizer-model-picker .canvas-model-picker-trigger-icon {
         width: 18px;
         height: 18px;
-        border-radius: 5px;
+        border-radius: 4px;
     }
 
     .canvas-prompt-optimizer-model-picker .canvas-model-picker-label {
-        gap: 5px;
+        gap: 4px;
     }
 
     .canvas-prompt-optimizer-model-picker .canvas-model-picker-chevron {
@@ -500,7 +504,7 @@
     @container (max-width: 350px) {
         .canvas-prompt-optimizer-model-picker.canvas-composer-model-picker {
             max-width: 96px;
-            padding-inline: 3px !important;
+            padding-inline: 4px !important;
         }
     }
     .creation-home .creation-chat-composer .creation-model-picker.canvas-composer-model-picker {
@@ -524,7 +528,7 @@
     height: 32px;
     min-width: 0;
     align-items: center;
-    gap: 5px;
+    gap: 4px;
     border: 0;
     border-radius: var(--r-md);
     background: transparent;
@@ -670,10 +674,10 @@ html:not(.dark) .creation-home .creation-chat-composer .creation-model-picker.ca
     min-height: 48px;
     min-width: 0;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     border: 1px solid transparent;
-    border-radius: 10px;
-    padding: 8px 10px;
+    border-radius: 8px;
+    padding: 8px 8px;
     background: transparent;
     color: inherit;
     text-align: left;
@@ -699,7 +703,7 @@ html:not(.dark) .creation-home .creation-chat-composer .creation-model-picker.ca
     height: 32px;
     flex: 0 0 32px;
     place-items: center;
-    border-radius: 9px;
+    border-radius: 8px;
     background: var(--workspace-surface-hover);
 }
 .canvas-model-picker-brand-copy {
@@ -711,7 +715,7 @@ html:not(.dark) .creation-home .creation-chat-composer .creation-model-picker.ca
 .canvas-model-picker-brand-copy strong {
     overflow: hidden;
     font-size: 13px;
-    font-weight: 650;
+    font-weight: 600;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
@@ -720,9 +724,9 @@ html:not(.dark) .creation-home .creation-chat-composer .creation-model-picker.ca
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 6px;
+    gap: 8px;
     color: color-mix(in srgb, currentColor 55%, transparent);
-    font-size: 10px;
+    font-size: 11px;
     line-height: 1.4;
 }
 .canvas-model-picker-brand-subtext {
@@ -757,7 +761,7 @@ html:not(.dark) .creation-home .creation-chat-composer .creation-model-picker.ca
     width: 100%;
     grid-template-columns: 250px minmax(0, 1fr);
     grid-template-rows: minmax(0, 1fr);
-    gap: 14px;
+    gap: 16px;
     min-width: 0;
     min-height: 0;
     overflow: hidden;
@@ -766,11 +770,11 @@ html:not(.dark) .creation-home .creation-chat-composer .creation-model-picker.ca
     display: grid;
     min-height: 0;
     align-content: start;
-    gap: 5px;
+    gap: 4px;
     overflow-x: hidden;
     overflow-y: auto;
     border-right: 1px solid var(--workspace-border);
-    padding-right: 14px;
+    padding-right: 16px;
 }
 .canvas-model-picker-menu.is-model-list .canvas-model-picker-brand {
     width: 100%;
@@ -834,7 +838,7 @@ html:not(.dark) .creation-home .creation-chat-composer .creation-model-picker.ca
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 6px 8px;
+    gap: 8px 8px;
 }
 
 .canvas-model-picker-option-name {
@@ -854,7 +858,7 @@ html:not(.dark) .creation-home .creation-chat-composer .creation-model-picker.ca
     font-size: var(--fs-caption);
     min-height: 1.5em;
     line-height: 1.5;
-    margin-top: 5px !important;
+    margin-top: 4px !important;
     white-space: normal;
     overflow-wrap: anywhere;
     visibility: hidden;
@@ -870,9 +874,9 @@ html:not(.dark) .creation-home .creation-chat-composer .creation-model-picker.ca
 .model-picker-price {
     --model-price-ink: #946900;
     color: var(--model-price-ink);
-    font-weight: 650;
+    font-weight: 600;
     line-height: 1.3;
-    gap: 3px;
+    gap: 4px;
     white-space: nowrap;
 }
 
@@ -890,7 +894,7 @@ html:not(.dark) .creation-home .creation-chat-composer .creation-model-picker.ca
     border: 1px solid color-mix(in srgb, var(--model-price-ink) 20%, transparent);
     border-radius: var(--r-sm);
     background: color-mix(in srgb, var(--model-price-ink) 9%, transparent);
-    padding: 2px 5px;
+    padding: 2px 4px;
     max-width: 100%;
     flex-wrap: wrap;
     white-space: normal;
@@ -904,10 +908,10 @@ html:not(.dark) .creation-home .creation-chat-composer .creation-model-picker.ca
     gap: 4px;
     border: 1px solid color-mix(in srgb, currentColor 16%, transparent);
     border-radius: 999px;
-    padding: 2px 6px;
+    padding: 2px 8px;
     color: color-mix(in srgb, currentColor 68%, transparent);
-    font-size: 10px;
-    font-weight: 650;
+    font-size: 11px;
+    font-weight: 600;
     line-height: 1.3;
     white-space: nowrap;
     cursor: help;
@@ -921,7 +925,7 @@ html:not(.dark) .creation-home .creation-chat-composer .creation-model-picker.ca
 .model-picker-availability-track {
     display: inline-flex;
     align-items: center;
-    gap: 2.5px;
+    gap: 4px;
     padding: 0 1px;
 }
 
@@ -952,9 +956,9 @@ html:not(.dark) .creation-home .creation-chat-composer .creation-model-picker.ca
 .model-picker-availability-track.in-popover {
     display: flex;
     align-items: center;
-    gap: 3.5px;
-    padding: 4px 6px;
-    border-radius: 6px;
+    gap: 4px;
+    padding: 4px 8px;
+    border-radius: 8px;
     background: color-mix(in srgb, currentColor 6%, transparent);
 }
 
@@ -1008,14 +1012,14 @@ html:not(.dark) .creation-home .creation-chat-composer .creation-model-picker.ca
 
 .model-picker-availability-popover-head span {
     color: #2e8d58;
-    font-weight: 700;
+    font-weight: 600;
     font-variant-numeric: tabular-nums;
 }
 
 .model-picker-availability-popover-meta,
 .model-picker-availability-popover-foot {
     color: color-mix(in srgb, currentColor 54%, transparent);
-    font-size: 10px;
+    font-size: 11px;
     line-height: 1.5;
 }
 
@@ -1030,7 +1034,7 @@ html:not(.dark) .creation-home .creation-chat-composer .creation-model-picker.ca
     display: grid;
     grid-template-columns: repeat(7, minmax(0, 1fr));
     gap: 4px;
-    margin-top: 10px;
+    margin-top: 8px;
 }
 
 .model-picker-availability-segment {
@@ -1087,7 +1091,7 @@ html:not(.dark) .creation-home .creation-chat-composer .creation-model-picker.ca
 }
 /* 模型与渠道共用菜单高度约束，长列表在各自区域滚动。 */
 .app-user-workspace .creation-model-picker-menu.is-brand-list {
-    padding: 10px !important;
+    padding: 8px !important;
 }
 .app-user-workspace .creation-model-picker-menu .canvas-model-picker-brands {
     display: grid;
@@ -1237,7 +1241,7 @@ html:not(.dark) .creation-home .creation-chat-composer .creation-model-picker.ca
     height: 32px !important;
 }
 .creation-model-picker-surface .creation-model-picker-menu.is-brand-list {
-    padding: 10px !important;
+    padding: 8px !important;
 }
 .creation-model-picker-surface .canvas-model-picker-brands {
     display: grid;

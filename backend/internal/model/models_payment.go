@@ -8,6 +8,14 @@ type PaymentReconciliationStatus string
 type PaymentReconciliationResult string
 type TopupSaleStrategy string
 
+// TopupProductKind 决定支付成功后发放的权益：积分入账或账号文件容量扩容。
+type TopupProductKind string
+
+const (
+	TopupProductKindCredits TopupProductKind = "credits"
+	TopupProductKindStorage TopupProductKind = "storage"
+)
+
 const (
 	TopupSaleStrategyUnlimited TopupSaleStrategy = "unlimited"
 	TopupSaleStrategyPeriodic  TopupSaleStrategy = "periodic"
@@ -58,6 +66,9 @@ type TopupProduct struct {
 	Featured            bool              `json:"featured"`
 	AmountFen           int64             `json:"amountFen" gorm:"index"`
 	CreditsMicrocredits int64             `json:"creditsMicrocredits"`
+	Kind                TopupProductKind  `json:"kind" gorm:"size:24;not null;default:credits;index"`
+	StorageBytes        int64             `json:"storageBytes" gorm:"not null;default:0"`
+	StorageDurationDays int               `json:"storageDurationDays" gorm:"not null;default:0"`
 	Enabled             bool              `json:"enabled" gorm:"index"`
 	SortOrder           int               `json:"sortOrder" gorm:"index"`
 	CreatedBy           string            `json:"createdBy" gorm:"index;size:36"`
@@ -98,6 +109,9 @@ type PaymentOrder struct {
 	MerchantOrderNo       string             `json:"merchantOrderNo" gorm:"size:32;uniqueIndex"`
 	ProductID             string             `json:"productId" gorm:"size:36;index"`
 	ProductName           string             `json:"productName" gorm:"size:120"`
+	ProductKind           TopupProductKind   `json:"productKind" gorm:"size:24;not null;default:credits"`
+	StorageBytes          int64              `json:"storageBytes" gorm:"not null;default:0"`
+	StorageDurationDays   int                `json:"storageDurationDays" gorm:"not null;default:0"`
 	StockReserved         bool               `json:"-" gorm:"not null;default:false"`
 	SaleStrategySnapshot  TopupSaleStrategy  `json:"-" gorm:"size:24"`
 	ProviderClosedAt      *time.Time         `json:"-" gorm:"index"`

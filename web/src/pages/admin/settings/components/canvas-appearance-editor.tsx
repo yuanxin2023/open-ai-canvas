@@ -127,7 +127,9 @@ export function CanvasAppearanceEditor({ value, onChange, disabled, onUploading 
                             width={Math.round(value.avatarHeight * 0.75)}
                             height={value.avatarHeight}
                             reducedMotion={reducedMotion}
-                            fallback={<FluidOrb size={62} color="#7164f6" />}
+                            fallback={<FluidOrb size={60} color="#7164f6" />}
+                            // 预览期间由预览框独占 Live2D 渲染，悬浮入口临时显示默认球。
+                            renderPriority={1}
                             onReady={() => {
                                 setReadyURL(url);
                                 setError("");

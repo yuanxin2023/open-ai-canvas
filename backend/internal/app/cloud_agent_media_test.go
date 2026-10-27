@@ -422,6 +422,63 @@ func TestCloudAgentMediaRejectAndInvalidModelDoNotCreateTasks(t *testing.T) {
 	}
 }
 
+func TestCloudAgentApprovalRejectionMessageMatchesOperation(t *testing.T) {
+	for _, scenario := range []struct {
+		name      string
+		media     bool
+		wantText  string
+		forbidden string
+	}{
+		{name: "ordinary write", wantText: "已拒绝本次操作，本次操作未执行。", forbidden: "草稿节点仍保留"},
+		{name: "media generation", media: true, wantText: "已拒绝本次生成，草稿节点仍保留在画布中；未提交任务、未产生扣费。", forbidden: "本次操作未执行"},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			s, _, args := agentMediaFixture(t)
+			run, state := agentMediaRun(t, s, args, "request_approval")
+			call := cloudAgentCall{ID: "approval-call"}
+			call.Function.Name = "canvas_apply_ops"
+			arguments, err := json.Marshal(map[string]any{
+				"snapshotHash": args.SnapshotHash,
+				"ops":          []map[string]any{{"type": "update_node", "id": "cat", "patch": map[string]any{"title": "拒绝后不应写入"}}},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			call.Function.Arguments = string(arguments)
+			if scenario.media {
+				call = agentMediaCall(args)
+				call.ID = "approval-call"
+			}
+			state.Calls = []cloudAgentCall{call}
+			state.Approval = &cloudAgentApproval{ID: "approval-id", Call: call}
+			if err := s.repo.MutateCloudAgent("user", run.ID, run.Revision, func(current *model.CloudAgentExecution, _ *repository.Repository) error {
+				current.Status = "waiting_approval"
+				return cloudAgentSave(current, &state)
+			}); err != nil {
+				t.Fatal(err)
+			}
+			if err := s.DecideCloudAgentApproval("user", run.ID, "approval-id", "reject", "暂不执行"); err != nil {
+				t.Fatal(err)
+			}
+			stored, err := s.repo.CloudAgent("user", run.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			state, err = cloudAgentDecode(stored)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if stored.Status != "rejected" || len(state.Events) == 0 {
+				t.Fatalf("approval rejection was not persisted: status=%s events=%+v", stored.Status, state.Events)
+			}
+			event := state.Events[len(state.Events)-1]
+			if event.Type != "approval_decided" || !strings.Contains(stringValue(event.Payload["text"]), scenario.wantText) || strings.Contains(stringValue(event.Payload["text"]), scenario.forbidden) {
+				t.Fatalf("rejection message does not match operation type: %+v", event)
+			}
+		})
+	}
+}
+
 func TestCloudAgentMediaChangedCanvasRollsBackAdmission(t *testing.T) {
 	s, db, a := agentMediaFixture(t)
 	run, state := agentMediaRun(t, s, a, "auto")
@@ -975,6 +1032,68 @@ func TestCloudAgentMediaCancellationUpdatesNode(t *testing.T) {
 	state, _ := cloudAgentDecode(run)
 	if run.Status != "cancelled" || state.MediaTaskID != "" {
 		t.Fatal("cancellation did not checkpoint media completion")
+	}
+}
+
+// 停止本轮（或用户想撤回插话时误点停止）不能把已经提交上游、可能已计费的媒体任务
+// 一起取消：任务继续生成，结果照常回写画布，收尾等它结束后再完成。
+func TestCloudAgentStopKeepsSubmittedMediaTask(t *testing.T) {
+	s, db, a := agentMediaFixture(t)
+	s.closeApprovedCloudAgentMediaWaiters()
+	run, _ := agentMediaRun(t, s, a, "request_approval")
+	if err := s.advanceCloudAgentByID("user", run.ID); err != nil {
+		t.Fatal(err)
+	}
+	approveAgentMediaDraft(t, s, run.ID)
+	run, state := agentInterjectionState(t, s, run.ID)
+	taskID := state.MediaTaskID
+	if taskID == "" {
+		t.Fatal("approved task missing")
+	}
+	if err := db.Model(&model.Task{}).Where("id = ?", taskID).Updates(map[string]any{"status": model.TaskStatusRunning, "stage": "上游生成中", "provider_request_id": "upstream-1"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := s.CancelCloudAgent(context.Background(), "user", run.ID); err != nil {
+		t.Fatal(err)
+	}
+	task, err := s.repo.TaskForUser("user", taskID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if task.Status != model.TaskStatusRunning {
+		t.Fatalf("submitted media task was cancelled with the run: %s", task.Status)
+	}
+	run, state = agentInterjectionState(t, s, run.ID)
+	if run.Status != "cancelled" || !run.CleanupPending || state.MediaTaskID != taskID {
+		t.Fatalf("stop must wait for the submitted media: status=%s cleanup=%v media=%s", run.Status, run.CleanupPending, state.MediaTaskID)
+	}
+	notice := false
+	for _, event := range state.Events {
+		if event.Type == "run_cancelled" && event.Payload["mediaContinues"] == true {
+			notice = true
+		}
+	}
+	if !notice {
+		t.Fatal("stop did not tell the user the billed media continues")
+	}
+	if err := db.Create(&model.Resource{ID: "stop-output", UserID: "user", Kind: "video", Status: "ready", MimeType: "video/mp4"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(&model.Task{}).Where("id = ?", taskID).Updates(map[string]any{"status": model.TaskStatusSucceeded, "result_json": `{"mode":"video","video":{"storageKey":"resource:stop-output"}}`}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := s.advanceCloudAgentByID("user", run.ID); err != nil {
+		t.Fatal(err)
+	}
+	run, state = agentInterjectionState(t, s, run.ID)
+	if run.Status != "cancelled" || run.CleanupPending || state.MediaTaskID != "" {
+		t.Fatalf("cleanup did not finish after media completed: status=%s cleanup=%v media=%s", run.Status, run.CleanupPending, state.MediaTaskID)
+	}
+	canvas, _ := s.repo.CanvasProjectForUser("user", "agent-canvas")
+	doc, _ := creationDocument(canvas.PayloadJSON)
+	nodes, _ := creationObjects(doc["nodes"])
+	if meta := nodes[a.NodeID]["metadata"].(map[string]any); meta["status"] != "success" {
+		t.Fatalf("finished media was not written back: %+v", meta["status"])
 	}
 }
 

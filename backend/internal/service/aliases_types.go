@@ -43,6 +43,8 @@ type (
 	AccountFileStorageUsage                = app.AccountFileStorageUsage
 	AdminAppearanceSetting                 = app.AdminAppearanceSetting
 	AdminCustomerServiceSetting            = app.AdminCustomerServiceSetting
+	AdminStorageGrantRequest               = app.AdminStorageGrantRequest
+	AdminUserStorage                       = app.AdminUserStorage
 	AdminAuditPage                         = app.AdminAuditPage
 	AdminCacheClearGroupResult             = app.AdminCacheClearGroupResult
 	AdminCacheClearRequest                 = app.AdminCacheClearRequest
@@ -334,6 +336,9 @@ type (
 	SkillListRequest                       = app.SkillListRequest
 	SkillMutationRequest                   = app.SkillMutationRequest
 	SkillPackageBundle                     = app.SkillPackageBundle
+	SkillPackageEditRequest                = app.SkillPackageEditRequest
+	SkillPackageEditResult                 = app.SkillPackageEditResult
+	SkillPackageFileOperation              = app.SkillPackageFileOperation
 	SkillPackageBundleFile                 = app.SkillPackageBundleFile
 	SkillPackageFileContent                = app.SkillPackageFileContent
 	SkillPackageFileItem                   = app.SkillPackageFileItem
@@ -369,6 +374,7 @@ type (
 	TextReplayResult                       = app.TextReplayResult
 	TimelineRenderCreateRequest            = app.TimelineRenderCreateRequest
 	TimelineTranscriptionCreateRequest     = app.TimelineTranscriptionCreateRequest
+	RevokeStorageGrantRequest              = app.RevokeStorageGrantRequest
 	TopupProductRequest                    = app.TopupProductRequest
 	PaymentPromotionSetting                = app.PaymentPromotionSetting
 	PublicPaymentPromotion                 = app.PublicPaymentPromotion

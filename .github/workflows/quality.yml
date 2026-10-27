@@ -45,7 +45,7 @@ jobs:
     defaults:
       run:
         working-directory: backend
-    # 提供 PostgreSQL、Redis 与原始 Schema 51 夹具，并核对十一条依赖路径实际通过。
+    # 提供 PostgreSQL、Redis 与原始 Schema 51/83 夹具，并核对十五条依赖路径实际通过。
     services:
       postgres:
         image: postgres:16-alpine
@@ -90,6 +90,26 @@ jobs:
             -e CANVAS_TEST_POSTGRES_DSN='postgres://postgres:canvas_test@codex-canvas-merge-v1692-postgres:5432/canvas_merge_fixture?sslmode=disable' \
             golang:1.25-bookworm go test -timeout=10m -count=1 -run '^TestExportOriginalSchema51$' ./internal/database
           printf 'CANVAS_TEST_MIGRATION_FIXTURES=%s\n' "$fixture_output" >> "$GITHUB_ENV"
+      - name: Generate original Schema 83 fixtures from the previous merged version
+        shell: bash
+        run: |
+          set -euo pipefail
+          fixture_source="$RUNNER_TEMP/canvas-schema83-source"
+          fixture_output="$RUNNER_TEMP/canvas-schema83-fixtures"
+          mkdir -p "$fixture_source" "$fixture_output" "$(go env GOMODCACHE)"
+          git -C .. archive 2008bbe60ba9b069255163b3da403d789a55922c backend | tar -x -C "$fixture_source"
+          sed 's/51/83/g' internal/database/testdata/schema51_export_test.go > "$fixture_source/backend/internal/database/schema83_export_test.go"
+          docker run --rm --user "$(id -u):$(id -g)" \
+            --add-host codex-canvas-merge-v1692-postgres:host-gateway \
+            --mount "type=bind,src=$fixture_source/backend,dst=/source,readonly" \
+            --mount "type=bind,src=$fixture_output,dst=/results" \
+            --mount "type=bind,src=$(go env GOMODCACHE),dst=/go/pkg/mod" \
+            --tmpfs /tmp:rw,exec,nosuid,nodev,mode=1777 \
+            --workdir /source -e GOCACHE=/tmp/go-build-cache -e GOFLAGS=-mod=readonly -e GOENV=off -e GOTOOLCHAIN=local \
+            -e CANVAS_FIXTURE_OUTPUT=/results \
+            -e CANVAS_TEST_POSTGRES_DSN='postgres://postgres:canvas_test@codex-canvas-merge-v1692-postgres:5432/canvas_merge_fixture?sslmode=disable' \
+            golang:1.25-bookworm go test -timeout=10m -count=1 -run '^TestExportOriginalSchema83$' ./internal/database
+          printf 'CANVAS_TEST_MIGRATION83_FIXTURES=%s\n' "$fixture_output" >> "$GITHUB_ENV"
       - uses: actions/setup-node@v4
         with:
           node-version: 22.19.0
@@ -118,7 +138,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          go test -json -timeout=20m ./... | tee "$RUNNER_TEMP/go-tests.jsonl"
+          go test -json -p 1 -timeout=20m ./... | tee "$RUNNER_TEMP/go-tests.jsonl"
       - name: Ensure dependency-backed tests were not skipped
         shell: bash
         run: |

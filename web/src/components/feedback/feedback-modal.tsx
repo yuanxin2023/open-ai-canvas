@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef, type ClipboardEvent } from "react";
-import { App, Button, Checkbox, Input, Radio, Tag, Tooltip, Image as AntImage, Segmented } from "antd";
+import { App, Button, Checkbox, Input, Radio, Tag, Image as AntImage, Segmented } from "antd";
+import { AntTooltip as Tooltip } from "@/components/ui/base/tooltip/ant-tooltip";
 import { AlertCircle, Archive, Bug, CheckCircle2, Clock, Inbox, Lightbulb, MessageSquare, Paperclip, Play, Plus, RefreshCw, Send, Sparkles, Trash2, UploadCloud, X } from "lucide-react";
 
 import { submitFeedback, getMyFeedbacks, uploadFeedbackAttachment, feedbackAttachmentURL, type FeedbackItem, type FeedbackType, type FeedbackAttachment } from "@/services/api/feedback";
@@ -197,14 +198,14 @@ function FeedbackModalContent({ open, onClose, initialTab = "submit", actorId }:
         <AppModal open={open} onCancel={onClose} footer={null} width={680} style={{ maxWidth: "calc(100vw - 20px)", top: 20, margin: "0 auto" }} destroyOnHidden={false} title={null} closable={false} className="feedback-dialog-modal p-0" flush>
             <div className="flex flex-col max-h-[85vh] text-foreground" onPaste={handlePaste}>
                 {/* Header with Navigation Tabs */}
-                <div className="flex items-center justify-between border-b border-border/60 px-3.5 py-2.5 sm:px-5 sm:py-3.5 bg-muted/20">
+                <div className="flex items-center justify-between border-b border-border/60 px-4 py-2 sm:px-5 sm:py-4 bg-muted/20">
                     <div className="inline-flex items-center gap-1 rounded-xl bg-muted/40 p-1 border border-border/40 min-w-0">
                         <button
                             id="feedback-tab-submit"
                             type="button"
                             onClick={() => setActiveTab("submit")}
                             className={cn(
-                                "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all whitespace-nowrap shrink-0",
+                                "flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition-[color,background-color,border-color,box-shadow] duration-150 whitespace-nowrap shrink-0",
                                 activeTab === "submit" ? "bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/30 shadow-sm" : "text-muted-foreground hover:text-foreground hover:bg-muted/40 border border-transparent",
                             )}
                         >
@@ -216,7 +217,7 @@ function FeedbackModalContent({ open, onClose, initialTab = "submit", actorId }:
                             type="button"
                             onClick={() => setActiveTab("inbox")}
                             className={cn(
-                                "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all relative whitespace-nowrap shrink-0",
+                                "flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition-[color,background-color,border-color,box-shadow] duration-150 relative whitespace-nowrap shrink-0",
                                 activeTab === "inbox" ? "bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/30 shadow-sm" : "text-muted-foreground hover:text-foreground hover:bg-muted/40 border border-transparent",
                             )}
                         >
@@ -225,7 +226,7 @@ function FeedbackModalContent({ open, onClose, initialTab = "submit", actorId }:
                                 <span className="hidden sm:inline">我的</span>反馈收件箱
                             </span>
                             {myFeedbacks.length > 0 ? (
-                                <span className={cn("px-1.5 py-0.2 rounded-full text-[10px] font-bold leading-tight shrink-0", activeTab === "inbox" ? "bg-blue-500/25 text-blue-600 dark:text-blue-300" : "bg-muted text-muted-foreground")}>
+                                <span className={cn("px-2 py-0.2 rounded-full text-[var(--fs-label)] font-semibold leading-tight shrink-0", activeTab === "inbox" ? "bg-blue-500/25 text-blue-600 dark:text-blue-300" : "bg-muted text-muted-foreground")}>
                                     {activeFeedbacks.length > 0 ? activeFeedbacks.length : archivedFeedbacks.length}
                                 </span>
                             ) : null}
@@ -233,7 +234,7 @@ function FeedbackModalContent({ open, onClose, initialTab = "submit", actorId }:
                         </button>
                     </div>
 
-                    <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted/40 hover:text-foreground transition-colors shrink-0 ml-1" aria-label="关闭">
+                    <button type="button" onClick={onClose} className="rounded-lg p-2 text-muted-foreground hover:bg-muted/40 hover:text-foreground transition-colors shrink-0 ml-1" aria-label="关闭">
                         <X className="size-4" />
                     </button>
                 </div>
@@ -265,15 +266,15 @@ function FeedbackModalContent({ open, onClose, initialTab = "submit", actorId }:
                                                 type="button"
                                                 onClick={() => setType(item.value as FeedbackType)}
                                                 className={cn(
-                                                    "flex flex-col items-start p-2 sm:p-2.5 rounded-xl border text-left transition-all",
+                                                    "flex flex-col items-start p-2 sm:p-2 rounded-xl border text-left transition-[color,background-color,border-color,box-shadow] duration-150",
                                                     selected ? "border-primary bg-primary/10 text-foreground ring-1 ring-primary/40" : "border-border/60 bg-muted/20 hover:border-border text-muted-foreground hover:text-foreground",
                                                 )}
                                             >
-                                                <div className="flex items-center gap-1.5 font-medium text-xs mb-1">
+                                                <div className="flex items-center gap-2 font-medium text-xs mb-1">
                                                     <Icon className={cn("size-3.5 shrink-0", selected ? "text-primary" : "text-muted-foreground")} />
-                                                    <span className={selected ? "text-primary font-bold" : ""}>{item.label}</span>
+                                                    <span className={selected ? "text-primary font-semibold" : ""}>{item.label}</span>
                                                 </div>
-                                                <span className="text-[10px] sm:text-[11px] text-muted-foreground/75 leading-tight">{item.desc}</span>
+                                                <span className="text-[var(--fs-label)] sm:text-[var(--fs-label)] text-muted-foreground/75 leading-tight">{item.desc}</span>
                                             </button>
                                         );
                                     })}
@@ -302,7 +303,7 @@ function FeedbackModalContent({ open, onClose, initialTab = "submit", actorId }:
                             ) : null}
                             {/* Title */}
                             <div>
-                                <label className="block text-xs font-medium text-muted-foreground mb-1.5">
+                                <label className="block text-xs font-medium text-muted-foreground mb-2">
                                     标题 / 简述 <span className="text-red-500">*</span>
                                 </label>
                                 <Input
@@ -316,11 +317,11 @@ function FeedbackModalContent({ open, onClose, initialTab = "submit", actorId }:
 
                             {/* Detailed Content */}
                             <div>
-                                <div className="flex items-center justify-between mb-1.5">
+                                <div className="flex items-center justify-between mb-2">
                                     <label className="block text-xs font-medium text-muted-foreground">
                                         详细说明 <span className="text-red-500">*</span>
                                     </label>
-                                    <span className="hidden sm:inline text-[11px] text-muted-foreground/60">可直接截图并在窗口内按 Ctrl+V 粘贴</span>
+                                    <span className="hidden sm:inline text-[var(--fs-label)] text-muted-foreground/60">可直接截图并在窗口内按 Ctrl+V 粘贴</span>
                                 </div>
                                 <Input.TextArea
                                     value={content}
@@ -336,7 +337,7 @@ function FeedbackModalContent({ open, onClose, initialTab = "submit", actorId }:
                             <div>
                                 <div className="flex items-center justify-between mb-2">
                                     <label className="text-xs font-medium text-muted-foreground">图片或视频附件 ({attachments.length}/5)</label>
-                                    <span className="text-[10px] sm:text-[11px] text-muted-foreground/60">单文件最高 50MB</span>
+                                    <span className="text-[var(--fs-label)] sm:text-[var(--fs-label)] text-muted-foreground/60">单文件最高 50MB</span>
                                 </div>
 
                                 <input
@@ -352,7 +353,7 @@ function FeedbackModalContent({ open, onClose, initialTab = "submit", actorId }:
 
                                 {/* Attachment list */}
                                 {attachments.length > 0 ? (
-                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 mb-2.5">
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-2">
                                         {attachments.map((att) => (
                                             <div key={att.id} className="group relative flex items-center gap-2 rounded-lg border border-border/80 bg-muted/30 p-2 overflow-hidden">
                                                 {att.type === "image" ? (
@@ -374,7 +375,7 @@ function FeedbackModalContent({ open, onClose, initialTab = "submit", actorId }:
                                                     <p className="truncate text-xs font-medium leading-tight" title={att.name}>
                                                         {att.name}
                                                     </p>
-                                                    <p className="text-[10px] text-muted-foreground/70 mt-0.5">
+                                                    <p className="text-[var(--fs-label)] text-muted-foreground/70 mt-0.5">
                                                         {(att.size / (1024 * 1024)).toFixed(1)} MB · {att.type === "video" ? "视频" : "图片"}
                                                     </p>
                                                 </div>
@@ -399,7 +400,7 @@ function FeedbackModalContent({ open, onClose, initialTab = "submit", actorId }:
                                         disabled={uploading}
                                         onClick={() => fileInputRef.current?.click()}
                                         className={cn(
-                                            "w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-dashed border-border/80 bg-muted/10 hover:bg-muted/25 hover:border-primary/50 text-xs text-muted-foreground transition-all",
+                                            "w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-dashed border-border/80 bg-muted/10 hover:bg-muted/25 hover:border-primary/50 text-xs text-muted-foreground transition-[color,background-color,border-color,opacity] duration-150",
                                             uploading && "opacity-60 cursor-not-allowed",
                                         )}
                                     >
@@ -411,7 +412,7 @@ function FeedbackModalContent({ open, onClose, initialTab = "submit", actorId }:
 
                             {/* Contact Info */}
                             <div>
-                                <label className="block text-xs font-medium text-muted-foreground mb-1.5">联系方式 (选填)</label>
+                                <label className="block text-xs font-medium text-muted-foreground mb-2">联系方式 (选填)</label>
                                 <Input value={contact} onChange={(e) => setContact(e.target.value)} placeholder="留下邮箱或微信号，方便我们进一步反馈处理进展" className="rounded-lg h-9 text-xs" />
                             </div>
                         </div>
@@ -448,7 +449,7 @@ function FeedbackModalContent({ open, onClose, initialTab = "submit", actorId }:
                                     </Button>
                                 </div>
                             ) : displayedFeedbacks.length === 0 ? (
-                                <div className="flex flex-col items-center justify-center py-14 text-muted-foreground text-xs gap-2.5 border border-dashed rounded-xl border-border/60 bg-muted/10">
+                                <div className="flex flex-col items-center justify-center py-14 text-muted-foreground text-xs gap-2 border border-dashed rounded-xl border-border/60 bg-muted/10">
                                     {inboxFilter === "active" ? (
                                         <>
                                             <CheckCircle2 className="size-7 text-green-500/80" />
@@ -479,7 +480,7 @@ function FeedbackModalContent({ open, onClose, initialTab = "submit", actorId }:
 
                 {/* Fixed Footer for Submit Tab */}
                 {activeTab === "submit" ? (
-                    <div className="border-t border-border/60 px-4 py-3 sm:px-6 sm:py-3.5 bg-muted/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="border-t border-border/60 px-4 py-3 sm:px-6 sm:py-4 bg-muted/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <label className="flex items-center gap-2 cursor-pointer select-none text-xs text-muted-foreground">
                             <Checkbox
                                 checked={includeEnv}
@@ -552,25 +553,25 @@ function FeedbackInboxCard({ item, onPreviewVideo }: { item: FeedbackItem; onPre
     });
 
     return (
-        <div className="rounded-xl border border-border/70 bg-muted/20 p-4 transition-all hover:border-border space-y-3">
+        <div className="rounded-xl border border-border/70 bg-muted/20 p-4 transition-colors duration-150 hover:border-border space-y-3">
             {/* Header */}
             <div className="flex items-start justify-between gap-3">
                 <div className="space-y-1 min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
                         {item.archived ? (
-                            <Tag className="flex items-center gap-1 m-0 text-[11px] px-1.5 py-0.5 bg-muted/60 text-muted-foreground border-border/60">
+                            <Tag className="flex items-center gap-1 m-0 text-[var(--fs-label)] px-2 py-0.5 bg-muted/60 text-muted-foreground border-border/60">
                                 <Archive className="size-3" />
                                 <span>已归档</span>
                             </Tag>
                         ) : null}
-                        <Tag color={typeInfo.color} className="flex items-center gap-1 m-0 text-[11px] px-1.5 py-0.5">
+                        <Tag color={typeInfo.color} className="flex items-center gap-1 m-0 text-[var(--fs-label)] px-2 py-0.5">
                             <TypeIcon className="size-3" />
                             <span>{typeInfo.label}</span>
                         </Tag>
-                        <Tag color={statusInfo.tagColor} className="m-0 text-[11px] px-1.5 py-0.5 font-medium">
+                        <Tag color={statusInfo.tagColor} className="m-0 text-[var(--fs-label)] px-2 py-0.5 font-medium">
                             {statusInfo.label}
                         </Tag>
-                        <span className="text-[11px] text-muted-foreground/60">{formattedTime}</span>
+                        <span className="text-[var(--fs-label)] text-muted-foreground/60">{formattedTime}</span>
                     </div>
                     <h4 className="text-sm font-semibold text-foreground pt-1">{item.title}</h4>
                 </div>
@@ -586,12 +587,12 @@ function FeedbackInboxCard({ item, onPreviewVideo }: { item: FeedbackItem; onPre
             {/* Attachments preview */}
             {parsedAttachments.length > 0 ? (
                 <div className="flex items-center gap-2 flex-wrap pt-1">
-                    <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+                    <span className="text-[var(--fs-label)] text-muted-foreground flex items-center gap-1">
                         <Paperclip className="size-3" />
                         <span>附件 ({parsedAttachments.length})：</span>
                     </span>
                     {parsedAttachments.map((att) => (
-                        <div key={att.id} className="inline-flex items-center gap-1.5 rounded bg-muted/40 px-2 py-1 text-[11px] border border-border/40">
+                        <div key={att.id} className="inline-flex items-center gap-2 rounded bg-muted/40 px-2 py-1 text-[var(--fs-label)] border border-border/40">
                             {att.type === "image" ? (
                                 <AntImage src={att.url} alt={att.name} width={18} height={18} className="rounded object-cover" />
                             ) : (
@@ -610,13 +611,13 @@ function FeedbackInboxCard({ item, onPreviewVideo }: { item: FeedbackItem; onPre
 
             {/* Admin Reply Highlight Box */}
             {item.adminReply ? (
-                <div className="rounded-lg border border-blue-500/30 bg-blue-500/5 p-3 text-xs space-y-1.5 mt-2">
-                    <div className="flex items-center justify-between text-blue-500 dark:text-blue-400 font-semibold text-[11px]">
-                        <span className="flex items-center gap-1.5">
+                <div className="rounded-lg border border-blue-500/30 bg-blue-500/5 p-3 text-xs space-y-2 mt-2">
+                    <div className="flex items-center justify-between text-blue-500 dark:text-blue-400 font-semibold text-[var(--fs-label)]">
+                        <span className="flex items-center gap-2">
                             <CheckCircle2 className="size-3.5" />
                             <span>官方答复</span>
                         </span>
-                        {item.repliedAt ? <span className="font-normal opacity-80 text-[10px]">{new Date(item.repliedAt).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</span> : null}
+                        {item.repliedAt ? <span className="font-normal opacity-80 text-[var(--fs-label)]">{new Date(item.repliedAt).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</span> : null}
                     </div>
                     <p className="text-foreground/90 whitespace-pre-wrap leading-relaxed">{item.adminReply}</p>
                 </div>
