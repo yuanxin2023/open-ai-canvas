@@ -1,5 +1,5 @@
 import { Popover } from "antd";
-import { BookOpen, ChevronDown, ChevronRight, CircleHelp, Headphones, Image as ImageIcon, Infinity as InfinityIcon, Video } from "lucide-react";
+import { BookOpen, ChevronDown, ChevronRight, CircleHelp, Headphones, Image as ImageIcon, Infinity as InfinityIcon, PanelLeftClose, PanelLeftOpen, Video } from "lucide-react";
 import { LayoutGroup, motion, useReducedMotion } from "motion/react";
 import { useEffect, useMemo, useRef, useState, type ComponentType, type CSSProperties } from "react";
 import { Link, useLocation, useSearchParams } from "react-router";
@@ -65,20 +65,21 @@ export function buildNav(features: FeatureAvailability): { groups: WorkspaceNavG
     return { groups, footer };
 }
 
-function WorkspaceSwitcher({ collapsed, onNavigate }: { collapsed: boolean; onNavigate: () => void; onExpand: () => void; onCollapse: () => void }) {
+function WorkspaceSwitcher({ collapsed, onNavigate, onExpand, onCollapse }: { collapsed: boolean; onNavigate: () => void; onExpand: () => void; onCollapse: () => void }) {
     const appearance = useAppearanceStore((state) => state.appearance);
 
     if (collapsed) {
         return (
-            <div className="app-workspace-sidebar-brand-row relative shrink-0 flex items-center justify-center px-3 pt-3">
-                <Link to="/" onClick={onNavigate} className="app-workspace-sidebar-brand-button group" aria-label={`${appearance.brandName}首页`}>
-                    <BrandLogoFrame
-                        className="app-workspace-brand-mark grid size-8 shrink-0 place-items-center rounded-[var(--r-sm)] shadow-sm"
-                        logoClassName="size-5 object-contain"
-                        alt=""
-                        fallback={<InfinityIcon className="size-4" strokeWidth={2.2} />}
-                    />
-                </Link>
+            <div className="app-workspace-sidebar-rail-header shrink-0">
+                <button
+                    type="button"
+                    className="app-workspace-sidebar-rail-button"
+                    aria-label="展开侧栏菜单"
+                    title="展开侧栏菜单"
+                    onClick={onExpand}
+                >
+                    <PanelLeftOpen className="size-4" strokeWidth={1.7} />
+                </button>
             </div>
         );
     }
@@ -91,6 +92,15 @@ function WorkspaceSwitcher({ collapsed, onNavigate }: { collapsed: boolean; onNa
                     <span className="app-workspace-brand-wordmark truncate text-[var(--fs-body)] leading-none font-semibold">{appearance.brandName}</span>
                 </span>
             </Link>
+            <button
+                type="button"
+                className="app-workspace-sidebar-collapse-button"
+                aria-label="收起侧栏"
+                title="收起侧栏"
+                onClick={onCollapse}
+            >
+                <PanelLeftClose className="size-4" strokeWidth={1.7} />
+            </button>
         </div>
     );
 }
