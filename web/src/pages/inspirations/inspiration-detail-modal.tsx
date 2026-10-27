@@ -155,24 +155,9 @@ export function InspirationDetailModal({
 
 export function InspirationCover({ image, resourceId }: { image: string; resourceId?: string }) {
     const source = resourceId ? resourceFileUrl(resourceId) : image;
-    const [allowed, setAllowed] = useState("");
     const [failed, setFailed] = useState("");
     const kind = resourceId ? "local" : inspirationCoverKind(source);
     if (kind === "invalid" || failed === source) return <MediaPlaceholder failed={Boolean(source)} />;
-    if (kind === "external" && allowed !== source)
-        return (
-            <span className="inspiration-cover-pending">
-                <button
-                    type="button"
-                    onClick={(event) => {
-                        event.stopPropagation();
-                        setAllowed(source);
-                    }}
-                >
-                    加载外部封面
-                </button>
-            </span>
-        );
     return <img src={source} alt="" loading="lazy" decoding="async" referrerPolicy="no-referrer" onError={() => setFailed(source)} />;
 }
 

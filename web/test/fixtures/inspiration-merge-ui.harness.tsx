@@ -133,17 +133,19 @@ test("local covers render without a confirmation", async () => {
     await render(<InspirationCover image="/inspiration-thumbs/local.webp" />);
     expect(host.querySelector("img")?.getAttribute("src")).toBe("/inspiration-thumbs/local.webp");
 });
-test("external image has no src until an explicit click", async () => {
+test("external covers use native lazy loading without a click", async () => {
     await render(<InspirationCover image="https://images.example/one.webp" />);
-    expect(host.querySelector("img")).toBeNull();
-    await click("加载外部封面");
     expect(host.querySelector("img")?.getAttribute("src")).toBe("https://images.example/one.webp");
+    expect(host.querySelector("img")?.getAttribute("loading")).toBe("lazy");
+    expect(host.querySelector("img")?.getAttribute("decoding")).toBe("async");
     expect(host.querySelector("img")?.getAttribute("referrerpolicy")).toBe("no-referrer");
+    expect(host.querySelector("button")).toBeNull();
 });
-test("a new external address requires another explicit action", async () => {
+test("a new external address remains lazy without another action", async () => {
     await render(<InspirationCover image="https://images.example/two.webp" />);
-    expect(host.querySelector("img")).toBeNull();
-    expect(host.textContent).toContain("加载外部封面");
+    expect(host.querySelector("img")?.getAttribute("src")).toBe("https://images.example/two.webp");
+    expect(host.querySelector("img")?.getAttribute("loading")).toBe("lazy");
+    expect(host.querySelector("button")).toBeNull();
 });
 test("invalid image URLs never get a load action", async () => {
     for (const image of ["javascript:alert(1)", "//images.example/one", "https://user:password@images.example/one", "http://images.example/one"]) {

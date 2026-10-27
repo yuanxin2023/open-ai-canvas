@@ -880,7 +880,7 @@ F-02 已确认接入工具目录与预设，118 个内置工具和 354 个提示
 
 ## v1.6.9.2 合并候选：灵感个人库
 
-F-03 已确认纳入固定目录、可选大厅和画廊；`inspirationHallEnabled` / `inspirationGalleryEnabled` 前后端默认 false，开关修改沿用 `admin.settings.features`。现有精选灵感和个人提示词接口继续保留，不自动导入整份目录。外部封面需点击后由浏览器加载，服务器不代抓。
+F-03 已确认纳入固定目录、可选大厅和画廊；`inspirationHallEnabled` / `inspirationGalleryEnabled` 前后端默认 false，开关修改沿用 `admin.settings.features`。现有精选灵感和个人提示词接口继续保留，不自动导入整份目录。外部 HTTPS 封面由浏览器原生懒加载，在接近可视区域时自动请求，无需逐张点击；服务器不代抓。
 
 - `GET /inspiration-library`：登录且大厅已开启时返回本人的 `revision`、`prompts`、`state`。state 包含 favorites、hidden、overrides、importedCustom、metadata，主要正文来自原个人库。首次读取不创建记录，不返回其他账号内容。
 - `POST /inspiration-library/commands`：operation 为 save/favorite/hide/restore/delete/import，携带 expectedUserId、expectedRevision 及操作字段。账号字段仅复核会话，不授予身份；版本绑定编辑器打开、删除确认或导入文件读取开始的时点。非幂等陈旧写入返回 409 `inspiration_library_changed`，需保留草稿、刷新并核对后重试。
