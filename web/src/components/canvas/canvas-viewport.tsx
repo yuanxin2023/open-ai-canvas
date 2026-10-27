@@ -532,14 +532,14 @@ function isCanvasInternalDragEvent(event: React.DragEvent<HTMLDivElement>) {
     return Boolean(target?.closest(CANVAS_INTERNAL_DRAG_SELECTOR));
 }
 
-const CANVAS_GRID_BASE: Record<Exclude<CanvasBackgroundMode, "blank">, number> = { dots: 24, lines: 32 };
+const CANVAS_GRID_BASE: Record<Exclude<CanvasBackgroundMode, "blank">, number> = { dots: 48, lines: 32 };
 
 export function CanvasGrid({ appearance, mode, viewport }: { appearance?: CanvasAppearance; mode: CanvasBackgroundMode; viewport: ViewportTransform }) {
     const colorTheme = useActiveTheme();
     const gridColor = resolveCanvasGridColor(appearance, colorTheme, mode);
     if (mode === "blank") return null;
     const base = CANVAS_GRID_BASE[mode];
-    const backgroundImage = mode === "dots" ? `radial-gradient(circle, ${gridColor} 1px, transparent 1.4px)` : `linear-gradient(${gridColor} 1px, transparent 1px), linear-gradient(90deg, ${gridColor} 1px, transparent 1px)`;
+    const backgroundImage = mode === "dots" ? `radial-gradient(circle, ${gridColor} 0.8px, transparent 1px)` : `linear-gradient(${gridColor} 1px, transparent 1px), linear-gradient(90deg, ${gridColor} 1px, transparent 1px)`;
     // 首帧和提交后的位置由 render 给出；交互期由 applyCanvasLiveViewport 直接写 transform，不触发 React。
     const { spacing, offsetX, offsetY } = canvasGridMetrics(viewport, base);
 
@@ -557,7 +557,7 @@ export function CanvasGrid({ appearance, mode, viewport }: { appearance?: Canvas
                 backgroundImage,
                 backgroundSize: `${spacing}px ${spacing}px`,
                 transform: `translate3d(${offsetX}px, ${offsetY}px, 0)`,
-                opacity: mode === "dots" ? 0.62 : 0.4,
+                opacity: mode === "dots" ? 0.34 : 0.4,
             }}
         />
     );

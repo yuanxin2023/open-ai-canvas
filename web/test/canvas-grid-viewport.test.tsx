@@ -28,7 +28,7 @@ function renderGrid(mode: CanvasBackgroundMode, viewport: ViewportTransform, the
 }
 
 describe("canvas screen-space background", () => {
-    const baseByMode = { lines: 32, dots: 24 } as const;
+    const baseByMode = { lines: 32, dots: 48 } as const;
 
     for (const mode of ["lines", "dots"] as const) {
         test(`${mode} keeps stable screen-space geometry across zoom and pan`, () => {
@@ -44,7 +44,10 @@ describe("canvas screen-space background", () => {
                     expect(markup).toContain(`background-size:${spacing}px ${spacing}px`);
                     expect(markup).toContain(`transform:translate3d(${offsetX}px, ${offsetY}px, 0)`);
                     expect(markup).not.toContain("var(--canvas-");
-                    if (mode === "dots") expect(markup).toContain("1px, transparent 1.4px");
+                    if (mode === "dots") {
+                        expect(markup).toContain("0.8px, transparent 1px");
+                        expect(markup).toContain("opacity:0.34");
+                    }
                 }
             }
         });
