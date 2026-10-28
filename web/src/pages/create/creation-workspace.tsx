@@ -3,12 +3,14 @@ import { ImageParameterFields } from "@/components/image-parameter-fields";
 import { imageResolutionUsesQuality, imageSizePresets } from "@/lib/image-size-presets";
 import { createPortal } from "react-dom";
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type PointerEvent, type ReactNode, type RefObject } from "react";
-import { App, Button, Dropdown, Popover } from "antd";
+import { App, Button, Dropdown, Input, Popover } from "antd";
 import { AppModal } from "@/components/ui/product/app-modal";
 import { useWorkspaceTopBarMount } from "@/components/layout/workspace-top-bar-extension";
 import { Tooltip } from "@/components/ui/base/tooltip";
+import { SegmentedControl } from "@/components/ui/base/segmented-control";
+import { Select } from "@/components/ui/base/select";
 import { Reorder, LayoutGroup, motion, useReducedMotion } from "motion/react";
-import { ArrowDown, ArrowUp, Brain, ChevronDown, ChevronLeft, ChevronRight, Clapperboard, Clock3, Coins, Copy, Download, FileText, Film, Image as ImageIcon, LoaderCircle, Maximize2, MessageSquareText, Minimize2, MoreHorizontal, Music2, Pencil, Pin, Plus, RefreshCw, Search, SlidersHorizontal, Sparkles, Trash2, UserRound, WandSparkles, Waves, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Brain, ChevronDown, ChevronLeft, ChevronRight, Clapperboard, Clock3, Coins, Copy, Download, FileText, Film, Image as ImageIcon, LoaderCircle, Maximize2, MessageSquareText, Minimize2, MoreHorizontal, Music2, Pencil, Pin, Plus, RefreshCw, RotateCcw, Search, SlidersHorizontal, Sparkles, Trash2, UserRound, WandSparkles, Waves, X } from "lucide-react";
 
 import { WorkingGlow } from "@/components/ai/working-indicator";
 import { formatVideoResolutionLabel as videoResolutionLabel } from "@/lib/video-generation-options";
@@ -44,6 +46,7 @@ import { conversationTimeFormatter, countOptions, historyDayFormatter, messageTi
 import { openWorkspaceCreditProducts } from "@/lib/workspace-wallet";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
 import { useCopyText } from "@/hooks/use-copy-text";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { GenerationToolCard, type GenerationToolStatus } from "@/components/ai/generation-tool-card";
 import { MessageReasoning } from "@/components/ai/message-reasoning";
 import { AIMessageMarkdown } from "@/components/ai/ai-message-markdown";
@@ -945,6 +948,8 @@ export function CreationEmptySuggest({ onStartPrompt, onOpenLibrary }: { onStart
 
 type CreationInspirationSource = "featured" | "personal";
 type CreationInspiration = Inspiration | UserPrompt;
+type CreationInspirationModeFilter = "all" | CreationMode;
+type CreationInspirationSort = "default" | "title";
 
 async function listAllUserPrompts(signal: AbortSignal) {
     const firstPage = await listUserPrompts({ page: 1, pageSize: 100 }, signal);
@@ -975,6 +980,18 @@ function creationInspirationSourceLabel(item: CreationInspiration, source: Creat
         "chatgpt-prompts": "开源改编 · CC0",
         original: "原创提示词",
     }[item.sourceId || "original"] || item.source?.trim() || "原创提示词";
+}
+
+function creationInspirationSourceKey(item: CreationInspiration, source: CreationInspirationSource) {
+    if (source === "personal") return item.source?.trim() || "personal";
+    return "status" in item ? item.sourceId?.trim() || "original" : "original";
+}
+
+function creationInspirationSourceFilterLabel(key: string, source: CreationInspirationSource) {
+    if (source === "personal") return key === "personal" ? "个人灵感" : key;
+    if (!Object.prototype.hasOwnProperty.call(inspirationSources, key)) return key;
+    const info = inspirationSources[key as InspirationSourceId];
+    return info.name || info.label;
 }
 
 function creationInspirationDetailItem(item: CreationInspiration, source: CreationInspirationSource): CatalogInspiration {
@@ -1029,25 +1046,23 @@ function CreationInspirationCard({ item, source, onOpen }: { item: CreationInspi
 
 export function CreationFeaturedWorks({ onStartPrompt, onRequireLogin }: { onStartPrompt: (mode: CreationMode, prompt: string) => void; onRequireLogin: () => void }) {
     const userId = useUserStore((state) => state.user?.id || "");
+    const inspirationSourcesVisible = useUserStore((state) => state.features.inspirationSourcesVisible);
     const [source, setSource] = useState<CreationInspirationSource>("featured");
     const [promptEditorOpen, setPromptEditorOpen] = useState(false);
     const [detail, setDetail] = useState<CreationInspiration | null>(null);
-    const [filter, setFilter] = useState<"all" | CreationMode>("all");
+    const [filter, setFilter] = useState<CreationInspirationModeFilter>("all");
+    const [search, setSearch] = useState("");
+    const [sourceFilter, setSourceFilter] = useState("all");
+    const [category, setCategory] = useState("all");
+    const [sort, setSort] = useState<CreationInspirationSort>("default");
+    const [filtersOpen, setFiltersOpen] = useState(false);
     const [limit, setLimit] = useState(12);
     const [inspirations, setInspirations] = useState<CreationInspiration[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [reloadToken, setReloadToken] = useState(0);
     const copyText = useCopyText();
-    const sourceItems = [
-        { value: "featured" as const, label: "全部灵感", icon: Sparkles },
-        { value: "personal" as const, label: "个人灵感", icon: UserRound },
-    ];
-    const typeItems = [
-        { value: "video" as const, label: modeLabels.video, icon: Film },
-        { value: "image" as const, label: modeLabels.image, icon: ImageIcon },
-        { value: "text" as const, label: modeLabels.text, icon: MessageSquareText },
-    ];
+    const debouncedSearch = useDebouncedValue(search, 250);
     useEffect(() => {
         if (!userId) {
             setInspirations([]);
@@ -1077,30 +1092,114 @@ export function CreationFeaturedWorks({ onStartPrompt, onRequireLogin }: { onSta
             controller.abort();
         };
     }, [reloadToken, source, userId]);
-    const filtered = inspirations.filter((item) => filter === "all" || item.mode === filter);
+    const sourceChoices = useMemo(() => {
+        const counts = new Map<string, number>();
+        for (const item of inspirations) {
+            const key = creationInspirationSourceKey(item, source);
+            counts.set(key, (counts.get(key) || 0) + 1);
+        }
+        return [...counts.entries()]
+            .map(([value, count]) => ({ value, count, label: creationInspirationSourceFilterLabel(value, source) }))
+            .sort((left, right) => right.count - left.count || left.label.localeCompare(right.label, "zh-Hans-CN"));
+    }, [inspirations, source]);
+    const categoryChoices = useMemo(() => {
+        const counts = new Map<string, number>();
+        for (const item of inspirations) {
+            if (sourceFilter !== "all" && creationInspirationSourceKey(item, source) !== sourceFilter) continue;
+            const value = "category" in item ? item.category?.trim() : "";
+            if (value) counts.set(value, (counts.get(value) || 0) + 1);
+        }
+        return [...counts.entries()]
+            .map(([value, count]) => ({ value, count }))
+            .sort((left, right) => right.count - left.count || left.value.localeCompare(right.value, "zh-Hans-CN"));
+    }, [inspirations, source, sourceFilter]);
+    const modeCounts = useMemo(() => {
+        const counts: Record<CreationInspirationModeFilter, number> = { all: 0, image: 0, video: 0, text: 0 };
+        for (const item of inspirations) {
+            if (sourceFilter !== "all" && creationInspirationSourceKey(item, source) !== sourceFilter) continue;
+            counts.all += 1;
+            counts[item.mode] += 1;
+        }
+        return counts;
+    }, [inspirations, source, sourceFilter]);
+    const modeOptions = useMemo(() => ([
+        { value: "all" as const, label: <><span>全部</span><span className="inspiration-mode-count app-segmented-count">{modeCounts.all.toLocaleString("zh-CN")}</span></> },
+        { value: "image" as const, label: <><span>{modeLabels.image}</span><span className="inspiration-mode-count app-segmented-count">{modeCounts.image.toLocaleString("zh-CN")}</span></> },
+        { value: "video" as const, label: <><span>{modeLabels.video}</span><span className="inspiration-mode-count app-segmented-count">{modeCounts.video.toLocaleString("zh-CN")}</span></> },
+        { value: "text" as const, label: <><span>{modeLabels.text}</span><span className="inspiration-mode-count app-segmented-count">{modeCounts.text.toLocaleString("zh-CN")}</span></> },
+    ]), [modeCounts]);
+    const filtered = useMemo(() => {
+        const query = debouncedSearch.trim().toLowerCase();
+        const result = inspirations.filter((item) => {
+            if (filter !== "all" && item.mode !== filter) return false;
+            if (sourceFilter !== "all" && creationInspirationSourceKey(item, source) !== sourceFilter) return false;
+            if (category !== "all" && (!("category" in item) || item.category?.trim() !== category)) return false;
+            if (!query) return true;
+            return [item.title, item.description, ...(item.tags || [])].join(" ").toLowerCase().includes(query);
+        });
+        if (sort === "title") return [...result].sort((left, right) => left.title.localeCompare(right.title, "zh-Hans-CN"));
+        return result;
+    }, [category, debouncedSearch, filter, inspirations, sort, source, sourceFilter]);
+    const advancedFilterCount = Number(source !== "featured") + Number(sourceFilter !== "all") + Number(category !== "all") + Number(sort !== "default");
+    const hasFilters = Boolean(advancedFilterCount || filter !== "all" || search.trim());
+    const changeSource = (next: CreationInspirationSource) => {
+        if (source !== next) setInspirations([]);
+        setSource(next);
+        setSourceFilter("all");
+        setCategory("all");
+        setFilter("all");
+        setLimit(12);
+        setDetail(null);
+    };
+    const resetFilters = () => {
+        setSource("featured");
+        setFilter("all");
+        setSearch("");
+        setSourceFilter("all");
+        setCategory("all");
+        setSort("default");
+        setLimit(12);
+        setDetail(null);
+    };
     return <section className="creation-featured-works" aria-label="灵感">
         <div className="creation-inspiration-filters">
-            <div className="creation-inspiration-filter-row is-source" role="group" aria-label="灵感来源">
-                {sourceItems.map(({ value, label, icon: Icon }) => <button key={value} type="button" aria-pressed={source === value} onClick={() => {
-                    if (source !== value) setInspirations([]);
-                    setSource(value);
-                    setFilter("all");
-                    setLimit(12);
-                }}>
-                    <Icon aria-hidden="true" />
-                    <span className="creation-inspiration-filter-label">{label}</span>
-                </button>)}
-            </div>
-            <div className="creation-inspiration-filter-row is-type" role="group" aria-label="灵感类型">
-                {typeItems.map(({ value, label, icon: Icon }) => <button key={value} type="button" aria-pressed={filter === value} onClick={() => { setFilter(value); setLimit(12); }}>
-                    <Icon aria-hidden="true" />
-                    <span className="creation-inspiration-filter-label">{label}</span>
-                    <span className="creation-inspiration-filter-count">{inspirations.filter((item) => item.mode === value).length}</span>
-                </button>)}
-                {source === "personal" && userId ? <button type="button" className="creation-inspiration-add" aria-label="新增个人提示词" title="新增个人提示词" onClick={() => setPromptEditorOpen(true)}><Plus aria-hidden="true" /></button> : null}
+            <div className="creation-inspiration-filter-row is-source" role="group" aria-label="灵感浏览范围">
+                <button type="button" aria-pressed={source === "featured"} onClick={() => changeSource("featured")}><Sparkles aria-hidden="true" /><span className="creation-inspiration-filter-label">全部灵感</span></button>
+                <button type="button" aria-pressed={source === "personal"} onClick={() => changeSource("personal")}><UserRound aria-hidden="true" /><span className="creation-inspiration-filter-label">个人灵感</span></button>
             </div>
         </div>
-        {!userId ? <div className="creation-inspiration-state"><span>登录后查看精选灵感和个人灵感</span><Button onClick={onRequireLogin}>登录</Button></div> : loading ? <div className="creation-inspiration-state">正在加载{source === "featured" ? "全部" : "个人"}灵感…</div> : error ? <div className="creation-inspiration-state"><span>{error}</span><Button onClick={() => setReloadToken((value) => value + 1)}>重新加载</Button></div> : !filtered.length ? <div className="creation-inspiration-state">当前分类暂无{source === "featured" ? "已启用的" : "个人"}灵感</div> : <div className="creation-featured-layout">
+        <div className="inspiration-hall-toolbar creation-inspiration-toolbar">
+            <SegmentedControl options={modeOptions} value={filter} onChange={(value) => { setFilter(value); setLimit(12); }} ariaLabel="按创作类型筛选首页灵感" className="inspiration-hall-modes" />
+            <Input allowClear prefix={<Search className="size-4" />} placeholder="搜索标题、描述或标签" aria-label="搜索首页灵感" value={search} onChange={(event) => { setSearch(event.target.value); setLimit(12); }} className="inspiration-hall-search" />
+            <Button type="text" icon={<SlidersHorizontal className="size-4" />} aria-expanded={filtersOpen} aria-controls="creation-inspiration-advanced-filters" onClick={() => setFiltersOpen((open) => !open)} className="inspiration-hall-filter-toggle">
+                更多筛选{advancedFilterCount ? ` · ${advancedFilterCount}` : ""}
+                <ChevronDown className={filtersOpen ? "is-open" : undefined} aria-hidden="true" />
+            </Button>
+            <span className="inspiration-hall-count" role="status">{!loading && !error ? `共 ${filtered.length.toLocaleString("zh-CN")} 条` : ""}</span>
+            {source === "personal" && userId ? <Button type="text" icon={<Plus className="size-4" />} aria-label="新增个人提示词" onClick={() => setPromptEditorOpen(true)}>新建灵感</Button> : null}
+        </div>
+        {filtersOpen ? <div id="creation-inspiration-advanced-filters" className="inspiration-hall-filters" role="group" aria-label="首页灵感进阶筛选">
+            <div className="inspiration-hall-field">
+                <span>浏览范围</span>
+                <Select options={[{ label: "全部灵感", value: "featured" }, { label: "个人灵感", value: "personal" }]} value={source} onChange={(value) => {
+                    changeSource(value as CreationInspirationSource);
+                }} ariaLabel="按全部或个人范围筛选首页灵感" />
+            </div>
+            {inspirationSourcesVisible ? <div className="inspiration-hall-field">
+                <span>来源</span>
+                <Select options={[{ label: "全部来源", value: "all" }, ...sourceChoices.map((choice) => ({ value: choice.value, label: `${choice.label} (${choice.count})` }))]} value={sourceFilter} onChange={(value) => { setSourceFilter(String(value)); setCategory("all"); setLimit(12); }} ariaLabel="按来源筛选首页灵感" />
+            </div> : null}
+            <div className="inspiration-hall-field">
+                <span>分类</span>
+                <Select showSearch optionFilterProp="label" options={[{ label: "全部分类", value: "all" }, ...categoryChoices.map((choice) => ({ value: choice.value, label: `${choice.value} (${choice.count})` }))]} value={category} onChange={(value) => { setCategory(String(value)); setLimit(12); }} ariaLabel="按分类筛选首页灵感" />
+            </div>
+            <div className="inspiration-hall-field">
+                <span>排序</span>
+                <Select options={[{ label: "默认顺序", value: "default" }, { label: "按标题", value: "title" }]} value={sort} onChange={(value) => { setSort(value as CreationInspirationSort); setLimit(12); }} ariaLabel="首页灵感排序" />
+            </div>
+            {hasFilters ? <Button type="text" icon={<RotateCcw className="size-4" />} onClick={resetFilters} className="inspiration-hall-reset">重置筛选</Button> : null}
+        </div> : null}
+        {!userId ? <div className="creation-inspiration-state"><span>登录后查看精选灵感和个人灵感</span><Button onClick={onRequireLogin}>登录</Button></div> : loading ? <div className="creation-inspiration-state">正在加载{source === "featured" ? "全部" : "个人"}灵感…</div> : error ? <div className="creation-inspiration-state"><span>{error}</span><Button onClick={() => setReloadToken((value) => value + 1)}>重新加载</Button></div> : !filtered.length ? <div className="creation-inspiration-state">没有符合当前筛选条件的灵感</div> : <div className="creation-featured-layout">
                 {filtered.slice(0, limit).map((item) => <CreationInspirationCard key={item.id} item={item} source={source} onOpen={() => setDetail(item)} />)}
         </div>}
         {!loading && !error && filtered.length ? <footer className="creation-inspiration-footer">{limit < filtered.length ? <Button onClick={() => setLimit((count) => count + 12)}>展开更多灵感<ChevronDown /></Button> : <span>已展示全部 {filtered.length} 个创意</span>}</footer> : null}
@@ -1110,6 +1209,10 @@ export function CreationFeaturedWorks({ onStartPrompt, onRequireLogin }: { onSta
             onSaved={(created) => {
                 setSource("personal");
                 setFilter("all");
+                setSearch("");
+                setSourceFilter("all");
+                setCategory("all");
+                setSort("default");
                 setLimit(12);
                 setInspirations((current) => [created, ...current.filter((item) => item.id !== created.id)]);
             }}
