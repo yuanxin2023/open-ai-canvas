@@ -1,8 +1,10 @@
 @echo off
 setlocal
 cd /d "%~dp0"
+set "NO_PAUSE=0"
+if /I "%~1"=="--no-pause" set "NO_PAUSE=1"
 
-powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\stop-local.ps1"
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\stop-canvas.ps1"
 set "exit_code=%errorlevel%"
 
 if not "%exit_code%"=="0" (
@@ -14,5 +16,5 @@ if not "%exit_code%"=="0" (
 
 echo.
 echo open-ai-canvas stopped successfully.
-pause
+if "%NO_PAUSE%"=="0" pause
 exit /b 0

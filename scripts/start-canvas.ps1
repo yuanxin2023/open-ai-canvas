@@ -1,12 +1,20 @@
 [CmdletBinding()]
-param()
+param(
+    [switch]$NoBrowser,
+    [int]$StartupTimeoutSeconds = 180,
+    [string]$PreviewComposeFile = $env:CANVAS_PREVIEW_COMPOSE_FILE,
+    [string]$PreviewProjectName = $env:CANVAS_PREVIEW_PROJECT_NAME
+)
 
 $ErrorActionPreference = "Stop"
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+$previewHelpers = Join-Path $PSScriptRoot "canvas-preview.ps1"
 $localStarter = Join-Path $PSScriptRoot "start-local.ps1"
 $healthUrl = "http://127.0.0.1:3000/api/health"
 $canvasUrl = "http://localhost:3000/canvas"
+
+. $previewHelpers
 
 function Test-CanvasHttp([string]$Url) {
     try {
@@ -25,32 +33,66 @@ function Test-ListeningPort([int]$Port) {
     }
 }
 
+$previewContext = Get-CanvasPreviewContext `
+    -RepoRoot $repoRoot `
+    -ComposeFile $PreviewComposeFile `
+    -ProjectName $PreviewProjectName
+
+if ($previewContext) {
+    Assert-CanvasDockerReady
+    $previewUrl = Get-CanvasPreviewUrl -Context $previewContext
+    $previewHealthUrl = "$previewUrl/api/health"
+
+    Write-Host "Starting the local preview services..." -ForegroundColor Cyan
+    Invoke-CanvasPreviewCompose -Context $previewContext -Arguments @("up", "--detach", "--remove-orphans")
+
+    $deadline = (Get-Date).AddSeconds($StartupTimeoutSeconds)
+    do {
+        if (Test-CanvasHealth -Url $previewHealthUrl) {
+            Write-Host "AI Canvas is ready: $previewUrl" -ForegroundColor Green
+            if (-not $NoBrowser) {
+                Start-Process $previewUrl
+            }
+            exit 0
+        }
+        Start-Sleep -Seconds 2
+    } while ((Get-Date) -lt $deadline)
+
+    Write-Host "The services did not become healthy within $StartupTimeoutSeconds seconds. Recent logs:" -ForegroundColor Red
+    Invoke-CanvasPreviewCompose -Context $previewContext -Arguments @("logs", "--tail", "80")
+    throw "The local preview timed out: $previewHealthUrl"
+}
+
 if (Test-CanvasHttp $healthUrl) {
-    Write-Host "AI 创作工作台已经在运行，正在打开..." -ForegroundColor Green
-    Start-Process $canvasUrl
+    Write-Host "AI Canvas is already running." -ForegroundColor Green
+    if (-not $NoBrowser) {
+        Start-Process $canvasUrl
+    }
     exit 0
 }
 
 $occupiedPorts = @(3000, 8080) | Where-Object { Test-ListeningPort $_ }
 if ($occupiedPorts.Count -gt 0) {
-    throw "端口 $($occupiedPorts -join ', ') 已被其他程序占用，无法安全启动 AI 创作工作台。"
+    throw "Port(s) $($occupiedPorts -join ', ') are already in use. AI Canvas cannot start safely."
 }
 
 if (-not (Test-Path -LiteralPath $localStarter)) {
-    throw "未找到项目启动脚本：$localStarter"
+    throw "The local startup script was not found: $localStarter"
 }
 
-Write-Host "正在启动 AI 创作工作台前端和后端，请稍候..." -ForegroundColor Cyan
+Write-Host "Starting the AI Canvas frontend and backend..." -ForegroundColor Cyan
 & $localStarter
 
 $deadline = (Get-Date).AddMinutes(3)
 do {
     Start-Sleep -Seconds 2
     if (Test-CanvasHttp $healthUrl) {
-        Write-Host "AI 创作工作台已启动，正在打开浏览器..." -ForegroundColor Green
-        Start-Process $canvasUrl
+        Write-Host "AI Canvas is ready." -ForegroundColor Green
+        if (-not $NoBrowser) {
+            Start-Process $canvasUrl
+        }
         exit 0
     }
 } while ((Get-Date) -lt $deadline)
 
-throw "AI 创作工作台服务已拉起，但 3 分钟内未通过健康检查。请查看打开的前端、后端窗口。"
+throw "AI Canvas was launched but did not pass its health check within 3 minutes."
