@@ -20,6 +20,7 @@ import { CanvasImagePreview } from "@/components/canvas/canvas-image-preview";
 import { CanvasResourceMentionTextarea, type CanvasSlashCommandGroup, type CanvasSlashCommandItem } from "@/components/canvas/canvas-resource-mention-textarea";
 import { VoiceRecordingButton } from "@/components/conversation/voice-recording-button";
 import { UserPromptEditorModal } from "@/components/user-prompt-editor-modal";
+import { InspirationDetailModal } from "@/pages/inspirations/inspiration-detail-modal";
 import { HoverBorderGradient } from "@/components/ui/aceternity/hover-border-gradient";
 import { ModelPicker } from "@/components/model-picker";
 import { aceternityMotion } from "@/lib/aceternity-motion";
@@ -51,6 +52,7 @@ import { generationErrorMessage } from "@/lib/generation-error";
 import "./creation-product.css";
 import { inspirationCoverUrl, listInspirations, type Inspiration } from "@/services/api/inspirations";
 import { listUserPrompts, type UserPrompt } from "@/services/api/user-prompts";
+import { inspirationSources, type CreationInspiration as CatalogInspiration, type InspirationSourceId } from "@/lib/inspirations/catalog";
 import "./creation-scrollbars.css";
 
 const CanvasPromptOptimizerDrawer = lazy(() => import("@/components/canvas/canvas-prompt-optimizer-drawer").then((module) => ({ default: module.CanvasPromptOptimizerDrawer })));
@@ -975,7 +977,28 @@ function creationInspirationSourceLabel(item: CreationInspiration, source: Creat
     }[item.sourceId || "original"] || item.source?.trim() || "原创提示词";
 }
 
-function CreationInspirationCard({ item, source, onStartPrompt }: { item: CreationInspiration; source: CreationInspirationSource; onStartPrompt: (mode: CreationMode, prompt: string) => void }) {
+function creationInspirationDetailItem(item: CreationInspiration, source: CreationInspirationSource): CatalogInspiration {
+    const sourceId = "status" in item && item.sourceId && Object.prototype.hasOwnProperty.call(inspirationSources, item.sourceId)
+        ? item.sourceId as InspirationSourceId
+        : "original";
+    return {
+        id: source === "personal" ? `custom:${item.id}` : item.id,
+        title: item.title,
+        description: item.description,
+        image: creationInspirationCover(item),
+        coverResourceId: item.coverResourceId,
+        mode: item.mode,
+        prompt: item.prompt,
+        category: "category" in item ? item.category : undefined,
+        tags: item.tags,
+        ratio: "ratio" in item ? item.ratio : undefined,
+        sourceId,
+        credit: item.source?.trim() || undefined,
+        sourceUrl: "sourceUrl" in item ? item.sourceUrl : undefined,
+    };
+}
+
+function CreationInspirationCard({ item, source, onOpen }: { item: CreationInspiration; source: CreationInspirationSource; onOpen: () => void }) {
     const dimensions = creationInspirationDimensions(item);
     const cardRef = useRef<HTMLButtonElement>(null);
     const [rowSpan, setRowSpan] = useState(1);
@@ -995,10 +1018,10 @@ function CreationInspirationCard({ item, source, onStartPrompt }: { item: Creati
         observer.observe(card);
         return () => observer.disconnect();
     }, []);
-    return <button ref={cardRef} type="button" className="product-collection-card creation-featured-card" style={{ gridRowEnd: `span ${rowSpan}` }} onClick={() => onStartPrompt(item.mode, item.prompt)}>
+    return <button ref={cardRef} type="button" className="product-collection-card creation-featured-card" style={{ gridRowEnd: `span ${rowSpan}` }} aria-haspopup="dialog" aria-label={`查看灵感详情：${item.title}`} onClick={onOpen}>
         <span className="creation-featured-media" style={dimensions ? { aspectRatio: `${dimensions.width} / ${dimensions.height}` } : undefined}>
             <img src={creationInspirationCover(item)} alt="" width={dimensions?.width} height={dimensions?.height} loading="lazy" decoding="async" referrerPolicy="no-referrer" onLoad={(event) => { const image = event.currentTarget; if (image.naturalWidth > 0 && image.naturalHeight > 0) image.parentElement?.style.setProperty("aspect-ratio", `${image.naturalWidth} / ${image.naturalHeight}`); }} onError={(event) => { const image = event.currentTarget; image.onerror = null; image.src = "/welcome/wing-it/barn.webp"; }} />
-            <span className="creation-inspiration-overlay"><ArrowUp />使用这个创意</span>
+            <span className="creation-inspiration-overlay"><ArrowUp />查看灵感详情</span>
         </span>
         <span className="creation-featured-copy"><strong>{item.title}</strong>{item.description ? <span>{item.description}</span> : null}<em><Sparkles />{creationInspirationSourceLabel(item, source)} · {modeLabels[item.mode]}</em></span>
     </button>;
@@ -1008,12 +1031,14 @@ export function CreationFeaturedWorks({ onStartPrompt, onRequireLogin }: { onSta
     const userId = useUserStore((state) => state.user?.id || "");
     const [source, setSource] = useState<CreationInspirationSource>("featured");
     const [promptEditorOpen, setPromptEditorOpen] = useState(false);
+    const [detail, setDetail] = useState<CreationInspiration | null>(null);
     const [filter, setFilter] = useState<"all" | CreationMode>("all");
     const [limit, setLimit] = useState(12);
     const [inspirations, setInspirations] = useState<CreationInspiration[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [reloadToken, setReloadToken] = useState(0);
+    const copyText = useCopyText();
     const sourceItems = [
         { value: "featured" as const, label: "全部灵感", icon: Sparkles },
         { value: "personal" as const, label: "个人灵感", icon: UserRound },
@@ -1029,6 +1054,7 @@ export function CreationFeaturedWorks({ onStartPrompt, onRequireLogin }: { onSta
             setLoading(false);
             setError("");
             setPromptEditorOpen(false);
+            setDetail(null);
             return;
         }
         let active = true;
@@ -1075,7 +1101,7 @@ export function CreationFeaturedWorks({ onStartPrompt, onRequireLogin }: { onSta
             </div>
         </div>
         {!userId ? <div className="creation-inspiration-state"><span>登录后查看精选灵感和个人灵感</span><Button onClick={onRequireLogin}>登录</Button></div> : loading ? <div className="creation-inspiration-state">正在加载{source === "featured" ? "全部" : "个人"}灵感…</div> : error ? <div className="creation-inspiration-state"><span>{error}</span><Button onClick={() => setReloadToken((value) => value + 1)}>重新加载</Button></div> : !filtered.length ? <div className="creation-inspiration-state">当前分类暂无{source === "featured" ? "已启用的" : "个人"}灵感</div> : <div className="creation-featured-layout">
-                {filtered.slice(0, limit).map((item) => <CreationInspirationCard key={item.id} item={item} source={source} onStartPrompt={onStartPrompt} />)}
+                {filtered.slice(0, limit).map((item) => <CreationInspirationCard key={item.id} item={item} source={source} onOpen={() => setDetail(item)} />)}
         </div>}
         {!loading && !error && filtered.length ? <footer className="creation-inspiration-footer">{limit < filtered.length ? <Button onClick={() => setLimit((count) => count + 12)}>展开更多灵感<ChevronDown /></Button> : <span>已展示全部 {filtered.length} 个创意</span>}</footer> : null}
         <UserPromptEditorModal
@@ -1087,6 +1113,13 @@ export function CreationFeaturedWorks({ onStartPrompt, onRequireLogin }: { onSta
                 setLimit(12);
                 setInspirations((current) => [created, ...current.filter((item) => item.id !== created.id)]);
             }}
+        />
+        <InspirationDetailModal
+            item={detail ? creationInspirationDetailItem(detail, source) : null}
+            categoryLabel={(item) => item.category?.trim() || (source === "personal" ? "个人灵感" : "未分类")}
+            onClose={() => setDetail(null)}
+            onUse={(item) => onStartPrompt(item.mode, item.prompt)}
+            onCopy={(text, label) => copyText(text, `${label}已复制`)}
         />
     </section>;
 }

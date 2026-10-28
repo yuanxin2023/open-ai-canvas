@@ -11,6 +11,7 @@ import { modeLabels } from "@/pages/create/creation-types";
 import { useUserStore } from "@/stores/use-user-store";
 import { inspirationCoverKind } from "@/lib/inspirations/cover";
 import { resourceFileUrl } from "@/services/api/resources";
+import "./inspirations.css";
 
 function MetaRow({ label, children }: { label: string; children: React.ReactNode }) {
     return (
@@ -24,7 +25,7 @@ function MetaRow({ label, children }: { label: string; children: React.ReactNode
 export function InspirationDetailModal({
     item,
     categoryLabel,
-    favorite,
+    favorite = false,
     onClose,
     onUse,
     onEdit,
@@ -34,12 +35,12 @@ export function InspirationDetailModal({
 }: {
     item: CreationInspiration | null;
     categoryLabel: (item: CreationInspiration) => string;
-    favorite: boolean;
+    favorite?: boolean;
     onClose: () => void;
     onUse: (item: CreationInspiration) => void;
-    onEdit: (item: CreationInspiration) => void;
-    onDelete: (item: CreationInspiration) => void;
-    onToggleFavorite: (item: CreationInspiration) => void;
+    onEdit?: (item: CreationInspiration) => void;
+    onDelete?: (item: CreationInspiration) => void;
+    onToggleFavorite?: (item: CreationInspiration) => void;
     onCopy: (text: string, label: string) => void;
 }) {
     const showSources = useUserStore((state) => state.features.inspirationSourcesVisible);
@@ -72,29 +73,37 @@ export function InspirationDetailModal({
                                 <h2 className="text-[var(--fs-heading,16px)] font-semibold leading-6 text-foreground">{item.title}</h2>
                                 {item.description ? <p className="mt-1 text-xs leading-5 text-foreground/58">{item.description}</p> : null}
                             </div>
-                            <div className="flex shrink-0 items-center gap-2">
-                                <Tooltip title={favorite ? "取消收藏" : "收藏"}>
-                                    <button type="button" data-icon-only className="inspiration-icon-button" aria-label={favorite ? "取消收藏灵感" : "收藏灵感"} aria-pressed={favorite} onClick={() => onToggleFavorite(item)}>
-                                        <span aria-hidden="true">
-                                            <Heart className="size-4" fill={favorite ? "currentColor" : "none"} />
-                                        </span>
-                                    </button>
-                                </Tooltip>
-                                <Tooltip title="编辑">
-                                    <button type="button" data-icon-only className="inspiration-icon-button" aria-label="编辑灵感" onClick={() => onEdit(item)}>
-                                        <span aria-hidden="true">
-                                            <Pencil className="size-4" />
-                                        </span>
-                                    </button>
-                                </Tooltip>
-                                <Tooltip title={custom ? "删除" : "从库中隐藏"}>
-                                    <button type="button" data-icon-only className="inspiration-icon-button" aria-label={custom ? "删除灵感" : "隐藏灵感"} onClick={() => onDelete(item)}>
-                                        <span aria-hidden="true">
-                                            <Trash2 className="size-4" />
-                                        </span>
-                                    </button>
-                                </Tooltip>
-                            </div>
+                            {onToggleFavorite || onEdit || onDelete ? (
+                                <div className="flex shrink-0 items-center gap-2">
+                                    {onToggleFavorite ? (
+                                        <Tooltip title={favorite ? "取消收藏" : "收藏"}>
+                                            <button type="button" data-icon-only className="inspiration-icon-button" aria-label={favorite ? "取消收藏灵感" : "收藏灵感"} aria-pressed={favorite} onClick={() => onToggleFavorite(item)}>
+                                                <span aria-hidden="true">
+                                                    <Heart className="size-4" fill={favorite ? "currentColor" : "none"} />
+                                                </span>
+                                            </button>
+                                        </Tooltip>
+                                    ) : null}
+                                    {onEdit ? (
+                                        <Tooltip title="编辑">
+                                            <button type="button" data-icon-only className="inspiration-icon-button" aria-label="编辑灵感" onClick={() => onEdit(item)}>
+                                                <span aria-hidden="true">
+                                                    <Pencil className="size-4" />
+                                                </span>
+                                            </button>
+                                        </Tooltip>
+                                    ) : null}
+                                    {onDelete ? (
+                                        <Tooltip title={custom ? "删除" : "从库中隐藏"}>
+                                            <button type="button" data-icon-only className="inspiration-icon-button" aria-label={custom ? "删除灵感" : "隐藏灵感"} onClick={() => onDelete(item)}>
+                                                <span aria-hidden="true">
+                                                    <Trash2 className="size-4" />
+                                                </span>
+                                            </button>
+                                        </Tooltip>
+                                    ) : null}
+                                </div>
+                            ) : null}
                         </div>
 
                         <div className="flex flex-col gap-2">
