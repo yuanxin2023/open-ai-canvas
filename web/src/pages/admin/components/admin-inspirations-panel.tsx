@@ -34,6 +34,9 @@ type EditorValues = {
     description: string;
     prompt: string;
     source?: string;
+    sourceUrl?: string;
+    category?: string;
+    ratio?: string;
     coverKind: "upload" | "url";
     coverUrl?: string;
 };
@@ -41,6 +44,13 @@ type EditorValues = {
 type CoverDimensions = { source: string; width: number; height: number };
 
 const modeLabels: Record<InspirationMode, string> = { text: "文本创作", image: "图片创作", video: "视频创作" };
+const sourceLabels: Record<string, string> = {
+    original: "原创提示词",
+    "chatgpt-prompts": "开源改编 · CC0",
+    seedance: "社区精选 · CC BY 4.0",
+    haohaoxue: "好好学 AI",
+    youmind: "YouMind · CC BY 4.0",
+};
 
 function parseTags(value = "") {
     const seen = new Set<string>();
@@ -123,7 +133,7 @@ export default function AdminInspirationsPanel() {
         setEditing(null);
         setDraftCoverId("");
         setCoverDimensions(null);
-        form.setFieldsValue({ title: "", mode: "image", tags: "", description: "", prompt: "", source: "", coverKind: "upload", coverUrl: "" });
+        form.setFieldsValue({ title: "", mode: "image", tags: "", description: "", prompt: "", source: "", sourceUrl: "", category: "", ratio: "", coverKind: "upload", coverUrl: "" });
         setEditorOpen(true);
     };
 
@@ -138,6 +148,9 @@ export default function AdminInspirationsPanel() {
             description: item.description,
             prompt: item.prompt,
             source: item.source || "",
+            sourceUrl: item.sourceUrl || "",
+            category: item.category || "",
+            ratio: item.ratio || "",
             coverKind: item.coverResourceId ? "upload" : "url",
             coverUrl: item.coverResourceId ? "" : item.coverUrl,
         });
@@ -182,6 +195,9 @@ export default function AdminInspirationsPanel() {
             prompt: values.prompt.trim(),
             tags: parseTags(values.tags),
             source: values.source?.trim() || "",
+            sourceUrl: values.sourceUrl?.trim() || "",
+            category: values.category?.trim() || "",
+            ratio: values.ratio?.trim() || "",
             coverResourceId,
             coverUrl,
             coverWidth: dimensions.width,
@@ -301,6 +317,7 @@ export default function AdminInspirationsPanel() {
             ),
         },
         { title: "类型", dataIndex: "mode", width: 110, render: (value: InspirationMode) => modeLabels[value] },
+        { title: "来源", key: "source", width: 170, render: (_, item) => sourceLabels[item.sourceId || ""] || item.source || "后台新增" },
         { title: "状态", dataIndex: "status", width: 100, render: (value: InspirationStatus) => <AdminStatusBadge label={value === "active" ? "已启用" : "已停用"} tone={value === "active" ? "success" : "neutral"} /> },
         { title: "更新时间", dataIndex: "updatedAt", width: 160, render: (value: string) => new Date(value).toLocaleString("zh-CN", { hour12: false }) },
         {
@@ -344,7 +361,7 @@ export default function AdminInspirationsPanel() {
                             setKeyword(event.target.value);
                             setPage(1);
                         }}
-                        placeholder="搜索标题、说明、标签或提示词内容"
+                        placeholder="搜索标题、说明、来源、分类或提示词内容"
                     />
                 }
                 toolbarFilters={
@@ -487,6 +504,17 @@ export default function AdminInspirationsPanel() {
                         <Form.Item label="来源署名" name="source" rules={[{ max: 120 }]}>
                             <Input placeholder="可选；留空时首页显示原创提示词" />
                         </Form.Item>
+                        <div className="admin-inspiration-form-grid">
+                            <Form.Item label="来源链接" name="sourceUrl" rules={[{ max: 1000 }, { validator: (_, value: string | undefined) => !value?.trim() || isHTTPSURL(value.trim()) ? Promise.resolve() : Promise.reject(new Error("请输入有效的 HTTPS 链接")) }]}>
+                                <Input placeholder="可选；官方案例或仓库地址" />
+                            </Form.Item>
+                            <Form.Item label="来源分类" name="category" rules={[{ max: 120 }]}>
+                                <Input placeholder="可选；例如手持 UGC Vlog" />
+                            </Form.Item>
+                        </div>
+                        <Form.Item label="画面比例" name="ratio" rules={[{ max: 24 }]}>
+                            <Input placeholder="可选；例如 16:9、9:16" />
+                        </Form.Item>
                     </Form>
                     <aside className="admin-inspiration-preview">
                         <span>首页卡片实时预览</span>
@@ -511,9 +539,7 @@ export default function AdminInspirationsPanel() {
                             <div>
                                 <strong>{watched?.title || "提示词标题"}</strong>
                                 <p>{watched?.description || "卡片说明会显示在这里"}</p>
-                                <small>
-                                    {watched?.source ? "开源改编 · CC0" : "原创提示词"} · {modeLabels[watched?.mode || "image"]}
-                                </small>
+                                <small>{sourceLabels[editing?.sourceId || ""] || watched?.source || "后台新增"} · {modeLabels[watched?.mode || "image"]}</small>
                             </div>
                         </div>
                         <p>图片按原始比例展示。预览不等于发布，新增内容保存后默认为停用状态。</p>

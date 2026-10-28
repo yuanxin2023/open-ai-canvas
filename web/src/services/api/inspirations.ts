@@ -12,6 +12,10 @@ export type Inspiration = {
     prompt: string;
     tags: string[];
     source?: string;
+    sourceId?: string;
+    sourceUrl?: string;
+    category?: string;
+    ratio?: string;
     coverResourceId?: string;
     coverUrl: string;
     coverWidth: number;
@@ -26,6 +30,9 @@ export type Inspiration = {
 
 export type InspirationInput = Pick<Inspiration, "title" | "description" | "mode" | "prompt" | "tags"> & {
     source?: string;
+    sourceUrl?: string;
+    category?: string;
+    ratio?: string;
     coverResourceId?: string;
     coverUrl?: string;
     coverWidth: number;

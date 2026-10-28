@@ -53,6 +53,8 @@ const editableFeatureKeys: FeatureKey[] = [
     "inspirationSourcesVisible",
     "imageWorkbenchEnabled",
     "videoWorkbenchEnabled",
+    // Legacy persisted fields remain round-tripped for compatibility, but the
+    // duplicate static hall and gallery no longer have separate UI switches.
     "inspirationHallEnabled",
     "inspirationGalleryEnabled",
     "userFeedbackEnabled",
@@ -67,26 +69,6 @@ const workspaceFeatureRows: FeatureRow[] = [
         changeCopy: {
             enabled: { title: "确认开启用户反馈？", operation: "开放文字、图片和视频反馈及本人历史。", userImpact: "诊断默认不附带；管理员须具备独立反馈权限才能处理。", okText: "确认开启" },
             disabled: { title: "确认关闭用户反馈？", operation: "隐藏设置入口并停止新提交和附件上传。", userImpact: "已有反馈、附件和站内答复保留，后台仍可处理。", okText: "确认关闭" },
-        },
-    },
-    {
-        key: "inspirationHallEnabled",
-        title: "灵感大厅",
-        description: "在现有精选灵感下方开放目录浏览和个人收藏；选择内容只预填草稿。",
-        icon: <Sparkles className="size-4" aria-hidden="true" />,
-        changeCopy: {
-            enabled: { title: "确认开启灵感大厅？", operation: "开放可选灵感目录与个人收藏。", userImpact: "用户选用后仍需确认模型并手动发送，不自动生成或扣费。", okText: "确认开启" },
-            disabled: { title: "确认关闭灵感大厅？", operation: "隐藏新大厅并停止其写入，不删除个人提示词和收藏。", userImpact: "现有精选灵感和个人提示词库继续可用。", okText: "确认关闭" },
-        },
-    },
-    {
-        key: "inspirationGalleryEnabled",
-        title: "灵感画廊",
-        description: "在创作首页额外显示动态画廊，保留原有精选和创作入口。",
-        icon: <Sparkles className="size-4" aria-hidden="true" />,
-        changeCopy: {
-            enabled: { title: "确认开启灵感画廊？", operation: "加载本地缩略图画廊。", userImpact: "点击卡片只预填草稿，需用户手动发送。", okText: "确认开启" },
-            disabled: { title: "确认关闭灵感画廊？", operation: "隐藏画廊并停止轮播。", userImpact: "既有草稿、个人内容和精选灵感保留。", okText: "确认关闭" },
         },
     },
     {

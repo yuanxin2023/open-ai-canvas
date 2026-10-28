@@ -37,7 +37,7 @@ func TestCopySchemaRefusesExistingDatabase(t *testing.T) {
 		t.Fatal(err)
 	}
 	var count int64
-	if err := db.Model(&model.Inspiration{}).Where("title = ?", "Preserved edit").Count(&count).Error; err != nil || count != 22 {
+	if err := db.Model(&model.Inspiration{}).Where("title = ?", "Preserved edit").Count(&count).Error; err != nil || count != 1341 {
 		t.Fatalf("existing seed edits changed: %d %v", count, err)
 	}
 }

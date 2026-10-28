@@ -558,6 +558,9 @@ async function main() {
     };
     writeFileSync(join(PUBLIC_DIR, "manifest.json"), JSON.stringify(manifest, null, 2), "utf8");
 
+    // 后端以数据库为唯一展示来源；每次同步静态目录时同时刷新其离线导入快照。
+    await import("./export-inspirations-backend-catalog.mjs");
+
     console.log(`新下载缩略图: ${downloaded}${skippedThumbs ? `，跳过不可用封面 ${skippedThumbs} 张` : ""}`);
     console.log(`清理孤儿文件: ${pruned}`);
     console.log(`画廊池      : ${GALLERY_POOL_FILE}`);

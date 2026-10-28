@@ -35,13 +35,19 @@ func InitializeSchemaForCopy(db *gorm.DB) error {
 		if err := MigrateSchema(tx); err != nil {
 			return err
 		}
-		var inspirations []model.Inspiration
-		if err := json.Unmarshal(inspirationSeedJSON, &inspirations); err != nil {
+		var catalog bundledInspirationCatalog
+		if err := json.Unmarshal(inspirationCatalogJSON, &catalog); err != nil {
 			return err
 		}
-		inspirationIDs := make([]any, 0, len(inspirations))
-		for _, item := range inspirations {
-			inspirationIDs = append(inspirationIDs, item.ID)
+		inspirationIDs := make([]any, 0, len(catalog.Entries))
+		catalogKeys := make([]any, 0, len(catalog.Entries))
+		for _, item := range catalog.Entries {
+			id := item.LegacyID
+			if id == "" {
+				id = inspirationCatalogID(item.CatalogKey)
+			}
+			inspirationIDs = append(inspirationIDs, id)
+			catalogKeys = append(catalogKeys, item.CatalogKey)
 		}
 		rootIDs := make([]any, 0)
 		for _, item := range model.DefaultSkillCurationRoots() {
@@ -57,6 +63,7 @@ func InitializeSchemaForCopy(db *gorm.DB) error {
 			keys   []any
 		}{
 			{&model.Inspiration{}, "id", inspirationIDs},
+			{&model.InspirationCatalogRecord{}, "catalog_key", catalogKeys},
 			{&model.SkillCurationSetting{}, "id", []any{int64(1)}},
 			{&model.SkillCurationRoot{}, "id", rootIDs},
 			{&model.IDSequence{}, "name", sequenceNames},

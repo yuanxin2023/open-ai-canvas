@@ -18,6 +18,9 @@ func TestNormalizeInspirationRequest(t *testing.T) {
 		Mode:        model.InspirationModeImage,
 		Prompt:      "  生成一张电影感海报  ",
 		Tags:        []string{" 海报 ", "海报", "CINEMA", "cinema"},
+		SourceURL:   " https://example.com/source ",
+		Category:    " 海报设计 ",
+		Ratio:       " 3:4 ",
 		CoverURL:    "https://example.com/cover.webp",
 		CoverWidth:  900,
 		CoverHeight: 1200,
@@ -28,6 +31,9 @@ func TestNormalizeInspirationRequest(t *testing.T) {
 	}
 	if normalized.Title != "测试灵感" || normalized.Description != "卡片说明" || normalized.Prompt != "生成一张电影感海报" {
 		t.Fatalf("text fields were not normalized: %+v", normalized)
+	}
+	if normalized.SourceURL != "https://example.com/source" || normalized.Category != "海报设计" || normalized.Ratio != "3:4" {
+		t.Fatalf("source metadata was not normalized: %+v", normalized)
 	}
 	if len(normalized.Tags) != 2 || normalized.Tags[0] != "海报" || normalized.Tags[1] != "CINEMA" {
 		t.Fatalf("tags were not trimmed and deduplicated: %+v", normalized.Tags)
@@ -43,6 +49,11 @@ func TestNormalizeInspirationRequest(t *testing.T) {
 	if _, _, err := normalizeInspirationRequest(request, true); err != nil {
 		t.Fatalf("existing migrated cover should remain editable: %v", err)
 	}
+	request.SourceURL = "http://example.com/source"
+	if _, _, err := normalizeInspirationRequest(request, true); err == nil || !strings.Contains(err.Error(), "来源链接") {
+		t.Fatalf("source links must require HTTPS: %v", err)
+	}
+	request.SourceURL = "https://example.com/source"
 	request.CoverWidth = 0
 	if _, _, err := normalizeInspirationRequest(request, true); err == nil || !strings.Contains(err.Error(), "尺寸") {
 		t.Fatalf("inspirations must require confirmed cover dimensions: %v", err)

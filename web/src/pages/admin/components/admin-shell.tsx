@@ -147,7 +147,7 @@ const adminNavigation: AdminNavigationGroup[] = [
         label: "内容与通知",
         collapsible: true,
         items: [
-            { path: "/admin/inspirations", label: "提示词运营", shortLabel: "提示", description: "维护首页精选灵感", icon: <MessageSquareText className="size-4" /> },
+            { path: "/admin/inspirations", label: "提示词运营", shortLabel: "提示", description: "统一维护前端灵感大厅", icon: <MessageSquareText className="size-4" /> },
             { path: "/admin/announcements", label: "系统公告", shortLabel: "系统", description: "发布、关闭与历史公告", icon: <BellRing className="size-4" /> },
             { path: "/admin/banner-announcements", label: "常驻通知", shortLabel: "常驻", description: "首页顶部常驻滚动通知", icon: <Megaphone className="size-4" /> },
         ],

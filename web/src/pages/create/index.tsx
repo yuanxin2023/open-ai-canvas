@@ -41,7 +41,6 @@ import { CreationAgentEntry } from "./creation-agent-entry";
 import { createCreationSubmitGate } from "./creation-submit-gate";
 import { creationVideoConfig } from "./creation-generation-config";
 import { CreationLoginDialog } from "./creation-login-dialog";
-import { CreationInspirationModules } from "./creation-inspiration-modules";
 
 const AssetLibraryPickerModal = lazy(() => import("@/components/assets/asset-library-picker-modal").then((module) => ({ default: module.AssetLibraryPickerModal })));
 const loadCreationRuntime = () => import("./creation-runtime");
@@ -1223,7 +1222,6 @@ function CreationPageContent() {
                     onRequireLogin={() => setLoginDialogOpen(true)}
                     onStartPrompt={(nextMode, prompt) => { setAgentMode(false); selectMode(nextMode); setPrompt(prompt); window.requestAnimationFrame(() => composerFocusRef.current?.focus()); }}
                 />
-                <CreationInspirationModules mode={mode} onStartPrompt={(nextMode, nextPrompt) => { setAgentMode(false); selectMode(nextMode); setPrompt(nextPrompt); window.requestAnimationFrame(() => composerFocusRef.current?.focus()); }} />
             </main>
             </> : <div className="creation-thread-workbench">
                 {conversationSidebarOpen ? <CreationConversationSidebar conversations={historyConversations} activeId={activeConversation.id} onNew={startNewConversation} onCollapse={() => setConversationSidebarOpen(false)} onSelect={selectConversation} onDelete={confirmDeleteConversation} onRename={renameConversationTitle} onTogglePin={toggleConversationPin} /> : null}

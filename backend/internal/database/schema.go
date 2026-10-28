@@ -99,6 +99,7 @@ func Models() []any {
 		&model.ResourceOffloadJob{},
 		&model.AnnouncementImageDraft{},
 		&model.InspirationCoverDraft{},
+		&model.InspirationCatalogRecord{},
 		&model.PaymentPromotionImageDraft{},
 		&model.Asset{},
 		&model.AssetFolder{},

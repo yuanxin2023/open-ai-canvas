@@ -2716,13 +2716,13 @@ paths:
   /inspirations:
     get:
       tags: [inspirations]
-      summary: 读取已启用的精选灵感
+      summary: 读取已启用的灵感大厅内容
       responses:
         "200": { $ref: "#/components/responses/Envelope" }
   /inspirations/{id}/cover:
     get:
       tags: [inspirations]
-      summary: 读取精选灵感托管封面
+      summary: 读取灵感大厅托管封面
       parameters:
         - in: path
           name: id
@@ -2734,7 +2734,7 @@ paths:
   /admin/inspirations:
     get:
       tags: [admin, inspirations]
-      summary: 分页查询全部精选灵感
+      summary: 分页查询全部灵感大厅内容
       parameters:
         - { in: query, name: keyword, schema: { type: string } }
         - { in: query, name: mode, schema: { type: string, enum: [text, image, video] } }
@@ -2745,7 +2745,7 @@ paths:
         "200": { $ref: "#/components/responses/Envelope" }
     post:
       tags: [admin, inspirations]
-      summary: 新增默认停用的精选灵感
+      summary: 新增默认停用的灵感
       requestBody:
         required: true
         content:
@@ -2761,7 +2761,7 @@ paths:
         schema: { type: string }
     put:
       tags: [admin, inspirations]
-      summary: 编辑精选灵感
+      summary: 编辑灵感
       requestBody:
         required: true
         content:
@@ -2771,13 +2771,13 @@ paths:
         "200": { $ref: "#/components/responses/Envelope" }
     delete:
       tags: [admin, inspirations]
-      summary: 永久删除精选灵感
+      summary: 永久删除灵感
       responses:
         "200": { $ref: "#/components/responses/Envelope" }
   /admin/inspirations/{id}/status:
     patch:
       tags: [admin, inspirations]
-      summary: 启用或停用精选灵感
+      summary: 启用或停用灵感
       parameters:
         - in: path
           name: id
@@ -2797,7 +2797,7 @@ paths:
   /admin/inspirations/batch-delete:
     post:
       tags: [admin, inspirations]
-      summary: 批量永久删除精选灵感
+      summary: 批量永久删除灵感
       requestBody:
         required: true
         content:
@@ -4303,6 +4303,9 @@ components:
           maxItems: 8
           items: { type: string, maxLength: 24 }
         source: { type: string, maxLength: 120 }
+        sourceUrl: { type: string, format: uri, maxLength: 1000 }
+        category: { type: string, maxLength: 120 }
+        ratio: { type: string, maxLength: 24 }
         coverResourceId: { type: string }
         coverUrl: { type: string, format: uri, maxLength: 1000 }
         coverWidth: { type: integer, minimum: 1, maximum: 100000 }

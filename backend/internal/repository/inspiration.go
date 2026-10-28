@@ -34,7 +34,7 @@ func (r *Repository) AdminInspirations(keyword string, mode model.InspirationMod
 	query := r.db.Model(&model.Inspiration{})
 	if keyword = strings.TrimSpace(keyword); keyword != "" {
 		like := "%" + keyword + "%"
-		query = query.Where("title LIKE ? OR description LIKE ? OR prompt LIKE ? OR tags_json LIKE ?", like, like, like, like)
+		query = query.Where("title LIKE ? OR description LIKE ? OR prompt LIKE ? OR tags_json LIKE ? OR source LIKE ? OR category LIKE ?", like, like, like, like, like, like)
 	}
 	if mode != "" {
 		query = query.Where("mode = ?", mode)
@@ -132,7 +132,8 @@ func (r *Repository) UpdateInspiration(row *model.Inspiration, draftUserID, newD
 		}
 		result := tx.Model(&model.Inspiration{}).Where("id = ?", row.ID).Updates(map[string]any{
 			"title": row.Title, "description": row.Description, "mode": row.Mode, "prompt": row.Prompt,
-			"tags_json": row.TagsJSON, "source": row.Source, "cover_resource_id": row.CoverResourceID,
+			"tags_json": row.TagsJSON, "source": row.Source, "source_url": row.SourceURL,
+			"category": row.Category, "ratio": row.Ratio, "cover_resource_id": row.CoverResourceID,
 			"cover_url": row.CoverURL, "cover_width": row.CoverWidth, "cover_height": row.CoverHeight,
 			"updated_by": row.UpdatedBy, "updated_at": row.UpdatedAt,
 		})
@@ -228,6 +229,8 @@ func (r *Repository) DeleteInspirations(ids []string, resources []model.Resource
 		} else if result.RowsAffected != int64(len(ids)) {
 			return gorm.ErrInvalidData
 		}
+		// Catalog records remain as deletion tombstones. Future bundled-catalog
+		// syncs therefore skip these IDs instead of recreating admin-deleted rows.
 		for index := range resources {
 			resource := resources[index]
 			var count int64

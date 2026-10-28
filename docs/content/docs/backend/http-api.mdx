@@ -247,11 +247,11 @@ handle 放错端点、格式错误或行 ID 不存在时，工具错误回执提
 
 登录用户通过 `GET /api/user-prompts` 分页读取自己的提示词，可按关键词和文本/图片/视频类型过滤；`POST /api/user-prompts` 新增，`PUT /api/user-prompts/:id` 编辑，`DELETE /api/user-prompts/:id` 删除。服务端始终按当前用户校验记录与上传封面归属，不接受其他账号的资源或提示词 ID；每个用户最多保存 500 条。
 
-## 精选灵感
+## 灵感大厅
 
-登录用户通过 `GET /api/inspirations` 读取按运营顺序排列的已启用内容；托管封面从 `GET /api/inspirations/:id/cover` 读取，普通用户不能借此访问停用内容。HTTPS 外链由浏览器直接加载，后端不代理或抓取。
+登录用户通过 `GET /api/inspirations` 读取按运营顺序排列的全部已启用大厅内容；托管封面从 `GET /api/inspirations/:id/cover` 读取，普通用户不能借此访问停用内容。HTTPS 外链由浏览器直接懒加载，后端不代理或抓取。
 
-管理员使用 `/api/admin/inspirations` 分页查询、新增和编辑，使用 `PATCH /api/admin/inspirations/:id/status` 启停，使用单条 DELETE 或 `POST /api/admin/inspirations/batch-delete` 永久删除。新增和编辑请求携带 `coverWidth` / `coverHeight`；托管封面最终以资源记录中的真实尺寸为准。`GET/PUT /api/admin/inspirations/order` 使用 `ids + expectedIds` 全量快照保存顺序，列表发生并发变化时拒绝覆盖。`POST /api/admin/inspiration-covers` 上传封面草稿时通过 multipart 同时提交 `width` / `height`，取消时调用对应 DELETE；新建记录始终以 `disabled` 状态保存。
+管理员使用 `/api/admin/inspirations` 分页查询、新增和编辑，使用 `PATCH /api/admin/inspirations/:id/status` 启停，使用单条 DELETE 或 `POST /api/admin/inspirations/batch-delete` 永久删除。新增和编辑可携带 `source`、`sourceUrl`、`category`、`ratio` 以及 `coverWidth` / `coverHeight`；托管封面最终以资源记录中的真实尺寸为准。`GET/PUT /api/admin/inspirations/order` 使用 `ids + expectedIds` 全量快照保存顺序，列表发生并发变化时拒绝覆盖。官方目录同步只追加从未登记的 ID；编辑、停用或永久删除不会被后续同步覆盖。
 
 出站模型服务域名解析失败返回 HTTP / `code: 502`、`reason: upstream_dns_failed`，不归类为用户参数错误。公开消息不包含上游域名、DNS 服务器或请求 URL；原始解析错误仅保留在内部错误链。此分类不会自动重试、切换渠道或放宽 SSRF 校验；上下文取消仍按取消处理。
 
@@ -880,7 +880,7 @@ F-02 已确认接入工具目录与预设，118 个内置工具和 354 个提示
 
 ## v1.6.9.2 合并候选：灵感个人库
 
-F-03 已确认纳入固定目录、可选大厅和画廊；`inspirationHallEnabled` / `inspirationGalleryEnabled` 前后端默认 false，开关修改沿用 `admin.settings.features`。现有精选灵感和个人提示词接口继续保留，不自动导入整份目录。外部 HTTPS 封面由浏览器原生懒加载，在接近可视区域时自动请求，无需逐张点击；服务器不代抓。
+F-03 固定目录已统一导入 `/api/inspirations`。旧 `inspirationHallEnabled` / `inspirationGalleryEnabled` 字段只为已有配置和个人库接口兼容保留，创作首页不再挂载第二套静态大厅或画廊。外部 HTTPS 封面由浏览器原生懒加载，在接近可视区域时自动请求；服务器不代抓。
 
 - `GET /inspiration-library`：登录且大厅已开启时返回本人的 `revision`、`prompts`、`state`。state 包含 favorites、hidden、overrides、importedCustom、metadata，主要正文来自原个人库。首次读取不创建记录，不返回其他账号内容。
 - `POST /inspiration-library/commands`：operation 为 save/favorite/hide/restore/delete/import，携带 expectedUserId、expectedRevision 及操作字段。账号字段仅复核会话，不授予身份；版本绑定编辑器打开、删除确认或导入文件读取开始的时点。非幂等陈旧写入返回 409 `inspiration_library_changed`，需保留草稿、刷新并核对后重试。

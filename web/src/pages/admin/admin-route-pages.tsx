@@ -143,7 +143,7 @@ export function AgentLessonsPage() {
 
 export function InspirationsPage() {
     return (
-        <AdminPageFrame title="提示词运营" description="维护首页“精选灵感”的内容、发布状态与展示顺序" scroll>
+        <AdminPageFrame title="提示词运营" description="统一维护前端灵感大厅的内容、封面、发布状态与展示顺序" scroll>
             <AdminInspirationsPanel />
         </AdminPageFrame>
     );

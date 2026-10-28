@@ -495,6 +495,10 @@ type Inspiration struct {
 	Tags            []string          `json:"tags" gorm:"-"`
 	TagsJSON        string            `json:"-" gorm:"column:tags_json;type:text"`
 	Source          string            `json:"source,omitempty" gorm:"size:120"`
+	SourceID        string            `json:"sourceId,omitempty" gorm:"size:40;index"`
+	SourceURL       string            `json:"sourceUrl,omitempty" gorm:"size:1000"`
+	Category        string            `json:"category,omitempty" gorm:"size:120;index"`
+	Ratio           string            `json:"ratio,omitempty" gorm:"size:24"`
 	CoverResourceID string            `json:"coverResourceId,omitempty" gorm:"index;size:36"`
 	CoverURL        string            `json:"coverUrl" gorm:"size:1000"`
 	CoverWidth      int               `json:"coverWidth"`
@@ -505,6 +509,18 @@ type Inspiration struct {
 	UpdatedBy       string            `json:"updatedBy" gorm:"size:36;index"`
 	CreatedAt       time.Time         `json:"createdAt"`
 	UpdatedAt       time.Time         `json:"updatedAt"`
+}
+
+// InspirationCatalogRecord is the append-only identity ledger for inspirations
+// imported from the bundled official catalog. The record deliberately survives
+// deletion of the Inspiration row so a later catalog sync cannot resurrect an
+// item that an administrator removed.
+type InspirationCatalogRecord struct {
+	CatalogKey    string    `json:"catalogKey" gorm:"primaryKey;size:160"`
+	InspirationID string    `json:"inspirationId" gorm:"uniqueIndex;size:36"`
+	SourceID      string    `json:"sourceId" gorm:"size:40;index"`
+	Revision      string    `json:"revision" gorm:"size:160"`
+	ImportedAt    time.Time `json:"importedAt"`
 }
 
 type UserAnnouncementRead struct {

@@ -27,6 +27,9 @@ type InspirationRequest struct {
 	Prompt          string                `json:"prompt"`
 	Tags            []string              `json:"tags"`
 	Source          string                `json:"source"`
+	SourceURL       string                `json:"sourceUrl"`
+	Category        string                `json:"category"`
+	Ratio           string                `json:"ratio"`
 	CoverResourceID string                `json:"coverResourceId"`
 	CoverURL        string                `json:"coverUrl"`
 	CoverWidth      int                   `json:"coverWidth"`
@@ -94,6 +97,9 @@ func normalizeInspirationRequest(req InspirationRequest, allowBuiltInURL bool) (
 	req.Description = strings.TrimSpace(req.Description)
 	req.Prompt = strings.TrimSpace(req.Prompt)
 	req.Source = strings.TrimSpace(req.Source)
+	req.SourceURL = strings.TrimSpace(req.SourceURL)
+	req.Category = strings.TrimSpace(req.Category)
+	req.Ratio = strings.TrimSpace(req.Ratio)
 	req.CoverResourceID = strings.TrimSpace(req.CoverResourceID)
 	req.CoverURL = strings.TrimSpace(req.CoverURL)
 	if req.Title == "" || utf8.RuneCountInString(req.Title) > 120 {
@@ -110,6 +116,15 @@ func normalizeInspirationRequest(req InspirationRequest, allowBuiltInURL bool) (
 	}
 	if utf8.RuneCountInString(req.Source) > 120 {
 		return req, "", BadAuthRequest("来源署名不能超过 120 个字符")
+	}
+	if utf8.RuneCountInString(req.Category) > 120 || utf8.RuneCountInString(req.Ratio) > 24 {
+		return req, "", BadAuthRequest("来源分类或画面比例过长")
+	}
+	if req.SourceURL != "" {
+		parsed, err := url.Parse(req.SourceURL)
+		if len(req.SourceURL) > 1000 || err != nil || parsed.Scheme != "https" || parsed.Host == "" {
+			return req, "", BadAuthRequest("来源链接必须是有效的 HTTPS 地址")
+		}
 	}
 	if req.CoverResourceID != "" && req.CoverURL != "" {
 		return req, "", BadAuthRequest("上传封面与外链封面只能选择一种")
@@ -179,7 +194,7 @@ func (s *Service) CreateInspiration(actor *model.User, req InspirationRequest) (
 		return nil, err
 	}
 	now := time.Now()
-	row := &model.Inspiration{ID: newID(), Title: req.Title, Description: req.Description, Mode: req.Mode, Prompt: req.Prompt, Tags: req.Tags, TagsJSON: tagsJSON, Source: req.Source, CoverResourceID: req.CoverResourceID, CoverURL: req.CoverURL, CoverWidth: req.CoverWidth, CoverHeight: req.CoverHeight, Status: model.InspirationStatusDisabled, SortOrder: sortOrder, CreatedBy: actor.ID, UpdatedBy: actor.ID, CreatedAt: now, UpdatedAt: now}
+	row := &model.Inspiration{ID: newID(), Title: req.Title, Description: req.Description, Mode: req.Mode, Prompt: req.Prompt, Tags: req.Tags, TagsJSON: tagsJSON, Source: req.Source, SourceURL: req.SourceURL, Category: req.Category, Ratio: req.Ratio, CoverResourceID: req.CoverResourceID, CoverURL: req.CoverURL, CoverWidth: req.CoverWidth, CoverHeight: req.CoverHeight, Status: model.InspirationStatusDisabled, SortOrder: sortOrder, CreatedBy: actor.ID, UpdatedBy: actor.ID, CreatedAt: now, UpdatedAt: now}
 	if err := s.repo.CreateInspiration(row); err != nil {
 		if errors.Is(err, repository.ErrInspirationCoverDraftUnavailable) {
 			return nil, BadAuthRequest("封面草稿已失效，请重新上传")
@@ -244,6 +259,7 @@ func (s *Service) UpdateInspiration(actor *model.User, id string, req Inspiratio
 	}
 	row.Title, row.Description, row.Mode, row.Prompt = req.Title, req.Description, req.Mode, req.Prompt
 	row.Tags, row.TagsJSON, row.Source = req.Tags, tagsJSON, req.Source
+	row.SourceURL, row.Category, row.Ratio = req.SourceURL, req.Category, req.Ratio
 	row.CoverResourceID, row.CoverURL, row.CoverWidth, row.CoverHeight, row.UpdatedBy, row.UpdatedAt = req.CoverResourceID, req.CoverURL, req.CoverWidth, req.CoverHeight, actor.ID, time.Now()
 	if err := s.repo.UpdateInspiration(row, actor.ID, newDraft, oldResource, deletionJob); err != nil {
 		if errors.Is(err, repository.ErrInspirationCoverDraftUnavailable) {

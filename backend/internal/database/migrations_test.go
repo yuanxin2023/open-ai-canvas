@@ -24,8 +24,8 @@ func TestCurrentSchemaVersionMatchesMigrationPlan(t *testing.T) {
 			}
 		}
 		latest := plan[len(plan)-1]
-		if CurrentSchemaVersion != latest.version || latest.name != "drama_segment_mode" {
-			t.Fatalf("%s latest migration = %d/%q, want %d/drama_segment_mode", name, latest.version, latest.name, CurrentSchemaVersion)
+		if CurrentSchemaVersion != latest.version || latest.name != "official_inspiration_catalog" {
+			t.Fatalf("%s latest migration = %d/%q, want %d/official_inspiration_catalog", name, latest.version, latest.name, CurrentSchemaVersion)
 		}
 	}
 }
@@ -265,8 +265,8 @@ func TestMigrateSchemaSupportsLocalAndUpstreamPost23Lineages(t *testing.T) {
 		expectedV24Name  string
 		expectedTailName string
 	}{
-		{name: "local", plan: schemaMigrations, appliedThrough: 27, expectedV24Name: "topup_product_benefits", expectedTailName: "drama_segment_mode"},
-		{name: "upstream", plan: upstreamFirstMigrationPlan(), appliedThrough: 32, expectedV24Name: "channel_model_label", expectedTailName: "drama_segment_mode"},
+		{name: "local", plan: schemaMigrations, appliedThrough: 27, expectedV24Name: "topup_product_benefits", expectedTailName: "official_inspiration_catalog"},
+		{name: "upstream", plan: upstreamFirstMigrationPlan(), appliedThrough: 32, expectedV24Name: "channel_model_label", expectedTailName: "official_inspiration_catalog"},
 	} {
 		t.Run(scenario.name, func(t *testing.T) {
 			db, err := Open(Config{Driver: "sqlite", DSN: "file:" + t.Name() + "?mode=memory&cache=shared"})
@@ -365,7 +365,7 @@ func TestMigrateSchemaRecordsAndValidatesVersion(t *testing.T) {
 		t.Fatal("schema migration v25 did not create inspiration tables")
 	}
 	var inspirationCount int64
-	if err := db.Model(&model.Inspiration{}).Count(&inspirationCount).Error; err != nil || inspirationCount != 22 {
+	if err := db.Model(&model.Inspiration{}).Count(&inspirationCount).Error; err != nil || inspirationCount != 1341 {
 		t.Fatalf("schema migration v25 inspiration seed count = %d, error = %v", inspirationCount, err)
 	}
 	if !db.Migrator().HasTable(&model.UserPrompt{}) {

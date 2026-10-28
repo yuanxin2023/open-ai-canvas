@@ -963,6 +963,18 @@ function creationInspirationDimensions(item: CreationInspiration) {
     return { width: item.coverWidth, height: item.coverHeight };
 }
 
+function creationInspirationSourceLabel(item: CreationInspiration, source: CreationInspirationSource) {
+    if (source === "personal") return item.source?.trim() || "个人灵感";
+    if (!("status" in item)) return item.source?.trim() || "原创提示词";
+    return {
+        seedance: "社区精选 · CC BY 4.0",
+        haohaoxue: "好好学 AI · 图片提示词",
+        youmind: "YouMind 提示词库 · CC BY 4.0",
+        "chatgpt-prompts": "开源改编 · CC0",
+        original: "原创提示词",
+    }[item.sourceId || "original"] || item.source?.trim() || "原创提示词";
+}
+
 function CreationInspirationCard({ item, source, onStartPrompt }: { item: CreationInspiration; source: CreationInspirationSource; onStartPrompt: (mode: CreationMode, prompt: string) => void }) {
     const dimensions = creationInspirationDimensions(item);
     const cardRef = useRef<HTMLButtonElement>(null);
@@ -985,10 +997,10 @@ function CreationInspirationCard({ item, source, onStartPrompt }: { item: Creati
     }, []);
     return <button ref={cardRef} type="button" className="product-collection-card creation-featured-card" style={{ gridRowEnd: `span ${rowSpan}` }} onClick={() => onStartPrompt(item.mode, item.prompt)}>
         <span className="creation-featured-media" style={dimensions ? { aspectRatio: `${dimensions.width} / ${dimensions.height}` } : undefined}>
-            <img src={creationInspirationCover(item)} alt="" width={dimensions?.width} height={dimensions?.height} loading="lazy" referrerPolicy="no-referrer" onLoad={(event) => { const image = event.currentTarget; if (image.naturalWidth > 0 && image.naturalHeight > 0) image.parentElement?.style.setProperty("aspect-ratio", `${image.naturalWidth} / ${image.naturalHeight}`); }} onError={(event) => { const image = event.currentTarget; image.onerror = null; image.src = "/welcome/wing-it/barn.webp"; }} />
+            <img src={creationInspirationCover(item)} alt="" width={dimensions?.width} height={dimensions?.height} loading="lazy" decoding="async" referrerPolicy="no-referrer" onLoad={(event) => { const image = event.currentTarget; if (image.naturalWidth > 0 && image.naturalHeight > 0) image.parentElement?.style.setProperty("aspect-ratio", `${image.naturalWidth} / ${image.naturalHeight}`); }} onError={(event) => { const image = event.currentTarget; image.onerror = null; image.src = "/welcome/wing-it/barn.webp"; }} />
             <span className="creation-inspiration-overlay"><ArrowUp />使用这个创意</span>
         </span>
-        <span className="creation-featured-copy"><strong>{item.title}</strong>{item.description ? <span>{item.description}</span> : null}<em><Sparkles />{source === "personal" ? item.source?.trim() || "个人灵感" : item.source ? "开源改编 · CC0" : "原创提示词"} · {modeLabels[item.mode]}</em></span>
+        <span className="creation-featured-copy"><strong>{item.title}</strong>{item.description ? <span>{item.description}</span> : null}<em><Sparkles />{creationInspirationSourceLabel(item, source)} · {modeLabels[item.mode]}</em></span>
     </button>;
 }
 
@@ -1040,7 +1052,7 @@ export function CreationFeaturedWorks({ onStartPrompt, onRequireLogin }: { onSta
         };
     }, [reloadToken, source, userId]);
     const filtered = inspirations.filter((item) => filter === "all" || item.mode === filter);
-    return <section className="creation-featured-works" aria-label="精选灵感">
+    return <section className="creation-featured-works" aria-label="灵感">
         <div className="creation-inspiration-filters">
             <div className="creation-inspiration-filter-row is-source" role="group" aria-label="灵感来源">
                 {sourceItems.map(({ value, label, icon: Icon }) => <button key={value} type="button" aria-pressed={source === value} onClick={() => {
