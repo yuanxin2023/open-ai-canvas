@@ -30,8 +30,7 @@ type builtinToolSeed struct {
 }
 
 // EnsureBuiltinCatalog seeds missing records without changing administrator
-// edits, versions, timestamps, or publication state of existing records. New
-// entries require an administrator to review and publish them.
+// edits, versions, timestamps, or publication state of existing records.
 func (s *Service) EnsureBuiltinCatalog() error {
 	tools, presets, err := builtinCatalog()
 	if err != nil {
@@ -76,7 +75,7 @@ func builtinCatalog() ([]model.WorkbenchTool, []model.WorkbenchPreset, error) {
 		tool, err := normalizeTool(ToolInput{
 			Kind: entry.Kind, CategoryID: entry.CategoryID, Name: entry.Name, Subtitle: entry.Focus,
 			Description: entry.Focus + "。具体画幅、时长与参考素材支持以所选模型能力为准，生成细节需人工验收。",
-			SortOrder:   1000 + index*10, Capability: capability, Guide: guide, Enabled: false,
+			SortOrder:   1000 + index*10, Capability: capability, Guide: guide, Enabled: true,
 		})
 		if err != nil {
 			return nil, nil, fmt.Errorf("tool %s: %w", entry.Key, err)
@@ -85,7 +84,7 @@ func builtinCatalog() ([]model.WorkbenchTool, []model.WorkbenchPreset, error) {
 		tool.Version, tool.CreatedAt, tool.UpdatedAt = 1, now, now
 		tools = append(tools, *tool)
 		for _, variant := range builtinPromptVariants(entry) {
-			preset, err := normalizePreset(PresetInput{ToolID: tool.ID, Name: variant.name, Summary: variant.summary, PromptTemplate: variant.prompt, SortOrder: variant.order, Enabled: false})
+			preset, err := normalizePreset(PresetInput{ToolID: tool.ID, Name: variant.name, Summary: variant.summary, PromptTemplate: variant.prompt, SortOrder: variant.order, Enabled: true})
 			if err != nil {
 				return nil, nil, fmt.Errorf("preset %s/%s: %w", entry.Key, variant.key, err)
 			}

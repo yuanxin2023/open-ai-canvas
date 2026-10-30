@@ -170,7 +170,7 @@ function CreationPageContent() {
         videoSeconds: mode === "video" ? seconds : undefined,
         imageSize: mode === "image" ? ratio : undefined,
 		options: mode === "image"
-            ? imageParameterRequest(modelCapabilityConfigFor(config, preferredModel).image!, { ...config, size: ratio, imageResolution, quality, count, imageParameters }, true, resolveModelRequestConfig(config, preferredModel).interfaceType) ?? { size: ratio, imageResolution, quality, count: Number(count), transparentBackground: config.transparentBackground === "true" }
+            ? imageParameterRequest(modelCapabilityConfigFor(config, preferredModel).image!, { ...config, size: ratio, imageResolution, quality, count, imageParameters }, false, resolveModelRequestConfig(config, preferredModel).interfaceType) ?? { size: ratio, imageResolution, quality, count: Number(count), transparentBackground: config.transparentBackground === "true" }
 			: mode === "video"
 				? { size: ratio, videoSeconds: Number(seconds), vquality: videoQuality }
 				: {},

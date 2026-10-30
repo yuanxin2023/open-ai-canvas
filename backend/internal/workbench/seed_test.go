@@ -7,7 +7,7 @@ import (
 	"infinite-canvas/backend/internal/model"
 )
 
-func TestBuiltinCatalogStartsUnpublishedWithStableIdentities(t *testing.T) {
+func TestBuiltinCatalogStartsPublishedWithStableIdentities(t *testing.T) {
 	tools, presets, err := builtinCatalog()
 	if err != nil {
 		t.Fatal(err)
@@ -19,15 +19,15 @@ func TestBuiltinCatalogStartsUnpublishedWithStableIdentities(t *testing.T) {
 	toolIDs := map[string]bool{}
 	presetCounts := map[string]int{}
 	for _, tool := range tools {
-		if tool.Enabled || tool.ID == "" || toolIDs[tool.ID] || tool.IconResourceID != "" || tool.CoverResourceID != "" {
-			t.Fatalf("new builtin tool must be unpublished with a unique resource-free identity: %#v", tool)
+		if !tool.Enabled || tool.ID == "" || toolIDs[tool.ID] || tool.IconResourceID != "" || tool.CoverResourceID != "" {
+			t.Fatalf("new builtin tool must be published with a unique resource-free identity: %#v", tool)
 		}
 		toolIDs[tool.ID] = true
 		kinds[tool.Kind]++
 	}
 	for _, preset := range presets {
-		if preset.Enabled || !toolIDs[preset.ToolID] || preset.PromptTemplate == "" {
-			t.Fatalf("new preset must be unpublished and belong to a builtin tool: %#v", preset)
+		if !preset.Enabled || !toolIDs[preset.ToolID] || preset.PromptTemplate == "" {
+			t.Fatalf("new preset must be published and belong to a builtin tool: %#v", preset)
 		}
 		presetCounts[preset.ToolID]++
 	}
@@ -50,7 +50,7 @@ func TestBuiltinCatalogStartsUnpublishedWithStableIdentities(t *testing.T) {
 	}
 }
 
-func TestEnsureBuiltinCatalogRequiresExplicitPublication(t *testing.T) {
+func TestEnsureBuiltinCatalogPublishesDefaultsWithIndependentSwitches(t *testing.T) {
 	svc, _, _ := newWorkbenchTest(t)
 	if err := svc.EnsureBuiltinCatalog(); err != nil {
 		t.Fatal(err)
@@ -61,14 +61,35 @@ func TestEnsureBuiltinCatalogRequiresExplicitPublication(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(tools) != 0 {
-			t.Fatalf("unreviewed %s tools were published", kind)
+		want := 69
+		if kind == KindVideo {
+			want = 49
+		}
+		if len(tools) != want {
+			t.Fatalf("builtin %s tools = %d, want %d", kind, len(tools), want)
+		}
+		for _, tool := range tools {
+			if len(tool.Presets) != 3 {
+				t.Fatalf("tool %s has %d public presets, want 3", tool.ID, len(tool.Presets))
+			}
+			for _, preset := range tool.Presets {
+				if preset.ToolID != tool.ID || preset.PromptTemplate == "" || !preset.Enabled {
+					t.Fatalf("unusable public preset: %#v", preset)
+				}
+			}
 		}
 		all, err := svc.AdminTools(admin, kind)
 		if err != nil || len(all) == 0 || len(all[0].Presets) != 3 {
 			t.Fatalf("administrator cannot review %s catalog: %v", kind, err)
 		}
 		tool := all[0]
+		preset := tool.Presets[0]
+		if err := svc.SetPresetEnabled(admin, tool.ID, preset.ID, false); err != nil {
+			t.Fatal(err)
+		}
+		if err := svc.SetToolEnabled(admin, tool.ID, false); err != nil {
+			t.Fatal(err)
+		}
 		if _, err := svc.ResolveTask("user", TaskInput{Kind: kind, ToolID: tool.ID}); err == nil {
 			t.Fatal("unpublished tool accepted a task")
 		}
@@ -76,10 +97,9 @@ func TestEnsureBuiltinCatalogRequiresExplicitPublication(t *testing.T) {
 			t.Fatal(err)
 		}
 		tools, err = svc.PublicTools(kind)
-		if err != nil || len(tools) != 1 || len(tools[0].Presets) != 0 {
-			t.Fatalf("tool publication must not publish its presets: %#v / %v", tools, err)
+		if err != nil || len(tools) != want || len(tools[0].Presets) != 2 {
+			t.Fatalf("tool publication must preserve disabled presets: %#v / %v", tools, err)
 		}
-		preset := tool.Presets[0]
 		if _, err := svc.ResolveTask("user", TaskInput{Kind: kind, ToolID: tool.ID, PresetID: preset.ID}); err == nil {
 			t.Fatal("unpublished preset accepted a task")
 		}
@@ -90,14 +110,14 @@ func TestEnsureBuiltinCatalogRequiresExplicitPublication(t *testing.T) {
 			t.Fatal(err)
 		}
 		tools, err = svc.PublicTools(kind)
-		if err != nil || len(tools) != 1 || len(tools[0].Presets) != 1 || tools[0].Presets[0].ID != preset.ID {
+		if err != nil || len(tools) != want || len(tools[0].Presets) != 3 {
 			t.Fatalf("explicit preset publication not reflected: %#v / %v", tools, err)
 		}
 		if err := svc.SetToolEnabled(admin, tool.ID, false); err != nil {
 			t.Fatal(err)
 		}
 		tools, err = svc.PublicTools(kind)
-		if err != nil || len(tools) != 0 {
+		if err != nil || len(tools) != want-1 {
 			t.Fatalf("unpublished tool remained visible: %v", err)
 		}
 	}

@@ -874,7 +874,7 @@ PATCH 请求为 `{ "overrides": { "resourceUploadMB": 80, "storedFileGB": null }
 
 `GET /workbench/submissions/:requestKey` 仅查本人原回执，开关关闭后仍可核对，不创建或重新计费。未查到返回 404 `workbench_submission_missing`，不能据此自动生成另一笔；原任务移除返回 410 `workbench_submission_task_removed`，去重记录继续保留。报价保留原金额、计费模式、数量、版本和授权上限，完整账单沿用原快照；不增加供应成本或加价系数的用户可见范围。请求摘要、任务、订单与预占同事务，完整账号注销清理本人回执。新增表的追加迁移和事务验收尚未完成。
 
-F-02 已确认接入工具目录与预设，118 个内置工具和 354 个提示词预设的新增记录首次停用。已有同 ID 内容、版本及发布状态保持；公开目录只返回已发布内容，选择不触发生成。后台读写、发布和下线均要求 `admin.platform.workbench_tools`，管理员角色本身不能代替细分授权。
+F-02 已确认接入工具目录与预设，118 个内置工具和 354 个提示词预设的新增记录按官方默认启用。已有同 ID 内容、版本及发布状态保持；公开目录只返回已发布内容，选择不触发生成。工具与预设仍可分别下线，重启初始化不会重新开启管理员已停用的记录。后台读写、发布和下线均要求 `admin.platform.workbench_tools`，管理员角色本身不能代替细分授权。
 
 工具接口为 `GET|POST /admin/workbench/tools`、`PATCH /admin/workbench/tools/:id` 及 `POST /admin/workbench/tools/:id/publish|unpublish`。预设接口为 `POST /admin/workbench/tools/:id/presets`、`PATCH /admin/workbench/tools/:id/presets/:presetId` 及其 `publish|unpublish` 子路径；创建/更新正文的 `toolId` 必须与路径一致，发布/下线也由 service 核对预设归属。保存工具时可同事务保存预设，停用与历史记录保留规则继续生效。前端统一使用 `http`；业务拒绝抛错，不显示成功或自动重试写入。
 
