@@ -1,6 +1,6 @@
 import { App, Button, InputNumber } from "antd";
 import { SettingsRow } from "@/components/ui/product/settings-row";
-import { ArrowLeft, Boxes, Brain, Bug, CircleDollarSign, Cloud, Gift, Inbox, LockKeyhole, MessageSquareText, RadioTower, ReceiptText, SlidersHorizontal, UserRound, Workflow } from "lucide-react";
+import { ArrowLeft, Boxes, Brain, Bug, CircleDollarSign, Cloud, Inbox, LockKeyhole, MessageSquareText, RadioTower, ReceiptText, SlidersHorizontal, UserRound, Workflow } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 
@@ -19,19 +19,17 @@ import { usePluginStore } from "@/stores/use-plugin-store";
 import { PaymentOrdersPane } from "./payment-orders-pane";
 import { openWorkspaceWallet } from "@/lib/workspace-wallet";
 import { CreditLedgerPane } from "./credit-ledger-pane";
-import { ReferralsPane } from "./referrals-pane";
 import { FeedbackInboxPane } from "./feedback-inbox-pane";
 import { ProfileSettingsPane } from "./profile-settings-pane";
 import { AccountSecurityPanel } from "./account-security-panel";
 
-type ConfigSectionKey = "profile" | "security" | "orders" | "wallet" | "referrals" | "channels" | "models" | "runninghub" | "preferences" | "prompts" | "agent-memory" | "storage" | "diagnostics" | "feedbacks";
+type ConfigSectionKey = "profile" | "security" | "orders" | "wallet" | "channels" | "models" | "runninghub" | "preferences" | "prompts" | "agent-memory" | "storage" | "diagnostics" | "feedbacks";
 
 const configSections: Array<{ key: ConfigSectionKey; label: string; icon: ReactNode }> = [
     { key: "profile", label: "个人资料", icon: <UserRound className="size-4" /> },
     { key: "security", label: "账号安全", icon: <LockKeyhole className="size-4" /> },
     { key: "orders", label: "我的订单", icon: <ReceiptText className="size-4" /> },
     { key: "wallet", label: "积分流水", icon: <CircleDollarSign className="size-4" /> },
-    { key: "referrals", label: "邀请返利", icon: <Gift className="size-4" /> },
     { key: "channels", label: "个人渠道", icon: <RadioTower className="size-4" /> },
     { key: "runninghub", label: "RunningHub 工作流", icon: <Workflow className="size-4" /> },
     { key: "models", label: "模型选择", icon: <Boxes className="size-4" /> },
@@ -60,7 +58,7 @@ export default function SettingsPage() {
     const visibleConfigSections = useMemo(() => (customChannelsEnabled ? configSections : configSections.filter((section) => section.key !== "channels"))
         .filter((section) => section.key !== "runninghub" || runningHubPluginEnabled)
         .filter((section) => section.key !== "feedbacks" || feedbackEnabled)
-        .filter((section) => !["wallet", "orders", "referrals"].includes(section.key) || creditsEnabled), [creditsEnabled, customChannelsEnabled, runningHubPluginEnabled, feedbackEnabled]);
+        .filter((section) => !["wallet", "orders"].includes(section.key) || creditsEnabled), [creditsEnabled, customChannelsEnabled, runningHubPluginEnabled, feedbackEnabled]);
     const isVisibleConfigSection = (value: string | null): value is ConfigSectionKey => isConfigSection(value) && visibleConfigSections.some((section) => section.key === value);
     const firstVisibleSection = visibleConfigSections[0]?.key || "models";
     const [activeTab, setActiveTab] = useState<ConfigSectionKey>(isVisibleConfigSection(requestedSection) ? requestedSection : firstVisibleSection);
@@ -135,7 +133,6 @@ export default function SettingsPage() {
         ),
         orders: <SettingsPane><PaymentOrdersPane onOpenWallet={() => openWorkspaceWallet()} /></SettingsPane>,
         wallet: <SettingsPane><CreditLedgerPane /></SettingsPane>,
-        referrals: <SettingsPane><ReferralsPane /></SettingsPane>,
         channels: <SettingsPane><ChannelSettingsPane onOpenModels={() => selectSection("models")} onOpenRunningHub={runningHubPluginEnabled ? () => selectSection("runninghub") : undefined} /></SettingsPane>,
         models: (
             <SettingsPane>

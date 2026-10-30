@@ -1,5 +1,5 @@
 import { Button } from "antd";
-import { ArrowUpRight, ChevronDown, Coins, HardDrive, LogOut, RefreshCw, Settings, ShieldCheck } from "lucide-react";
+import { ArrowUpRight, ChevronDown, Coins, Gift, HardDrive, LogOut, RefreshCw, Settings, ShieldCheck } from "lucide-react";
 import { Link } from "react-router";
 import { useAccountFileStorageUsage } from "@/hooks/use-account-file-storage-usage";
 import { useWalletBalance } from "@/hooks/use-wallet-balance";
@@ -57,6 +57,7 @@ export function WorkspaceAccountCard({ onBuyCredits, onNavigate }: { onBuyCredit
         </details>
         <nav className="workspace-account-card-actions" aria-label="账户操作">
             <Link to="/settings" onClick={onNavigate}><Settings /><span>账号管理</span><ArrowUpRight /></Link>
+            {creditsEnabled ? <Link to="/referrals" onClick={onNavigate}><Gift /><span>邀请返利</span><ArrowUpRight /></Link> : null}
             {user.role === "admin" ? <Link to="/admin" onClick={onNavigate}><ShieldCheck /><span>管理员后台</span><ArrowUpRight /></Link> : null}
             <Button danger type="text" icon={<LogOut />} loading={loggingOut} onClick={() => void handleLogout()}>退出登录</Button>
         </nav>

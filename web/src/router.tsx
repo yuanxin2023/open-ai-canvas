@@ -71,6 +71,7 @@ const ProjectsPage = lazy(loadProjectsPage);
 const ProjectDetailPage = lazy(loadProjectDetailPage);
 const ProjectCreatePage = lazy(loadProjectCreatePage);
 const SettingsPage = lazy(() => import("@/pages/settings"));
+const ReferralsPage = lazy(() => import("@/pages/referrals"));
 const ProfilePage = lazy(() => import("@/pages/profile"));
 const TestVoiceRecording = lazy(() => import("@/pages/test-voice-recording"));
 const UserLayout = lazy(() => import("@/layouts/user-layout"));
@@ -196,6 +197,7 @@ export const router = createBrowserRouter([
                 element: <RequireAuth>{null}</RequireAuth>,
             },
             { path: "/settings", element: <RequireAuth>{deferred(<SettingsPage />)}</RequireAuth> },
+            { path: "/referrals", element: <RequireAuth><RequireFeature feature="creditsEnabled">{deferred(<ReferralsPage />)}</RequireFeature></RequireAuth> },
             { path: "/profile", element: <RequireAuth>{deferred(<ProfilePage />)}</RequireAuth> },
             { path: "/test-voice-recording", element: <RequireAuth>{deferred(<TestVoiceRecording />)}</RequireAuth> },
             {
