@@ -12,7 +12,7 @@ import { ApiError } from "@/services/api/request";
 import { bindVerification, emptyVerification } from "@/services/api/verification";
 import { loadProfileSession } from "@/services/profile-session";
 import { useUserStore } from "@/stores/use-user-store";
-import { profilePasswordError, profileReauthReady, profileSecondsRemaining } from "../settings/profile-validation";
+import { profilePasswordError, profileReauthReady, profileSecondsRemaining } from "./profile-validation";
 
 export function AccountSecurityPanel({ onBusyChange }: { onBusyChange: (busy: boolean) => void }) {
     const { message } = App.useApp();

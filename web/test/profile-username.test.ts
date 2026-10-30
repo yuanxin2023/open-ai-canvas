@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 
 test("profile username changes require confirmation and cancellation restores only the username draft", async () => {
-    const source = await Bun.file(new URL("../src/pages/profile/index.tsx", import.meta.url)).text();
+    const source = await Bun.file(new URL("../src/pages/settings/profile-settings-pane.tsx", import.meta.url)).text();
 
     expect(source).toContain('title: "确认修改用户名？"');
     expect(source).toContain('okText: "确定修改"');
@@ -16,7 +16,7 @@ test("profile username changes require confirmation and cancellation restores on
 });
 
 test("profile renders login username rules and explains the change quota", async () => {
-    const source = await Bun.file(new URL("../src/pages/profile/index.tsx", import.meta.url)).text();
+    const source = await Bun.file(new URL("../src/pages/settings/profile-settings-pane.tsx", import.meta.url)).text();
 
     expect(source).toContain("登录用户名");
     expect(source).toContain("用户名为 3–9 位，可使用中文、英文字母和数字");

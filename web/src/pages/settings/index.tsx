@@ -1,6 +1,6 @@
 import { App, Button, InputNumber } from "antd";
 import { SettingsRow } from "@/components/ui/product/settings-row";
-import { ArrowLeft, Boxes, Brain, Bug, CircleDollarSign, Cloud, Gift, Inbox, MessageSquareText, RadioTower, ReceiptText, SlidersHorizontal, Workflow } from "lucide-react";
+import { ArrowLeft, Boxes, Brain, Bug, CircleDollarSign, Cloud, Gift, Inbox, LockKeyhole, MessageSquareText, RadioTower, ReceiptText, SlidersHorizontal, UserRound, Workflow } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 
@@ -21,10 +21,14 @@ import { openWorkspaceWallet } from "@/lib/workspace-wallet";
 import { CreditLedgerPane } from "./credit-ledger-pane";
 import { ReferralsPane } from "./referrals-pane";
 import { FeedbackInboxPane } from "./feedback-inbox-pane";
+import { ProfileSettingsPane } from "./profile-settings-pane";
+import { AccountSecurityPanel } from "./account-security-panel";
 
-type ConfigSectionKey = "orders" | "wallet" | "referrals" | "channels" | "models" | "runninghub" | "preferences" | "prompts" | "agent-memory" | "storage" | "diagnostics" | "feedbacks";
+type ConfigSectionKey = "profile" | "security" | "orders" | "wallet" | "referrals" | "channels" | "models" | "runninghub" | "preferences" | "prompts" | "agent-memory" | "storage" | "diagnostics" | "feedbacks";
 
 const configSections: Array<{ key: ConfigSectionKey; label: string; icon: ReactNode }> = [
+    { key: "profile", label: "个人资料", icon: <UserRound className="size-4" /> },
+    { key: "security", label: "账号安全", icon: <LockKeyhole className="size-4" /> },
     { key: "orders", label: "我的订单", icon: <ReceiptText className="size-4" /> },
     { key: "wallet", label: "积分流水", icon: <CircleDollarSign className="size-4" /> },
     { key: "referrals", label: "邀请返利", icon: <Gift className="size-4" /> },
@@ -60,6 +64,7 @@ export default function SettingsPage() {
     const isVisibleConfigSection = (value: string | null): value is ConfigSectionKey => isConfigSection(value) && visibleConfigSections.some((section) => section.key === value);
     const firstVisibleSection = visibleConfigSections[0]?.key || "models";
     const [activeTab, setActiveTab] = useState<ConfigSectionKey>(isVisibleConfigSection(requestedSection) ? requestedSection : firstVisibleSection);
+    const [accountBusy, setAccountBusy] = useState(false);
     const config = useConfigStore((state) => state.config);
     const effectiveConfig = useEffectiveConfig();
     const updateConfig = useConfigStore((state) => state.updateConfig);
@@ -87,6 +92,7 @@ export default function SettingsPage() {
     }, [message, userId]);
 
     const selectSection = (section: ConfigSectionKey) => {
+        if (accountBusy) return;
         if (!visibleConfigSections.some((item) => item.key === section)) return;
         setActiveTab(section);
         const next = new URLSearchParams(searchParams);
@@ -113,6 +119,20 @@ export default function SettingsPage() {
     };
 
     const panes: Record<ConfigSectionKey, ReactNode> = {
+        profile: <SettingsPane><ProfileSettingsPane key={userId} onBusyChange={setAccountBusy} /></SettingsPane>,
+        security: (
+            <SettingsPane>
+                <div className="settings-pane-header">
+                    <div className="min-w-0">
+                        <h2>账号安全</h2>
+                        <p>验证当前身份，管理登录密码和绑定的联系方式。</p>
+                    </div>
+                </div>
+                <div className="settings-section">
+                    <AccountSecurityPanel key={userId} onBusyChange={setAccountBusy} />
+                </div>
+            </SettingsPane>
+        ),
         orders: <SettingsPane><PaymentOrdersPane onOpenWallet={() => openWorkspaceWallet()} /></SettingsPane>,
         wallet: <SettingsPane><CreditLedgerPane /></SettingsPane>,
         referrals: <SettingsPane><ReferralsPane /></SettingsPane>,
@@ -193,8 +213,8 @@ export default function SettingsPage() {
             {shouldPromptContinue ? (
                 <div className="settings-topbar shrink-0">
                     <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
-                        <Button icon={<ArrowLeft className="size-4" />} onClick={() => navigate(-1)}>返回创作</Button>
-                        <Button type="primary" onClick={finishConfig}>保存并返回</Button>
+                        <Button icon={<ArrowLeft className="size-4" />} disabled={accountBusy} onClick={() => navigate(-1)}>返回创作</Button>
+                        <Button type="primary" disabled={accountBusy} onClick={finishConfig}>保存并返回</Button>
                     </div>
                 </div>
             ) : null}
@@ -207,6 +227,7 @@ export default function SettingsPage() {
                                 <button
                                     key={item.key}
                                     type="button"
+                                    disabled={accountBusy}
                                     className={`settings-nav-item flex h-9 shrink-0 items-center gap-2 rounded-md px-3 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:h-auto md:w-full md:items-start md:gap-3 md:py-2 ${selected ? "is-active" : "text-foreground/58 hover:bg-muted/55 hover:text-foreground"}`}
                                     onClick={() => selectSection(item.key)}
                                     aria-current={selected ? "page" : undefined}

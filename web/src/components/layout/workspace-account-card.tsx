@@ -1,6 +1,6 @@
 import { Button } from "antd";
-import { ArrowUpRight, ChevronDown, Coins, HardDrive, LogOut, RefreshCw, Settings, ShieldCheck, UserRound } from "lucide-react";
-import { Link, useLocation } from "react-router";
+import { ArrowUpRight, ChevronDown, Coins, HardDrive, LogOut, RefreshCw, Settings, ShieldCheck } from "lucide-react";
+import { Link } from "react-router";
 import { useAccountFileStorageUsage } from "@/hooks/use-account-file-storage-usage";
 import { useWalletBalance } from "@/hooks/use-wallet-balance";
 import { useWorkspaceLogout } from "@/hooks/use-workspace-logout";
@@ -11,7 +11,6 @@ import "./workspace-account-card.css";
 
 /** 账户菜单卡片；余额、积分购买与退出均复用真实服务。 */
 export function WorkspaceAccountCard({ onBuyCredits, onNavigate }: { onBuyCredits: () => void; onNavigate: () => void }) {
-    const location = useLocation();
     const user = useUserStore((state) => state.user);
     const creditsEnabled = useUserStore((state) => state.features.creditsEnabled);
     const { availableMicrocredits, refreshing, refresh } = useWalletBalance(user?.id, creditsEnabled);
@@ -57,7 +56,6 @@ export function WorkspaceAccountCard({ onBuyCredits, onNavigate }: { onBuyCredit
             </div>
         </details>
         <nav className="workspace-account-card-actions" aria-label="账户操作">
-            <Link to="/profile" state={{ profileReturnTo: `${location.pathname}${location.search}${location.hash}` }} onClick={onNavigate}><UserRound /><span>个人资料</span><ArrowUpRight /></Link>
             <Link to="/settings" onClick={onNavigate}><Settings /><span>账号管理</span><ArrowUpRight /></Link>
             {user.role === "admin" ? <Link to="/admin" onClick={onNavigate}><ShieldCheck /><span>管理员后台</span><ArrowUpRight /></Link> : null}
             <Button danger type="text" icon={<LogOut />} loading={loggingOut} onClick={() => void handleLogout()}>退出登录</Button>
