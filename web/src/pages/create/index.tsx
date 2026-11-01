@@ -1,6 +1,7 @@
-import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties } from "react";
 import { App, Spin } from "antd";
 import { Tooltip } from "@/components/ui/base/tooltip";
+import { AppDrawer } from "@/components/ui/product/app-drawer";
 import { History, Sparkles, Maximize2 } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useLocation, useNavigate } from "react-router";
@@ -51,6 +52,14 @@ type CreationRuntime = Awaited<ReturnType<typeof loadCreationRuntime>>;
 const TEXT_STREAMING_PREF_KEY = "creation.composer.text-streaming";
 const TEXT_THINKING_PREF_KEY = "creation.composer.text-thinking";
 const CONVERSATION_SIDEBAR_OPEN_PREF_KEY = "creation.sidebar.conversations-open";
+const historyDrawerQuery = "(max-width: 1180px)";
+function subscribeHistoryViewport(notify: () => void) {
+    const query = window.matchMedia(historyDrawerQuery);
+    query.addEventListener("change", notify);
+    return () => query.removeEventListener("change", notify);
+}
+const historyDrawerViewport = () => window.matchMedia(historyDrawerQuery).matches;
+const historyDesktopViewport = () => false;
 function readComposerPref(key: string, fallback: boolean): boolean {
     try {
         const stored = window.localStorage.getItem(key);
@@ -130,6 +139,20 @@ function CreationPageContent() {
     const [textStreaming, setTextStreaming] = useState(() => readComposerPref(TEXT_STREAMING_PREF_KEY, true));
     const [textThinking, setTextThinking] = useState(() => readComposerPref(TEXT_THINKING_PREF_KEY, false));
     const [conversationSidebarOpen, setConversationSidebarOpen] = useState(() => readComposerPref(CONVERSATION_SIDEBAR_OPEN_PREF_KEY, true));
+    const historyUsesDrawer = useSyncExternalStore(subscribeHistoryViewport, historyDrawerViewport, historyDesktopViewport);
+    const [historyDrawerOpen, setHistoryDrawerOpen] = useState(false);
+    const historyTriggerRef = useRef<HTMLButtonElement>(null);
+    const openHistory = () => {
+        if (historyDrawerViewport()) setHistoryDrawerOpen(true);
+        else setConversationSidebarOpen(true);
+    };
+    const closeHistoryDrawer = () => {
+        setHistoryDrawerOpen(false);
+        requestAnimationFrame(() => historyTriggerRef.current?.focus({ preventScroll: true }));
+    };
+    useEffect(() => {
+        if (!historyUsesDrawer) setHistoryDrawerOpen(false);
+    }, [historyUsesDrawer]);
     const [busy, setBusy] = useState(false);
     const [referenceReplacementBusy, setReferenceReplacementBusy] = useState(false);
     const [referenceUploadBusy, setReferenceUploadBusy] = useState(false);
@@ -771,7 +794,7 @@ function CreationPageContent() {
         const expandedPrompt = skillExecution.prompt;
         const referenceMetadata = skillExecution.metadata;
         if (enteringThreadFromHome) {
-            setConversationSidebarOpen(true);
+            if (!historyUsesDrawer) setConversationSidebarOpen(true);
             publishWorkspaceSidebarCollapsed(true);
         }
         followLatestMessageRef.current = true;
@@ -942,6 +965,7 @@ function CreationPageContent() {
     }, [retrySequence]);
 
     const startNewConversation = () => {
+        if (historyUsesDrawer) closeHistoryDrawer();
         const next = newConversation();
         followLatestMessageRef.current = true;
         setConversations((current) => [next, ...current.filter((conversation) => conversation.messages.length > 0)]);
@@ -1010,6 +1034,7 @@ function CreationPageContent() {
     };
 
     const selectConversation = (conversation: CreationConversation) => {
+        if (historyUsesDrawer) closeHistoryDrawer();
         followLatestMessageRef.current = true;
         setActiveId(conversation.id);
         setInspirationHomeOpen(false);
@@ -1208,6 +1233,8 @@ function CreationPageContent() {
     };
 
 
+    const historySidebar = <CreationConversationSidebar conversations={historyConversations} activeId={activeConversation?.id ?? activeId} onNew={startNewConversation} onCollapse={() => historyUsesDrawer ? closeHistoryDrawer() : setConversationSidebarOpen(false)} onSelect={selectConversation} onDelete={confirmDeleteConversation} onRename={renameConversationTitle} onTogglePin={toggleConversationPin} />;
+
     return <>
         <div className="creation-home relative flex h-full min-h-0 flex-col overflow-hidden">
             {!showThreadWorkspace ? <>
@@ -1216,10 +1243,11 @@ function CreationPageContent() {
                         <button
                             type="button"
                             aria-label="查看创作对话"
+                            ref={historyTriggerRef}
                             className="creation-top-action"
                             disabled={!historyConversations.length}
                             onClick={() => {
-                                setConversationSidebarOpen(true);
+                                openHistory();
                                 setInspirationHomeOpen(false);
                             }}
                         >
@@ -1273,10 +1301,10 @@ function CreationPageContent() {
                 />
             </main>
             </> : <div className="creation-thread-workbench">
-                {conversationSidebarOpen ? <CreationConversationSidebar conversations={historyConversations} activeId={activeConversation.id} onNew={startNewConversation} onCollapse={() => setConversationSidebarOpen(false)} onSelect={selectConversation} onDelete={confirmDeleteConversation} onRename={renameConversationTitle} onTogglePin={toggleConversationPin} /> : null}
+                {!historyUsesDrawer && conversationSidebarOpen ? historySidebar : null}
                 <div className="creation-thread-main">
-                    {!conversationSidebarOpen ? <Tooltip title="展开创作对话">
-                        <button type="button" aria-label="展开创作对话" className="creation-conversation-sidebar-expand" onClick={() => setConversationSidebarOpen(true)}><History /></button>
+                    {historyUsesDrawer || !conversationSidebarOpen ? <Tooltip title="展开创作对话">
+                        <button ref={historyTriggerRef} type="button" aria-label="展开创作对话" aria-expanded={historyUsesDrawer ? historyDrawerOpen : conversationSidebarOpen} className={`creation-conversation-sidebar-expand${historyUsesDrawer ? " is-mobile" : ""}`} onClick={openHistory}><History />{historyUsesDrawer ? <span>历史</span> : null}</button>
                     </Tooltip> : null}
                     <CreationWorkspaceToolbar onNewConversation={startNewConversation} shots={videoShots} onJumpToShot={jumpToShot} onContinueCanvas={() => void continueOnCanvas()} openingCanvas={openingCanvas} />
                     <main ref={threadScrollRef} onScroll={handleThreadScroll} className="creation-thread-scroll creation-scrollbar">
@@ -1298,6 +1326,9 @@ function CreationPageContent() {
                 </div>
             </div>}
         </div>
+        {historyUsesDrawer ? <AppDrawer flush title={null} closable={false} placement="left" size="min(336px, calc(100vw - 24px))" open={historyDrawerOpen} onClose={closeHistoryDrawer} focusable={{ focusTriggerAfterClose: false }} rootClassName="creation-history-panel app-user-overlays" aria-label="创作对话历史">
+            {historySidebar}
+        </AppDrawer> : null}
         {libraryOpen ? <Suspense fallback={null}><AssetLibraryPickerModal
             remoteLibrary
             acceptRemoteItems

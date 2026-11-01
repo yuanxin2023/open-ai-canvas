@@ -19,12 +19,11 @@ test("creation thread exposes a persistent desktop conversation sidebar", async 
     expect(pageSource).toContain("setConversationSidebarOpen(true)");
     expect(pageSource).toContain("publishWorkspaceSidebarCollapsed(true)");
     expect(shellSource).toContain("subscribeWorkspaceSidebarCollapsed(setDesktopSidebarCollapsed)");
-    expect(pageSource).toContain("onCollapse={() => setConversationSidebarOpen(false)}");
+    expect(pageSource).toContain("onClose={closeHistoryDrawer}");
     expect(pageSource).toContain("onDelete={confirmDeleteConversation}");
     expect(pageSource).toContain("onRename={renameConversationTitle}");
     expect(pageSource).toContain("onTogglePin={toggleConversationPin}");
     expect(pageSource).not.toContain("CreationHistoryDrawer");
-    expect(pageSource).not.toContain("historyOpen");
     expect(pageSource).not.toContain("onOpenHistory");
     expect(pageSource).toContain('aria-label="查看创作对话"');
     expect(pageSource).toContain("setConversationSidebarOpen(true)");
@@ -72,8 +71,7 @@ test("creation thread exposes a persistent desktop conversation sidebar", async 
     expect(styles).toContain(".creation-conversation-sidebar-expand");
     expect(styles).toContain(".creation-thread-empty-state");
     expect(styles).toContain("@media (max-width: 1180px)");
-    expect(styles).toContain("width: min(336px, 100%)");
-    expect(styles).toContain("inset: 0 auto 0 0");
+    expect(styles).toContain(".creation-history-panel .creation-conversation-sidebar");
     expect(styles).toContain(".creation-toolbar-conversation-actions");
     expect(globalStyles).toContain(".creation-top-actions");
     expect(globalStyles).toContain("left: 28px;");
