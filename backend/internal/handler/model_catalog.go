@@ -29,10 +29,6 @@ func RegisterModelCatalogRoutes(r *gin.RouterGroup, svc *service.Service) {
 		ok(c, gin.H{"quote": quote})
 	})
 	r.GET("/model-catalog", func(c *gin.Context) {
-		if _, err := currentUser(c, svc); err != nil {
-			failService(c, err)
-			return
-		}
 		catalog, err := svc.ModelCatalog(nil)
 		if err != nil {
 			failService(c, err)

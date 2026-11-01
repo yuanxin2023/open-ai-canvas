@@ -40,7 +40,7 @@ func TestChannelCostHTTPAuthorizationAndPublicProjection(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	channel := model.ModelChannel{ID: "channel", Name: "渠道", Scope: model.ChannelScopeSystem, Enabled: true, ModelsJSON: `[]`}
+	channel := model.ModelChannel{ID: "channel", Name: "internal-channel-name", Scope: model.ChannelScopeSystem, Enabled: true, ModelsJSON: `[]`, BaseURL: "https://private-provider.invalid", APIKey: "private-provider-key", HeadersJSON: `{"Authorization":"private-provider-header"}`}
 	if err := db.Create(&channel).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -178,5 +178,27 @@ func TestChannelCostHTTPAuthorizationAndPublicProjection(t *testing.T) {
 		if strings.Contains(w.Body.String(), "costPricing") || strings.Contains(w.Body.String(), "123456") {
 			t.Fatalf("public cost leaked: %s", w.Body.String())
 		}
+		guest := call("", method, path, payload)
+		if method != http.MethodGet {
+			if guest.Code != http.StatusUnauthorized {
+				t.Fatalf("anonymous %s must require login: %d %s", path, guest.Code, guest.Body.String())
+			}
+			continue
+		}
+		if guest.Code != http.StatusOK || !strings.Contains(guest.Body.String(), `"modelKey":"text-model"`) {
+			t.Fatalf("anonymous catalog missing configured models: %d %s", guest.Code, guest.Body.String())
+		}
+		for _, secret := range []string{"costPricing", "123456", "internal-channel-name", "private-provider", "baseUrl", "apiKey", "headers"} {
+			if strings.Contains(guest.Body.String(), secret) {
+				t.Fatalf("anonymous catalog leaked %q: %s", secret, guest.Body.String())
+			}
+		}
+	}
+	if err := db.Model(&model.ChannelModel{}).Where("channel_id = ?", channel.ID).Update("enabled", false).Error; err != nil {
+		t.Fatal(err)
+	}
+	guest := call("", http.MethodGet, "/api/model-catalog", nil)
+	if guest.Code != http.StatusOK || strings.Contains(guest.Body.String(), `"modelKey":"text-model"`) {
+		t.Fatalf("disabled model exposed to guest: %d %s", guest.Code, guest.Body.String())
 	}
 }

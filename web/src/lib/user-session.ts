@@ -12,6 +12,7 @@ import { CREATION_PREFERENCES_STORE_KEY, useCreationPreferencesStore } from "@/s
 import { defaultModelCapabilityConfig, STANDARD_IMAGE_SIZE_VALUES, type ModelCapabilityConfig } from "@/lib/model-capabilities";
 import { imageSizeConfigWithPresets } from "@/lib/image-size-presets";
 import { useUserStore } from "@/stores/use-user-store";
+import { useModelCatalogStore } from "@/stores/use-model-catalog-store";
 import { PLUGIN_STORE_KEY, usePluginStore } from "@/stores/use-plugin-store";
 import { useGlobalAgentStore } from "@/stores/use-global-agent-store";
 import { initializeRemoteUserDataSession, installRemoteUserDataAutoSync, resetRemoteUserDataSync, withRemoteUserDataSyncExclusive } from "@/services/user-data-sync";
@@ -36,6 +37,7 @@ let sessionGeneration = 0;
 
 export async function applyUserSession(payload: AuthSessionPayload) {
     const generation = ++sessionGeneration;
+    useModelCatalogStore.setState({ status: "loading" });
     const previousUserId = useUserStore.getState().user?.id || "";
     const nextUserId = payload.user?.id || "";
     useUserStore.getState().setHydrated(false);
@@ -112,12 +114,11 @@ async function hydrateUserSessionData(payload: AuthSessionPayload, generation: n
     }
 
     void (async () => {
-        if (!userId) return;
         try {
             const catalog = await getModelCatalog();
             if (!isCurrentSession(generation, userId)) return;
-            if (!persistedConfig) {
-                // 只有首次配置缺失时才生成能力推荐；已有配置中的空数组代表用户明确清空。
+            if (!userId || !persistedConfig) {
+                // 游客始终使用公开目录；已登录用户只在首次配置缺失时生成推荐。
                 const initialSystemConfig = {
                     ...defaultConfig,
                     channels: modelCatalogChannels(catalog),
@@ -130,8 +131,12 @@ async function hydrateUserSessionData(payload: AuthSessionPayload, generation: n
             } else {
                 useConfigStore.getState().mergeSystemChannels(modelCatalogChannels(catalog));
             }
+            useModelCatalogStore.setState({ status: "ready" });
         } catch (error) {
-            if (isCurrentSession(generation, userId)) console.warn("模型目录后台刷新失败，保留本地配置", error);
+            if (isCurrentSession(generation, userId)) {
+                useModelCatalogStore.setState({ status: "error" });
+                console.warn("模型目录后台刷新失败，保留本地配置", error);
+            }
         }
     })();
     if (isCurrentSession(generation, userId)) {
@@ -167,8 +172,18 @@ function safeScopedStorageGet(key: string) {
 }
 
 export async function refreshSystemChannels() {
-    const catalog = await getModelCatalog();
-    useConfigStore.getState().mergeSystemChannels(modelCatalogChannels(catalog));
+    const generation = sessionGeneration;
+    const userId = useUserStore.getState().user?.id || "";
+    useModelCatalogStore.setState({ status: "loading" });
+    try {
+        const catalog = await getModelCatalog();
+        if (!isCurrentSession(generation, userId)) return;
+        useConfigStore.getState().mergeSystemChannels(modelCatalogChannels(catalog));
+        useModelCatalogStore.setState({ status: "ready" });
+    } catch (error) {
+        if (isCurrentSession(generation, userId)) useModelCatalogStore.setState({ status: "error" });
+        throw error;
+    }
 }
 
 // 目录仅接受系统渠道模型，避免畸形响应被当成空目录写入配置。

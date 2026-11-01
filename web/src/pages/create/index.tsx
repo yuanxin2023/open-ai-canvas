@@ -27,6 +27,7 @@ import { loadAssetsForUse, saveRemoteUserDataNow } from "@/services/user-data-sy
 import { useAppearanceStore } from "@/stores/use-appearance-store";
 import { cn } from "@/lib/utils";
 import { useUserStore } from "@/stores/use-user-store";
+import { useModelCatalogStore } from "@/stores/use-model-catalog-store";
 import type { PromptOptimizerProvider } from "@/lib/plugins/plugin-types";
 import { promptOptimizerPlugin, PROMPT_OPTIMIZER_PLUGIN_ID } from "@/lib/plugins/builtin/prompt-optimizer";
 import { createPluginHostContext } from "@/services/plugin-host";
@@ -41,6 +42,7 @@ import { CreationAgentEntry } from "./creation-agent-entry";
 import { createCreationSubmitGate } from "./creation-submit-gate";
 import { creationVideoConfig } from "./creation-generation-config";
 import { CreationLoginDialog } from "./creation-login-dialog";
+import { discardCreationLoginDraft, readCreationLoginDraft, saveCreationLoginDraft } from "./creation-login-draft";
 
 const AssetLibraryPickerModal = lazy(() => import("@/components/assets/asset-library-picker-modal").then((module) => ({ default: module.AssetLibraryPickerModal })));
 const loadCreationRuntime = () => import("./creation-runtime");
@@ -106,6 +108,8 @@ function CreationPageContent() {
     const [hydrated, setHydrated] = useState(false);
     const userId = useUserStore((state) => state.user?.id || null);
     const userSessionHydrated = useUserStore((state) => state.hydrated);
+    const catalogStatus = useModelCatalogStore((state) => state.status);
+    const loginDraftRestored = useRef(false);
     const inspirationSourcesVisible = useUserStore((state) => state.features.inspirationSourcesVisible);
     const [conversationScope, setConversationScope] = useState<string | null>(null);
     const [mode, setMode] = useState<CreationMode>(() => initialComposerPreferences.mode || defaultCreationMode);
@@ -268,6 +272,40 @@ function CreationPageContent() {
         setRatio(normalized.ratio);
         setVideoQuality(normalized.resolution.replace(/p$/i, ""));
     }, [composerPreferencesHydrated, composerPreferencesInitialized, mode, selectedModel, videoProfile]);
+
+    useEffect(() => {
+        if (!userSessionHydrated || !composerPreferencesInitialized || catalogStatus !== "ready" || loginDraftRestored.current) return;
+        let cancelled = false;
+        void readCreationLoginDraft().then((saved) => {
+            if (cancelled || loginDraftRestored.current || (useUserStore.getState().user?.id || null) !== userId) return;
+            loginDraftRestored.current = true;
+            if (!saved) return;
+            const draft = saved.draft;
+            const model = selectableModelsByCapability(config, draft.mode).includes(draft.model) ? draft.model : "";
+            rememberMode(draft.mode);
+            if (draft.mode === "image") rememberImageSettings({ model, ratio: draft.ratio, quality: draft.quality, imageResolution: draft.imageResolution, imageParameters: draft.imageParameters, count: draft.count });
+            if (draft.mode === "video") rememberVideoSettings({ ratio: draft.ratio, seconds: draft.seconds, videoQuality: draft.videoQuality });
+            if (model) updateConfig(draft.mode === "text" ? "textModel" : draft.mode === "image" ? "imageModel" : "videoModel", model);
+            else if (draft.model) toast.warning("原选模型已不可用，请重新选择模型");
+            setMode(draft.mode);
+            setPrompt(draft.prompt);
+            setRatio(draft.ratio);
+            setSeconds(draft.seconds);
+            setQuality(draft.quality);
+            setImageResolution(draft.imageResolution);
+            setImageParameters(draft.imageParameters);
+            setVideoQuality(draft.videoQuality);
+            setCount(draft.count);
+            setTextStreaming(draft.textStreaming);
+            setTextThinking(draft.textThinking);
+            setAttachments(draft.attachments);
+            setDraftReferences(draft.references);
+            if (userId) void discardCreationLoginDraft(saved.id).catch((error) => console.warn("清理已恢复创作草稿失败", error));
+        }).catch((error) => {
+            if (!cancelled) toast.error(error instanceof Error ? error.message : "读取登录前草稿失败");
+        });
+        return () => { cancelled = true; };
+    }, [catalogStatus, composerPreferencesInitialized, config, rememberImageSettings, rememberMode, rememberVideoSettings, toast, updateConfig, userId, userSessionHydrated]);
 
     useEffect(() => {
         const reconciled = mode === "video" && videoReferenceLimits
@@ -651,14 +689,21 @@ function CreationPageContent() {
             return;
         }
         const releaseSubmitGate = () => submitGateRef.current.release(submitToken);
-        const text = prompt.trim();
-        if (!text || busy || !activeConversation) {
-            releaseRetryLock();
-            releaseSubmitGate();
+        if (!useUserStore.getState().user) {
+            try {
+                await saveCreationLoginDraft({ mode, prompt, model: selectedModel, ratio, seconds, quality, imageResolution, imageParameters, videoQuality, count, textStreaming, textThinking, attachments, references: draftReferences });
+                const next = `${location.pathname}${location.search}${location.hash}`;
+                navigate(`/login?next=${encodeURIComponent(next)}`);
+            } catch (error) {
+                toast.error(error instanceof Error ? error.message : "保存创作草稿失败，请重试");
+            } finally {
+                releaseRetryLock();
+                releaseSubmitGate();
+            }
             return;
         }
-        if (!useUserStore.getState().user) {
-            setLoginDialogOpen(true);
+        const text = prompt.trim();
+        if (!text || busy || !activeConversation) {
             releaseRetryLock();
             releaseSubmitGate();
             return;

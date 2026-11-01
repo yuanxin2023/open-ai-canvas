@@ -853,7 +853,9 @@ paths:
     get:
       tags: [models]
       summary: 获取创作端模型目录
+      security: []
       description: |
+        允许游客匿名读取脱敏后的模型目录；不返回渠道真实名称、上游地址、密钥或请求头。报价与生成仍需登录。
         固定 source=system，channels 直接来自系统渠道下的模型列表，models 为空数组；不反查逻辑模型。
         一级跨渠道按 displayName 分组，二级显示 channelLabel；模型请求仍使用 channelId + modelKey 定位。
         channelLabel 是后台渠道模型创建和更新时配置的渠道展示名，去除首尾空白后最多 80 字，空字符串表示使用所属渠道名称。
