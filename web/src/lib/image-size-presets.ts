@@ -113,7 +113,8 @@ export function imageSizePresets(profile: ImageCapabilityConfig): ImageResolutio
     if (profile.size.parameter === "none") return [];
     if (profile.parameters && !profile.resolution.supported) {
         const tier = imageSingleSizeTier(profile);
-        return (profile.size.presets || []).filter((preset) => preset.tier === (tier ?? ""));
+        // An auto default does not constrain a model's declared pixel tiers.
+        return (profile.size.presets || []).filter((preset) => !tier || preset.tier === tier);
     }
     if (profile.size.presets) return profile.size.presets;
     if (profile.parameters) return [];

@@ -22,8 +22,9 @@ export function ImageSizePicker({
     canSelectResolution?: (resolution: string) => boolean;
     onChange: (size: string, quality?: string, resolution?: string) => void;
 }) {
-    const ungrouped = Boolean(profile.parameters && !profile.resolution.supported);
-    const IMAGE_RESOLUTIONS = ungrouped ? [...new Set(imageSizePresets(profile).map((p) => p.tier))] : imageResolutionTiers(profile);
+    const schemaSizePresets = Boolean(profile.parameters && !profile.resolution.supported);
+    const pixelTierSelection = schemaSizePresets && profile.size.parameter === "size";
+    const IMAGE_RESOLUTIONS = schemaSizePresets ? [...new Set(imageSizePresets(profile).map((p) => p.tier))].sort((a, b) => parseFloat(a) - parseFloat(b)) : imageResolutionTiers(profile);
     const presets = imageSizePresets(profile).filter((preset) => imageTierAvailable(profile, preset.tier));
     const visibleTiers = IMAGE_RESOLUTIONS.filter((value) => presets.some((preset) => preset.tier === value));
     const [chosenTier, setChosenTier] = useState<ImageResolutionTier>("1k");
@@ -68,9 +69,8 @@ export function ImageSizePicker({
         presets.find((preset) => preset.size === resolvedLegacySize) ||
         (restoredCustom && imageTierAvailable(profile, restoredCustom.tier) ? restoredCustom : undefined);
     const available = (value: ImageResolutionTier) => imageTierAvailable(profile, value) && (profile.size.allowCustom || presets.some((preset) => preset.tier === value));
-    const tier = ungrouped
-        ? (IMAGE_RESOLUTIONS[0] ?? "")
-        : (active && visibleTiers.includes(active.tier) ? active.tier : undefined) ||
+    const tier = (schemaSizePresets && !pixelTierSelection ? IMAGE_RESOLUTIONS[0] : undefined) ||
+          (active && visibleTiers.includes(active.tier) ? active.tier : undefined) ||
           (profile.size.parameter === "aspect_ratio" && imageResolutionUsesQuality(profile) ? visibleTiers.find((value) => imageQualityForTier(profile, value) === (quality || profile.quality.default)) : undefined) ||
           (selectedTier && visibleTiers.includes(selectedTier) ? selectedTier : undefined) ||
           (visibleTiers.includes(chosenTier) ? chosenTier : visibleTiers[0]) ||
@@ -105,7 +105,7 @@ export function ImageSizePicker({
         const candidate = presets.find((preset) => preset.tier === next && preset.ratio === ratio);
         try {
             if (candidate) select(candidate);
-            else if (profile.size.allowCustom) select(makeCustom(next, ratio));
+            else if (profile.size.allowCustom && !pixelTierSelection) select(makeCustom(next, ratio));
             else {
                 const first = presets.find((preset) => preset.tier === next);
                 if (first) select(first);
@@ -177,12 +177,12 @@ export function ImageSizePicker({
                         ))}
                     </div>
                 </>
-            ) : !ungrouped && visibleTiers.length && (profile.size.parameter === "size" || !profile.quality.supported || imageResolutionUsesQuality(profile)) ? (
+            ) : (!schemaSizePresets || pixelTierSelection) && visibleTiers.length > (profile.parameters ? 1 : 0) && (profile.size.parameter === "size" || !profile.quality.supported || imageResolutionUsesQuality(profile)) ? (
                 <>
                     <div className="image-size-label">分辨率</div>
                     <div className="image-size-tiers">
                         {visibleTiers.map((value) => (
-                            <button type="button" key={value} aria-pressed={size !== "auto" && active?.tier === value} onClick={() => changeTier(value)}>
+                                <button type="button" key={value} aria-pressed={pixelTierSelection ? tier === value : size !== "auto" && active?.tier === value} onClick={() => changeTier(value)}>
                                 {value.toUpperCase()}
                             </button>
                         ))}

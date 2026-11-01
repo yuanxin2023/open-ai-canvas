@@ -38,7 +38,7 @@ export function ImageParameterInput({
             const ratios = field.encoding === "ratio" || (field.name === "size" && field.values.some((item) => typeof item === "string" && /^\d+(?:\.\d+)?:\d+(?:\.\d+)?$/.test(item)));
             return (
                 <div className="image-size-picker">
-                    <div className={ratios ? "image-size-ratios" : "image-size-tiers"} role="group" aria-label={field.label}>
+                    <div className={ratios ? "image-size-ratios" : field.encoding === "pixels" || field.name === "size" ? "image-size-tiers image-size-pixels" : "image-size-tiers"} role="group" aria-label={field.label}>
                         {field.values.map((option) => {
                             const dimensions = ratios && typeof option === "string" ? option.split(":").map(Number) : [];
                             const [width, height] = dimensions;
@@ -134,7 +134,8 @@ export function ImageParameterFields({
     const values = imageParameterRequest(profile, config) || {};
     const sizeField = profile.parameters?.find((p) => p.name === "size");
     const usesSizePresets = profile.resolution.supported || profile.size.parameter === "size" || sizeField?.encoding === "pixels" || profile.parameters?.some((p) => p.name === "imageResolution");
-    const groupedSize = showSize && profile.size.parameter !== "none" && usesSizePresets && imageSizePresets(profile).length > 0;
+    const unmappedPixelSizes = sizeField?.encoding === "pixels" && sizeField.values?.some((value) => typeof value === "string" && /^\d+x\d+$/.test(value) && !profile.size.presets?.some((preset) => preset.size === value));
+    const groupedSize = showSize && profile.size.parameter !== "none" && usesSizePresets && !unmappedPixelSizes && imageSizePresets(profile).length > 0;
     const fields = (profile.parameters || []).filter(
         (p) =>
             p.enabled !== false &&

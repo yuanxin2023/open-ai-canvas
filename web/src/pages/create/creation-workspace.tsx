@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type PointerEvent, type ReactNode, type RefObject } from "react";
 import { App, Button, Dropdown, Input, Popover } from "antd";
 import { AppModal } from "@/components/ui/product/app-modal";
+import { CreationSettingsOverlay } from "./creation-settings-overlay";
 import { useWorkspaceTopBarMount } from "@/components/layout/workspace-top-bar-extension";
 import { Tooltip } from "@/components/ui/base/tooltip";
 import { SegmentedControl } from "@/components/ui/base/segmented-control";
@@ -842,7 +843,7 @@ function GenerationSettingsMenu(props: ComposerProps) {
     ].join(" · ");
     const videoRatioSupported = props.mode === "video" && ratios.length > 0;
     const summary = props.mode === "video" ? [...(videoRatioSupported ? [props.ratio] : []), ...(videoResolutionSupported ? [videoResolutionLabel(props.videoQuality)] : [])].join(" · ") : imageSummary;
-    const panel = props.mode === "image" && props.imageProfile.parameters ? <div className="creation-parameter-menu max-h-[65vh] overflow-y-auto"><ImageParameterFields profile={props.imageProfile} config={{ ...props.config, model: props.model, size: props.ratio, quality: props.quality, imageResolution: props.imageResolution, imageParameters: props.imageParameters, count: props.count }} onChange={(key, value) => {
+    const panel = props.mode === "image" && props.imageProfile.parameters ? <div className="creation-parameter-menu"><ImageParameterFields profile={props.imageProfile} config={{ ...props.config, model: props.model, size: props.ratio, quality: props.quality, imageResolution: props.imageResolution, imageParameters: props.imageParameters, count: props.count }} onChange={(key, value) => {
         const setters = { size: props.setRatio, quality: props.setQuality, imageResolution: props.setImageResolution, imageParameters: props.setImageParameters, count: props.setCount, transparentBackground: props.setTransparentBackground };
         setters[key](value);
     }} /></div> : <div className="creation-parameter-menu">
@@ -854,9 +855,9 @@ function GenerationSettingsMenu(props: ComposerProps) {
             {props.imageProfile.maxOutputs > 1 ? <SettingSection title="生成张数" value={`${props.count} 张`}><div className="creation-parameter-content"><div className="creation-choice-grid is-count">{countOptions.filter((option) => Number(option) <= props.imageProfile.maxOutputs).map((option) => <button key={option} type="button" aria-pressed={option === props.count} className={option === props.count ? "is-selected" : ""} onClick={() => props.setCount(option)}>{option}</button>)}</div><label className="creation-custom-value"><span>自定义</span><input inputMode="numeric" pattern="[0-9]*" value={props.count} onChange={(event) => props.setCount(String(Math.max(1, Math.min(props.imageProfile.maxOutputs, Number(event.target.value) || 1))))} aria-label={`生成张数，范围 1 到 ${props.imageProfile.maxOutputs}`} /><em>张</em></label></div></SettingSection> : null}
         </>}
     </div>;
-    return <Popover open={open} onOpenChange={setOpen} trigger="click" placement="bottom" arrow={false} classNames={{ root: "creation-control-popover", container: "creation-control-popover-surface", content: "creation-control-popover-content" }} content={panel}>
-        <button type="button" className="creation-chat-control" aria-label={`生成设置：${summary}`}><SlidersHorizontal /><span>{summary}</span><ChevronDown className={open ? "is-open" : ""} /></button>
-    </Popover>;
+    return <CreationSettingsOverlay open={open} onOpenChange={setOpen} content={panel} mobileDrawer={props.mode === "image"}>
+        <button type="button" className="creation-chat-control" aria-label={`生成设置：${summary}`} aria-expanded={open} onClick={() => setOpen(!open)}><SlidersHorizontal /><span>{summary}</span><ChevronDown className={open ? "is-open" : ""} /></button>
+    </CreationSettingsOverlay>;
 }
 
 function SettingSection({ title, value, children }: { title: string; value?: string; children: ReactNode }) {
