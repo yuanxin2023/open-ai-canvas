@@ -1,15 +1,14 @@
 import { type FormEvent, useEffect, useState, type ReactNode } from "react";
 import { App, Button, Input } from "antd";
 import { ArrowLeft, ArrowRight, LockKeyhole, Mail, ShieldCheck, TriangleAlert } from "lucide-react";
-import { Link, useNavigate, useSearchParams } from "react-router";
+import { AuthLink as Link, useAuthFormNavigation } from "@/components/auth/auth-form-navigation";
 
 import { getAuthSettings, resetPassword, sendPasswordResetEmailCode } from "@/services/api/auth";
 
 type RecoveryStage = "request" | "reset";
 
 export default function ForgotPasswordPage() {
-    const navigate = useNavigate();
-    const [params] = useSearchParams();
+    const { navigate, next } = useAuthFormNavigation();
     const { message } = App.useApp();
     const [stage, setStage] = useState<RecoveryStage>("request");
     const [email, setEmail] = useState("");
@@ -20,7 +19,6 @@ export default function ForgotPasswordPage() {
     const [sendingCode, setSendingCode] = useState(false);
     const [submitting, setSubmitting] = useState(false);
     const [countdown, setCountdown] = useState(0);
-    const next = safeNext(params.get("next"));
     const loginURL = `/login?next=${encodeURIComponent(next)}`;
 
     useEffect(() => {
@@ -209,9 +207,4 @@ function Notice({ icon, children }: { icon: ReactNode; children: ReactNode }) {
             {children}
         </div>
     );
-}
-
-function safeNext(value: string | null) {
-    if (!value || !value.startsWith("/") || value.startsWith("//")) return "/";
-    return value;
 }

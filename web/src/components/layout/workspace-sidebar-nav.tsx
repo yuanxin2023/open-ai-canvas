@@ -1,7 +1,9 @@
 import { Popover } from "antd";
 import { BookOpen, ChevronDown, ChevronRight, CircleHelp, Headphones, Image as ImageIcon, Infinity as InfinityIcon, PanelLeftClose, PanelLeftOpen, Video } from "lucide-react";
 import { LayoutGroup, motion, useReducedMotion } from "motion/react";
-import { useEffect, useMemo, useRef, useState, type ComponentType, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type ComponentType, type CSSProperties, type MouseEvent } from "react";
+import { useWorkspaceAuth } from "@/components/auth/workspace-auth-context";
+import { isGuestWorkspacePath } from "@/lib/guest-workspace";
 import { Link, useLocation, useSearchParams } from "react-router";
 
 import { BrandLogoFrame } from "@/components/brand/brand-logo";
@@ -123,6 +125,8 @@ function NavItem({
     collapsed?: boolean;
 }) {
     const isActive = activeId === item.id || (item.id === "settings" && activeId.startsWith("settings:"));
+    const { openAuth } = useWorkspaceAuth();
+    const user = useUserStore((state) => state.user);
     const hasChildren = Boolean(item.children?.length);
     const [isOpen, setIsOpen] = useState(false);
     const reducedMotion = useReducedMotion();
@@ -165,7 +169,12 @@ function NavItem({
     );
     const activePill = isActive ? <motion.span layoutId="workspace-nav-active-pill" className="app-workspace-nav-active-pill" aria-hidden transition={reducedMotion ? { duration: 0 } : aceternityMotion.spring.dock} /> : null;
 
-    const handleClick = () => {
+    const handleClick = (event: MouseEvent) => {
+        if (!user && item.to && !isGuestWorkspacePath(item.to.split("?")[0])) {
+            event.preventDefault();
+            void openAuth({ next: item.to });
+            return;
+        }
         if (item.action === "search") {
             onOpenSearch();
             return;

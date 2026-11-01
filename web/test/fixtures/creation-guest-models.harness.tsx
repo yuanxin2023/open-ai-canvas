@@ -2,6 +2,7 @@ import { afterAll, expect, mock, test } from "bun:test";
 import { Window } from "happy-dom";
 
 const dom = new Window({ url: "http://localhost/create" });
+Object.defineProperty(globalThis, "ResizeObserver", { configurable: true, value: dom.ResizeObserver });
 for (const [key, value] of Object.entries({ window: dom, document: dom.document, navigator: dom.navigator, HTMLElement: dom.HTMLElement, Element: dom.Element, Node: dom.Node, Event: dom.Event, SVGElement: dom.SVGElement, ShadowRoot: dom.ShadowRoot, getComputedStyle: dom.getComputedStyle.bind(dom), IS_REACT_ACT_ENVIRONMENT: true })) {
     Object.defineProperty(globalThis, key, { configurable: true, writable: true, value });
 }
@@ -25,6 +26,13 @@ mock.module("localforage", () => ({ default: {
 const antd = await import("antd");
 mock.module("antd", () => ({ ...antd, Popover: ({ children, content }: any) => <>{children}{content}</> }));
 const { act } = await import("react");
+const { AuthLink, useAuthFormNavigation } = await import("@/components/auth/auth-form-navigation");
+mock.module("@/pages/auth/login", () => ({ default: Login }));
+mock.module("@/pages/auth/register", () => ({ default: AuthSubView }));
+mock.module("@/pages/auth/forgot-password", () => ({ default: AuthSubView }));
+mock.module("@/components/ui/product/app-modal", () => ({ AppModal: ({ open, children, onCancel }: any) => open ? <div role="dialog"><button data-testid="close-auth" onClick={onCancel}>关闭</button>{children}</div> : null }));
+const { WorkspaceAuthProvider } = await import("@/components/auth/workspace-auth-provider");
+const { WorkspaceSidebarNav } = await import("@/components/layout/workspace-sidebar-nav");
 const { createRoot } = await import("react-dom/client");
 const { saveCreationLoginDraft, readCreationLoginDraft, discardCreationLoginDraft } = await import("@/pages/create/creation-login-draft");
 const { useUserStore } = await import("@/stores/use-user-store");
@@ -38,14 +46,18 @@ mock.module("@/pages/create/creation-workspace", () => ({
     CreationConversationSidebar: () => null, CreationEmptySuggest: () => null, CreationFeaturedWorks: () => null, CreationMessageView: () => null, CreationModeTabs: () => null, CreationWorkspaceToolbar: () => null, creationAssetCategoryLabels: {},
 }));
 const { default: CreatePage } = await import("@/pages/create/index");
-const { MemoryRouter, Routes, Route, useNavigate, useSearchParams } = await import("react-router");
+const { MemoryRouter, Routes, Route, useLocation } = await import("react-router");
 const { useCreationPreferencesStore } = await import("@/stores/use-creation-preferences-store");
 const host = document.createElement("div");
 document.body.append(host);
 const root = createRoot(host);
 const originalRequest = apiClient.request;
 let quotes = 0;
-apiClient.request = (async () => { quotes++; return { data: { code: 0, data: { quote: {} }, msg: "ok" } }; }) as typeof apiClient.request;
+apiClient.request = (async (config: any) => {
+    if (config.url === "/public/customer-service") return { data: { code: 0, data: { customerService: { enabled: true, configured: true, tutorialUrl: "https://example.com/tutorial" } }, msg: "ok" } };
+    quotes++;
+    return { data: { code: 0, data: { quote: {} }, msg: "ok" } };
+}) as typeof apiClient.request;
 afterAll(async () => {
     await act(async () => root.unmount());
     apiClient.request = originalRequest;
@@ -105,6 +117,44 @@ test("guests see system image models without authenticated quote requests", asyn
     expect(host.textContent).not.toContain("当前没有可用模型");
     expect(quotes).toBe(0);
 });
+
+test("sidebar leaves public navigation available and resumes a protected destination only after login", async () => {
+    let expanded = 0;
+    await act(async () => {
+        useUserStore.setState({ hydrated: true, user: null });
+        root.render(<antd.App><MemoryRouter key="sidebar" initialEntries={["/"]}><WorkspaceAuthProvider>
+            <Location />
+            <WorkspaceSidebarNav collapsed={false} onNavigate={() => {}} onOpenSearch={() => {}} onExpand={() => {}} onCollapse={() => { expanded++; }} />
+        </WorkspaceAuthProvider></MemoryRouter></antd.App>);
+    });
+    await act(async () => { host.querySelector<HTMLButtonElement>('[aria-label="收起侧栏"]')!.click(); });
+    expect(expanded).toBe(1);
+    expect(host.querySelector('[role="dialog"]')).toBeNull();
+    await act(async () => { host.querySelector<HTMLAnchorElement>('[data-nav-id="home"]')!.click(); });
+    expect(host.querySelector("output")!.textContent).toBe("/?home=1");
+    expect(host.querySelector('[role="dialog"]')).toBeNull();
+    await act(async () => { host.querySelector<HTMLAnchorElement>('[data-nav-id="assets"]')!.click(); });
+    expect(host.querySelector("output")!.textContent).toBe("/?home=1");
+    expect(host.querySelectorAll('[role="dialog"]').length).toBe(1);
+    await act(async () => { [...host.querySelectorAll<HTMLElement>('[role="tab"]')].find((tab) => tab.textContent === "注册")!.click(); });
+    expect(host.textContent).toContain("返回登录表单");
+    expect(host.querySelector("output")!.textContent).toBe("/?home=1");
+    await act(async () => { host.querySelector<HTMLButtonElement>('[data-testid="return-login"]')!.click(); });
+    await act(async () => { host.querySelector<HTMLAnchorElement>('[data-testid="recover"]')!.click(); });
+    expect(host.textContent).toContain("找回密码");
+    expect(host.querySelector("output")!.textContent).toBe("/?home=1");
+    await act(async () => { host.querySelector<HTMLButtonElement>('[data-testid="return-login"]')!.click(); });
+    await act(async () => { host.querySelector<HTMLButtonElement>('[data-testid="close-auth"]')!.click(); });
+    expect(host.querySelector("output")!.textContent).toBe("/?home=1");
+    await act(async () => {
+        host.querySelector<HTMLAnchorElement>('[data-nav-id="assets"]')!.click();
+        host.querySelector<HTMLAnchorElement>('[data-nav-id="assets"]')!.click();
+    });
+    expect(host.querySelectorAll('[role="dialog"]').length).toBe(1);
+    await act(async () => { host.querySelector<HTMLButtonElement>('[data-testid="confirm-login"]')!.click(); });
+    expect(host.querySelector("output")!.textContent).toBe("/assets");
+    expect(host.querySelector('[role="dialog"]')).toBeNull();
+});
 test("empty model picker distinguishes loading, failure and empty directory", async () => {
     const config = normalizeConfigSnapshot({ config: { ...defaultConfig, channels: [] } }).config;
     for (const [status, label] of [["loading", "正在加载模型"], ["error", "模型加载失败"], ["ready", "当前没有可用模型"]] as const) {
@@ -118,30 +168,52 @@ test("empty model picker distinguishes loading, failure and empty directory", as
 });
 
 function Login() {
-    const navigate = useNavigate();
-    const [params] = useSearchParams();
-    return <button onClick={() => {
+    const { navigate, next } = useAuthFormNavigation();
+    return <><button data-testid="confirm-login" onClick={() => {
         useUserStore.setState({ hydrated: true, user: { id: "logged-in-user", username: "creator", role: "user", status: "active" } as any });
-        navigate(params.get("next")!);
-    }}>确认登录</button>;
+        navigate(next);
+    }}>确认登录</button><AuthLink data-testid="recover" to="/forgot-password">忘记密码</AuthLink></>;
 }
 
-test("actual creation page redirects with its return address and restores the guest draft after login", async () => {
+function AuthSubView() {
+    const { navigate } = useAuthFormNavigation();
+    return <button data-testid="return-login" onClick={() => navigate("/login")}>返回登录表单</button>;
+}
+
+function Location() {
+    const location = useLocation();
+    return <output>{location.pathname + location.search}</output>;
+}
+
+test("actual creation page opens a modal in place and restores the guest draft without generating", async () => {
     const channel = createModelChannel({ id: "system", scope: "system", models: ["image-model"], modelCosts: [{ model: "image-model", capability: "image", billingMode: "fixed_request", unitPriceMicrocredits: 1000000 }] });
     await act(async () => {
         useConfigStore.getState().replaceConfig(normalizeConfigSnapshot({ config: { ...defaultConfig, channels: [channel], imageModel: "system::image-model" } }).config);
         useUserStore.setState({ hydrated: true, user: null });
         useModelCatalogStore.setState({ status: "ready" });
         useCreationPreferencesStore.setState({ hydrated: true, preferences: {} });
-        root.render(<MemoryRouter initialEntries={["/create?source=home"]}><Routes><Route path="/create" element={<CreatePage />} /><Route path="/login" element={<Login />} /></Routes></MemoryRouter>);
+        root.render(<antd.App><MemoryRouter initialEntries={["/create?source=home"]}><WorkspaceAuthProvider><Location /><Routes><Route path="/create" element={<CreatePage />} /></Routes></WorkspaceAuthProvider></MemoryRouter></antd.App>);
     });
+    expect(host.querySelector('[role="dialog"]')).toBeNull();
     await act(async () => { composer.onModeChange("image"); composer.setPrompt("登录前的提示词"); });
     await act(async () => { composer.setRatio("1:1"); });
     expect(composer.model).toBe("system::image-model");
+    failWrite = true;
+    await act(async () => { host.querySelector<HTMLButtonElement>('[data-testid="start-creation"]')!.click(); });
+    expect(host.querySelector('[role="dialog"]')).toBeNull();
+    expect(composer.prompt).toBe("登录前的提示词");
+    expect(document.body.textContent).toContain("storage unavailable");
+    failWrite = false;
     await act(async () => { host.querySelector<HTMLButtonElement>('[data-testid="start-creation"]')!.click(); });
     expect(host.textContent).toContain("确认登录");
+    expect(host.querySelector("output")!.textContent).toBe("/create?source=home");
     expect((await readCreationLoginDraft())?.draft.prompt).toBe("登录前的提示词");
-    await act(async () => { host.querySelector<HTMLButtonElement>("button")!.click(); });
+    await act(async () => { host.querySelector<HTMLButtonElement>('[data-testid="close-auth"]')!.click(); });
+    expect(composer.prompt).toBe("登录前的提示词");
+    expect(host.querySelector('[role="dialog"]')).toBeNull();
+    await act(async () => { host.querySelector<HTMLButtonElement>('[data-testid="start-creation"]')!.click(); });
+    await act(async () => { host.querySelector<HTMLButtonElement>('[data-testid="confirm-login"]')!.click(); });
+    expect(host.querySelector('[role="dialog"]')).toBeNull();
     expect(composer.prompt).toBe("登录前的提示词");
     expect(composer.mode).toBe("image");
     expect(composer.model).toBe("system::image-model");

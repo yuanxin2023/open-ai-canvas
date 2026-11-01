@@ -3,6 +3,7 @@ import { Switch } from "@/components/ui/base/switch";
 import { ChevronRight, LogIn, LogOut, Moon, ShieldCheck, Sun } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router";
+import { useWorkspaceAuth } from "@/components/auth/workspace-auth-context";
 
 import { IdentityProviderBadge } from "@/components/layout/identity-provider-badge";
 import { UserAvatar } from "@/components/layout/user-avatar";
@@ -22,6 +23,7 @@ type WorkspaceSidebarFooterProps = {
 };
 
 export function WorkspaceSidebarFooter({ expandedClassName, collapsedClassName, accountClassName, showAnnouncement = true }: WorkspaceSidebarFooterProps) {
+    const { openAuth } = useWorkspaceAuth();
     const theme = useThemeStore((state) => state.theme);
     const setTheme = useThemeStore((state) => state.setTheme);
     const user = useUserStore((state) => state.user);
@@ -101,7 +103,7 @@ export function WorkspaceSidebarFooter({ expandedClassName, collapsedClassName, 
                     </button>
                 </Popover>
             ) : (
-                <Link to="/login" className={cn("flex h-10 items-center rounded-md text-xs text-foreground/65 hover:bg-surface-hover hover:text-foreground", collapsedClassName)} title="登录">
+                <Link to="/login" onClick={(event) => { event.preventDefault(); void openAuth(); }} className={cn("flex h-10 items-center rounded-md text-xs text-foreground/65 hover:bg-surface-hover hover:text-foreground", collapsedClassName)} title="登录">
                     <LogIn className="size-4 shrink-0" /><span className={expandedClassName}>登录</span>
                 </Link>
             )}

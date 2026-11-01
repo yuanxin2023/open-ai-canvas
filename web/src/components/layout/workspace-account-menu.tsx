@@ -3,6 +3,7 @@ import { Switch } from "@/components/ui/base/switch";
 import { CircleUserRound, Moon, Sun } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router";
+import { useWorkspaceAuth } from "@/components/auth/workspace-auth-context";
 
 import { WorkspaceAccountCard } from "./workspace-account-card";
 import { UserAvatar } from "./user-avatar";
@@ -12,6 +13,7 @@ import { useUserStore } from "@/stores/use-user-store";
 
 /** 顶部与侧栏复用同一账户卡片；顶部额外保留主题偏好。 */
 export function WorkspaceAccountMenu() {
+    const { openAuth } = useWorkspaceAuth();
     const theme = useThemeStore((state) => state.theme);
     const setTheme = useThemeStore((state) => state.setTheme);
     const user = useUserStore((state) => state.user);
@@ -48,5 +50,5 @@ export function WorkspaceAccountMenu() {
                 <UserAvatar user={user} className="size-6" />
             </button>
         </Popover></>
-    ) : <Link to="/login" className="inline-flex items-center gap-2 px-2 text-xs text-foreground/55" aria-label="登录" title="登录"><CircleUserRound className="size-5" /><span className="hidden sm:inline">游客</span></Link>;
+    ) : <Link to="/login" onClick={(event) => { event.preventDefault(); void openAuth(); }} className="inline-flex items-center gap-2 px-2 text-xs text-foreground/55" aria-label="登录" title="登录"><CircleUserRound className="size-5" /><span className="hidden sm:inline">游客</span></Link>;
 }

@@ -1,7 +1,8 @@
 import { type FormEvent, useEffect, useRef, useState, type ReactNode } from "react";
 import { App, Button, Checkbox, Divider, Input, Segmented } from "antd";
 import { ArrowLeft, ArrowRight, Gift, Info, KeyRound, LockKeyhole, Mail, ShieldCheck, TriangleAlert } from "lucide-react";
-import { useNavigate, useSearchParams } from "react-router";
+import { useSearchParams } from "react-router";
+import { useAuthFormNavigation } from "@/components/auth/auth-form-navigation";
 
 import { getAuthSession, getAuthSettings, linuxDOLoginURL, register, sendRegistrationEmailCode } from "@/services/api/auth";
 import { ApiError } from "@/services/api/request";
@@ -14,7 +15,7 @@ type AuthSettings = Awaited<ReturnType<typeof getAuthSettings>>;
 type RegistrationStep = "details" | "verification";
 
 export default function RegisterPage() {
-    const navigate = useNavigate();
+    const { navigate, next } = useAuthFormNavigation();
     const [params] = useSearchParams();
     const { message } = App.useApp();
     const [settings, setSettings] = useState<AuthSettings | null>(null);
@@ -38,7 +39,6 @@ export default function RegisterPage() {
     const [registerCountdown, setRegisterCountdown] = useState(0);
     const sending = useRef(false);
     const registering = useRef(false);
-    const next = safeNext(params.get("next"));
 
     useEffect(() => {
         let cancelled = false;
@@ -394,9 +394,4 @@ function Notice({ icon, tone, children }: { icon: ReactNode; tone: "blue" | "amb
             {children}
         </div>
     );
-}
-
-function safeNext(value: string | null) {
-    if (!value || !value.startsWith("/") || value.startsWith("//")) return "/";
-    return value;
 }

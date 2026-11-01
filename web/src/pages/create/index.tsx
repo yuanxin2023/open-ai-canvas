@@ -41,7 +41,7 @@ import { CreationComposer, CreationConversationSidebar, CreationEmptySuggest, Cr
 import { CreationAgentEntry } from "./creation-agent-entry";
 import { createCreationSubmitGate } from "./creation-submit-gate";
 import { creationVideoConfig } from "./creation-generation-config";
-import { CreationLoginDialog } from "./creation-login-dialog";
+import { useWorkspaceAuth } from "@/components/auth/workspace-auth-context";
 import { discardCreationLoginDraft, readCreationLoginDraft, saveCreationLoginDraft } from "./creation-login-draft";
 
 const AssetLibraryPickerModal = lazy(() => import("@/components/assets/asset-library-picker-modal").then((module) => ({ default: module.AssetLibraryPickerModal })));
@@ -135,7 +135,7 @@ function CreationPageContent() {
     const [referenceUploadBusy, setReferenceUploadBusy] = useState(false);
     const referenceUploadBusyRef = useRef(false);
     const [inspirationHomeOpen, setInspirationHomeOpen] = useState(false);
-    const [loginDialogOpen, setLoginDialogOpen] = useState(false);
+    const { openAuth, prepareDraft } = useWorkspaceAuth();
     const [libraryOpen, setLibraryOpen] = useState(false);
     const externalAssetSources = useExternalAssetSources(libraryOpen);
     const abortRef = useRef<AbortController | null>(null);
@@ -272,6 +272,12 @@ function CreationPageContent() {
         setRatio(normalized.ratio);
         setVideoQuality(normalized.resolution.replace(/p$/i, ""));
     }, [composerPreferencesHydrated, composerPreferencesInitialized, mode, selectedModel, videoProfile]);
+
+    useEffect(() => {
+        if (userId) return;
+        prepareDraft.current = () => saveCreationLoginDraft({ mode, prompt, model: selectedModel, ratio, seconds, quality, imageResolution, imageParameters, videoQuality, count, textStreaming, textThinking, attachments, references: draftReferences });
+        return () => { prepareDraft.current = null; };
+    }, [prepareDraft, userId, mode, prompt, selectedModel, ratio, seconds, quality, imageResolution, imageParameters, videoQuality, count, textStreaming, textThinking, attachments, draftReferences]);
 
     useEffect(() => {
         if (!userSessionHydrated || !composerPreferencesInitialized || catalogStatus !== "ready" || loginDraftRestored.current) return;
@@ -624,7 +630,7 @@ function CreationPageContent() {
 
     const addReferenceImagesFromFiles = useCallback(async (files: File[]) => {
         if (!userId) {
-            setLoginDialogOpen(true);
+            void openAuth();
             return;
         }
         if (busy || referenceReplacementBusy || referenceUploadBusyRef.current) return;
@@ -674,7 +680,7 @@ function CreationPageContent() {
             referenceUploadBusyRef.current = false;
             setReferenceUploadBusy(false);
         }
-    }, [addAsset, busy, maxReferences, referenceReplacementBusy, toast, userId]);
+    }, [addAsset, busy, maxReferences, referenceReplacementBusy, toast, userId, openAuth]);
 
     const submit = async (retryContext?: CreationRetryContext, retryLockKey?: string) => {
         const enteringThreadFromHome = !showThreadWorkspace;
@@ -691,9 +697,7 @@ function CreationPageContent() {
         const releaseSubmitGate = () => submitGateRef.current.release(submitToken);
         if (!useUserStore.getState().user) {
             try {
-                await saveCreationLoginDraft({ mode, prompt, model: selectedModel, ratio, seconds, quality, imageResolution, imageParameters, videoQuality, count, textStreaming, textThinking, attachments, references: draftReferences });
-                const next = `${location.pathname}${location.search}${location.hash}`;
-                navigate(`/login?next=${encodeURIComponent(next)}`);
+                await openAuth();
             } catch (error) {
                 toast.error(error instanceof Error ? error.message : "保存创作草稿失败，请重试");
             } finally {
@@ -1170,7 +1174,7 @@ function CreationPageContent() {
         onReplaceAttachment: replaceReferenceFromTrack,
         onReplaceReferenceFiles: replaceReferenceFromFiles,
         onAddReferenceFiles: addReferenceImagesFromFiles,
-        onOpenLibrary: () => userId ? setLibraryOpen(true) : setLoginDialogOpen(true),
+        onOpenLibrary: () => userId ? setLibraryOpen(true) : void openAuth(),
         onModeChange: selectMode,
         model: selectedModel,
         modelRequirements,
@@ -1255,7 +1259,7 @@ function CreationPageContent() {
                     <section ref={launchpadRef} className="creation-launchpad" aria-label="开始创作">
                         <div className={cn("creation-composer-stage is-home-mode", agentMode && "is-agent-mode")}>
                             <CreationModeTabs mode={mode} agentActive={agentMode} onAgentSelect={() => setAgentMode(true)} onModeChange={(next) => { setAgentMode(false); selectMode(next); }} />
-                            {agentMode ? <CreationAgentEntry onRequireLogin={() => setLoginDialogOpen(true)} /> : <div className="creation-empty-composer"><CreationComposer {...composerProps} variant="empty" /></div>}
+                            {agentMode ? <CreationAgentEntry onRequireLogin={() => void openAuth()} /> : <div className="creation-empty-composer"><CreationComposer {...composerProps} variant="empty" /></div>}
                         </div>
                         <CreationEmptySuggest
                             onStartPrompt={(nextMode, prompt) => { setAgentMode(false); selectMode(nextMode); setPrompt(prompt); window.requestAnimationFrame(() => composerFocusRef.current?.focus()); }}
@@ -1264,7 +1268,7 @@ function CreationPageContent() {
                     </section>
                 </div>
                 <CreationFeaturedWorks
-                    onRequireLogin={() => setLoginDialogOpen(true)}
+                    onRequireLogin={() => void openAuth()}
                     onStartPrompt={(nextMode, prompt) => { setAgentMode(false); selectMode(nextMode); setPrompt(prompt); window.requestAnimationFrame(() => composerFocusRef.current?.focus()); }}
                 />
             </main>
@@ -1294,7 +1298,6 @@ function CreationPageContent() {
                 </div>
             </div>}
         </div>
-        <CreationLoginDialog open={loginDialogOpen} onClose={() => setLoginDialogOpen(false)} />
         {libraryOpen ? <Suspense fallback={null}><AssetLibraryPickerModal
             remoteLibrary
             acceptRemoteItems

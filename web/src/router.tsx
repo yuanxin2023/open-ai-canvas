@@ -2,6 +2,7 @@ import { lazy, Suspense, type ReactNode } from "react";
 import { createBrowserRouter, Navigate, Outlet, useLocation } from "react-router";
 
 import { RequireAuth } from "@/components/auth/require-auth";
+import { WorkspaceAuthProvider } from "@/components/auth/workspace-auth-provider";
 import { AdminLanding, RequireAdminPermission, RequireFullAdmin } from "@/components/auth/require-admin-permission";
 import type { AdminPermission } from "@/lib/admin-permissions";
 import { CustomerServiceWidget } from "@/components/customer-service/customer-service-widget";
@@ -94,14 +95,16 @@ function AuthenticatedWorkspaceLayout() {
     const isCanvasProjectRoute = pathname.startsWith("/canvas/");
     const fallback = isCanvasProjectRoute ? <CanvasRefreshShell /> : <FullScreenLoader label="正在打开创作空间" detail="准备当前页面" />;
     return (
-        <RequireAuth allowAnonymous={isGuestWorkspacePath(pathname)}>
-            <Suspense fallback={fallback}>
-                <UserLayout>
-                    <Outlet />
-                </UserLayout>
-            </Suspense>
-            <CustomerServiceWidget />
-        </RequireAuth>
+        <WorkspaceAuthProvider>
+            <RequireAuth allowAnonymous={isGuestWorkspacePath(pathname)}>
+                <Suspense fallback={fallback}>
+                    <UserLayout>
+                        <Outlet />
+                    </UserLayout>
+                </Suspense>
+                <CustomerServiceWidget />
+            </RequireAuth>
+        </WorkspaceAuthProvider>
     );
 }
 

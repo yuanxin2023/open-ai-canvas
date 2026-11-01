@@ -1,7 +1,8 @@
 import { type FormEvent, useEffect, useState, type ReactNode } from "react";
 import { App, Button, Divider, Input, Segmented } from "antd";
 import { ArrowRight, LockKeyhole, UserRound } from "lucide-react";
-import { Link, useNavigate, useSearchParams } from "react-router";
+import { useSearchParams } from "react-router";
+import { AuthLink as Link, useAuthFormNavigation } from "@/components/auth/auth-form-navigation";
 
 import { getAuthSession, getAuthSettings, linuxDOLoginURL, login } from "@/services/api/auth";
 import { useUserStore } from "@/stores/use-user-store";
@@ -10,7 +11,7 @@ import { VerificationFields } from "@/components/auth/verification-fields";
 import { emptyVerification, loginVerification, methodLabels, verificationMethods, type VerificationMethod } from "@/services/api/verification";
 
 export default function LoginPage() {
-    const navigate = useNavigate();
+    const { navigate, next } = useAuthFormNavigation();
     const [params] = useSearchParams();
     const { message } = App.useApp();
     const [username, setUsername] = useState("");
@@ -20,7 +21,6 @@ export default function LoginPage() {
     const [methods, setMethods] = useState<VerificationMethod[]>([]);
     const [method, setMethod] = useState<"password" | VerificationMethod>("password");
     const [verification, setVerification] = useState({ ...emptyVerification });
-    const next = safeNext(params.get("next"));
     const forgotPasswordURL = `/forgot-password?next=${encodeURIComponent(next)}`;
     const user = useUserStore((state) => state.user);
     const hydrated = useUserStore((state) => state.hydrated);
@@ -143,9 +143,4 @@ function AuthField({ label, htmlFor, action, children }: { label: string; htmlFo
             {children}
         </div>
     );
-}
-
-function safeNext(value: string | null) {
-    if (!value || !value.startsWith("/") || value.startsWith("//")) return "/";
-    return value;
 }
