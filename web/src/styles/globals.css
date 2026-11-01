@@ -1851,6 +1851,16 @@
         -webkit-backdrop-filter: blur(7px);
     }
 
+    :is(.workspace-navigation-drawer, .creation-history-panel).ant-drawer {
+        background: transparent !important;
+    }
+
+    :is(.workspace-navigation-drawer, .creation-history-panel) .ant-drawer-mask {
+        background: color-mix(in srgb, var(--color-neutral-950) 20%, transparent) !important;
+        -webkit-backdrop-filter: none !important;
+        backdrop-filter: none !important;
+    }
+
 
     .app-workspace-shell.is-spatial .app-workspace-brand-mark {
         border: 1px solid color-mix(in srgb, var(--workspace-accent) 36%, transparent);
@@ -20084,7 +20094,6 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap { box-shadow: 0 
 @media (max-width: 680px) {
     .app-user-workspace .app-workspace-topbar { padding-inline: 12px !important; gap: 8px; }
     .app-user-workspace .app-workspace-topbar-breadcrumb { min-width: 0; white-space: nowrap; }
-    .app-user-workspace .app-workspace-sidebar { width: 180px !important; }
     .app-user-workspace .creation-home > .creation-empty-workspace { width: calc(100% - 24px) !important; padding-top: 28px !important; padding-bottom: 40px !important; }
     .app-user-workspace .creation-home-heading h1 { font-size: 32px !important; }
     .app-user-workspace .creation-home-heading p { font-size: 14px !important; }

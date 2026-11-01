@@ -1,5 +1,6 @@
 import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { useLocation } from "react-router";
+import type { Ref } from "react";
 
 import { TopbarFeedbackButton } from "@/components/feedback/topbar-feedback-button";
 import { SystemAnnouncementCenter } from "@/components/layout/system-announcement-center";
@@ -24,7 +25,7 @@ const PAGE_TITLES: Record<string, string> = {
     settings: "设置",
 };
 
-export function WorkspaceTopBar({ sidebarOpen, onToggleSidebar }: { sidebarOpen: boolean; onToggleSidebar: () => void }) {
+export function WorkspaceTopBar({ sidebarOpen, onToggleSidebar, sidebarTriggerRef }: { sidebarOpen: boolean; onToggleSidebar: () => void; sidebarTriggerRef?: Ref<HTMLButtonElement> }) {
     const theme = useThemeStore((state) => state.theme);
     const setTheme = useThemeStore((state) => state.setTheme);
     const user = useUserStore((state) => state.user);
@@ -35,7 +36,7 @@ export function WorkspaceTopBar({ sidebarOpen, onToggleSidebar }: { sidebarOpen:
 
     return (
         <header className="app-workspace-topbar">
-            <button type="button" className="app-workspace-mobile-menu app-workspace-topbar-icon-button" aria-label={sidebarOpen ? "收起侧栏" : "展开侧栏"} onClick={onToggleSidebar}>
+            <button ref={sidebarTriggerRef} type="button" className="app-workspace-mobile-menu app-workspace-topbar-icon-button" aria-label={sidebarOpen ? "收起侧栏" : "展开侧栏"} aria-expanded={sidebarOpen} onClick={onToggleSidebar}>
                 {sidebarOpen ? <PanelLeftClose className="size-4" /> : <PanelLeftOpen className="size-4" />}
             </button>
             <div className="app-workspace-topbar-breadcrumb" aria-label="当前位置">
