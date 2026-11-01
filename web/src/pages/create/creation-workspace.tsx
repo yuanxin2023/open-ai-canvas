@@ -620,7 +620,7 @@ export function CreationComposer(props: ComposerProps) {
     };
     const composer = <HoverBorderGradient as="div" duration={2.2} containerClassName="creation-composer-shell" className="creation-composer-shell-inner">
         <div
-            className={`creation-chat-composer is-${props.variant}${fileDropActive ? " is-file-drop-active" : ""}${props.referenceUploadBusy ? " is-reference-uploading" : ""}`}
+            className={`creation-chat-composer is-${props.variant}${props.attachments.length ? " has-reference-attachments" : ""}${fileDropActive ? " is-file-drop-active" : ""}${props.referenceUploadBusy ? " is-reference-uploading" : ""}`}
             onDragOver={handleComposerDragOver}
             onDragLeave={handleComposerDragLeave}
             onDrop={handleComposerDrop}
@@ -702,7 +702,7 @@ export function CreationComposer(props: ComposerProps) {
         <footer className="creation-chat-dock">
             <div className="creation-chat-controls">
                 {props.variant === "thread" ? <ModePicker mode={props.mode} onModeChange={props.onModeChange} /> : null}
-                {referencesSupported && !props.attachments.length ? <Tooltip title={addReferenceLabel}><button type="button" className="creation-chat-control" onClick={props.onOpenLibrary} disabled={interactionBusy || !canAddMoreReferences} aria-label={addReferenceLabel}><Plus aria-hidden="true" /><span>参考内容</span></button></Tooltip> : null}
+                {referencesSupported && !props.attachments.length ? <Tooltip title={addReferenceLabel}><button type="button" className="creation-chat-control is-add-reference" onClick={props.onOpenLibrary} disabled={interactionBusy || !canAddMoreReferences} aria-label={addReferenceLabel}><Plus aria-hidden="true" /><span>参考内容</span></button></Tooltip> : null}
                 <VoiceRecordingButton
                     className="creation-voice-trigger"
                     disabled={interactionBusy}
