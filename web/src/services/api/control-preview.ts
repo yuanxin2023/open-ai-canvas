@@ -72,8 +72,8 @@ export type PreviewUserDetail = PreviewMeta & {
 
 const base = "/admin/analytics/control-preview";
 
-export function getControlPreview(range: PreviewRange, signal?: AbortSignal) {
-    return http.get<PreviewOverview>(base, { params: range, signal });
+export function getControlPreview(range: PreviewRange, signal?: AbortSignal, fresh = false) {
+    return http.get<PreviewOverview>(base, { params: { ...range, ...(fresh ? { fresh: true } : {}) }, signal });
 }
 
 export function getControlPreviewUsers(params: PreviewRange & { page: number; pageSize: number; keyword?: string; model?: string; capability?: string }, signal?: AbortSignal) {

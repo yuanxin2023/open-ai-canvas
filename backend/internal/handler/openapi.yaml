@@ -2889,6 +2889,7 @@ paths:
         - {$ref: "#/components/parameters/ControlPreviewPeriod"}
         - {$ref: "#/components/parameters/ControlPreviewFrom"}
         - {$ref: "#/components/parameters/ControlPreviewTo"}
+        - {in: query, name: fresh, schema: {type: boolean, default: false}, description: 手动立即更新，跳过已完成的统计缓存；仍共享在途回源及并发限制}
       responses:
         "200":
           description: 成功信封，data 为控制预览快照

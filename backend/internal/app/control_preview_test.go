@@ -110,6 +110,14 @@ func TestControlPreviewPermissionAndCache(t *testing.T) {
 	if err != nil || !second.AsOf.Equal(first.AsOf) || second.KPI.AvailableMicrocredits != 100 {
 		t.Fatalf("cache did not preserve snapshot: %+v %v", second, err)
 	}
+	fresh, err := svc.AdminControlPreview(ctx, full, ControlPreviewQuery{Fresh: true})
+	if err != nil || fresh.KPI.AvailableMicrocredits != 200 {
+		t.Fatalf("manual refresh returned cached balance: %+v %v", fresh, err)
+	}
+	cachedFresh, err := svc.AdminControlPreview(ctx, full, ControlPreviewQuery{})
+	if err != nil || !cachedFresh.AsOf.Equal(fresh.AsOf) || cachedFresh.KPI.AvailableMicrocredits != 200 {
+		t.Fatalf("fresh snapshot did not update shared cache: %+v %v", cachedFresh, err)
+	}
 	denied := &model.User{Role: model.UserRoleAdmin, AdminLevel: model.AdminLevelScoped, AdminPermissions: []model.AdminPermission{model.AdminPermissionAnalyticsOverview}}
 	custom := ControlPreviewQuery{Period: "custom", From: "2026-10-01", To: "2026-10-02"}
 	for index, at := range []string{"2026-09-30T23:59:59+08:00", "2026-10-01T00:00:00+08:00", "2026-10-02T23:59:59+08:00", "2026-10-03T00:00:00+08:00"} {

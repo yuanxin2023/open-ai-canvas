@@ -9,6 +9,45 @@ import (
 	"time"
 )
 
+func TestReadCacheFreshSharesInFlightAndLimits(t *testing.T) {
+	cache := NewBoundedReadCache[string, int](4, 1024, 1, time.Minute)
+	ctx := context.Background()
+	_, _ = cache.Get(ctx, "hot", func(context.Context) (int, int, error) { return 1, 256, nil })
+	started, finish := make(chan struct{}), make(chan struct{})
+	result := make(chan int, 1)
+	go func() {
+		value, err := cache.GetFresh(ctx, "hot", func(context.Context) (int, int, error) {
+			close(started)
+			<-finish
+			return 2, 256, nil
+		})
+		if err != nil {
+			t.Error(err)
+		}
+		result <- value
+	}()
+	<-started
+	waitCtx, cancel := context.WithTimeout(ctx, 10*time.Millisecond)
+	defer cancel()
+	if _, err := cache.GetFresh(waitCtx, "hot", func(context.Context) (int, int, error) {
+		t.Error("fresh waiter started a duplicate load")
+		return 0, 0, nil
+	}); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("fresh waiter did not share in-flight load: %v", err)
+	}
+	if _, err := cache.GetFresh(ctx, "other", func(context.Context) (int, int, error) { t.Error("capacity bypassed"); return 0, 0, nil }); !errors.Is(err, ErrReadCacheBusy) {
+		t.Fatalf("capacity: %v", err)
+	}
+	close(finish)
+	if value := <-result; value != 2 {
+		t.Fatalf("fresh value: %d", value)
+	}
+	value, err := cache.Get(ctx, "hot", func(context.Context) (int, int, error) { t.Error("fresh result was not cached"); return 0, 0, nil })
+	if err != nil || value != 2 {
+		t.Fatalf("cached fresh value: %d %v", value, err)
+	}
+}
+
 func TestReadCacheCoalescesBurstAndCoolsFailures(t *testing.T) {
 	for _, fail := range []bool{false, true} {
 		cache := NewBoundedReadCache[string, int](4, 1024, 2, time.Minute)

@@ -1,6 +1,7 @@
-import { App, Button, DatePicker, Skeleton } from "antd";
-import { ArrowRight, RefreshCw } from "lucide-react";
+import { App, Button, DatePicker, Dropdown, Skeleton } from "antd";
+import { ArrowRight, ChevronDown, RefreshCw } from "lucide-react";
 import { useState } from "react";
+import { useUserStore } from "@/stores/use-user-store";
 import { Area, AreaChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 import { getControlPreview, type PreviewModel, type PreviewPeriod, type PreviewRange } from "@/services/api/control-preview";
@@ -10,25 +11,26 @@ import { PreviewChoice, PreviewEmpty, PreviewError, PreviewPanel } from "./previ
 import { PreviewDetails, type PreviewSelection } from "./preview-details";
 import { previewCapabilities, previewColors, previewCredits, previewModelSlices, previewNumber, previewPercent, previewPeriods, previewRangeDates, previewRangeLabel, previewTime, previewUserColor } from "./preview-utils";
 import { usePreviewQuery } from "./use-preview-query";
+import { usePreviewRefresh } from "./use-preview-refresh";
+import { previewRefreshIntervals } from "./preview-refresh";
 import "./control-preview.css";
 
-const refreshOptions = [
-    { value: 0, label: "暂停" },
-    { value: 5_000, label: "5s" },
-    { value: 30_000, label: "30s" },
-    { value: 60_000, label: "60s" },
-];
 const inflowLabels = { redeem: "兑换码兑换", payment: "在线充值", admin: "管理员增加", reward: "其他奖励" };
 
 export default function ControlPreviewPage() {
+    const userId = useUserStore(state => state.user?.id);
+    return <ControlPreviewContent key={userId} />;
+}
+
+function ControlPreviewContent() {
     const { message } = App.useApp();
     const [range, setRange] = useState<PreviewRange>({ period: "day" });
-    const [interval, setInterval] = useState(30_000);
+    const refresh = usePreviewRefresh();
     const [top, setTop] = useState(10);
     const [metric, setMetric] = useState<"generations" | "consumedMicrocredits">("generations");
     const [capability, setCapability] = useState("");
     const [stack, setStack] = useState<PreviewSelection[]>([]);
-    const query = usePreviewQuery(["overview", range], (signal) => getControlPreview(range, signal), interval);
+    const query = usePreviewQuery(["overview", range], (signal) => getControlPreview(range, signal, refresh.fresh.current));
     const data = query.data;
     const kpi = data?.kpi;
     const periodLabel = range.period === "custom" ? "所选范围" : previewRangeLabel(range);
@@ -67,9 +69,23 @@ export default function ControlPreviewPage() {
                                     }}
                                 />
                             </div>
-                            <span className="admin-preview-note">{interval ? "自动更新" : "已暂停更新"}</span>
-                            <PreviewChoice label="刷新间隔" options={refreshOptions} value={interval} onChange={setInterval} />
-                            <Button aria-label="刷新控制预览" title="刷新控制预览" icon={<RefreshCw className="size-4" />} loading={query.isFetching} onClick={() => void query.refetch({ cancelRefetch: false })} />
+                            <Dropdown
+                                trigger={["click"]}
+                                placement="bottomRight"
+                                menu={{
+                                    items: [{ key: "enabled", label: "启用自动刷新" }, { type: "divider" }, ...previewRefreshIntervals.map(seconds => ({ key: String(seconds), label: `${seconds} 秒` }))],
+                                    selectable: true,
+                                    multiple: true,
+                                    selectedKeys: [String(refresh.preference.intervalSeconds), ...(refresh.preference.enabled ? ["enabled"] : [])],
+                                    onClick: ({ key }) => refresh.updatePreference(key === "enabled" ? { ...refresh.preference, enabled: !refresh.preference.enabled } : { enabled: true, intervalSeconds: Number(key) }),
+                                }}
+                            >
+                                <Button aria-label="设置控制预览自动刷新">
+                                    {refresh.fetching ? "更新中…" : !refresh.preference.enabled ? "自动刷新：已关闭" : !refresh.visible ? "自动刷新：已暂停" : `自动刷新：${refresh.countdown} 秒`}
+                                    <ChevronDown className="size-3.5" aria-hidden="true" />
+                                </Button>
+                            </Dropdown>
+                            <Button aria-label="立即更新控制预览" title="读取最新统计并更新当前明细" icon={<RefreshCw className="size-4" />} loading={refresh.fetching} onClick={() => void refresh.refresh(true)}>立即更新</Button>
                             <span className="admin-preview-note" aria-live="polite">
                                 {data ? `更新于 ${previewTime(data.asOf)}` : "尚未更新"}
                             </span>
@@ -303,7 +319,7 @@ export default function ControlPreviewPage() {
                         {Boolean(kpi?.unlinkedGenerations) && <p className="admin-preview-note">有 {previewNumber(kpi?.unlinkedGenerations)} 条历史生成缺少任务或请求关联，已按独立日志计数。</p>}
                     </>
                 )}
-                <PreviewDetails stack={stack} onStackChange={setStack} range={range} interval={interval} overview={data} />
+                <PreviewDetails stack={stack} onStackChange={setStack} range={range} overview={data} onRefresh={() => void refresh.refresh(true)} refreshing={refresh.fetching} />
             </div>
         </AdminPageFrame>
     );

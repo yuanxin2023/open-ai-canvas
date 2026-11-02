@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { PreviewModel } from "../src/services/api/control-preview";
+import { normalizePreviewRefresh, previewRefreshRemaining, previewRefreshStorageKey } from "../src/pages/admin/control-preview/preview-refresh";
 import { ALL_ADMIN_PERMISSIONS, firstAdminPath, hasAdminPermission } from "../src/lib/admin-permissions";
 import { PreviewChoice, PreviewEmpty, PreviewPanel } from "../src/pages/admin/control-preview/preview-controls";
 import { previewCredits, previewModelKey, previewModelSlices, previewTime, previewUserColor, previewRangeDates, previewRangeLabel } from "../src/pages/admin/control-preview/preview-utils";
@@ -10,6 +11,15 @@ function model(name: string, count: number, capability: PreviewModel["capability
 }
 
 describe("control preview", () => {
+    test("refresh preferences validate saved values and isolate accounts from request logs", () => {
+        expect(normalizePreviewRefresh(null)).toEqual({ enabled: true, intervalSeconds: 30 });
+        expect(normalizePreviewRefresh({ enabled: false, intervalSeconds: 120 })).toEqual({ enabled: false, intervalSeconds: 120 });
+        expect(normalizePreviewRefresh({ enabled: "true", intervalSeconds: 1 })).toEqual({ enabled: true, intervalSeconds: 30 });
+        expect(previewRefreshStorageKey("one")).not.toBe(previewRefreshStorageKey("two"));
+        expect(previewRefreshStorageKey("one")).not.toContain("api-log-auto-refresh");
+        expect(previewRefreshRemaining(30_000, 1_001)).toBe(29);
+        expect(previewRefreshRemaining(30_000, 31_000)).toBe(0);
+    });
     test("date picker shortcuts use Beijing dates across midnight and preserve custom bounds", () => {
         const now = Date.parse("2026-11-01T16:01:00Z");
         const dates = (range: Parameters<typeof previewRangeDates>[0]) => previewRangeDates(range, now).map(date => date.format("YYYY-MM-DD"));

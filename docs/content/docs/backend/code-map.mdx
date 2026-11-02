@@ -16,6 +16,7 @@ description: 从产品功能快速定位主要代码入口
 
 - 页面及私有组件：`web/src/pages/admin/control-preview/`；API 类型和调用：`web/src/services/api/control-preview.ts`；路由和导航复用现有后台外壳。
 - 日期范围：页面保留今日、本周、本月快捷项，日历使用 `period=custom&from&to`；四个统计接口共用北京时间日期校验，包含结束日期全天、最多 366 天。查询键及服务端缓存同时包含起止日期，明细沿用所选范围。
+- 刷新调度：`use-preview-refresh.tsx` 统一调度主看板及活跃明细查询，管理账号独立偏好、倒计时和可见性暂停；手动更新的 `fresh=true` 由 service 选择有界缓存 `GetFresh`，跳过已完成缓存并保留在途合并及容量限制。
 - HTTP 入口：`backend/internal/handler/admin_control_preview.go`，由经营分析路由注册；service 别名转入 `app/control_preview.go`，负责独立权限、周期、趋势补零和五秒有界缓存。
 - 数据投影：`backend/internal/repository/control_preview.go`，在数据库聚合积分、充值和按逻辑生成去重的请求；主快照采用只读可重复读事务，用户排行和结算明细分页读取，无新增业务表。
 

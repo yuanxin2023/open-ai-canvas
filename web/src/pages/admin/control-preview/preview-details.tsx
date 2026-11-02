@@ -1,6 +1,6 @@
 import { Button, Input, Skeleton } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, RefreshCw } from "lucide-react";
 import { useState } from "react";
 
 import { getControlPreviewUser, getControlPreviewUsers, type PreviewModel, type PreviewOverview, type PreviewRange, type PreviewUser, type PreviewUserDetail } from "@/services/api/control-preview";
@@ -34,7 +34,7 @@ export function previewModelColumns(onModel?: (row: PreviewModel) => void): Colu
     ];
 }
 
-export function PreviewDetails({ stack, onStackChange, range, interval, overview }: { stack: PreviewSelection[]; onStackChange: (stack: PreviewSelection[]) => void; range: PreviewRange; interval: number; overview?: PreviewOverview }) {
+export function PreviewDetails({ stack, onStackChange, range, overview, onRefresh, refreshing }: { stack: PreviewSelection[]; onStackChange: (stack: PreviewSelection[]) => void; range: PreviewRange; overview?: PreviewOverview; onRefresh: () => void; refreshing: boolean }) {
     const selection = stack.at(-1);
     const title = selection?.kind === "user" ? "用户消费明细" : selection?.kind === "models" ? "完整模型统计" : selection?.kind === "model" ? `${selection.row.model} · 用户统计` : "完整消费排行";
     const openUser = (id: string) => onStackChange([...stack, { kind: "user", id }]);
@@ -46,22 +46,25 @@ export function PreviewDetails({ stack, onStackChange, range, interval, overview
             rootClassName="admin-preview-drawer"
             onClose={() => onStackChange([])}
             extra={
-                stack.length > 1 ? (
-                    <Button icon={<ArrowLeft className="size-4" />} onClick={() => onStackChange(stack.slice(0, -1))}>
-                        返回
-                    </Button>
-                ) : undefined
+                <div className="flex items-center gap-2">
+                    {stack.length > 1 && (
+                        <Button icon={<ArrowLeft className="size-4" />} onClick={() => onStackChange(stack.slice(0, -1))}>
+                            返回
+                        </Button>
+                    )}
+                    <Button icon={<RefreshCw className="size-4" />} loading={refreshing} onClick={onRefresh}>立即更新</Button>
+                </div>
             }
         >
             {selection && (
                 <div className="admin-preview-detail" key={JSON.stringify(selection) + JSON.stringify(range)}>
                     <p className="admin-preview-note">{previewRangeLabel(range)} · 北京时间 · 仅普通用户</p>
                     {selection.kind === "user" ? (
-                        <UserDetail id={selection.id} range={range} interval={interval} />
+                        <UserDetail id={selection.id} range={range} />
                     ) : selection.kind === "models" ? (
                         <ModelsTable models={overview?.models || []} onModel={(row) => onStackChange([...stack, { kind: "model", row }])} />
                     ) : (
-                        <UserTable range={range} interval={interval} model={selection.kind === "model" ? selection.row : undefined} onUser={openUser} />
+                        <UserTable range={range} model={selection.kind === "model" ? selection.row : undefined} onUser={openUser} />
                     )}
                 </div>
             )}
@@ -69,10 +72,10 @@ export function PreviewDetails({ stack, onStackChange, range, interval, overview
     );
 }
 
-function UserTable({ range, interval, model, onUser }: { range: PreviewRange; interval: number; model?: PreviewModel; onUser: (id: string) => void }) {
+function UserTable({ range, model, onUser }: { range: PreviewRange; model?: PreviewModel; onUser: (id: string) => void }) {
     const [page, setPage] = useState(1);
     const [keyword, setKeyword] = useState("");
-    const query = usePreviewQuery(["users", range, model?.model, model?.capability, page, keyword], (signal) => getControlPreviewUsers({ ...range, page, pageSize: 20, keyword, model: model?.model, capability: model?.capability }, signal), interval);
+    const query = usePreviewQuery(["users", range, model?.model, model?.capability, page, keyword], (signal) => getControlPreviewUsers({ ...range, page, pageSize: 20, keyword, model: model?.model, capability: model?.capability }, signal));
     const columns: ColumnsType<PreviewUser> = [
         { title: "排名", dataIndex: "rank", width: 65 },
         {
@@ -122,9 +125,9 @@ function ModelsTable({ models, onModel }: { models: PreviewModel[]; onModel?: (r
     );
 }
 
-function UserDetail({ id, range, interval }: { id: string; range: PreviewRange; interval: number }) {
+function UserDetail({ id, range }: { id: string; range: PreviewRange }) {
     const [page, setPage] = useState(1);
-    const query = usePreviewQuery(["user", id, range, page], (signal) => getControlPreviewUser(id, { ...range, page, pageSize: 20 }, signal), interval);
+    const query = usePreviewQuery(["user", id, range, page], (signal) => getControlPreviewUser(id, { ...range, page, pageSize: 20 }, signal));
     const detail = query.data;
     const columns: ColumnsType<PreviewUserDetail["entries"][number]> = [
         { title: "结算时间（北京）", dataIndex: "createdAt", width: 155, render: (value) => previewTime(value, true) },

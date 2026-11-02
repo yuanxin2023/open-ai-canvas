@@ -15,6 +15,7 @@ import (
 
 type ControlPreviewQuery struct {
 	Period     string `form:"period"`
+	Fresh      bool   `form:"fresh"`
 	From       string `form:"from"`
 	To         string `form:"to"`
 	Page       int    `form:"page"`
@@ -136,7 +137,11 @@ func (s *Service) AdminControlPreview(ctx context.Context, actor *model.User, qu
 	if meta.Period == "custom" {
 		key += ":" + meta.To.Format(time.RFC3339)
 	}
-	return s.controlPreviewReadCache.Get(ctx, key, func(ctx context.Context) (*ControlPreviewOverview, int, error) {
+	read := s.controlPreviewReadCache.Get
+	if query.Fresh {
+		read = s.controlPreviewReadCache.GetFresh
+	}
+	return read(ctx, key, func(ctx context.Context) (*ControlPreviewOverview, int, error) {
 		snapshot, err := s.repo.WithContext(ctx).ControlPreviewSnapshot(filter, controlPreviewHourly(meta))
 		if err != nil {
 			return nil, 0, err

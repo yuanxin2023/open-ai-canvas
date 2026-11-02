@@ -37,6 +37,15 @@ func NewBoundedReadCache[K comparable, V any](entries, bytes, loads int, ttl tim
 }
 
 func (c *BoundedReadCache[K, V]) Get(ctx context.Context, key K, load func(context.Context) (V, int, error)) (V, error) {
+	return c.get(ctx, key, load, false)
+}
+
+// GetFresh skips completed entries while sharing in-flight loads and capacity limits.
+func (c *BoundedReadCache[K, V]) GetFresh(ctx context.Context, key K, load func(context.Context) (V, int, error)) (V, error) {
+	return c.get(ctx, key, load, true)
+}
+
+func (c *BoundedReadCache[K, V]) get(ctx context.Context, key K, load func(context.Context) (V, int, error), fresh bool) (V, error) {
 	var zero V
 	if err := ctx.Err(); err != nil {
 		return zero, err
@@ -52,7 +61,7 @@ func (c *BoundedReadCache[K, V]) Get(ctx context.Context, key K, load func(conte
 				return e.value, e.err
 			}
 		}
-		if time.Now().Before(e.expires) {
+		if !fresh && time.Now().Before(e.expires) {
 			c.lru.MoveToFront(e.position)
 			value, err := e.value, e.err
 			c.mu.Unlock()
