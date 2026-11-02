@@ -57,6 +57,7 @@ func Models() []any {
 		&model.CreditAccount{},
 		&model.CreditLedgerEntry{},
 		&model.ReferralProfile{},
+		&model.ReferralPolicyVersion{},
 		&model.ReferralReward{},
 		&model.BillingOrder{},
 		&model.TopupProduct{},

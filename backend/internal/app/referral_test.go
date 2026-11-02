@@ -1,32 +1,38 @@
 package app
 
-import "testing"
+import (
+	"infinite-canvas/backend/internal/model"
+	"testing"
+)
 
-func TestCalculateReferralRewardUsesPaidFenAndRoundsDown(t *testing.T) {
-	tests := []struct {
-		name       string
-		amountFen  int64
-		conversion int64
-		rateBPS    int64
-		want       int64
-	}{
-		{name: "ten percent of one yuan", amountFen: 100, conversion: 1_000_000, rateBPS: 1_000, want: 100_000},
-		{name: "custom conversion", amountFen: 1_999, conversion: 2_500_000, rateBPS: 1_500, want: 7_490_000},
-		{name: "round to hundredth credit", amountFen: 1, conversion: 1_000_000, rateBPS: 333, want: 0},
-		{name: "zero rate", amountFen: 100, conversion: 1_000_000, rateBPS: 0, want: 0},
+func TestReferralAdminPermissionsAndUserScope(t *testing.T) {
+	s, _, admin := quotaTestService(t, "sqlite")
+	p := defaultReferralPolicy()
+	for _, user := range []*model.User{nil, {ID: "normal", Role: model.UserRoleUser}, {ID: "scoped", Role: model.UserRoleAdmin, AdminLevel: model.AdminLevelScoped, AdminPermissions: []model.AdminPermission{model.AdminPermissionUsers}}} {
+		if _, err := s.UpdateReferralPolicy(user, p); err == nil {
+			t.Fatal("unauthorized policy update")
+		}
+		if _, err := s.AdminSetReferralUserPolicy(user, admin.ID, &p, false); err == nil {
+			t.Fatal("unauthorized personal policy update")
+		}
+		if _, err := s.AdminReferralUser(user, admin.ID); err == nil {
+			t.Fatal("unauthorized profile read")
+		}
+		if _, err := s.AdminReviewReferralReward(user, "reward", true, ""); err == nil {
+			t.Fatal("unauthorized reward approval")
+		}
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := calculateReferralReward(tt.amountFen, tt.conversion, tt.rateBPS)
-			if err != nil || got != tt.want {
-				t.Fatalf("calculateReferralReward() = %d, %v; want %d", got, err, tt.want)
-			}
-		})
+	if _, err := s.AdminSetReferralUserPolicy(admin, "missing-user", &p, false); err == nil {
+		t.Fatal("policy created for missing user")
+	}
+	if _, err := s.ReferralDashboard(nil); err == nil {
+		t.Fatal("anonymous dashboard accepted")
 	}
 }
 
-func TestCalculateReferralRewardRejectsOverflow(t *testing.T) {
-	if _, err := calculateReferralReward(1_000_000_000_000, 1_000_000_000, 10_000); err == nil {
-		t.Fatal("expected overflow to be rejected")
+func TestReferralPaymentViewIncludesNewcomerSnapshot(t *testing.T) {
+	view := paymentOrderView(model.PaymentOrder{ID: "order", ReferralPolicyVersionID: "pinned-rule", NewcomerBonusMicrocredits: 60_000_000, CreditsMicrocredits: 1_200_000_000})
+	if view.ReferralPolicyVersionID != "pinned-rule" || view.NewcomerBonusMicrocredits != 60_000_000 || view.CreditsMicrocredits != 1_200_000_000 {
+		t.Fatalf("payment view lost reward snapshot: %+v", view)
 	}
 }

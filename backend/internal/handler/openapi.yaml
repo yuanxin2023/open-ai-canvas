@@ -89,7 +89,7 @@ paths:
       tags: [auth]
       summary: 查询当前用户的推广码、邀请列表和返利记录
       responses:
-        "200": {description: 标准信封 data 包含 enabled、code、effectiveRateBps、inviteeCount、invitees、rewards}
+        "200": {description: 标准信封 data 包含 enabled、code、policy、boundPolicy、newcomerEligible、inviteeCount、invitees（含绑定规则）及 rewards（含计算快照）}
         "401": {$ref: "#/components/responses/Error"}
   /admin/referrals/policy:
     get:
@@ -107,30 +107,23 @@ paths:
         required: true
         content:
           application/json:
-            schema:
-              type: object
-              required: [enabled, globalRateBps, creditsPerYuanMicro, perInviteeCapMicrocredits]
-              properties:
-                enabled: {type: boolean}
-                globalRateBps: {type: integer, minimum: 0, maximum: 10000}
-                creditsPerYuanMicro: {type: integer, minimum: 1}
-                perInviteeCapMicrocredits: {type: integer, minimum: 0}
+            schema: {$ref: "#/components/schemas/ReferralPolicy"}
       responses:
         "200": {description: 标准信封 data 为已保存规则}
         "403": {$ref: "#/components/responses/Error"}
   /admin/referrals/users/{id}:
     get:
       tags: [admin]
-      summary: 查询用户推广档案与专属返利比例
+      summary: 查询用户推广档案、暂停状态与专属完整规则
       parameters:
         - {in: path, name: id, required: true, schema: {type: string}}
       responses:
         "200": {description: 标准信封 data 为用户推广档案}
         "403": {$ref: "#/components/responses/Error"}
-  /admin/referrals/users/{id}/rate:
+  /admin/referrals/users/{id}/policy:
     put:
       tags: [admin]
-      summary: 设置或清空用户专属返利比例
+      summary: 设置专属完整规则或恢复全局，并更新暂停状态
       parameters:
         - {in: path, name: id, required: true, schema: {type: string}}
       requestBody:
@@ -139,8 +132,13 @@ paths:
           application/json:
             schema:
               type: object
+              required: [policy, paused]
               properties:
-                rateBps: {type: integer, nullable: true, minimum: 0, maximum: 10000}
+                policy:
+                  nullable: true
+                  allOf:
+                    - {$ref: "#/components/schemas/ReferralPolicy"}
+                paused: {type: boolean}
       responses:
         "200": {description: 标准信封 data 为用户推广档案}
         "403": {$ref: "#/components/responses/Error"}
@@ -4041,6 +4039,29 @@ components:
       in: cookie
       name: open_ai_canvas_session
   schemas:
+    ReferralPolicy:
+      type: object
+      required: [enabled, mode, stages, maxDays, maxOrders, perInviteeCapMicrocredits, newcomerEnabled, newcomerRateBps, newcomerCapMicrocredits]
+      properties:
+        versionId: {type: string, description: 保存时由服务端生成不可变版本}
+        enabled: {type: boolean}
+        mode: {type: string, enum: [time, orders]}
+        stages:
+          type: array
+          minItems: 1
+          maxItems: 20
+          items:
+            type: object
+            required: [until, rateBps]
+            properties:
+              until: {type: integer, minimum: 0, description: 递增的累计结束值；时间不含边界、单数含边界，只有最后阶段允许 0 表示不限}
+              rateBps: {type: integer, minimum: 0, maximum: 10000}
+        maxDays: {type: integer, minimum: 0, maximum: 36500}
+        maxOrders: {type: integer, minimum: 0, maximum: 1000000}
+        perInviteeCapMicrocredits: {type: integer, minimum: 0, maximum: 1000000000000000, multipleOf: 10000}
+        newcomerEnabled: {type: boolean}
+        newcomerRateBps: {type: integer, minimum: 0, maximum: 10000}
+        newcomerCapMicrocredits: {type: integer, minimum: 0, maximum: 1000000000000000, multipleOf: 10000}
     InspirationLibraryCommand:
       type: object
       additionalProperties: false

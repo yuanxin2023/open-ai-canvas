@@ -67,6 +67,8 @@ func InitializeSchemaForCopy(db *gorm.DB) error {
 			{&model.SkillCurationSetting{}, "id", []any{int64(1)}},
 			{&model.SkillCurationRoot{}, "id", rootIDs},
 			{&model.IDSequence{}, "name", sequenceNames},
+			{&model.ReferralPolicyVersion{}, "id", []any{"referral-policy-initial"}},
+			{&model.SystemSetting{}, "key", []any{"referral_policy"}},
 		}
 		seedTables := map[string]bool{}
 		for _, seed := range seeds {

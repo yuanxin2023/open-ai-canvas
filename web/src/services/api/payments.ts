@@ -101,6 +101,8 @@ export type AdminPaymentPromotion = {
 export type PaymentOrderStatus = "created" | "pending" | "closing" | "closed" | "credited" | "create_failed";
 
 export type PaymentOrder = {
+    referralPolicyVersionId?: string;
+    newcomerBonusMicrocredits?: number;
     id: string;
     userId?: string;
     merchantOrderNo: string;

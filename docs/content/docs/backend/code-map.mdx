@@ -5,6 +5,13 @@ description: 从产品功能快速定位主要代码入口
 
 # 代码功能地图
 
+## 邀请推广规则与奖励
+
+- 规则计算：`backend/internal/referrals/policy.go` 负责阶梯校验、时间/单数边界、精度和上限，不访问数据库。
+- 业务与接口：`app/referral.go` 校验权限并组合全局、专属及绑定规则；`handler/referral.go` 提供推广管理和审核接口。
+- 持久化：`repository/referral_policy.go` 保存不可变版本、固定注册绑定并协调支付事务；`repository/payment.go` 保证充值、新人奖励和邀请返利原子提交。Schema 96 入口为 `database/migration_referral_policies.go`。
+- 真实页面：`web/src/pages/admin/referrals/` 编辑规则和审核，`web/src/pages/referrals/` 显示邀请及计算依据；充值弹窗显示符合资格的新客首充赠送预估。
+
 ## 管理后台控制预览
 
 - 页面及私有组件：`web/src/pages/admin/control-preview/`；API 类型和调用：`web/src/services/api/control-preview.ts`；路由和导航复用现有后台外壳。

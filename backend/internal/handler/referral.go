@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"net/http"
 	"strconv"
 
@@ -54,20 +55,26 @@ func registerReferralRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		ok(c, result)
 	})
-	r.PUT("/admin/referrals/users/:id/rate", func(c *gin.Context) {
+	r.PUT("/admin/referrals/users/:id/policy", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {
 			failService(c, err)
 			return
 		}
 		var req struct {
-			RateBPS *int64 `json:"rateBps"`
+			Policy json.RawMessage `json:"policy" binding:"required"`
+			Paused *bool           `json:"paused" binding:"required"`
 		}
 		if err := c.ShouldBindJSON(&req); err != nil {
 			fail(c, http.StatusBadRequest, err)
 			return
 		}
-		result, err := svc.AdminSetReferralRate(user, c.Param("id"), req.RateBPS)
+		var policy *service.ReferralPolicy
+		if err := json.Unmarshal(req.Policy, &policy); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		result, err := svc.AdminSetReferralUserPolicy(user, c.Param("id"), policy, *req.Paused)
 		if err != nil {
 			failService(c, err)
 			return

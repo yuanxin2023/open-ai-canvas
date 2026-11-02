@@ -1,250 +1,100 @@
-import { App, Button, Form, Input, InputNumber, Select, Space, Switch, Table, Tabs, Typography } from "antd";
+import { Alert, App, Button, Input, Select, Space, Switch, Table, Tabs } from "antd";
 import { useCallback, useEffect, useRef, useState } from "react";
-
 import { formatCredits } from "@/constant/credits";
-import { useAdminContext } from "@/pages/admin/admin-context";
+import { defaultReferralPolicy } from "@/lib/referral-policy";
 import { AdminPageFrame } from "@/pages/admin/components/admin-shell";
 import { searchAdminUserReferences, type AdminUserReference } from "@/services/api/auth";
-import { getAdminReferralPolicy, getAdminReferralUser, listAdminReferralRewards, reviewAdminReferralReward, setAdminReferralRate, updateAdminReferralPolicy, type ReferralPolicy, type ReferralReward } from "@/services/api/referrals";
+import { getAdminReferralPolicy, getAdminReferralUser, listAdminReferralRewards, reviewAdminReferralReward, setAdminReferralUserPolicy, updateAdminReferralPolicy, type ReferralPolicy, type ReferralReward, type ReferralUserPolicy } from "@/services/api/referrals";
+import { PolicyEditor } from "./policy-editor";
 
-type PolicyForm = { enabled: boolean; globalRatePercent: number; creditsPerYuan: number; perInviteeCap: number };
-const rewardStatusLabels: Record<ReferralReward["status"], string> = { pending: "待审核", approved: "已批准", rejected: "已拒绝" };
+const statuses = { pending: "待审核", approved: "已批准", rejected: "已拒绝", all: "全部" };
 
 export default function ReferralsAdminPage() {
     const { message } = App.useApp();
-    const { references } = useAdminContext();
-    const [form] = Form.useForm<PolicyForm>();
-    const [loading, setLoading] = useState(true);
+    const [policy, setPolicy] = useState<ReferralPolicy>();
     const [saving, setSaving] = useState(false);
     const [selectedUserId, setSelectedUserId] = useState<string>();
     const [userOptions, setUserOptions] = useState<AdminUserReference[]>([]);
-    const userSearchSequence = useRef(0);
-    const [customRate, setCustomRate] = useState<number | null>(null);
-    const [savingRate, setSavingRate] = useState(false);
+    const sequence = useRef(0);
+    const [user, setUser] = useState<ReferralUserPolicy>();
+    const [custom, setCustom] = useState(false);
+    const [paused, setPaused] = useState(false);
+    const [loadingUser, setLoadingUser] = useState(false);
     const [status, setStatus] = useState<ReferralReward["status"] | "all">("pending");
     const [page, setPage] = useState(1);
     const [total, setTotal] = useState(0);
     const [rewards, setRewards] = useState<ReferralReward[]>([]);
     const [loadingRewards, setLoadingRewards] = useState(false);
-    const [reviewNotes, setReviewNotes] = useState<Record<string, string>>({});
+    const [notes, setNotes] = useState<Record<string, string>>({});
     const [reviewingId, setReviewingId] = useState("");
-
-    const loadRewards = useCallback(
-        async (nextStatus = status, nextPage = page) => {
-            setLoadingRewards(true);
-            try {
-                const result = await listAdminReferralRewards(nextStatus, nextPage, 20);
-                setRewards(result.rewards);
-                setTotal(result.total);
-                setPage(result.page);
-            } catch (error) {
-                message.error(error instanceof Error ? error.message : "读取返利记录失败");
-            } finally {
-                setLoadingRewards(false);
-            }
-        },
-        [message, page, status],
-    );
-
+    const fail = useCallback((error: unknown) => { message.error(error instanceof Error ? error.message : "操作失败"); }, [message]);
+    useEffect(() => { void getAdminReferralPolicy().then(setPolicy).catch(fail); }, [fail]);
+    const loadRewards = useCallback(async () => {
+        setLoadingRewards(true);
+        try { const result = await listAdminReferralRewards(status, page, 20); setRewards(result.rewards); setTotal(result.total); }
+        catch (error) { fail(error); } finally { setLoadingRewards(false); }
+    }, [status, page, fail]);
+    useEffect(() => { void loadRewards(); }, [loadRewards]);
     useEffect(() => {
-        void getAdminReferralPolicy()
-            .then((policy) =>
-                form.setFieldsValue({
-                    enabled: policy.enabled,
-                    globalRatePercent: policy.globalRateBps / 100,
-                    creditsPerYuan: policy.creditsPerYuanMicro / 1_000_000,
-                    perInviteeCap: policy.perInviteeCapMicrocredits / 1_000_000,
-                }),
-            )
-            .catch((error) => message.error(error instanceof Error ? error.message : "读取返利规则失败"))
-            .finally(() => setLoading(false));
-    }, [form, message]);
-    useEffect(() => {
-        void loadRewards();
-    }, [loadRewards]);
-    useEffect(() => {
-        setUserOptions(references.users);
-    }, [references.users]);
-
+        if (!selectedUserId) return;
+        let cancelled = false;
+        setLoadingUser(true); setUser(undefined);
+        void getAdminReferralUser(selectedUserId).then((next) => {
+            if (cancelled) return;
+            setUser(next); setCustom(Boolean(next.policy)); setPaused(next.paused);
+        }).catch((error) => { if (!cancelled) fail(error); }).finally(() => { if (!cancelled) setLoadingUser(false); });
+        return () => { cancelled = true; };
+    }, [selectedUserId, fail]);
     const searchUsers = async (keyword: string) => {
-        const sequence = ++userSearchSequence.current;
-        try {
-            const result = await searchAdminUserReferences({ keyword, limit: 100 });
-            if (sequence === userSearchSequence.current) setUserOptions(result.users);
-        } catch (error) {
-            message.error(error instanceof Error ? error.message : "搜索用户失败");
-        }
+        const current = ++sequence.current;
+        try { const result = await searchAdminUserReferences({ keyword, limit: 100 }); if (current === sequence.current) setUserOptions(result.users); }
+        catch (error) { fail(error); }
     };
-
-    const savePolicy = async (values: PolicyForm) => {
+    const save = async (next: ReferralPolicy, personal: boolean) => {
         setSaving(true);
         try {
-            const policy: ReferralPolicy = {
-                enabled: values.enabled,
-                globalRateBps: Math.round(values.globalRatePercent * 100),
-                creditsPerYuanMicro: Math.round(values.creditsPerYuan * 1_000_000),
-                perInviteeCapMicrocredits: Math.round(values.perInviteeCap * 1_000_000),
-            };
-            await updateAdminReferralPolicy(policy);
-            message.success("邀请返利规则已保存");
-        } catch (error) {
-            message.error(error instanceof Error ? error.message : "保存失败");
-        } finally {
-            setSaving(false);
-        }
+            if (personal && selectedUserId) setUser(await setAdminReferralUserPolicy(selectedUserId, custom ? next : null, paused));
+            else setPolicy(await updateAdminReferralPolicy(next));
+            message.success("规则已保存，已有邀请关系继续使用绑定版本");
+        } catch (error) { fail(error); } finally { setSaving(false); }
     };
-
-    const selectUser = async (userId: string) => {
-        setSelectedUserId(userId);
-        try {
-            const profile = await getAdminReferralUser(userId);
-            setCustomRate(profile.rateBps === undefined ? null : profile.rateBps / 100);
-        } catch (error) {
-            message.error(error instanceof Error ? error.message : "读取用户返利比例失败");
-        }
-    };
-
-    const saveRate = async () => {
-        if (!selectedUserId) return;
-        setSavingRate(true);
-        try {
-            await setAdminReferralRate(selectedUserId, customRate === null ? null : Math.round(customRate * 100));
-            message.success("专属比例已保存");
-        } catch (error) {
-            message.error(error instanceof Error ? error.message : "保存失败");
-        } finally {
-            setSavingRate(false);
-        }
-    };
-
     const review = async (reward: ReferralReward, approve: boolean) => {
-        const note = reviewNotes[reward.id]?.trim() || "";
-        if (!approve && !note) {
-            message.warning("拒绝时请填写原因");
-            return;
-        }
+        const note = notes[reward.id]?.trim() || "";
+        if (!approve && !note) { message.warning("拒绝时请填写原因"); return; }
         setReviewingId(reward.id);
-        try {
-            await reviewAdminReferralReward(reward.id, approve, note);
-            message.success(approve ? "返利已发放到邀请人钱包" : "返利已拒绝");
-            await loadRewards();
-        } catch (error) {
-            message.error(error instanceof Error ? error.message : "审核失败");
-        } finally {
-            setReviewingId("");
-        }
+        try { await reviewAdminReferralReward(reward.id, approve, note); message.success(approve ? "返利已发放" : "返利已拒绝"); await loadRewards(); }
+        catch (error) { fail(error); } finally { setReviewingId(""); }
     };
-
-    return (
-        <AdminPageFrame title="邀请返利" description="管理推广规则、专属比例和逐笔审核" scroll>
-            <Tabs
-                items={[
-                    {
-                        key: "policy",
-                        label: "规则与开关",
-                        children: (
-                            <Form<PolicyForm> form={form} layout="vertical" onFinish={(values) => void savePolicy(values)} initialValues={{ enabled: false, globalRatePercent: 0, creditsPerYuan: 1, perInviteeCap: 0 }} style={{ maxWidth: 560 }}>
-                                <Form.Item name="enabled" label="启用邀请返利" valuePropName="checked">
-                                    <Switch aria-label="启用邀请返利" />
-                                </Form.Item>
-                                <Form.Item name="globalRatePercent" label="全局返利比例（%）" rules={[{ required: true }]}>
-                                    <InputNumber min={0} max={100} precision={2} style={{ width: "100%" }} />
-                                </Form.Item>
-                                <Form.Item name="creditsPerYuan" label="每实付 1 元对应的基础积分" rules={[{ required: true }]}>
-                                    <InputNumber min={0.01} max={1000} precision={2} style={{ width: "100%" }} />
-                                </Form.Item>
-                                <Form.Item name="perInviteeCap" label="每位被邀请人的累计返利上限（积分，0 为不限）" rules={[{ required: true }]}>
-                                    <InputNumber min={0} precision={2} style={{ width: "100%" }} />
-                                </Form.Item>
-                                <Typography.Paragraph type="secondary">仅已验证且成功入账的在线充值参与返利。新返利需人工审核；关闭开关后不再接受推广码或计提新返利。</Typography.Paragraph>
-                                <Button type="primary" htmlType="submit" loading={saving || loading}>
-                                    保存规则
-                                </Button>
-                            </Form>
-                        ),
-                    },
-                    {
-                        key: "rates",
-                        label: "专属比例",
-                        children: (
-                            <Space direction="vertical" style={{ width: "100%", maxWidth: 560 }}>
-                                <Select
-                                    showSearch
-                                    filterOption={false}
-                                    placeholder="搜索并选择邀请人"
-                                    value={selectedUserId}
-                                    onSearch={(keyword) => void searchUsers(keyword)}
-                                    onChange={(value: string) => void selectUser(value)}
-                                    options={userOptions.map((user) => ({ value: user.id, label: `${user.username} (${user.id})` }))}
-                                />
-                                <InputNumber value={customRate} onChange={setCustomRate} min={0} max={100} precision={2} placeholder="留空使用全局比例" addonAfter="%" style={{ width: "100%" }} />
-                                <Button disabled={!selectedUserId} loading={savingRate} onClick={() => void saveRate()}>
-                                    保存专属比例
-                                </Button>
-                                <Typography.Text type="secondary">设置为 0% 可停止该邀请人的新返利；清空则恢复全局比例。已生成的返利不重算。</Typography.Text>
-                            </Space>
-                        ),
-                    },
-                    {
-                        key: "rewards",
-                        label: "返利审核",
-                        children: (
-                            <>
-                                <Select
-                                    value={status}
-                                    onChange={(value) => {
-                                        setStatus(value);
-                                        setPage(1);
-                                    }}
-                                    options={[
-                                        { value: "pending", label: "待审核" },
-                                        { value: "approved", label: "已批准" },
-                                        { value: "rejected", label: "已拒绝" },
-                                        { value: "all", label: "全部" },
-                                    ]}
-                                    style={{ width: 160, marginBottom: 16 }}
-                                />
-                                <Table
-                                    rowKey="id"
-                                    loading={loadingRewards}
-                                    dataSource={rewards}
-                                    pagination={{ current: page, pageSize: 20, total, onChange: (next) => setPage(next) }}
-                                    scroll={{ x: 1050 }}
-                                    columns={[
-                                        { title: "订单", dataIndex: "paymentOrderId", width: 200, ellipsis: true },
-                                        { title: "邀请人", dataIndex: "inviterId", width: 150, ellipsis: true },
-                                        { title: "被邀请人", dataIndex: "inviteeId", width: 150, ellipsis: true },
-                                        { title: "实付", dataIndex: "amountFen", width: 90, render: (value: number) => `¥${(value / 100).toFixed(2)}` },
-                                        { title: "比例", dataIndex: "rateBps", width: 90, render: (value: number) => `${(value / 100).toFixed(2)}%` },
-                                        { title: "返利积分", dataIndex: "rewardMicrocredits", width: 100, render: (value: number) => formatCredits(value) },
-                                        { title: "状态", dataIndex: "status", width: 100, render: (value: ReferralReward["status"]) => rewardStatusLabels[value] },
-                                        {
-                                            title: "审核",
-                                            width: 280,
-                                            render: (_, reward: ReferralReward) =>
-                                                reward.status === "pending" ? (
-                                                    <Space direction="vertical">
-                                                        <Input value={reviewNotes[reward.id] || ""} onChange={(event) => setReviewNotes((current) => ({ ...current, [reward.id]: event.target.value }))} placeholder="审核备注 / 拒绝原因" maxLength={500} />
-                                                        <Space>
-                                                            <Button type="primary" loading={reviewingId === reward.id} onClick={() => void review(reward, true)}>
-                                                                批准并发放
-                                                            </Button>
-                                                            <Button danger disabled={Boolean(reviewingId)} onClick={() => void review(reward, false)}>
-                                                                拒绝
-                                                            </Button>
-                                                        </Space>
-                                                    </Space>
-                                                ) : (
-                                                    reward.reviewNote || "—"
-                                                ),
-                                        },
-                                    ]}
-                                />
-                            </>
-                        ),
-                    },
-                ]}
-            />
-        </AdminPageFrame>
-    );
+    return <AdminPageFrame title="邀请返利" description="管理阶梯规则、专属方案与逐笔审核" scroll>
+        <Tabs items={[
+            { key: "policy", label: "全局推广规则", children: policy ? <>
+                <PolicyEditor global key={policy.versionId} initial={policy} saving={saving} onSave={(value) => void save(value, false)} />
+            </> : <Alert type="info" message="规则未加载，刷新页面重试" /> },
+            { key: "users", label: "个人专属规则", children: <div className="min-w-0">
+                <Select className="mb-4 w-full" showSearch filterOption={false} placeholder="搜索并选择邀请人" value={selectedUserId} onSearch={(keyword) => void searchUsers(keyword)} onChange={setSelectedUserId} loading={loadingUser} disabled={saving} options={userOptions.map((item) => ({ value: item.id, label: item.username + " (" + item.id + ")" }))} />
+                {user ? <>
+                    <div className="mb-4 flex flex-wrap gap-6"><label className="flex items-center gap-2"><Switch checked={custom} onChange={setCustom} /> 使用专属完整规则</label><label className="flex items-center gap-2"><Switch checked={paused} onChange={setPaused} /> 暂停该邀请人的新绑定及奖励</label></div>
+                    {custom ? <PolicyEditor key={user.userId + ":" + (user.policy?.versionId ?? "new")} initial={user.policy ?? { ...(policy ?? defaultReferralPolicy), versionId: "" }} saving={saving} onSave={(value) => void save(value, true)} /> : <Button type="primary" loading={saving} onClick={() => void save(policy ?? defaultReferralPolicy, true)}>保存，之后的新邀请使用全局规则</Button>}
+                    <p className="mt-3 text-caption text-muted-foreground">专属规则完整替代全局方案。暂停对现有关系立即生效；修改方案和恢复全局仅影响之后的新绑定。</p>
+                </> : null}
+            </div> },
+            { key: "rewards", label: "返利审核", children: <>
+                <Select className="mb-4 w-40" value={status} onChange={(value) => { setStatus(value); setPage(1); }} options={Object.entries(statuses).map(([value, label]) => ({ value, label }))} />
+                <Table rowKey="id" loading={loadingRewards} dataSource={rewards} pagination={{ current: page, pageSize: 20, total, onChange: setPage }} scroll={{ x: 1450 }} columns={[
+                    { title: "订单", dataIndex: "paymentOrderId", width: 160, ellipsis: true },
+                    { title: "邀请人", dataIndex: "inviterId", width: 140, ellipsis: true },
+                    { title: "被邀请人", dataIndex: "inviteeId", width: 140, ellipsis: true },
+                    { title: "规则版本", dataIndex: "policyVersionId", width: 140, ellipsis: true, render: (value?: string) => value || "历史记录" },
+                    { title: "基础积分 / 单序 / 阶段", width: 180, render: (_, row: ReferralReward) => row.policyVersionId ? formatCredits(row.baseMicrocredits) + " / 第" + row.orderOrdinal + "单 / " + (row.stageIndex + 1) : "—" },
+                    { title: "比例", dataIndex: "rateBps", width: 80, render: (value: number) => value / 100 + "%" },
+                    { title: "原始 / 实际积分", width: 140, render: (_, row: ReferralReward) => (row.policyVersionId ? formatCredits(row.uncappedMicrocredits) : "—") + " / " + formatCredits(row.rewardMicrocredits) },
+                    { title: "状态", dataIndex: "status", width: 100, render: (value: ReferralReward["status"]) => statuses[value] },
+                    { title: "审核", width: 270, render: (_, row: ReferralReward) => row.status === "pending" ? <Space orientation="vertical">
+                        <Input value={notes[row.id] || ""} onChange={(event) => setNotes((old) => ({ ...old, [row.id]: event.target.value }))} placeholder="审核备注 / 拒绝原因" maxLength={500} />
+                        <Space><Button type="primary" disabled={Boolean(reviewingId)} loading={reviewingId === row.id} onClick={() => void review(row, true)}>批准并发放</Button><Button danger disabled={Boolean(reviewingId)} onClick={() => void review(row, false)}>拒绝</Button></Space>
+                    </Space> : row.reviewNote || "—" },
+                ]} />
+            </> },
+        ]} />
+    </AdminPageFrame>;
 }

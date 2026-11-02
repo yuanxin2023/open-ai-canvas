@@ -103,41 +103,43 @@ type PaymentProviderConfig struct {
 }
 
 type PaymentOrder struct {
-	ID                    string             `json:"id" gorm:"primaryKey;size:36"`
-	UserID                string             `json:"userId" gorm:"size:36;index;uniqueIndex:idx_payment_user_idempotency,priority:1"`
-	IdempotencyKey        string             `json:"idempotencyKey" gorm:"size:120;uniqueIndex:idx_payment_user_idempotency,priority:2"`
-	MerchantOrderNo       string             `json:"merchantOrderNo" gorm:"size:32;uniqueIndex"`
-	ProductID             string             `json:"productId" gorm:"size:36;index"`
-	ProductName           string             `json:"productName" gorm:"size:120"`
-	ProductKind           TopupProductKind   `json:"productKind" gorm:"size:24;not null;default:credits"`
-	StorageBytes          int64              `json:"storageBytes" gorm:"not null;default:0"`
-	StorageDurationDays   int                `json:"storageDurationDays" gorm:"not null;default:0"`
-	StockReserved         bool               `json:"-" gorm:"not null;default:false"`
-	SaleStrategySnapshot  TopupSaleStrategy  `json:"-" gorm:"size:24"`
-	ProviderClosedAt      *time.Time         `json:"-" gorm:"index"`
-	InventoryOversold     bool               `json:"-" gorm:"not null;default:false;index"`
-	ProviderID            string             `json:"providerId" gorm:"size:80;index;uniqueIndex:idx_payment_provider_trade,priority:1"`
-	PluginID              string             `json:"pluginId" gorm:"size:120;index"`
-	PluginVersion         string             `json:"pluginVersion" gorm:"size:40"`
-	ProviderConfigID      string             `json:"providerConfigId" gorm:"size:36;index"`
-	ProviderConfigVersion int64              `json:"providerConfigVersion"`
-	AmountFen             int64              `json:"amountFen"`
-	Currency              string             `json:"currency" gorm:"size:8"`
-	CreditsMicrocredits   int64              `json:"creditsMicrocredits"`
-	Status                PaymentOrderStatus `json:"status" gorm:"size:24;index;index:idx_payment_order_status_expiry,priority:1"`
-	ProviderTradeNo       *string            `json:"providerTradeNo,omitempty" gorm:"size:96;uniqueIndex:idx_payment_provider_trade,priority:2"`
-	ProviderStatus        string             `json:"providerStatus,omitempty" gorm:"size:40;index"`
-	CheckoutMode          string             `json:"checkoutMode,omitempty" gorm:"size:24"`
-	CheckoutValue         string             `json:"-" gorm:"type:text"`
-	CheckoutExpiresAt     *time.Time         `json:"checkoutExpiresAt,omitempty"`
-	ExpiresAt             time.Time          `json:"expiresAt" gorm:"index:idx_payment_order_status_expiry,priority:2"`
-	ProviderPaidAt        *time.Time         `json:"providerPaidAt,omitempty" gorm:"index"`
-	CreditedAt            *time.Time         `json:"creditedAt,omitempty" gorm:"index"`
-	ClosedAt              *time.Time         `json:"closedAt,omitempty" gorm:"index"`
-	LastQueriedAt         *time.Time         `json:"lastQueriedAt,omitempty"`
-	LastError             string             `json:"lastError,omitempty" gorm:"size:1000"`
-	CreatedAt             time.Time          `json:"createdAt" gorm:"index"`
-	UpdatedAt             time.Time          `json:"updatedAt"`
+	ID                        string             `json:"id" gorm:"primaryKey;size:36"`
+	UserID                    string             `json:"userId" gorm:"size:36;index;uniqueIndex:idx_payment_user_idempotency,priority:1"`
+	IdempotencyKey            string             `json:"idempotencyKey" gorm:"size:120;uniqueIndex:idx_payment_user_idempotency,priority:2"`
+	MerchantOrderNo           string             `json:"merchantOrderNo" gorm:"size:32;uniqueIndex"`
+	ProductID                 string             `json:"productId" gorm:"size:36;index"`
+	ProductName               string             `json:"productName" gorm:"size:120"`
+	ProductKind               TopupProductKind   `json:"productKind" gorm:"size:24;not null;default:credits"`
+	StorageBytes              int64              `json:"storageBytes" gorm:"not null;default:0"`
+	StorageDurationDays       int                `json:"storageDurationDays" gorm:"not null;default:0"`
+	StockReserved             bool               `json:"-" gorm:"not null;default:false"`
+	SaleStrategySnapshot      TopupSaleStrategy  `json:"-" gorm:"size:24"`
+	ProviderClosedAt          *time.Time         `json:"-" gorm:"index"`
+	InventoryOversold         bool               `json:"-" gorm:"not null;default:false;index"`
+	ProviderID                string             `json:"providerId" gorm:"size:80;index;uniqueIndex:idx_payment_provider_trade,priority:1"`
+	PluginID                  string             `json:"pluginId" gorm:"size:120;index"`
+	PluginVersion             string             `json:"pluginVersion" gorm:"size:40"`
+	ProviderConfigID          string             `json:"providerConfigId" gorm:"size:36;index"`
+	ProviderConfigVersion     int64              `json:"providerConfigVersion"`
+	AmountFen                 int64              `json:"amountFen"`
+	Currency                  string             `json:"currency" gorm:"size:8"`
+	CreditsMicrocredits       int64              `json:"creditsMicrocredits"`
+	ReferralPolicyVersionID   string             `json:"referralPolicyVersionId,omitempty" gorm:"size:36"`
+	NewcomerBonusMicrocredits int64              `json:"newcomerBonusMicrocredits" gorm:"not null;default:0"`
+	Status                    PaymentOrderStatus `json:"status" gorm:"size:24;index;index:idx_payment_order_status_expiry,priority:1"`
+	ProviderTradeNo           *string            `json:"providerTradeNo,omitempty" gorm:"size:96;uniqueIndex:idx_payment_provider_trade,priority:2"`
+	ProviderStatus            string             `json:"providerStatus,omitempty" gorm:"size:40;index"`
+	CheckoutMode              string             `json:"checkoutMode,omitempty" gorm:"size:24"`
+	CheckoutValue             string             `json:"-" gorm:"type:text"`
+	CheckoutExpiresAt         *time.Time         `json:"checkoutExpiresAt,omitempty"`
+	ExpiresAt                 time.Time          `json:"expiresAt" gorm:"index:idx_payment_order_status_expiry,priority:2"`
+	ProviderPaidAt            *time.Time         `json:"providerPaidAt,omitempty" gorm:"index"`
+	CreditedAt                *time.Time         `json:"creditedAt,omitempty" gorm:"index"`
+	ClosedAt                  *time.Time         `json:"closedAt,omitempty" gorm:"index"`
+	LastQueriedAt             *time.Time         `json:"lastQueriedAt,omitempty"`
+	LastError                 string             `json:"lastError,omitempty" gorm:"size:1000"`
+	CreatedAt                 time.Time          `json:"createdAt" gorm:"index"`
+	UpdatedAt                 time.Time          `json:"updatedAt"`
 }
 
 // PaymentNotification is a durable, verified inbox. NormalizedJSON contains

@@ -105,9 +105,6 @@ func TestStorageGrantsRespectScopedAdministratorBoundaries(t *testing.T) {
 	if _, err := s.AdminRevokeUserStorageGrant(scoped, grant.ID, RevokeStorageGrantRequest{Reason: "denied"}); err == nil {
 		t.Fatal("scoped administrator revoked administrator capacity")
 	}
-	if _, err := s.referralRewardDraft(&model.PaymentOrder{ProductKind: model.TopupProductKindStorage, AmountFen: 100, Currency: "CNY"}); err != nil {
-		t.Fatal(err)
-	}
 }
 
 func TestStoragePaymentPreservesSnapshotAndGrantsOnlyOnce(t *testing.T) {

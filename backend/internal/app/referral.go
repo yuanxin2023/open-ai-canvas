@@ -3,11 +3,11 @@ package app
 import (
 	"encoding/json"
 	"errors"
-	"math/big"
 	"strings"
 	"time"
 
 	"infinite-canvas/backend/internal/model"
+	"infinite-canvas/backend/internal/referrals"
 	"infinite-canvas/backend/internal/repository"
 
 	"gorm.io/gorm"
@@ -15,24 +15,22 @@ import (
 
 const referralPolicySettingKey = "referral_policy"
 
-type ReferralPolicy struct {
-	Enabled                   bool  `json:"enabled"`
-	GlobalRateBPS             int64 `json:"globalRateBps"`
-	CreditsPerYuanMicro       int64 `json:"creditsPerYuanMicro"`
-	PerInviteeCapMicrocredits int64 `json:"perInviteeCapMicrocredits"`
-}
+type ReferralPolicy = referrals.Policy
 
 type ReferralInviteeView struct {
-	UserID   string    `json:"userId"`
-	Email    string    `json:"email"`
-	JoinedAt time.Time `json:"joinedAt"`
+	UserID   string         `json:"userId"`
+	Email    string         `json:"email"`
+	JoinedAt time.Time      `json:"joinedAt"`
+	Policy   ReferralPolicy `json:"policy"`
 }
 
 type ReferralDashboard struct {
 	Enabled          bool                   `json:"enabled"`
 	Code             string                 `json:"code"`
 	InviterID        string                 `json:"inviterId,omitempty"`
-	EffectiveRateBPS int64                  `json:"effectiveRateBps"`
+	Policy           ReferralPolicy         `json:"policy"`
+	BoundPolicy      *ReferralPolicy        `json:"boundPolicy,omitempty"`
+	NewcomerEligible bool                   `json:"newcomerEligible"`
 	InviteeCount     int64                  `json:"inviteeCount"`
 	Invitees         []ReferralInviteeView  `json:"invitees"`
 	Rewards          []model.ReferralReward `json:"rewards"`
@@ -46,15 +44,12 @@ type ReferralRewardPage struct {
 }
 
 func defaultReferralPolicy() ReferralPolicy {
-	return ReferralPolicy{CreditsPerYuanMicro: CreditScale}
+	return referrals.Default()
 }
 
 func validateReferralPolicy(policy ReferralPolicy) error {
-	if policy.GlobalRateBPS < 0 || policy.GlobalRateBPS > 10_000 || policy.CreditsPerYuanMicro <= 0 || policy.CreditsPerYuanMicro > 1_000*CreditScale || policy.PerInviteeCapMicrocredits < 0 || policy.PerInviteeCapMicrocredits > 1_000_000_000*CreditScale {
-		return BadAuthRequest("邀请返利规则超出允许范围")
-	}
-	if policy.Enabled && policy.GlobalRateBPS == 0 {
-		return BadAuthRequest("启用邀请返利前请设置全局返利比例")
+	if err := policy.Validate(); err != nil {
+		return BadAuthRequest(err.Error())
 	}
 	return nil
 }
@@ -91,23 +86,11 @@ func (s *Service) UpdateReferralPolicy(actor *model.User, policy ReferralPolicy)
 	if err := validateReferralPolicy(policy); err != nil {
 		return ReferralPolicy{}, err
 	}
-	encoded, err := json.Marshal(policy)
+	audit, err := newAdminAuditEvent(actor, "referral.policy.update", "system_setting", referralPolicySettingKey, "发布邀请返利规则版本", policy)
 	if err != nil {
 		return ReferralPolicy{}, err
 	}
-	setting := model.SystemSetting{Key: referralPolicySettingKey, ValueJSON: string(encoded), UpdatedBy: actor.ID}
-	if current, err := s.repo.SystemSetting(referralPolicySettingKey); err == nil {
-		setting.CreatedAt = current.CreatedAt
-	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
-		return ReferralPolicy{}, err
-	}
-	if err := s.repo.SaveSystemSetting(&setting); err != nil {
-		return ReferralPolicy{}, err
-	}
-	if err := s.appendAdminAudit(actor, "referral.policy.update", "system_setting", referralPolicySettingKey, "更新邀请返利规则", policy); err != nil {
-		return ReferralPolicy{}, err
-	}
-	return policy, nil
+	return s.repo.SaveReferralPolicy(policy, "", nil, actor.ID, audit)
 }
 
 func (s *Service) ReferralDashboard(user *model.User) (*ReferralDashboard, error) {
@@ -134,15 +117,40 @@ func (s *Service) ReferralDashboard(user *model.User) (*ReferralDashboard, error
 	if err != nil {
 		return nil, err
 	}
-	rate := policy.GlobalRateBPS
-	if profile.RateBPS != nil {
-		rate = *profile.RateBPS
+	enabled := policy.Enabled && !profile.Paused
+	if profile.PolicyVersionID != "" {
+		policy, err = s.repo.ReferralPolicyVersion(profile.PolicyVersionID)
+		if err != nil {
+			return nil, err
+		}
 	}
+	enabled = enabled && policy.Enabled
 	items := make([]ReferralInviteeView, 0, len(invitees))
 	for _, invitee := range invitees {
-		items = append(items, ReferralInviteeView{UserID: invitee.ID, Email: maskReferralEmail(invitee.Email), JoinedAt: invitee.CreatedAt})
+		var boundPolicy ReferralPolicy
+		if err := json.Unmarshal([]byte(invitee.PolicyJSON), &boundPolicy); err != nil {
+			return nil, err
+		}
+		if err := validateReferralPolicy(boundPolicy); err != nil {
+			return nil, err
+		}
+		items = append(items, ReferralInviteeView{UserID: invitee.ID, Email: maskReferralEmail(invitee.Email), JoinedAt: invitee.CreatedAt, Policy: boundPolicy})
 	}
-	return &ReferralDashboard{Enabled: policy.Enabled, Code: profile.Code, InviterID: profile.InviterID, EffectiveRateBPS: rate, InviteeCount: inviteeCount, Invitees: items, Rewards: rewards}, nil
+	result := &ReferralDashboard{Enabled: enabled, Code: profile.Code, InviterID: profile.InviterID, Policy: policy, InviteeCount: inviteeCount, Invitees: items, Rewards: rewards}
+	if profile.InviterID != "" {
+		bound, err := s.repo.ReferralPolicyVersion(profile.BoundPolicyVersionID)
+		if err != nil {
+			return nil, err
+		}
+		result.BoundPolicy = &bound
+		if bound.Enabled && bound.NewcomerEnabled {
+			result.NewcomerEligible, err = s.repo.ReferralNewcomerEligible(user.ID, profile.InviterID)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+	return result, nil
 }
 
 func maskReferralEmail(email string) string {
@@ -153,33 +161,55 @@ func maskReferralEmail(email string) string {
 	return string([]rune(parts[0])[0]) + "***@" + parts[1]
 }
 
-func (s *Service) AdminSetReferralRate(actor *model.User, userID string, rate *int64) (*model.ReferralProfile, error) {
-	if err := s.RequireAdminPermission(actor, model.AdminPermissionReferrals); err != nil {
-		return nil, err
-	}
-	if rate != nil && (*rate < 0 || *rate > 10_000) {
-		return nil, BadAuthRequest("专属比例必须在 0% 到 100% 之间")
-	}
-	if _, err := s.repo.User(userID); err != nil {
-		return nil, err
-	}
-	if err := s.repo.SetReferralRate(userID, rate); err != nil {
-		return nil, err
-	}
-	if err := s.appendAdminAudit(actor, "referral.rate.update", "user", userID, "更新用户专属返利比例", map[string]any{"rateBps": rate}); err != nil {
-		return nil, err
-	}
-	return s.repo.ReferralProfile(userID)
+type ReferralUserPolicy struct {
+	UserID string          `json:"userId"`
+	Code   string          `json:"code"`
+	Paused bool            `json:"paused"`
+	Policy *ReferralPolicy `json:"policy"`
 }
 
-func (s *Service) AdminReferralUser(actor *model.User, userID string) (*model.ReferralProfile, error) {
+func (s *Service) AdminSetReferralUserPolicy(actor *model.User, userID string, policy *ReferralPolicy, paused bool) (*ReferralUserPolicy, error) {
+	if err := s.RequireAdminPermission(actor, model.AdminPermissionReferrals); err != nil {
+		return nil, err
+	}
+	if policy != nil {
+		if err := validateReferralPolicy(*policy); err != nil {
+			return nil, err
+		}
+	}
+	if _, err := s.repo.User(userID); err != nil {
+		return nil, err
+	}
+	audit, err := newAdminAuditEvent(actor, "referral.policy.user.update", "user", userID, "更新专属推广规则", map[string]any{"policy": policy, "paused": paused})
+	if err != nil {
+		return nil, err
+	}
+	if err := s.repo.SaveReferralUserPolicy(userID, policy, paused, actor.ID, audit); err != nil {
+		return nil, err
+	}
+	return s.AdminReferralUser(actor, userID)
+}
+
+func (s *Service) AdminReferralUser(actor *model.User, userID string) (*ReferralUserPolicy, error) {
 	if err := s.RequireAdminPermission(actor, model.AdminPermissionReferrals); err != nil {
 		return nil, err
 	}
 	if _, err := s.repo.User(userID); err != nil {
 		return nil, err
 	}
-	return s.repo.ReferralProfile(userID)
+	profile, err := s.repo.ReferralProfile(userID)
+	if err != nil {
+		return nil, err
+	}
+	result := &ReferralUserPolicy{UserID: userID, Code: profile.Code, Paused: profile.Paused}
+	if profile.PolicyVersionID != "" {
+		policy, err := s.repo.ReferralPolicyVersion(profile.PolicyVersionID)
+		if err != nil {
+			return nil, err
+		}
+		result.Policy = &policy
+	}
+	return result, nil
 }
 
 func (s *Service) AdminReferralRewards(actor *model.User, status string, page, pageSize int) (*ReferralRewardPage, error) {
@@ -228,66 +258,6 @@ func (s *Service) AdminReviewReferralReward(actor *model.User, id string, approv
 	return reward, err
 }
 
-func (s *Service) referralRewardDraft(order *model.PaymentOrder) (*model.ReferralReward, error) {
-	if order == nil || order.ProductKind == model.TopupProductKindStorage || order.AmountFen <= 0 || order.Currency != "CNY" {
-		return nil, nil
-	}
-	policy, err := s.referralPolicy()
-	if err != nil || !policy.Enabled {
-		return nil, err
-	}
-	invitee, err := s.repo.ReferralProfileForInvitee(order.UserID)
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	if invitee.InviterID == "" {
-		return nil, nil
-	}
-	inviter, err := s.repo.ReferralInviter(invitee.InviterID)
-	if err != nil {
-		return nil, err
-	}
-	rate := policy.GlobalRateBPS
-	if inviter.RateBPS != nil {
-		rate = *inviter.RateBPS
-	}
-	if rate <= 0 {
-		return nil, nil
-	}
-	amount, err := calculateReferralReward(order.AmountFen, policy.CreditsPerYuanMicro, rate)
-	if err != nil {
-		return nil, err
-	}
-	if amount <= 0 {
-		return nil, nil
-	}
-	return &model.ReferralReward{ID: newID(), PaymentOrderID: order.ID, InviterID: invitee.InviterID, InviteeID: order.UserID, AmountFen: order.AmountFen, CreditsPerYuanMicro: policy.CreditsPerYuanMicro, RateBPS: rate, RewardMicrocredits: amount, CapMicrocredits: policy.PerInviteeCapMicrocredits, Status: model.ReferralRewardPending}, nil
-}
-
-func calculateReferralReward(amountFen, creditsPerYuanMicro, rateBPS int64) (int64, error) {
-	if amountFen <= 0 || creditsPerYuanMicro <= 0 || rateBPS <= 0 {
-		return 0, nil
-	}
-	value := new(big.Int).Mul(big.NewInt(amountFen), big.NewInt(creditsPerYuanMicro))
-	value.Mul(value, big.NewInt(rateBPS))
-	value.Quo(value, big.NewInt(1_000_000))
-	if !value.IsInt64() {
-		return 0, errors.New("邀请返利积分溢出")
-	}
-	return value.Int64() / 10_000 * 10_000, nil
-}
-
 func (s *Service) completePaymentOrderWithReferral(providerID, merchantOrderNo string, evidence repository.PaymentEvidence) (*model.PaymentOrder, bool, error) {
-	order, err := s.repo.PaymentOrderByMerchant(providerID, merchantOrderNo)
-	if err != nil {
-		return nil, false, err
-	}
-	draft, err := s.referralRewardDraft(order)
-	if err != nil {
-		return nil, false, err
-	}
-	return s.repo.CompletePaymentOrder(providerID, merchantOrderNo, evidence, draft)
+	return s.repo.CompletePaymentOrderWithReferral(providerID, merchantOrderNo, evidence, referrals.Evaluate)
 }

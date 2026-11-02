@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"testing"
@@ -8,6 +9,7 @@ import (
 
 	"infinite-canvas/backend/internal/model"
 	"infinite-canvas/backend/internal/referralcode"
+	"infinite-canvas/backend/internal/referrals"
 
 	"gorm.io/gorm"
 )
@@ -17,6 +19,7 @@ func TestReferralCodeRegistrationRejectsOldCodeWithoutConsumingVerification(t *t
 	if err := db.AutoMigrate(&model.User{}, &model.EmailVerificationCode{}, &model.ReferralProfile{}); err != nil {
 		t.Fatal(err)
 	}
+	seedReferralPolicy(t, db, referrals.Default())
 	if err := db.Create(&model.User{ID: "inviter", Username: "inviter", Status: model.UserStatusActive}).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -61,6 +64,10 @@ func TestReferralRewardPaymentCapAndApprovalAreAtomic(t *testing.T) {
 	if err := db.AutoMigrate(&model.User{}, &model.ReferralProfile{}, &model.ReferralReward{}, &model.AdminAuditEvent{}); err != nil {
 		t.Fatal(err)
 	}
+	p := referrals.Default()
+	p.Stages = []referrals.Stage{{RateBPS: 1000}}
+	p.PerInviteeCapMicrocredits = 1_500_000
+	seedReferralPolicy(t, db, p)
 	users := []model.User{
 		{ID: "inviter", Username: "inviter", Status: model.UserStatusActive},
 		{ID: "invitee", Username: "invitee", Status: model.UserStatusActive},
@@ -70,7 +77,7 @@ func TestReferralRewardPaymentCapAndApprovalAreAtomic(t *testing.T) {
 	}
 	profiles := []model.ReferralProfile{
 		{UserID: "inviter", Code: "INVITERCODE1"},
-		{UserID: "invitee", Code: "INVITEECODE1", InviterID: "inviter"},
+		{UserID: "invitee", Code: "INVITEECODE1", InviterID: "inviter", BoundPolicyVersionID: "test-policy"},
 	}
 	if err := db.Create(&profiles).Error; err != nil {
 		t.Fatal(err)
@@ -86,16 +93,11 @@ func TestReferralRewardPaymentCapAndApprovalAreAtomic(t *testing.T) {
 		if err := db.Create(&order).Error; err != nil {
 			t.Fatal(err)
 		}
-		draft := &model.ReferralReward{
-			ID: "reward-" + id, PaymentOrderID: id, InviterID: "inviter", InviteeID: "invitee",
-			AmountFen: 100, RewardMicrocredits: 1_000_000, CapMicrocredits: 1_500_000,
-			RateBPS: 1_000, Status: model.ReferralRewardPending,
-		}
 		evidence := PaymentEvidence{ProviderTradeNo: "trade-" + id, ProviderStatus: "SUCCESS", AmountFen: 100, Currency: "CNY", PaidAt: time.Now()}
-		if _, granted, err := repo.CompletePaymentOrder(order.ProviderID, id, evidence, draft); err != nil || !granted {
+		if _, granted, err := repo.CompletePaymentOrderWithReferral(order.ProviderID, id, evidence, referrals.Evaluate); err != nil || !granted {
 			t.Fatalf("complete order %s: granted=%v err=%v", id, granted, err)
 		}
-		if _, granted, err := repo.CompletePaymentOrder(order.ProviderID, id, evidence, draft); err != nil || granted {
+		if _, granted, err := repo.CompletePaymentOrderWithReferral(order.ProviderID, id, evidence, referrals.Evaluate); err != nil || granted {
 			t.Fatalf("duplicate order %s: granted=%v err=%v", id, granted, err)
 		}
 		var reward model.ReferralReward
@@ -127,5 +129,24 @@ func TestReferralRewardPaymentCapAndApprovalAreAtomic(t *testing.T) {
 	var count int64
 	if err := db.Model(&model.CreditLedgerEntry{}).Where("user_id = ? AND type = ?", "inviter", model.CreditLedgerReferral).Count(&count).Error; err != nil || count != 2 {
 		t.Fatalf("referral ledger count = %d, err=%v", count, err)
+	}
+}
+
+func seedReferralPolicy(t *testing.T, db *gorm.DB, p referrals.Policy) {
+	t.Helper()
+	if err := db.AutoMigrate(&model.SystemSetting{}, &model.ReferralPolicyVersion{}); err != nil {
+		t.Fatal(err)
+	}
+	p.Enabled = true
+	p.VersionID = "test-policy"
+	encoded, err := json.Marshal(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&model.ReferralPolicyVersion{ID: p.VersionID, PolicyJSON: string(encoded)}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&model.SystemSetting{Key: referrals.SettingKey, ValueJSON: string(encoded)}).Error; err != nil {
+		t.Fatal(err)
 	}
 }

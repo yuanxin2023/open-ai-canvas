@@ -6,7 +6,9 @@ import { CreditProductCard } from "@/components/payments/credit-product-card";
 import { formatCredits } from "@/constant/credits";
 import { accountStorageMeter, accountStorageStateMessage, formatStorageCapacity, formatStorageDate, formatStorageDuration } from "@/lib/account-storage-usage";
 import { cn } from "@/lib/utils";
+import { referralCredits } from "@/lib/referral-policy";
 import type { PaymentProvider, TopupProduct, TopupProductKind } from "@/services/api/payments";
+import type { ReferralPolicy } from "@/services/api/referrals";
 import type { AccountFileStorageUsage } from "@/services/api/resources";
 import { storageGrantActive, type UserStorageGrant } from "@/services/api/storage-grants";
 
@@ -151,6 +153,7 @@ function StorageSummary({ usage, grants, onCleanAssets }: { usage?: AccountFileS
 }
 
 export function WalletTopupPanel({
+    newcomerPolicy,
     loading,
     products,
     providers,
@@ -166,6 +169,7 @@ export function WalletTopupPanel({
     storageGrants,
     onCleanAssets,
 }: {
+    newcomerPolicy?: ReferralPolicy;
     loading: boolean;
     products: TopupProduct[];
     providers: PaymentProvider[];
@@ -234,6 +238,7 @@ export function WalletTopupPanel({
                                     <strong>{selectedProduct.name}</strong>
                                     <small>
                                         {topupProductValue(selectedProduct)}
+                                        {selectedProduct.kind === "credits" && newcomerPolicy ? ` · 邀请新人首充预计另赠 ${formatCredits(Math.min(referralCredits(selectedProduct.creditsMicrocredits, newcomerPolicy.newcomerRateBps), newcomerPolicy.newcomerCapMicrocredits || Number.MAX_SAFE_INTEGER))} 积分` : ""}
                                         {selectedProduct.kind === "storage" ? ` · ${formatStorageDuration(selectedProduct.storageDurationDays)}` : ""}
                                     </small>
                                 </span>

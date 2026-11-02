@@ -372,7 +372,11 @@ func (r *Repository) RetryPaymentNotification(id, message string, next time.Time
 
 // CompletePaymentOrder atomically records provider success and grants credits.
 // The unique ledger reference is the final guard against callback/query races.
-func (r *Repository) CompletePaymentOrder(providerID, merchantOrderNo string, evidence PaymentEvidence, referral ...*model.ReferralReward) (*model.PaymentOrder, bool, error) {
+func (r *Repository) CompletePaymentOrder(providerID, merchantOrderNo string, evidence PaymentEvidence) (*model.PaymentOrder, bool, error) {
+	return r.completePaymentOrder(providerID, merchantOrderNo, evidence, nil)
+}
+
+func (r *Repository) completePaymentOrder(providerID, merchantOrderNo string, evidence PaymentEvidence, evaluate ReferralEvaluator) (*model.PaymentOrder, bool, error) {
 	var order model.PaymentOrder
 	granted := false
 	err := r.db.Transaction(func(tx *gorm.DB) error {
@@ -425,6 +429,21 @@ func (r *Repository) CompletePaymentOrder(providerID, merchantOrderNo string, ev
 			}
 		}
 		referenceKey := "payment:" + providerID + ":" + merchantOrderNo
+		// Lock the invitation owner before granting credits to keep lock ordering
+		// identical across simultaneous recharges from the same invitee.
+		if !storageOrder && evaluate != nil {
+			var profile model.ReferralProfile
+			err := tx.First(&profile, "user_id = ?", order.UserID).Error
+			if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+				return err
+			}
+			if profile.InviterID != "" && tx.Dialector.Name() == "postgres" {
+				var inviter model.ReferralProfile
+				if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&inviter, "user_id = ?", profile.InviterID).Error; err != nil {
+					return err
+				}
+			}
+		}
 		now := time.Now()
 		if storageOrder {
 			if err := grantPaymentStorage(tx, &order, referenceKey, now); err != nil {
@@ -449,8 +468,8 @@ func (r *Repository) CompletePaymentOrder(providerID, merchantOrderNo string, ev
 		if updated.RowsAffected != 1 {
 			return ErrPaymentOrderStateConflict
 		}
-		if !storageOrder && len(referral) > 0 && referral[0] != nil {
-			if err := createReferralRewardTx(tx, &order, referral[0]); err != nil {
+		if !storageOrder && evaluate != nil && order.Currency == "CNY" {
+			if err := settleVersionedReferralTx(tx, &order, now, evaluate); err != nil {
 				return err
 			}
 		}

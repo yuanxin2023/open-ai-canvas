@@ -8,6 +8,7 @@ import { StatusBadge } from "@/components/ui/base/badges";
 import { EmptyState } from "@/components/ui/product/empty-state";
 import { formatCredits } from "@/constant/credits";
 import { getReferralDashboard, type ReferralDashboard, type ReferralReward } from "@/services/api/referrals";
+import { referralPolicySummary } from "@/lib/referral-policy";
 
 type ReferralInvitee = ReferralDashboard["invitees"][number];
 
@@ -20,11 +21,13 @@ const rewardStatus: Record<ReferralReward["status"], { label: string; tone: "war
 const inviteeColumns: ColumnsType<ReferralInvitee> = [
     { title: "被邀请用户", dataIndex: "email", ellipsis: true },
     { title: "注册时间", dataIndex: "joinedAt", width: 190, render: (value: string) => new Date(value).toLocaleString("zh-CN") },
+    { title: "绑定奖励规则", key: "policy", width: 300, render: (_, item) => referralPolicySummary(item.policy) },
 ];
 
 const rewardColumns: ColumnsType<ReferralReward> = [
     { title: "充值订单", dataIndex: "paymentOrderId", ellipsis: true },
     { title: "返利积分", dataIndex: "rewardMicrocredits", width: 130, align: "right", render: (value: number) => <span className="tabular-nums">{formatCredits(value)}</span> },
+    { title: "计算依据", key: "basis", width: 220, render: (_, item) => item.policyVersionId ? `第${item.orderOrdinal}单 · 基础${formatCredits(item.baseMicrocredits)}积分 × ${item.rateBps / 100}%` : "历史记录" },
     { title: "状态", dataIndex: "status", width: 150, render: (value: ReferralReward["status"]) => <StatusBadge {...rewardStatus[value]} /> },
     { title: "时间", dataIndex: "createdAt", width: 190, render: (value: string) => new Date(value).toLocaleString("zh-CN") },
 ];
@@ -125,8 +128,8 @@ export default function ReferralsPage() {
                                         </div>
                                         <div className="grid grid-cols-2 gap-4 border-t border-border/70 pt-5 lg:border-l lg:border-t-0 lg:pl-8 lg:pt-0">
                                             <div>
-                                                <p className="text-caption text-muted-foreground">返利比例</p>
-                                                <p className="mt-2 text-2xl font-semibold tabular-nums text-foreground sm:text-3xl">{(dashboard.effectiveRateBps / 100).toFixed(2)}%</p>
+                                                <p className="text-caption text-muted-foreground">新邀请奖励规则</p>
+                                                <p className="mt-2 text-sm leading-relaxed text-foreground">{referralPolicySummary(dashboard.policy)}</p>
                                             </div>
                                             <div className="border-l border-border/70 pl-4">
                                                 <p className="text-caption text-muted-foreground">已邀请好友</p>
@@ -136,7 +139,7 @@ export default function ReferralsPage() {
                                             </div>
                                         </div>
                                     </div>
-                                    <p className="border-t border-border/70 bg-secondary/25 px-5 py-3 text-caption leading-relaxed text-muted-foreground sm:px-6 lg:px-8">仅在线充值参与返利 · 管理员审核通过后发放积分</p>
+                                    <p className="border-t border-border/70 bg-secondary/25 px-5 py-3 text-caption leading-relaxed text-muted-foreground sm:px-6 lg:px-8">仅在线积分充值参与 · 按套餐基础积分计算 · 邀请人奖励审核后发放 · 每位好友沿用注册绑定的规则版本{dashboard.policy.newcomerEnabled ? ` · 新人首充额外赠送 ${dashboard.policy.newcomerRateBps / 100}%${dashboard.policy.newcomerCapMicrocredits ? `，最多 ${formatCredits(dashboard.policy.newcomerCapMicrocredits)} 积分` : ""}` : ""}</p>
                                 </>
                             ) : (
                                 <div className="flex flex-wrap items-center gap-5 p-5 sm:p-6">

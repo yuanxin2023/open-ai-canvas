@@ -15,45 +15,6 @@ import (
 var ErrReferralCodeInvalid = errors.New("referral code invalid")
 var ErrReferralReviewConflict = errors.New("referral reward already reviewed")
 
-func createReferralRewardTx(tx *gorm.DB, order *model.PaymentOrder, draft *model.ReferralReward) error {
-	if draft.PaymentOrderID != order.ID || draft.InviteeID != order.UserID || draft.AmountFen != order.AmountFen || draft.InviterID == order.UserID || draft.RewardMicrocredits <= 0 {
-		return errors.New("invalid referral reward draft")
-	}
-	var profile model.ReferralProfile
-	query := tx.Where("user_id = ?", draft.InviterID)
-	if tx.Dialector.Name() == "postgres" {
-		query = query.Clauses(clause.Locking{Strength: "UPDATE"})
-	}
-	if err := query.First(&profile).Error; err != nil {
-		return err
-	}
-	if profile.UserID == "" {
-		return errors.New("referral inviter missing")
-	}
-	var invitee model.ReferralProfile
-	if err := tx.First(&invitee, "user_id = ? AND inviter_id = ?", draft.InviteeID, draft.InviterID).Error; err != nil {
-		return err
-	}
-	var total int64
-	if err := tx.Model(&model.ReferralReward{}).Where("inviter_id = ? AND invitee_id = ? AND status <> ?", draft.InviterID, draft.InviteeID, model.ReferralRewardRejected).
-		Select("COALESCE(SUM(reward_microcredits), 0)").Row().Scan(&total); err != nil {
-		return err
-	}
-	if draft.CapMicrocredits > 0 {
-		remaining := draft.CapMicrocredits - total
-		if remaining <= 0 {
-			return nil
-		}
-		if draft.RewardMicrocredits > remaining {
-			draft.RewardMicrocredits = remaining - remaining%10_000
-		}
-	}
-	if draft.RewardMicrocredits <= 0 {
-		return nil
-	}
-	return tx.Create(draft).Error
-}
-
 func ensureReferralProfileTx(tx *gorm.DB, userID string) (*model.ReferralProfile, error) {
 	var profile model.ReferralProfile
 	err := tx.First(&profile, "user_id = ?", userID).Error
@@ -101,18 +62,22 @@ func (r *Repository) ReferralProfileForInvitee(userID string) (*model.ReferralPr
 	return &profile, err
 }
 
-func (r *Repository) ReferralInviter(inviterID string) (*model.ReferralProfile, error) {
-	var profile model.ReferralProfile
-	err := r.db.First(&profile, "user_id = ?", inviterID).Error
-	return &profile, err
-}
-
 func bindReferralTx(tx *gorm.DB, userID, code string) error {
 	code = strings.ToUpper(strings.TrimSpace(code))
 	if code == "" {
 		return nil
 	}
 	if !referralcode.Valid(code) {
+		return ErrReferralCodeInvalid
+	}
+	if err := lockReferralSettingTx(tx); err != nil {
+		return err
+	}
+	policy, err := readReferralPolicyTx(tx)
+	if err != nil {
+		return err
+	}
+	if !policy.Enabled {
 		return ErrReferralCodeInvalid
 	}
 	var inviter model.ReferralProfile
@@ -123,6 +88,20 @@ func bindReferralTx(tx *gorm.DB, userID, code string) error {
 		return err
 	}
 	if inviter.UserID == userID {
+		return ErrReferralCodeInvalid
+	}
+	if inviter.Paused {
+		return ErrReferralCodeInvalid
+	}
+	version := policy.VersionID
+	if inviter.PolicyVersionID != "" {
+		version = inviter.PolicyVersionID
+	}
+	boundPolicy, err := policyVersionTx(tx, version)
+	if err != nil {
+		return err
+	}
+	if !boundPolicy.Enabled {
 		return ErrReferralCodeInvalid
 	}
 	var user model.User
@@ -136,7 +115,7 @@ func bindReferralTx(tx *gorm.DB, userID, code string) error {
 	if profile.InviterID != "" {
 		return ErrReferralCodeInvalid
 	}
-	updated := tx.Model(&model.ReferralProfile{}).Where("user_id = ? AND inviter_id = ''", userID).Updates(map[string]any{"inviter_id": inviter.UserID, "updated_at": time.Now()})
+	updated := tx.Model(&model.ReferralProfile{}).Where("user_id = ? AND inviter_id = ''", userID).Updates(map[string]any{"inviter_id": inviter.UserID, "bound_policy_version_id": version, "updated_at": time.Now()})
 	if updated.Error != nil {
 		return updated.Error
 	}
@@ -146,11 +125,18 @@ func bindReferralTx(tx *gorm.DB, userID, code string) error {
 	return nil
 }
 
-func (r *Repository) ReferralInvitees(inviterID string) ([]model.User, error) {
-	var users []model.User
-	err := r.db.Model(&model.User{}).Joins("JOIN referral_profiles ON referral_profiles.user_id = users.id").
+type ReferralInviteeRecord struct {
+	ID         string
+	Email      string
+	CreatedAt  time.Time
+	PolicyJSON string
+}
+
+func (r *Repository) ReferralInvitees(inviterID string) ([]ReferralInviteeRecord, error) {
+	var users []ReferralInviteeRecord
+	err := r.db.Model(&model.User{}).Select("users.id, users.email, users.created_at, referral_policy_versions.policy_json").Joins("JOIN referral_profiles ON referral_profiles.user_id = users.id").Joins("LEFT JOIN referral_policy_versions ON referral_policy_versions.id = referral_profiles.bound_policy_version_id").
 		Where("referral_profiles.inviter_id = ?", inviterID).Order("users.created_at desc").Limit(100).
-		Find(&users).Error
+		Scan(&users).Error
 	return users, err
 }
 

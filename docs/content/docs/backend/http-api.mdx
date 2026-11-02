@@ -182,9 +182,15 @@ handle 放错端点、格式错误或行 ID 不存在时，工具错误回执提
 
 ## 邀请返利
 
-`GET /referrals/me` 返回本人六位推广码、有效返利比例、被邀请用户总数、最多 100 位被邀请用户的脱敏邮箱和最近 100 条返利记录。分享链接为 `/register?ref=<推广码>`。注册接口仅接受当前六位字符集中的推广码；旧十二位码及其链接失效。关闭返利后仍可查看历史记录，页面不展示分享入口。
+`GET /referrals/me` 返回本人六位推广码、用于新邀请的 `policy`、本人被邀请时绑定的 `boundPolicy`、新人首充赠送资格 `newcomerEligible`、被邀请用户总数、最多 100 位被邀请用户的脱敏邮箱及其绑定规则，以及最近 100 条返利记录。分享链接为 `/register?ref=<推广码>`。注册只接受六位推广码，绑定时固定规则版本；关闭或暂停后仍可查看历史，页面隐藏分享入口。
 
-管理员接口要求 `admin.finance.referrals`：`GET/PUT /admin/referrals/policy` 读取或更新 `{ enabled, globalRateBps, creditsPerYuanMicro, perInviteeCapMicrocredits }`。比例单位为基点（10000 = 100%），返利金额按订单实付分换算，最终截断到 0.01 积分；累计上限为 0 表示不限。`GET /admin/referrals/users/:id` 读取用户推广档案；`PUT /admin/referrals/users/:id/rate` 提交 `{ "rateBps": 500 }` 设置专属 5%，提交 `null` 恢复全局比例。`GET /admin/referrals/rewards?status=pending&page=1&pageSize=30` 分页读取审核记录；`POST /admin/referrals/rewards/:id/approve|reject` 提交 `{ "note": "..." }`，拒绝时原因必填。批准后立即向邀请人的积分钱包入账，同一记录不能重复审核。
+管理员接口要求 `admin.finance.referrals`：`GET/PUT /admin/referrals/policy` 读取或发布 `{ versionId, enabled, mode, stages, maxDays, maxOrders, perInviteeCapMicrocredits, newcomerEnabled, newcomerRateBps, newcomerCapMicrocredits }`。服务端生成新版本，规则修改仅影响之后绑定的邀请关系；全局 `enabled=false` 同时暂停全部新绑定和计提。
+
+`mode=time|orders` 二选一，`stages=[{ until, rateBps }]` 定义连续阶梯。`until` 是递增累计结束值，时间单位天且不含边界，单数从 1 开始且含边界；只有最后一阶段可用 0 表示不限。有限最后阶段结束后停止奖励，比例 0 同样表示停止。时间从首次成功入账起按连续 24 小时计算。`maxDays`、`maxOrders` 和积分上限均以 0 表示不限；按成功入账序号计算，不按下单或审核顺序。比例单位为基点（10000 = 100%），按订单套餐基础积分计算，向下截断到 0.01 积分；新人赠送不再产生返利。
+
+`GET /admin/referrals/users/:id` 返回 `{ userId, code, paused, policy }`；`PUT /admin/referrals/users/:id/policy` 提交 `{ policy, paused }` 设置完整专属规则，`policy=null` 恢复全局。暂停立即影响已有关系的新奖励，规则修改及恢复全局只影响新绑定。个人接口不再接受旧的 `/rate` 写法。
+
+`GET /admin/referrals/rewards?status=pending&page=1&pageSize=30` 分页读取记录，新增 `policyVersionId`、`baseMicrocredits`、`orderOrdinal`、`stageIndex`、`uncappedMicrocredits` 供核对。`POST /admin/referrals/rewards/:id/approve|reject` 提交 `{ "note": "..." }`，拒绝时原因必填；批准按保存金额向邀请人钱包入账，同一记录不能重复审核。新人首充奖励自动到账，支付订单返回 `referralPolicyVersionId` 与 `newcomerBonusMicrocredits`，不进入邀请人审核队列。
 
 空数据库中的首个用户是初始化例外：仍必须提交合法邮箱和至少 8 位密码，但不要求 `emailCode`，创建后自动成为管理员，便于未配置 SMTP 的新部署完成初始化。后续用户必须同时满足普通注册已开启、邮箱域名白名单和一次性验证码要求。
 

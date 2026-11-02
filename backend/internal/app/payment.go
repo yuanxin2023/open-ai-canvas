@@ -98,29 +98,31 @@ type PaymentCheckoutView struct {
 }
 
 type PaymentOrderView struct {
-	ClosurePending      bool                     `json:"closurePending"`
-	ID                  string                   `json:"id"`
-	UserID              string                   `json:"userId,omitempty"`
-	MerchantOrderNo     string                   `json:"merchantOrderNo"`
-	ProductID           string                   `json:"productId"`
-	ProductName         string                   `json:"productName"`
-	ProductKind         model.TopupProductKind   `json:"productKind"`
-	ProviderID          string                   `json:"providerId"`
-	AmountFen           int64                    `json:"amountFen"`
-	Currency            string                   `json:"currency"`
-	CreditsMicrocredits int64                    `json:"creditsMicrocredits"`
-	StorageBytes        int64                    `json:"storageBytes,omitempty"`
-	StorageDurationDays int                      `json:"storageDurationDays,omitempty"`
-	Status              model.PaymentOrderStatus `json:"status"`
-	ProviderStatus      string                   `json:"providerStatus,omitempty"`
-	ProviderTradeNo     string                   `json:"providerTradeNo,omitempty"`
-	Checkout            PaymentCheckoutView      `json:"checkout"`
-	ExpiresAt           time.Time                `json:"expiresAt"`
-	ProviderPaidAt      *time.Time               `json:"providerPaidAt,omitempty"`
-	CreditedAt          *time.Time               `json:"creditedAt,omitempty"`
-	ClosedAt            *time.Time               `json:"closedAt,omitempty"`
-	CreatedAt           time.Time                `json:"createdAt"`
-	UpdatedAt           time.Time                `json:"updatedAt"`
+	ReferralPolicyVersionID   string                   `json:"referralPolicyVersionId,omitempty"`
+	NewcomerBonusMicrocredits int64                    `json:"newcomerBonusMicrocredits"`
+	ClosurePending            bool                     `json:"closurePending"`
+	ID                        string                   `json:"id"`
+	UserID                    string                   `json:"userId,omitempty"`
+	MerchantOrderNo           string                   `json:"merchantOrderNo"`
+	ProductID                 string                   `json:"productId"`
+	ProductName               string                   `json:"productName"`
+	ProductKind               model.TopupProductKind   `json:"productKind"`
+	ProviderID                string                   `json:"providerId"`
+	AmountFen                 int64                    `json:"amountFen"`
+	Currency                  string                   `json:"currency"`
+	CreditsMicrocredits       int64                    `json:"creditsMicrocredits"`
+	StorageBytes              int64                    `json:"storageBytes,omitempty"`
+	StorageDurationDays       int                      `json:"storageDurationDays,omitempty"`
+	Status                    model.PaymentOrderStatus `json:"status"`
+	ProviderStatus            string                   `json:"providerStatus,omitempty"`
+	ProviderTradeNo           string                   `json:"providerTradeNo,omitempty"`
+	Checkout                  PaymentCheckoutView      `json:"checkout"`
+	ExpiresAt                 time.Time                `json:"expiresAt"`
+	ProviderPaidAt            *time.Time               `json:"providerPaidAt,omitempty"`
+	CreditedAt                *time.Time               `json:"creditedAt,omitempty"`
+	ClosedAt                  *time.Time               `json:"closedAt,omitempty"`
+	CreatedAt                 time.Time                `json:"createdAt"`
+	UpdatedAt                 time.Time                `json:"updatedAt"`
 }
 
 type AdminPaymentOrderPage struct {
@@ -663,6 +665,7 @@ func paymentOrderView(order model.PaymentOrder) PaymentOrderView {
 		}
 	}
 	return PaymentOrderView{
+		ReferralPolicyVersionID: order.ReferralPolicyVersionID, NewcomerBonusMicrocredits: order.NewcomerBonusMicrocredits,
 		ID: order.ID, UserID: order.UserID, MerchantOrderNo: order.MerchantOrderNo, ProductID: order.ProductID, ProductName: order.ProductName,
 		ProductKind: topupProductKind(order.ProductKind), StorageBytes: order.StorageBytes, StorageDurationDays: order.StorageDurationDays,
 		ProviderID: order.ProviderID, AmountFen: order.AmountFen, Currency: order.Currency,

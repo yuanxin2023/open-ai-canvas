@@ -14,6 +14,7 @@ import { generationErrorMessage } from "@/lib/generation-error";
 import { listPaymentProviders, listTopupProducts, type PaymentOrder, type PaymentProvider, type TopupProduct, type TopupProductKind } from "@/services/api/payments";
 import { listMyStorageGrants } from "@/services/api/storage-grants";
 import { getWallet, redeemCredits, type CreditLedgerEntry, type WalletSummary } from "@/services/api/wallet";
+import { getReferralDashboard } from "@/services/api/referrals";
 import { cn } from "@/lib/utils";
 import { consumePaymentReturnPath, openWorkspaceWallet, WORKSPACE_WALLET_OPEN_EVENT, type WorkspaceWalletOpenDetail } from "@/lib/workspace-wallet";
 import { useUserStore } from "@/stores/use-user-store";
@@ -114,6 +115,7 @@ export function WorkspaceWalletModal({
     const requestSequence = useRef(0);
     const storageQuery = useAccountFileStorageUsage(open);
     const grantsQuery = useQuery({ queryKey: [...storageGrantsQueryKey, actorId], queryFn: ({ signal }) => listMyStorageGrants(signal), enabled: open && Boolean(actorId) });
+    const referralQuery = useQuery({ queryKey: ["wallet-referral", actorId], queryFn: ({ signal }) => getReferralDashboard(signal), enabled: open && Boolean(actorId), staleTime: 0 });
     const storageMeter = accountStorageMeter(storageQuery.data);
 
     const selectedProduct = useMemo(() => products.find((item) => item.id === selectedProductId), [products, selectedProductId]);
@@ -174,6 +176,7 @@ export function WorkspaceWalletModal({
 
     const announceGranted = async (order: PaymentOrder) => {
         if (!current()) return;
+        await queryClient.invalidateQueries({ queryKey: ["wallet-referral", actorId] });
         if (order.productKind === "storage") {
             await Promise.all([queryClient.invalidateQueries({ queryKey: accountFileStorageUsageQueryKey }), queryClient.invalidateQueries({ queryKey: storageGrantsQueryKey })]);
             return;
@@ -298,6 +301,7 @@ export function WorkspaceWalletModal({
 
                     {activeTab === "topup" ? (
                         <WalletTopupPanel
+                            newcomerPolicy={referralQuery.data?.newcomerEligible ? referralQuery.data.boundPolicy : undefined}
                             loading={paymentsLoading}
                             products={products}
                             providers={providers}
