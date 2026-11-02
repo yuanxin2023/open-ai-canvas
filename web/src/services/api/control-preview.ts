@@ -1,6 +1,7 @@
 import { compactApiParams, http } from "./request";
 
-export type PreviewPeriod = "day" | "week" | "month";
+export type PreviewPeriod = "day" | "week" | "month" | "custom";
+export type PreviewRange = { period: Exclude<PreviewPeriod, "custom"> } | { period: "custom"; from: string; to: string };
 export type PreviewCapability = "text" | "image" | "video" | "audio";
 
 export type PreviewMeta = {
@@ -71,14 +72,14 @@ export type PreviewUserDetail = PreviewMeta & {
 
 const base = "/admin/analytics/control-preview";
 
-export function getControlPreview(period: PreviewPeriod, signal?: AbortSignal) {
-    return http.get<PreviewOverview>(base, { params: { period }, signal });
+export function getControlPreview(range: PreviewRange, signal?: AbortSignal) {
+    return http.get<PreviewOverview>(base, { params: range, signal });
 }
 
-export function getControlPreviewUsers(params: { period: PreviewPeriod; page: number; pageSize: number; keyword?: string; model?: string; capability?: string }, signal?: AbortSignal) {
+export function getControlPreviewUsers(params: PreviewRange & { page: number; pageSize: number; keyword?: string; model?: string; capability?: string }, signal?: AbortSignal) {
     return http.get<PreviewUsers>(`${base}${params.model !== undefined ? "/model-users" : "/users"}`, { params: compactApiParams(params), signal });
 }
 
-export function getControlPreviewUser(userId: string, params: { period: PreviewPeriod; page: number; pageSize: number }, signal?: AbortSignal) {
+export function getControlPreviewUser(userId: string, params: PreviewRange & { page: number; pageSize: number }, signal?: AbortSignal) {
     return http.get<PreviewUserDetail>(`${base}/users/${encodeURIComponent(userId)}`, { params, signal });
 }

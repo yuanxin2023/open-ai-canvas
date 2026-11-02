@@ -2887,6 +2887,8 @@ paths:
       description: 需要 admin.analytics.control_preview。仅统计当前保留的普通用户；北京时间自然周期，主看板缓存最长五秒。
       parameters:
         - {$ref: "#/components/parameters/ControlPreviewPeriod"}
+        - {$ref: "#/components/parameters/ControlPreviewFrom"}
+        - {$ref: "#/components/parameters/ControlPreviewTo"}
       responses:
         "200":
           description: 成功信封，data 为控制预览快照
@@ -2906,6 +2908,8 @@ paths:
       description: 需要 admin.analytics.control_preview。搜索和分页不改变全体用户消费占比分母及原始排名。
       parameters:
         - {$ref: "#/components/parameters/ControlPreviewPeriod"}
+        - {$ref: "#/components/parameters/ControlPreviewFrom"}
+        - {$ref: "#/components/parameters/ControlPreviewTo"}
         - {$ref: "#/components/parameters/ControlPreviewPage"}
         - {$ref: "#/components/parameters/ControlPreviewPageSize"}
         - {in: query, name: keyword, schema: {type: string}, description: 用户名或用户 ID}
@@ -2927,6 +2931,8 @@ paths:
       description: 需要 admin.analytics.control_preview。包括有调用但零消费的用户；消费占比分母为该模型全体用户消费。
       parameters:
         - {$ref: "#/components/parameters/ControlPreviewPeriod"}
+        - {$ref: "#/components/parameters/ControlPreviewFrom"}
+        - {$ref: "#/components/parameters/ControlPreviewTo"}
         - {$ref: "#/components/parameters/ControlPreviewPage"}
         - {$ref: "#/components/parameters/ControlPreviewPageSize"}
         - {in: query, name: model, required: true, schema: {type: string}}
@@ -2951,6 +2957,8 @@ paths:
       parameters:
         - {in: path, name: id, required: true, schema: {type: string}}
         - {$ref: "#/components/parameters/ControlPreviewPeriod"}
+        - {$ref: "#/components/parameters/ControlPreviewFrom"}
+        - {$ref: "#/components/parameters/ControlPreviewTo"}
         - {$ref: "#/components/parameters/ControlPreviewPage"}
         - {$ref: "#/components/parameters/ControlPreviewPageSize"}
       responses:
@@ -4017,8 +4025,18 @@ components:
     ControlPreviewPeriod:
       in: query
       name: period
-      schema: {type: string, enum: [day, week, month], default: day}
-      description: 北京时间今日、本周（周一开始）、本月至当前，左闭右开
+      schema: {type: string, enum: [day, week, month, custom], default: day}
+      description: 北京时间今日、本周（周一开始）、本月至当前；custom 使用 from/to，最多 366 天
+    ControlPreviewFrom:
+      in: query
+      name: from
+      schema: {type: string, format: date}
+      description: custom 时必填，开始日期（北京时间，含当天）
+    ControlPreviewTo:
+      in: query
+      name: to
+      schema: {type: string, format: date}
+      description: custom 时必填，结束日期（北京时间，含当天）；返回的 to 为次日零点排他边界
     ControlPreviewPage:
       in: query
       name: page
@@ -4151,7 +4169,7 @@ components:
     ControlPreviewMeta:
       type: object
       properties:
-        period: {type: string, enum: [day, week, month]}
+        period: {type: string, enum: [day, week, month, custom]}
         from: {type: string, format: date-time}
         to: {type: string, format: date-time}
         asOf: {type: string, format: date-time}

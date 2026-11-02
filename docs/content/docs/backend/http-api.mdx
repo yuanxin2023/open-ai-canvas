@@ -205,7 +205,9 @@ handle 放错端点、格式错误或行 ID 不存在时，工具错误回执提
 | `GET /admin/analytics/control-preview/model-users` | 指定 `model` 和 `capability` 的用户生成与消费统计 |
 | `GET /admin/analytics/control-preview/users/:id` | 普通用户汇总、模型统计、分页消费流水 |
 
-统一接收 `period=day|week|month`，默认 `day`。北京时间自然日、本周周一、本月第一日开始，统计到当前，区间左闭右开。分页默认 `page=1&pageSize=20`，每页最多 100 条；用户列表支持 `keyword` 搜索用户名或用户 ID。模型用户接口必须同时传模型和 `text|image|video|audio` 能力；用户明细拒绝管理员、缺失或已注销账户（404）。
+统一接收 `period=day|week|month|custom`，默认 `day`。快捷周期从北京时间自然日、本周周一、本月第一日开始，统计到当前。自定义周期必须同时传 `from=YYYY-MM-DD&to=YYYY-MM-DD`，包含起止日期全天，最多 366 天；日期缺失、无效、倒序或超限返回错误。查询边界左闭右开，响应 `to` 为结束日期次日北京时间零点。单日趋势按小时、多日按天统计。其他周期不接受日期参数。
+
+控制预览右上角支持日历筛选，指标、排行、模型分布、到账来源、趋势及用户和模型明细共享同一范围，自动刷新保持所选日期。剩余积分与累计消耗仍为当前快照，不回溯历史余额。分页默认 `page=1&pageSize=20`，每页最多 100 条；用户列表支持 `keyword` 搜索用户名或用户 ID。模型用户接口必须同时传模型和 `text|image|video|audio` 能力；用户明细拒绝管理员、缺失或已注销账户（404）。
 
 所有响应的 `data` 均含 `period/from/to/asOf/timezone`；列表另含 `users/total/page/pageSize`，用户明细含 `user/models/entries/total/page/pageSize`。金额字段以整数微积分、人民币分传递。主看板使用有界进程内缓存合并并发查询，缓存五秒，权限在读取缓存前校验；`asOf` 是实际快照时间，手动刷新也可能命中五秒内快照。详细类型见 OpenAPI。
 

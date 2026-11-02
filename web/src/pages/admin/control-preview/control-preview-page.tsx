@@ -1,14 +1,14 @@
-import { Button, Skeleton } from "antd";
+import { App, Button, DatePicker, Skeleton } from "antd";
 import { ArrowRight, RefreshCw } from "lucide-react";
 import { useState } from "react";
 import { Area, AreaChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
-import { getControlPreview, type PreviewModel, type PreviewPeriod } from "@/services/api/control-preview";
+import { getControlPreview, type PreviewModel, type PreviewPeriod, type PreviewRange } from "@/services/api/control-preview";
 import { AdminPageFrame } from "../components/admin-shell";
 import { AdminStatTile, ListToolbar } from "../components/admin-ui";
 import { PreviewChoice, PreviewEmpty, PreviewError, PreviewPanel } from "./preview-controls";
 import { PreviewDetails, type PreviewSelection } from "./preview-details";
-import { previewCapabilities, previewColors, previewCredits, previewModelSlices, previewNumber, previewPercent, previewPeriods, previewTime, previewUserColor } from "./preview-utils";
+import { previewCapabilities, previewColors, previewCredits, previewModelSlices, previewNumber, previewPercent, previewPeriods, previewRangeDates, previewRangeLabel, previewTime, previewUserColor } from "./preview-utils";
 import { usePreviewQuery } from "./use-preview-query";
 import "./control-preview.css";
 
@@ -21,16 +21,18 @@ const refreshOptions = [
 const inflowLabels = { redeem: "兑换码兑换", payment: "在线充值", admin: "管理员增加", reward: "其他奖励" };
 
 export default function ControlPreviewPage() {
-    const [period, setPeriod] = useState<PreviewPeriod>("day");
+    const { message } = App.useApp();
+    const [range, setRange] = useState<PreviewRange>({ period: "day" });
     const [interval, setInterval] = useState(30_000);
     const [top, setTop] = useState(10);
     const [metric, setMetric] = useState<"generations" | "consumedMicrocredits">("generations");
     const [capability, setCapability] = useState("");
     const [stack, setStack] = useState<PreviewSelection[]>([]);
-    const query = usePreviewQuery(["overview", period], (signal) => getControlPreview(period, signal), interval);
+    const query = usePreviewQuery(["overview", range], (signal) => getControlPreview(range, signal), interval);
     const data = query.data;
     const kpi = data?.kpi;
-    const periodLabel = previewPeriods.find((item) => item.value === period)!.label;
+    const periodLabel = range.period === "custom" ? "所选范围" : previewRangeLabel(range);
+    const hourly = range.period === "day" || (range.period === "custom" && range.from === range.to);
     const ranking = data?.ranking.slice(0, top) || [];
     const slices = previewModelSlices(data?.models || [], metric, capability);
     const modelTotal = slices.reduce((sum, row) => sum + row.value, 0);
@@ -48,6 +50,23 @@ export default function ControlPreviewPage() {
                 <ListToolbar
                     trailing={
                         <>
+                            <div className="admin-preview-range-picker" role="group" aria-label="控制预览日期范围（北京时间）">
+                                <DatePicker.RangePicker
+                                    allowClear={false}
+                                    format="YYYY-MM-DD"
+                                    placeholder={["开始日期", "结束日期"]}
+                                    value={previewRangeDates(range)}
+                                    onChange={(value) => {
+                                        if (!value?.[0] || !value[1]) return;
+                                        if (value[1].startOf("day").diff(value[0].startOf("day"), "day") > 365) {
+                                            message.warning("日期范围最多包含 366 天");
+                                            return;
+                                        }
+                                        setRange({ period: "custom", from: value[0].format("YYYY-MM-DD"), to: value[1].format("YYYY-MM-DD") });
+                                        setStack([]);
+                                    }}
+                                />
+                            </div>
                             <span className="admin-preview-note">{interval ? "自动更新" : "已暂停更新"}</span>
                             <PreviewChoice label="刷新间隔" options={refreshOptions} value={interval} onChange={setInterval} />
                             <Button aria-label="刷新控制预览" title="刷新控制预览" icon={<RefreshCw className="size-4" />} loading={query.isFetching} onClick={() => void query.refetch({ cancelRefetch: false })} />
@@ -60,13 +79,14 @@ export default function ControlPreviewPage() {
                     <PreviewChoice<PreviewPeriod>
                         label="统计周期"
                         options={previewPeriods}
-                        value={period}
+                        value={range.period}
                         onChange={(value) => {
-                            setPeriod(value);
+                            if (value === "custom") return;
+                            setRange({ period: value });
                             setStack([]);
                         }}
                     />
-                    <span className="admin-preview-note">北京时间</span>
+                    <span className="admin-preview-note">{range.period === "custom" ? "自定义日期 · 北京时间" : "北京时间"}</span>
                 </ListToolbar>
                 <PreviewError error={query.error} stale={Boolean(data)} retry={() => void query.refetch({ cancelRefetch: false })} />
                 {query.isPending && <Skeleton active paragraph={{ rows: 8 }} />}
@@ -220,7 +240,7 @@ export default function ControlPreviewPage() {
                         <div className="admin-preview-bottom-grid">
                             <PreviewPanel
                                 title="积分到账与消费趋势"
-                                description={`${periodLabel} · ${period === "day" ? "按小时" : "按日"}统计`}
+                                description={`${periodLabel} · ${hourly ? "按小时" : "按日"}统计`}
                                 actions={
                                     <div className="admin-preview-chart-legend">
                                         <span>
@@ -279,10 +299,11 @@ export default function ControlPreviewPage() {
                             </PreviewPanel>
                         </div>
                         <p className="admin-preview-note">仅统计当前保留的普通用户数据 · 管理员及已永久注销用户不计入 · 消费按结算时间，生成按首次请求时间统计 · 成功率仅包含已结束生成</p>
+                        <p className="admin-preview-note">用户剩余积分及累计消耗为当前快照，其余指标按所选范围统计；自定义范围包含结束日期当天。</p>
                         {Boolean(kpi?.unlinkedGenerations) && <p className="admin-preview-note">有 {previewNumber(kpi?.unlinkedGenerations)} 条历史生成缺少任务或请求关联，已按独立日志计数。</p>}
                     </>
                 )}
-                <PreviewDetails stack={stack} onStackChange={setStack} period={period} interval={interval} overview={data} />
+                <PreviewDetails stack={stack} onStackChange={setStack} range={range} interval={interval} overview={data} />
             </div>
         </AdminPageFrame>
     );

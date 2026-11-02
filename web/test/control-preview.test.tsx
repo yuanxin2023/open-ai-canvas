@@ -3,13 +3,23 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { PreviewModel } from "../src/services/api/control-preview";
 import { ALL_ADMIN_PERMISSIONS, firstAdminPath, hasAdminPermission } from "../src/lib/admin-permissions";
 import { PreviewChoice, PreviewEmpty, PreviewPanel } from "../src/pages/admin/control-preview/preview-controls";
-import { previewCredits, previewModelKey, previewModelSlices, previewTime, previewUserColor } from "../src/pages/admin/control-preview/preview-utils";
+import { previewCredits, previewModelKey, previewModelSlices, previewTime, previewUserColor, previewRangeDates, previewRangeLabel } from "../src/pages/admin/control-preview/preview-utils";
 
 function model(name: string, count: number, capability: PreviewModel["capability"] = "text"): PreviewModel {
     return { model: name, capability, generations: count, consumedMicrocredits: count * 1_000_000, succeeded: count, failed: 0, pending: 0 };
 }
 
 describe("control preview", () => {
+    test("date picker shortcuts use Beijing dates across midnight and preserve custom bounds", () => {
+        const now = Date.parse("2026-11-01T16:01:00Z");
+        const dates = (range: Parameters<typeof previewRangeDates>[0]) => previewRangeDates(range, now).map(date => date.format("YYYY-MM-DD"));
+        expect(dates({ period: "day" })).toEqual(["2026-11-02", "2026-11-02"]);
+        expect(dates({ period: "week" })).toEqual(["2026-11-02", "2026-11-02"]);
+        expect(dates({ period: "month" })).toEqual(["2026-11-01", "2026-11-02"]);
+        const custom = { period: "custom" as const, from: "2026-10-04", to: "2026-11-02" };
+        expect(dates(custom)).toEqual([custom.from, custom.to]);
+        expect(previewRangeLabel(custom)).toBe("2026-10-04 至 2026-11-02");
+    });
     test("top five plus other preserve the full denominator and capability scope", () => {
         const rows = [model("same", 30), model("same", 20, "image"), ...Array.from({ length: 6 }, (_, index) => model(`m${index}`, index + 1))];
         const copy = [...rows];

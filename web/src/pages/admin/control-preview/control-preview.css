@@ -6,6 +6,16 @@
     padding-bottom: 16px;
 }
 
+[data-admin-root] .admin-control-preview .admin-preview-range-picker {
+    width: 260px;
+    max-width: 100%;
+    min-width: 0;
+}
+
+[data-admin-root] .admin-control-preview .admin-preview-range-picker .ant-picker {
+    width: 100%;
+}
+
 :is(.admin-control-preview, .admin-preview-detail) .admin-preview-note {
     color: var(--admin-text-muted);
     font-size: 11px;

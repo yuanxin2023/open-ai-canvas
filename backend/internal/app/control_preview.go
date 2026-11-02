@@ -15,6 +15,8 @@ import (
 
 type ControlPreviewQuery struct {
 	Period     string `form:"period"`
+	From       string `form:"from"`
+	To         string `form:"to"`
 	Page       int    `form:"page"`
 	PageSize   int    `form:"pageSize"`
 	Keyword    string `form:"keyword"`
@@ -73,14 +75,29 @@ func controlPreviewRange(query ControlPreviewQuery, now time.Time) (ControlPrevi
 	}
 	local := now.In(controlPreviewLocation)
 	from := time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, controlPreviewLocation)
+	to := now
+	fromText, toText := strings.TrimSpace(query.From), strings.TrimSpace(query.To)
+	if period != "custom" && (fromText != "" || toText != "") {
+		return ControlPreviewMeta{}, repository.ControlPreviewFilter{}, BadAuthRequest("日期范围仅适用于 custom 统计周期")
+	}
 	switch period {
 	case "day":
 	case "week":
 		from = from.AddDate(0, 0, -(int(local.Weekday())+6)%7)
 	case "month":
 		from = time.Date(local.Year(), local.Month(), 1, 0, 0, 0, 0, controlPreviewLocation)
+	case "custom":
+		start, startErr := time.ParseInLocation("2006-01-02", fromText, controlPreviewLocation)
+		end, endErr := time.ParseInLocation("2006-01-02", toText, controlPreviewLocation)
+		if startErr != nil || endErr != nil || end.Before(start) {
+			return ControlPreviewMeta{}, repository.ControlPreviewFilter{}, BadAuthRequest("请提供有效的开始和结束日期（YYYY-MM-DD），结束日期不能早于开始日期")
+		}
+		from, to = start, end.AddDate(0, 0, 1)
+		if to.Year() > 9999 || to.Sub(from) > 366*24*time.Hour {
+			return ControlPreviewMeta{}, repository.ControlPreviewFilter{}, BadAuthRequest("自定义日期范围最多包含 366 天")
+		}
 	default:
-		return ControlPreviewMeta{}, repository.ControlPreviewFilter{}, BadAuthRequest("统计周期必须为 day、week 或 month")
+		return ControlPreviewMeta{}, repository.ControlPreviewFilter{}, BadAuthRequest("统计周期必须为 day、week、month 或 custom")
 	}
 	if query.Page < 0 || query.PageSize < 0 || query.PageSize > 100 || query.Page > 1_000_000 {
 		return ControlPreviewMeta{}, repository.ControlPreviewFilter{}, BadAuthRequest("分页参数无效，每页最多 100 条")
@@ -96,7 +113,7 @@ func controlPreviewRange(query ControlPreviewQuery, now time.Time) (ControlPrevi
 	if size == 0 {
 		size = 20
 	}
-	meta := ControlPreviewMeta{Period: period, From: from.UTC(), To: now.UTC(), AsOf: now.UTC(), Timezone: "Asia/Shanghai"}
+	meta := ControlPreviewMeta{Period: period, From: from.UTC(), To: to.UTC(), AsOf: now.UTC(), Timezone: "Asia/Shanghai"}
 	filter := repository.ControlPreviewFilter{From: meta.From, To: meta.To, Page: page, PageSize: size,
 		Model: strings.TrimSpace(query.Model), Capability: capability, Keyword: strings.TrimSpace(query.Keyword)}
 	return meta, filter, nil
@@ -116,8 +133,11 @@ func (s *Service) AdminControlPreview(ctx context.Context, actor *model.User, qu
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	key := meta.Period + ":" + meta.From.Format(time.RFC3339)
+	if meta.Period == "custom" {
+		key += ":" + meta.To.Format(time.RFC3339)
+	}
 	return s.controlPreviewReadCache.Get(ctx, key, func(ctx context.Context) (*ControlPreviewOverview, int, error) {
-		snapshot, err := s.repo.WithContext(ctx).ControlPreviewSnapshot(filter, meta.Period == "day")
+		snapshot, err := s.repo.WithContext(ctx).ControlPreviewSnapshot(filter, controlPreviewHourly(meta))
 		if err != nil {
 			return nil, 0, err
 		}
@@ -128,6 +148,10 @@ func (s *Service) AdminControlPreview(ctx context.Context, actor *model.User, qu
 	})
 }
 
+func controlPreviewHourly(meta ControlPreviewMeta) bool {
+	return meta.Period == "day" || (meta.Period == "custom" && meta.To.Sub(meta.From) == 24*time.Hour)
+}
+
 func controlPreviewTrend(meta ControlPreviewMeta, buckets []repository.ControlPreviewBucket) []ControlPreviewTrend {
 	byBucket := make(map[string]repository.ControlPreviewBucket, len(buckets))
 	for _, bucket := range buckets {
@@ -136,12 +160,12 @@ func controlPreviewTrend(meta ControlPreviewMeta, buckets []repository.ControlPr
 	result := []ControlPreviewTrend{}
 	for at := meta.From.In(controlPreviewLocation); at.Before(meta.To); {
 		key, label := at.Format("2006-01-02"), at.Format("01-02")
-		if meta.Period == "day" {
+		if controlPreviewHourly(meta) {
 			key, label = at.Format("2006-01-02 15:00"), at.Format("15:00")
 		}
 		bucket := byBucket[key]
 		result = append(result, ControlPreviewTrend{Time: at.UTC(), Label: label, InflowMicrocredits: bucket.InflowMicrocredits, ConsumedMicrocredits: bucket.ConsumedMicrocredits})
-		if meta.Period == "day" {
+		if controlPreviewHourly(meta) {
 			at = at.Add(time.Hour)
 		} else {
 			at = at.AddDate(0, 0, 1)

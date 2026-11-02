@@ -44,6 +44,42 @@ func TestControlPreviewPeriods(t *testing.T) {
 	}
 }
 
+func TestControlPreviewCustomRange(t *testing.T) {
+	now := time.Date(2026, 11, 2, 12, 0, 0, 0, controlPreviewLocation)
+	for _, test := range []struct {
+		from, to string
+		buckets  int
+	}{
+		{"2026-10-04", "2026-11-02", 30},
+		{"2026-11-01", "2026-11-01", 24},
+		{"2024-01-01", "2024-12-31", 366},
+	} {
+		meta, filter, err := controlPreviewRange(ControlPreviewQuery{Period: "custom", From: test.from, To: test.to}, now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		end, _ := time.ParseInLocation("2006-01-02", test.to, controlPreviewLocation)
+		if filter.From.In(controlPreviewLocation).Format("2006-01-02 15:04") != test.from+" 00:00" || !filter.To.Equal(end.AddDate(0, 0, 1)) || !meta.AsOf.Equal(now) {
+			t.Fatalf("incorrect inclusive Beijing dates: %+v", meta)
+		}
+		if trend := controlPreviewTrend(meta, nil); len(trend) != test.buckets || !trend[len(trend)-1].Time.Before(filter.To) {
+			t.Fatalf("incorrect trend: %+v", trend)
+		}
+	}
+	for _, query := range []ControlPreviewQuery{
+		{Period: "custom"},
+		{Period: "custom", From: "2026-11-01"},
+		{Period: "custom", From: "2026-02-30", To: "2026-03-01"},
+		{Period: "custom", From: "2026-11-02", To: "2026-11-01"},
+		{Period: "custom", From: "2024-01-01", To: "2025-01-01"},
+		{Period: "day", From: "2026-11-01", To: "2026-11-02"},
+	} {
+		if _, _, err := controlPreviewRange(query, now); err == nil {
+			t.Fatalf("accepted invalid range: %+v", query)
+		}
+	}
+}
+
 func TestControlPreviewPermissionAndCache(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "preview.db")), &gorm.Config{})
 	if err != nil {
@@ -75,6 +111,26 @@ func TestControlPreviewPermissionAndCache(t *testing.T) {
 		t.Fatalf("cache did not preserve snapshot: %+v %v", second, err)
 	}
 	denied := &model.User{Role: model.UserRoleAdmin, AdminLevel: model.AdminLevelScoped, AdminPermissions: []model.AdminPermission{model.AdminPermissionAnalyticsOverview}}
+	custom := ControlPreviewQuery{Period: "custom", From: "2026-10-01", To: "2026-10-02"}
+	for index, at := range []string{"2026-09-30T23:59:59+08:00", "2026-10-01T00:00:00+08:00", "2026-10-02T23:59:59+08:00", "2026-10-03T00:00:00+08:00"} {
+		created, _ := time.Parse(time.RFC3339, at)
+		entry := model.CreditLedgerEntry{ID: at, UserID: "user", Type: model.CreditLedgerCheckinBonus, AmountMicrocredits: int64((index + 1) * 10), CreatedAt: created}
+		if err := db.Create(&entry).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	short, err := svc.AdminControlPreview(ctx, full, custom)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if short.KPI.InflowMicrocredits != 50 {
+		t.Fatalf("inclusive date boundary: %+v", short.KPI)
+	}
+	custom.To = "2026-10-03"
+	long, err := svc.AdminControlPreview(ctx, full, custom)
+	if err != nil || long.To.Equal(short.To) || len(long.Trend) != 3 || long.KPI.AvailableMicrocredits != 200 || long.KPI.InflowMicrocredits != 90 {
+		t.Fatalf("custom range cache collision: %+v %v", long, err)
+	}
 	if _, err := svc.AdminControlPreview(ctx, denied, ControlPreviewQuery{}); err == nil {
 		t.Fatal("existing overview permission granted new financial permission")
 	}

@@ -3,11 +3,11 @@ import type { ColumnsType } from "antd/es/table";
 import { ArrowLeft } from "lucide-react";
 import { useState } from "react";
 
-import { getControlPreviewUser, getControlPreviewUsers, type PreviewModel, type PreviewOverview, type PreviewPeriod, type PreviewUser, type PreviewUserDetail } from "@/services/api/control-preview";
+import { getControlPreviewUser, getControlPreviewUsers, type PreviewModel, type PreviewOverview, type PreviewRange, type PreviewUser, type PreviewUserDetail } from "@/services/api/control-preview";
 import { AdminDataTable, AdminStatTile, PaginationBar } from "../components/admin-ui";
 import { AdminDrawer } from "../ui/overlays";
 import { PreviewEmpty, PreviewError } from "./preview-controls";
-import { previewCapabilities, previewCredits, previewModelKey, previewNumber, previewPercent, previewTime } from "./preview-utils";
+import { previewCapabilities, previewCredits, previewModelKey, previewNumber, previewPercent, previewRangeLabel, previewTime } from "./preview-utils";
 import { usePreviewQuery } from "./use-preview-query";
 
 export type PreviewSelection = { kind: "ranking" } | { kind: "model"; row: PreviewModel } | { kind: "models" } | { kind: "user"; id: string };
@@ -34,7 +34,7 @@ export function previewModelColumns(onModel?: (row: PreviewModel) => void): Colu
     ];
 }
 
-export function PreviewDetails({ stack, onStackChange, period, interval, overview }: { stack: PreviewSelection[]; onStackChange: (stack: PreviewSelection[]) => void; period: PreviewPeriod; interval: number; overview?: PreviewOverview }) {
+export function PreviewDetails({ stack, onStackChange, range, interval, overview }: { stack: PreviewSelection[]; onStackChange: (stack: PreviewSelection[]) => void; range: PreviewRange; interval: number; overview?: PreviewOverview }) {
     const selection = stack.at(-1);
     const title = selection?.kind === "user" ? "用户消费明细" : selection?.kind === "models" ? "完整模型统计" : selection?.kind === "model" ? `${selection.row.model} · 用户统计` : "完整消费排行";
     const openUser = (id: string) => onStackChange([...stack, { kind: "user", id }]);
@@ -54,14 +54,14 @@ export function PreviewDetails({ stack, onStackChange, period, interval, overvie
             }
         >
             {selection && (
-                <div className="admin-preview-detail" key={JSON.stringify(selection) + period}>
-                    <p className="admin-preview-note">{period === "day" ? "今日" : period === "week" ? "本周" : "本月"} · 北京时间 · 仅普通用户</p>
+                <div className="admin-preview-detail" key={JSON.stringify(selection) + JSON.stringify(range)}>
+                    <p className="admin-preview-note">{previewRangeLabel(range)} · 北京时间 · 仅普通用户</p>
                     {selection.kind === "user" ? (
-                        <UserDetail id={selection.id} period={period} interval={interval} />
+                        <UserDetail id={selection.id} range={range} interval={interval} />
                     ) : selection.kind === "models" ? (
                         <ModelsTable models={overview?.models || []} onModel={(row) => onStackChange([...stack, { kind: "model", row }])} />
                     ) : (
-                        <UserTable period={period} interval={interval} model={selection.kind === "model" ? selection.row : undefined} onUser={openUser} />
+                        <UserTable range={range} interval={interval} model={selection.kind === "model" ? selection.row : undefined} onUser={openUser} />
                     )}
                 </div>
             )}
@@ -69,10 +69,10 @@ export function PreviewDetails({ stack, onStackChange, period, interval, overvie
     );
 }
 
-function UserTable({ period, interval, model, onUser }: { period: PreviewPeriod; interval: number; model?: PreviewModel; onUser: (id: string) => void }) {
+function UserTable({ range, interval, model, onUser }: { range: PreviewRange; interval: number; model?: PreviewModel; onUser: (id: string) => void }) {
     const [page, setPage] = useState(1);
     const [keyword, setKeyword] = useState("");
-    const query = usePreviewQuery(["users", period, model?.model, model?.capability, page, keyword], (signal) => getControlPreviewUsers({ period, page, pageSize: 20, keyword, model: model?.model, capability: model?.capability }, signal), interval);
+    const query = usePreviewQuery(["users", range, model?.model, model?.capability, page, keyword], (signal) => getControlPreviewUsers({ ...range, page, pageSize: 20, keyword, model: model?.model, capability: model?.capability }, signal), interval);
     const columns: ColumnsType<PreviewUser> = [
         { title: "排名", dataIndex: "rank", width: 65 },
         {
@@ -122,9 +122,9 @@ function ModelsTable({ models, onModel }: { models: PreviewModel[]; onModel?: (r
     );
 }
 
-function UserDetail({ id, period, interval }: { id: string; period: PreviewPeriod; interval: number }) {
+function UserDetail({ id, range, interval }: { id: string; range: PreviewRange; interval: number }) {
     const [page, setPage] = useState(1);
-    const query = usePreviewQuery(["user", id, period, page], (signal) => getControlPreviewUser(id, { period, page, pageSize: 20 }, signal), interval);
+    const query = usePreviewQuery(["user", id, range, page], (signal) => getControlPreviewUser(id, { ...range, page, pageSize: 20 }, signal), interval);
     const detail = query.data;
     const columns: ColumnsType<PreviewUserDetail["entries"][number]> = [
         { title: "结算时间（北京）", dataIndex: "createdAt", width: 155, render: (value) => previewTime(value, true) },

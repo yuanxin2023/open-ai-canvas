@@ -1,10 +1,22 @@
-import type { PreviewModel } from "@/services/api/control-preview";
+import dayjs, { type Dayjs } from "dayjs";
+import type { PreviewModel, PreviewRange } from "@/services/api/control-preview";
 
 export const previewPeriods = [
     { value: "day", label: "今日" },
     { value: "week", label: "本周" },
     { value: "month", label: "本月" },
 ] as const;
+
+export function previewRangeDates(range: PreviewRange, now = Date.now()): [Dayjs, Dayjs] {
+    if (range.period === "custom") return [dayjs(range.from), dayjs(range.to)];
+    const today = dayjs(new Date(now + 8 * 60 * 60 * 1000).toISOString().slice(0, 10));
+    const from = range.period === "week" ? today.subtract((today.day() + 6) % 7, "day") : range.period === "month" ? today.startOf("month") : today;
+    return [from, today];
+}
+
+export function previewRangeLabel(range: PreviewRange) {
+    return range.period === "custom" ? `${range.from} 至 ${range.to}` : previewPeriods.find((item) => item.value === range.period)!.label;
+}
 export const previewCapabilities = [
     { value: "", label: "全部" },
     { value: "text", label: "文本" },
