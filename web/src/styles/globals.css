@@ -3167,7 +3167,11 @@
     }
 
     .workspace-credit-checkout-shell {
-    padding: 28px 30px 30px;
+    --surface-raised: var(--user-surface-raised);
+    --border-color: var(--border);
+    --checkout-wechat: #07c160;
+    --checkout-alipay: #1677ff;
+    padding: 32px;
     background: var(--surface-raised);
     }
 
@@ -3191,12 +3195,12 @@
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
     gap: 10px;
-    margin: 24px 0;
+    margin: 18px 0;
     }
 
     .workspace-credit-provider-option {
     display: flex;
-    min-height: 54px;
+    min-height: 68px;
     align-items: center;
     gap: 10px;
     border: 1px solid var(--border-color);
@@ -3215,36 +3219,90 @@
     }
 
     .workspace-credit-provider-option[aria-checked="true"] {
-    border-color: var(--control-selected-border);
-    background: var(--control-selected-bg);
-    color: var(--control-selected-fg);
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--control-selected-border) 45%, transparent);
+    border-color: var(--foreground);
+    background: var(--surface-raised);
+    color: var(--foreground);
+    box-shadow: inset 0 0 0 1px var(--foreground);
     }
 
-    .workspace-credit-provider-option > svg:last-child {
-    width: 15px;
-    height: 15px;
+    .workspace-credit-provider-radio {
+    width: 18px;
+    height: 18px;
     margin-left: auto;
-    opacity: 0;
+    flex: 0 0 auto;
+    border: 1px solid var(--border-color);
+    border-radius: var(--r-full);
     }
 
-    .workspace-credit-provider-option[aria-checked="true"] > svg:last-child { opacity: 1; }
+    .workspace-credit-provider-option[aria-checked="true"] .workspace-credit-provider-radio {
+    border: 5px solid var(--foreground);
+    }
+
+    .workspace-credit-provider-option:focus-visible {
+    outline: 2px solid var(--foreground);
+    outline-offset: 3px;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+    .workspace-credit-provider-option { transition: none; }
+    }
+
+    .workspace-credit-checkout-total {
+    display: grid;
+    gap: 8px;
+    padding: 28px 0;
+    text-align: center;
+    color: var(--muted-foreground);
+    }
+
+    .workspace-credit-checkout-total strong {
+    color: var(--foreground);
+    font-size: clamp(36px, 7vw, 48px);
+    font-weight: 650;
+    line-height: 1.2;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.03em;
+    }
+
+    .workspace-credit-checkout-total small { margin-right: 8px; font-size: var(--fs-heading-lg); }
+
+    .workspace-credit-checkout-method-title {
+    border-top: 1px solid var(--border-color);
+    padding-top: 24px;
+    font-size: var(--fs-body);
+    font-weight: 600;
+    }
+
+    .workspace-credit-checkout-hint,
+    .workspace-credit-checkout-note {
+    color: var(--muted-foreground);
+    text-align: center;
+    font-size: var(--fs-label);
+    }
+
+    .workspace-credit-checkout-hint { display: flex; align-items: center; justify-content: center; gap: 6px; margin: 20px 0; }
+    .workspace-credit-checkout-hint svg { width: 14px; height: 14px; flex: 0 0 auto; }
+    .workspace-credit-checkout-note { margin-top: 12px; }
+    .workspace-credit-checkout-submit.ant-btn { height: 50px; }
 
     .workspace-credit-provider-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
     width: 24px;
     height: 24px;
     flex: 0 0 auto;
     }
 
-    .workspace-credit-provider-icon.is-large { width: 34px; height: 34px; }
-    .workspace-credit-provider-icon.is-wechat { color: #07c160; }
-    .workspace-credit-provider-icon.is-alipay { color: #1677ff; }
+    .workspace-credit-provider-icon.is-large { width: 34px; height: 34px; font-size: 34px; }
+    .workspace-credit-provider-icon.is-wechat { color: var(--checkout-wechat); }
+    .workspace-credit-provider-icon.is-alipay { color: var(--checkout-alipay); }
 
     .workspace-credit-checkout-summary {
     display: grid;
     gap: 12px;
     margin-bottom: 22px;
-    border: 1px solid var(--border-color);
     border-radius: var(--r-lg);
     padding: 18px;
     background: color-mix(in srgb, var(--foreground) 2.5%, transparent);

@@ -2,6 +2,7 @@ import { ApiError, apiBaseURL, compactApiParams, http } from "@/services/api/req
 import type { RemoteResource } from "@/services/api/resources";
 
 export type PaymentProvider = {
+    paymentMethod: "wechat" | "alipay" | "online";
     id: "wechat-native" | "alipay-page-pay" | string;
     pluginId: string;
     name: string;

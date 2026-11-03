@@ -599,6 +599,10 @@ Skills 的 `tool_completed` / `tool_failed` 事件附带 `skillId`、`skillName`
 
 ## 用户支付订单
 
+`GET /api/payments/providers` 的用户渠道视图提供 `paymentMethod=wechat|alipay|online`，`name` 为用户可理解的付款方式，不展示易支付等插件品牌；管理员渠道接口仍保留原始名称和配置。易支付与支付 FM 根据已保存的 `payType` 映射微信或支付宝，空值遵循插件默认支付宝；其他无法确定的付款方式显示在线支付。渠道 ID 仍用于下单路由，不将显示名称作为支付依据，也不向用户返回商户配置或密钥。
+
+套餐购买弹窗先确认金额、套餐与到账积分，再选择实际可用的支付方式；扫码与跳转提示遵循渠道收银方式。只有一个已配置通道时只显示该方式，不虚构另一种付款能力。外部收银台的品牌和页面由网关控制。
+
 `GET /api/payments/orders` 仅返回当前登录用户自己的充值订单，支持 `page`、`pageSize` 和归并筛选 `status=all|unpaid|completed|failed|closed`。`unpaid` 包含创建中、待支付和关单中，接口不接受原始数据库状态绕过归并筛选。结果按创建时间倒序返回 `{ orders, total, page, pageSize }`。
 
 个人中心“我的订单”可刷新、分页和筛选订单；未完成订单通过 `POST /api/payments/orders/:id/close` 取消。服务端始终校验订单归属并尽力在关闭前向渠道查单，不能操作其他用户订单；查单或远程关单失败不阻塞本地取消，已验签的晚到通知和已关闭订单补查仍可幂等入账。

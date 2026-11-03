@@ -1,6 +1,6 @@
 import { AlipayCircleFilled, WechatFilled } from "@ant-design/icons";
 import { App, Button, ConfigProvider, Input, Popover, QRCode, Skeleton } from "antd";
-import { Check, CircleCheck, CreditCard, Gift, Sparkles } from "lucide-react";
+import { Check, CircleCheck, CreditCard, ExternalLink, Gift, Sparkles } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -378,7 +378,7 @@ export function WorkspaceCreditPopover({ userId }: { userId: string }) {
                 open={Boolean(selectedProduct)}
                 title={null}
                 footer={null}
-                width="min(760px, calc(100vw - 24px))"
+                width="min(600px, calc(100vw - 24px))"
                 rootClassName="workspace-credit-checkout-modal"
                 maskClosable={!paymentCreating && !paymentQuerying}
                 onCancel={closePaymentSelector}
@@ -387,13 +387,22 @@ export function WorkspaceCreditPopover({ userId }: { userId: string }) {
                     <section className="workspace-credit-checkout-shell">
                         <header className="workspace-credit-checkout-header">
                             <div>
-                                <h2>{paymentOrder ? "完成支付" : "选择支付方式"}</h2>
-                                <p>{paymentOrder ? "请按收银台提示完成付款，到账状态将自动更新。" : "仅显示管理员已启用并配置完成的支付方式。"}</p>
+                                <h2>{paymentOrder ? "完成支付" : "确认订单"}</h2>
+                                <p>{paymentOrder ? "请按收银台提示完成付款，到账状态将自动更新。" : "确认套餐与支付方式，付款成功后积分自动到账"}</p>
                             </div>
                         </header>
 
                         {!paymentOrder ? (
                             <>
+                                <div className="workspace-credit-checkout-total">
+                                    <span>应付金额</span>
+                                    <strong><small>¥</small>{(selectedProduct.amountFen / 100).toFixed(2)}</strong>
+                                </div>
+                                <div className="workspace-credit-checkout-summary">
+                                    <div><span>所选套餐</span><strong>{selectedProduct.name}</strong></div>
+                                    <div><span>到账积分</span><strong>{formatCredits(selectedProduct.creditsMicrocredits)} 积分</strong></div>
+                                </div>
+                                <h3 className="workspace-credit-checkout-method-title">支付方式</h3>
                                 <div className="workspace-credit-provider-options" role="radiogroup" aria-label="支付方式">
                                     {providers.map((provider) => (
                                         <button
@@ -401,25 +410,34 @@ export function WorkspaceCreditPopover({ userId }: { userId: string }) {
                                             type="button"
                                             role="radio"
                                             aria-checked={selectedProviderId === provider.id}
+                                            tabIndex={selectedProviderId === provider.id ? 0 : -1}
                                             className="workspace-credit-provider-option"
                                             onClick={() => setSelectedProviderId(provider.id)}
+                                            onKeyDown={(event) => {
+                                                const index = providers.indexOf(provider);
+                                                const direction = event.key === "ArrowRight" || event.key === "ArrowDown" ? 1 : event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : 0;
+                                                if (!direction && event.key !== "Home" && event.key !== "End") return;
+                                                event.preventDefault();
+                                                const next = event.key === "Home" ? 0 : event.key === "End" ? providers.length - 1 : (index + direction + providers.length) % providers.length;
+                                                setSelectedProviderId(providers[next].id);
+                                                event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="radio"]')[next]?.focus();
+                                            }}
                                         >
-                                            <PaymentProviderIcon providerId={provider.id} />
+                                            <PaymentProviderIcon providerId={provider.paymentMethod} />
                                             <span>{paymentProviderLabel(provider)}</span>
-                                            <Check aria-hidden />
+                                            <span className="workspace-credit-provider-radio" aria-hidden />
                                         </button>
                                     ))}
                                 </div>
 
-                                <div className="workspace-credit-checkout-summary">
-                                    <div><span>所选套餐</span><strong>{selectedProduct.name}</strong></div>
-                                    <div><span>到账积分</span><strong>{formatCredits(selectedProduct.creditsMicrocredits)} 积分</strong></div>
-                                    <div><span>应付金额</span><strong className="workspace-credit-checkout-amount">¥ {(selectedProduct.amountFen / 100).toFixed(2)}</strong></div>
-                                </div>
-
-                                <Button type="primary" size="large" block loading={paymentCreating} disabled={!selectedProvider} onClick={() => void startPayment()}>
-                                    {selectedProvider ? `使用${paymentProviderLabel(selectedProvider)}` : "暂无可用支付方式"}
+                                <p className="workspace-credit-checkout-hint">
+                                    {selectedProvider?.checkoutMode === "qr_code" ? "确认后请扫码完成付款" : "确认后将跳转至支付页面完成付款"}
+                                    {selectedProvider?.checkoutMode === "redirect" ? <ExternalLink aria-hidden /> : null}
+                                </p>
+                                <Button className="workspace-credit-checkout-submit" type="primary" size="large" block loading={paymentCreating} disabled={!selectedProvider} onClick={() => void startPayment()}>
+                                    {selectedProvider ? `确认支付 ¥${(selectedProduct.amountFen / 100).toFixed(2)}` : "暂无可用支付方式"}
                                 </Button>
+                                <p className="workspace-credit-checkout-note">支付结果确认后，积分将自动到账</p>
                             </>
                         ) : (
                             <div className="workspace-credit-payment-order">
@@ -429,15 +447,15 @@ export function WorkspaceCreditPopover({ userId }: { userId: string }) {
                                     ) : paymentOrder.checkout.mode === "qr_code" && paymentOrder.checkout.value ? (
                                         <QRCode value={paymentOrder.checkout.value} size={220} bordered={false} />
                                     ) : null}
-                                    <strong>{paymentOrder.status === "credited" ? "支付成功" : paymentOrder.checkout.mode === "qr_code" ? `请使用${paymentProviderLabelById(paymentOrder.providerId)}扫码` : "请在支付页面完成付款"}</strong>
+                                    <strong>{paymentOrder.status === "credited" ? "支付成功" : paymentOrder.checkout.mode === "qr_code" ? `请使用${paymentProviderLabel(providers.find((provider) => provider.id === paymentOrder.providerId))}扫码` : "请在支付页面完成付款"}</strong>
                                     {paymentOrder.status === "pending" ? <span>剩余支付时间 {formatPaymentCountdown(paymentOrder.expiresAt, clock)}</span> : null}
                                 </div>
                                 <div className="workspace-credit-payment-details">
-                                    <PaymentProviderIcon providerId={paymentOrder.providerId} large />
+                                    <PaymentProviderIcon providerId={providers.find((provider) => provider.id === paymentOrder.providerId)?.paymentMethod || "online"} large />
                                     <h3>{paymentOrder.productName}</h3>
                                     <div className="workspace-credit-payment-total"><span>总计</span><strong>¥ {(paymentOrder.amountFen / 100).toFixed(2)}</strong></div>
                                     <dl>
-                                        <div><dt>支付方式</dt><dd>{paymentProviderLabelById(paymentOrder.providerId)}</dd></div>
+                                        <div><dt>支付方式</dt><dd>{paymentProviderLabel(providers.find((provider) => provider.id === paymentOrder.providerId))}</dd></div>
                                         <div><dt>到账积分</dt><dd>{formatCredits(paymentOrder.creditsMicrocredits)} 积分</dd></div>
                                         <div><dt>订单号</dt><dd>{paymentOrder.merchantOrderNo}</dd></div>
                                     </dl>
@@ -459,20 +477,14 @@ export function WorkspaceCreditPopover({ userId }: { userId: string }) {
 
 function PaymentProviderIcon({ providerId, large = false }: { providerId: string; large?: boolean }) {
     const className = large ? "workspace-credit-provider-icon is-large" : "workspace-credit-provider-icon";
-    if (isWechatProvider(providerId)) return <WechatFilled className={`${className} is-wechat`} aria-hidden />;
-    if (isAlipayProvider(providerId)) return <AlipayCircleFilled className={`${className} is-alipay`} aria-hidden />;
+    if (isWechatProvider(providerId)) return <span className={`${className} is-wechat`} aria-hidden><WechatFilled /></span>;
+    if (isAlipayProvider(providerId)) return <span className={`${className} is-alipay`} aria-hidden><AlipayCircleFilled /></span>;
     return <CreditCard className={className} aria-hidden />;
 }
 
-function paymentProviderLabel(provider: PaymentProvider) {
-    if (isWechatProvider(provider.id)) return "微信支付";
-    if (isAlipayProvider(provider.id)) return "支付宝支付";
-    return provider.name;
-}
-
-function paymentProviderLabelById(providerId: string) {
-    if (isWechatProvider(providerId)) return "微信支付";
-    if (isAlipayProvider(providerId)) return "支付宝支付";
+function paymentProviderLabel(provider?: PaymentProvider) {
+    if (provider?.paymentMethod === "wechat") return "微信支付";
+    if (provider?.paymentMethod === "alipay") return "支付宝支付";
     return "在线支付";
 }
 

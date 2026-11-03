@@ -66,15 +66,48 @@ func (s *Service) PaymentProviders(actor *model.User) ([]PaymentProviderView, er
 	}
 	items := make([]PaymentProviderView, 0)
 	for _, descriptor := range s.paymentRegistry.Descriptors() {
-		view, _, err := s.paymentProviderView(descriptor)
+		view, config, err := s.paymentProviderView(descriptor)
 		if err != nil {
 			return nil, err
 		}
 		if view.Enabled && view.Configured {
+			values, err := s.decryptPaymentConfig(config)
+			if err != nil {
+				return nil, err
+			}
+			view.PaymentMethod = customerPaymentMethod(descriptor.ID, values)
+			if mode := strings.TrimSpace(values["checkoutMode"]); mode == "qr_code" || mode == "redirect" {
+				view.CheckoutMode = mode
+			}
+			switch view.PaymentMethod {
+			case "wechat":
+				view.Name = "微信支付"
+			case "alipay":
+				view.Name = "支付宝支付"
+			default:
+				view.Name = "在线支付"
+			}
 			items = append(items, view)
 		}
 	}
 	return items, nil
+}
+
+func customerPaymentMethod(providerID string, config payment.Config) string {
+	switch providerID {
+	case PaymentProviderWeChat, PaymentProviderZPayWeChat:
+		return "wechat"
+	case PaymentProviderAlipay, PaymentProviderZPayAlipay:
+		return "alipay"
+	case PaymentProviderEpay, PaymentProviderZhiFuFM:
+		switch strings.TrimSpace(config["payType"]) {
+		case "wxpay":
+			return "wechat"
+		case "", "alipay":
+			return "alipay"
+		}
+	}
+	return "online"
 }
 
 func (s *Service) AdminPaymentProviders(actor *model.User) ([]AdminPaymentProviderView, error) {

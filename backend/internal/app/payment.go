@@ -25,6 +25,7 @@ const (
 )
 
 type PaymentProviderView struct {
+	PaymentMethod          string `json:"paymentMethod"`
 	ID                     string `json:"id"`
 	PluginID               string `json:"pluginId"`
 	Name                   string `json:"name"`
