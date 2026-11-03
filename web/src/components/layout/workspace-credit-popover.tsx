@@ -1,6 +1,6 @@
 import { AlipayCircleFilled, WechatFilled } from "@ant-design/icons";
 import { App, Button, ConfigProvider, Input, Popover, QRCode, Skeleton } from "antd";
-import { Check, CircleCheck, CreditCard, ExternalLink, Gift, Sparkles } from "lucide-react";
+import { Check, CircleCheck, Clock3, CreditCard, ExternalLink, Gift, Sparkles } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -378,17 +378,17 @@ export function WorkspaceCreditPopover({ userId }: { userId: string }) {
                 open={Boolean(selectedProduct)}
                 title={null}
                 footer={null}
-                width="min(600px, calc(100vw - 24px))"
+                width={paymentOrder ? "min(780px, calc(100vw - 24px))" : "min(600px, calc(100vw - 24px))"}
                 rootClassName="workspace-credit-checkout-modal"
                 maskClosable={!paymentCreating && !paymentQuerying}
                 onCancel={closePaymentSelector}
             >
                 {selectedProduct ? (
-                    <section className="workspace-credit-checkout-shell">
+                    <section className={`workspace-credit-checkout-shell${paymentOrder ? " is-payment-order" : ""}`}>
                         <header className="workspace-credit-checkout-header">
                             <div>
-                                <h2>{paymentOrder ? "完成支付" : "确认订单"}</h2>
-                                <p>{paymentOrder ? "请按收银台提示完成付款，到账状态将自动更新。" : "确认套餐与支付方式，付款成功后积分自动到账"}</p>
+                                <h2>{paymentOrder ? paymentOrder.status === "credited" ? "支付成功" : paymentOrder.checkout.mode === "qr_code" ? "扫码支付" : "完成支付" : "确认订单"}</h2>
+                                <p>{paymentOrder ? paymentOrder.status !== "credited" && paymentOrder.checkout.mode === "qr_code" ? `请使用${paymentProviderLabel(providers.find((provider) => provider.id === paymentOrder.providerId))}扫描二维码完成付款` : "请按收银台提示完成付款，到账状态将自动更新。" : "确认套餐与支付方式，付款成功后积分自动到账"}</p>
                             </div>
                         </header>
 
@@ -440,33 +440,41 @@ export function WorkspaceCreditPopover({ userId }: { userId: string }) {
                                 <p className="workspace-credit-checkout-note">支付结果确认后，积分将自动到账</p>
                             </>
                         ) : (
+                            <>
                             <div className="workspace-credit-payment-order">
                                 <div className="workspace-credit-payment-code">
+                                    <div className="workspace-credit-payment-brand">
+                                        <PaymentProviderIcon providerId={providers.find((provider) => provider.id === paymentOrder.providerId)?.paymentMethod || "online"} />
+                                        <strong>{paymentProviderLabel(providers.find((provider) => provider.id === paymentOrder.providerId))}</strong>
+                                    </div>
                                     {paymentOrder.status === "credited" ? (
                                         <span className="workspace-credit-payment-success"><CircleCheck aria-hidden /></span>
                                     ) : paymentOrder.checkout.mode === "qr_code" && paymentOrder.checkout.value ? (
-                                        <QRCode value={paymentOrder.checkout.value} size={220} bordered={false} />
+                                        <div className="workspace-credit-payment-qr-frame"><QRCode value={paymentOrder.checkout.value} size={220} color="#111111" bgColor="#FFFFFF" bordered={false} /></div>
                                     ) : null}
-                                    <strong>{paymentOrder.status === "credited" ? "支付成功" : paymentOrder.checkout.mode === "qr_code" ? `请使用${paymentProviderLabel(providers.find((provider) => provider.id === paymentOrder.providerId))}扫码` : "请在支付页面完成付款"}</strong>
-                                    {paymentOrder.status === "pending" ? <span>剩余支付时间 {formatPaymentCountdown(paymentOrder.expiresAt, clock)}</span> : null}
+                                    {paymentOrder.status === "credited" ? <strong>支付成功</strong> : paymentOrder.checkout.mode !== "qr_code" ? <strong>请在支付页面完成付款</strong> : null}
+                                    {paymentOrder.status === "pending" ? <span className="workspace-credit-payment-countdown"><Clock3 aria-hidden />支付剩余时间 <time>{formatPaymentCountdown(paymentOrder.expiresAt, clock)}</time></span> : null}
+                                    <p className="workspace-credit-payment-note">支付完成后，到账状态将自动更新</p>
                                 </div>
                                 <div className="workspace-credit-payment-details">
-                                    <PaymentProviderIcon providerId={providers.find((provider) => provider.id === paymentOrder.providerId)?.paymentMethod || "online"} large />
-                                    <h3>{paymentOrder.productName}</h3>
-                                    <div className="workspace-credit-payment-total"><span>总计</span><strong>¥ {(paymentOrder.amountFen / 100).toFixed(2)}</strong></div>
+                                    <div className="workspace-credit-payment-total"><span>应付金额</span><strong><small>¥</small>{(paymentOrder.amountFen / 100).toFixed(2)}</strong></div>
                                     <dl>
-                                        <div><dt>支付方式</dt><dd>{paymentProviderLabel(providers.find((provider) => provider.id === paymentOrder.providerId))}</dd></div>
+                                        <div><dt>所选套餐</dt><dd>{paymentOrder.productName}</dd></div>
                                         <div><dt>到账积分</dt><dd>{formatCredits(paymentOrder.creditsMicrocredits)} 积分</dd></div>
-                                        <div><dt>订单号</dt><dd>{paymentOrder.merchantOrderNo}</dd></div>
+                                        <div><dt>支付方式</dt><dd><PaymentProviderIcon providerId={providers.find((provider) => provider.id === paymentOrder.providerId)?.paymentMethod || "online"} />{paymentProviderLabel(providers.find((provider) => provider.id === paymentOrder.providerId))}</dd></div>
                                     </dl>
-                                    {paymentOrder.status === "create_failed" ? <Button type="primary" loading={paymentQuerying} onClick={() => void retryPaymentCheckout()}>重新生成支付信息</Button> : paymentOrder.status === "pending" ? (
-                                        <div className="flex gap-2">
-                                            <Button danger disabled={paymentQuerying} onClick={() => void cancelPayment()}>关闭订单</Button>
-                                            <Button type="primary" loading={paymentQuerying} onClick={() => void confirmPayment()}>我已完成支付</Button>
-                                        </div>
-                                    ) : <Button type="primary" onClick={closePaymentSelector}>完成</Button>}
+                                    <div className="workspace-credit-payment-order-number"><span>订单号</span><span>{paymentOrder.merchantOrderNo}</span></div>
                                 </div>
                             </div>
+                            <footer className="workspace-credit-payment-footer">
+                                    {paymentOrder.status === "create_failed" ? <Button type="primary" loading={paymentQuerying} onClick={() => void retryPaymentCheckout()}>重新生成支付信息</Button> : paymentOrder.status === "pending" ? (
+                                        <>
+                                            <Button disabled={paymentQuerying} onClick={() => void cancelPayment()}>关闭订单</Button>
+                                            <Button type="primary" loading={paymentQuerying} onClick={() => void confirmPayment()}>我已完成支付</Button>
+                                        </>
+                                    ) : <Button type="primary" onClick={closePaymentSelector}>完成</Button>}
+                            </footer>
+                            </>
                         )}
                     </section>
                 ) : null}

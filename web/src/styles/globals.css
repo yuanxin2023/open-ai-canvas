@@ -3328,28 +3328,39 @@
     font-variant-numeric: tabular-nums;
     }
 
+    .workspace-credit-checkout-shell.is-payment-order .workspace-credit-checkout-header {
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 24px;
+    }
+
     .workspace-credit-payment-order {
     display: grid;
-    grid-template-columns: minmax(250px, .85fr) minmax(0, 1.15fr);
-    gap: 30px;
-    margin-top: 26px;
+    grid-template-columns: 280px minmax(0, 1fr);
+    gap: 36px;
+    padding: 28px 0;
     }
 
     .workspace-credit-payment-code {
     display: flex;
-    min-height: 320px;
+    min-width: 0;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
-    gap: 10px;
-    border-right: 1px solid var(--border-color);
-    padding-right: 30px;
+    gap: 16px;
     text-align: center;
     }
 
-    .workspace-credit-payment-code .ant-qrcode { background: #fff; }
-    .workspace-credit-payment-code > strong { margin-top: 6px; font-size: var(--fs-body); }
-    .workspace-credit-payment-code > span:last-child { color: color-mix(in srgb, var(--foreground) 48%, transparent); font-size: var(--fs-label); }
+    .workspace-credit-payment-qr-frame {
+    padding: 16px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--r-lg);
+    background: var(--palette-white, #fff);
+    }
+
+    .workspace-credit-payment-brand { display: flex; align-items: center; gap: 10px; font-size: var(--fs-heading); }
+    .workspace-credit-payment-countdown { display: inline-flex; align-items: center; gap: 6px; border-radius: var(--r-full); padding: 6px 12px; background: var(--user-surface-muted); color: var(--muted-foreground); font-size: var(--fs-label); }
+    .workspace-credit-payment-countdown svg { width: 16px; height: 16px; }
+    .workspace-credit-payment-countdown time { font-variant-numeric: tabular-nums; }
+    .workspace-credit-payment-note { color: var(--muted-foreground); font-size: var(--fs-label); }
 
     .workspace-credit-payment-success {
     display: grid;
@@ -3368,32 +3379,38 @@
     min-width: 0;
     flex-direction: column;
     align-items: flex-start;
-    justify-content: center;
+    justify-content: flex-start;
     }
-
-    .workspace-credit-payment-details h3 { margin-top: 14px; font-size: var(--fs-heading); font-weight: 650; }
 
     .workspace-credit-payment-total {
     display: flex;
-    align-items: baseline;
-    gap: 12px;
-    margin-top: 18px;
+    flex-direction: column;
+    gap: 8px;
     }
 
-    .workspace-credit-payment-total span { color: color-mix(in srgb, var(--foreground) 52%, transparent); font-size: var(--fs-body); }
-    .workspace-credit-payment-total strong { font-size: 36px; font-variant-numeric: tabular-nums; font-weight: 650; letter-spacing: -0.03em; }
+    .workspace-credit-payment-total span { color: var(--muted-foreground); font-size: var(--fs-body); }
+    .workspace-credit-payment-total strong { color: var(--foreground); font-size: 44px; line-height: 1.2; font-variant-numeric: tabular-nums; font-weight: 650; letter-spacing: -0.03em; }
+    .workspace-credit-payment-total small { margin-right: 6px; font-size: var(--fs-heading); }
 
     .workspace-credit-payment-details dl {
     display: grid;
     width: 100%;
-    gap: 9px;
-    margin: 24px 0 20px;
+    margin: 24px 0;
+    border-radius: var(--r-lg);
+    padding: 4px 18px;
+    background: var(--user-surface-muted);
     }
 
-    .workspace-credit-payment-details dl > div { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 12px; font-size: var(--fs-label); }
-    .workspace-credit-payment-details dt { color: color-mix(in srgb, var(--foreground) 45%, transparent); }
-    .workspace-credit-payment-details dd { min-width: 0; overflow: hidden; color: color-mix(in srgb, var(--foreground) 70%, transparent); font-family: var(--font-mono); text-overflow: ellipsis; white-space: nowrap; }
-    .workspace-credit-payment-details > .ant-btn { min-width: 150px; }
+    .workspace-credit-payment-details dl > div { display: grid; grid-template-columns: 64px minmax(0, 1fr); align-items: center; gap: 12px; padding: 14px 0; font-size: var(--fs-body); }
+    .workspace-credit-payment-details dl > div + div { border-top: 1px solid var(--border-color); }
+    .workspace-credit-payment-details dt { color: var(--muted-foreground); }
+    .workspace-credit-payment-details dd { display: flex; align-items: center; justify-content: flex-end; gap: 6px; min-width: 0; overflow-wrap: anywhere; text-align: right; color: var(--foreground); font-weight: 600; }
+    .workspace-credit-payment-details dd .workspace-credit-provider-icon { width: 20px; height: 20px; font-size: 20px; }
+    .workspace-credit-payment-order-number { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; width: 100%; font-size: var(--fs-label); color: var(--muted-foreground); }
+    .workspace-credit-payment-order-number > span:last-child { min-width: 0; color: var(--foreground); font-family: var(--font-mono); overflow-wrap: anywhere; text-align: right; }
+    .workspace-credit-payment-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; border-top: 1px solid var(--border-color); padding-top: 24px; }
+    .workspace-credit-payment-footer > .ant-btn { min-width: 128px; height: 44px; }
+    .workspace-credit-payment-footer > .ant-btn:only-child { margin-left: auto; }
 
     @media (max-width: 1100px) {
     .workspace-payment-promotion {
@@ -3403,6 +3420,12 @@
 
     .workspace-payment-promotion-countdown { min-width: 0; }
     .workspace-credit-products-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+
+    @media (max-width: 740px) {
+    .workspace-credit-payment-order { grid-template-columns: minmax(0, 1fr); gap: 28px; }
+    .workspace-credit-payment-details { align-items: stretch; }
+    .workspace-credit-payment-total { align-items: center; }
     }
 
     @media (max-width: 640px) {
@@ -3455,9 +3478,7 @@
     .workspace-credit-checkout-shell { padding: 24px 18px 20px; }
     .workspace-credit-provider-options { grid-template-columns: minmax(0, 1fr); }
     .workspace-credit-payment-order { grid-template-columns: minmax(0, 1fr); gap: 20px; }
-    .workspace-credit-payment-code { min-height: 0; border-right: 0; border-bottom: 1px solid var(--border-color); padding: 0 0 24px; }
-    .workspace-credit-payment-details { align-items: stretch; }
-    .workspace-credit-payment-details > .ant-btn { width: 100%; }
+    .workspace-credit-payment-footer > .ant-btn { min-width: 0; flex: 1; }
     }
 
 
