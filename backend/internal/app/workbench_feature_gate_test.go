@@ -7,7 +7,7 @@ import (
 	"infinite-canvas/backend/internal/model"
 )
 
-func TestClosedWorkbenchRejectsBothCreationPathsAndHistory(t *testing.T) {
+func TestClosedWorkbenchRejectsBothCreationPathsAndCatalog(t *testing.T) {
 	s, _ := newFeatureAvailabilityTestService(t)
 	for _, kind := range []string{model.WorkbenchKindImage, model.WorkbenchKindVideo} {
 		t.Run(kind, func(t *testing.T) {
@@ -17,11 +17,25 @@ func TestClosedWorkbenchRejectsBothCreationPathsAndHistory(t *testing.T) {
 				"mode": kind, "metadata": map[string]any{"source": "workbench", "workbenchKind": kind},
 			}})
 			assertClosedWorkbench(t, err)
-			_, err = s.WorkbenchTasks("user", kind, false, 10)
-			assertClosedWorkbench(t, err)
 			_, err = s.PublicWorkbenchTools(kind)
 			assertClosedWorkbench(t, err)
 		})
+	}
+}
+
+func TestClosedWorkbenchKeepsOwnedHistoryReadable(t *testing.T) {
+	s, db, _, _ := ecommerceCreationTestService(t)
+	saveAdmissionFeatures(t, s, defaultFeatureAvailability())
+	for _, kind := range []string{WorkbenchKindImage, WorkbenchKindVideo} {
+		for _, userID := range []string{"user", "other"} {
+			if err := db.Create(&model.Task{ID: userID + "-" + kind, UserID: userID, Type: "canvas_" + kind, WorkbenchKind: kind, Status: model.TaskStatusSucceeded, InputJSON: `{}`}).Error; err != nil {
+				t.Fatal(err)
+			}
+		}
+		items, err := s.WorkbenchTasks("user", kind, false, 10)
+		if err != nil || len(items) != 1 || items[0].ID != "user-"+kind {
+			t.Fatalf("closed %s history ownership: %+v, %v", kind, items, err)
+		}
 	}
 }
 

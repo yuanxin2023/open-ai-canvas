@@ -6,10 +6,11 @@
 
 - `duration` 支持 4-30 秒整数，默认 5 秒。
 - `resolution` 直接来自统一分辨率，不再遗漏。
-- 比例写入上游实际使用的 `ratio`；首尾帧模式强制 `adaptive`。
+- 比例写入上游实际使用的 `ratio`；只有首尾帧、没有其他参考图时使用 `adaptive`，首尾帧混用参考图时按请求比例出片（`adaptive` 会被参考图带偏成横屏）。
 - `watermark` 映射为 `aigc_watermark`。
 - `generateAudio` 映射为 `generate_audio`。
 - prompt 只放入 text block，不再同时发送顶层 prompt。
 - 首帧、尾帧和 reference image 依据 role 转换，不按 `0/1` 猜测。
+- 首尾帧可与角色、风格参考图同时提交，不再在本地拒绝。
 
 完整字段见 [docs/interface.md](docs/interface.md)。

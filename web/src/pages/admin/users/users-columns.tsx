@@ -7,20 +7,27 @@ import { formatCredits } from "@/constant/credits";
 import { IdentityProviderBadge } from "@/components/layout/identity-provider-badge";
 import { AdminRowActions, AdminStatusBadge } from "../components/admin-ui";
 import type { AdminUser } from "@/services/api/auth";
+import { UserGroupBadge } from "@/components/layout/user-group-badge";
+import { userGroupCode, type PublicUserGroup } from "@/services/api/user-groups";
 
-export type UserColumnKey = "user" | "remark" | "email" | "credits" | "status" | "createdAt" | "actions";
+export type UserColumnKey = "user" | "remark" | "email" | "credits" | "group" | "recharged" | "consumed" | "lastLoginAt" | "status" | "createdAt" | "actions";
 
 export const userColumnOptions: Array<{ key: UserColumnKey; label: string; locked?: boolean }> = [
     { key: "user", label: "用户", locked: true },
     { key: "remark", label: "备注", locked: true },
     { key: "email", label: "邮箱" },
     { key: "credits", label: "当前积分" },
+    { key: "group", label: "分组" },
+    { key: "recharged", label: "累计充值" },
+    { key: "consumed", label: "累计消耗" },
+    { key: "lastLoginAt", label: "最近登录" },
     { key: "status", label: "状态" },
     { key: "createdAt", label: "注册时间" },
     { key: "actions", label: "操作", locked: true },
 ];
 
 export function createUserColumns({
+    groups = [],
     actorId,
     visibleColumns,
     onView,
@@ -28,6 +35,7 @@ export function createUserColumns({
     onSaveRemark,
     onPurge,
 }: {
+    groups?: PublicUserGroup[];
     actorId?: string;
     visibleColumns: Set<UserColumnKey>;
     onView: (user: AdminUser) => void;
@@ -64,6 +72,14 @@ export function createUserColumns({
             align: "center",
             render: (value, user) => <span className="tabular-nums" title={`冻结积分：${formatCredits(user.reservedMicrocredits)}`}>{formatCredits(value)}</span>,
         },
+        { key: "group", title: "分组", width: 130, align: "center", render: (_, user) => {
+            const code = userGroupCode(user.userGroup);
+            const group = groups.find((item) => item.code === code);
+            return <span className="inline-flex items-center gap-1"><span>{group?.name || (code === "default" ? "默认分组" : code)}</span>{group ? <UserGroupBadge group={group} compact /> : null}</span>;
+        } },
+        { key: "recharged", title: "累计充值", dataIndex: "rechargedMicrocredits", width: 130, align: "center", render: (value?: number) => <span className="tabular-nums">{value === undefined ? "—" : formatCredits(value)}</span> },
+        { key: "consumed", title: "累计消耗", dataIndex: "consumedMicrocredits", width: 130, align: "center", render: (value?: number) => <span className="tabular-nums">{value === undefined ? "—" : formatCredits(value)}</span> },
+        { key: "lastLoginAt", title: "最近登录", dataIndex: "lastLoginAt", width: 150, align: "center", render: (value?: string) => value ? <span title={formatTime(value)}>{formatTime(value)}</span> : <span className="text-foreground/40">从未登录</span> },
         { key: "status", title: "状态", dataIndex: "status", width: 110, align: "center", render: (status) => <AdminStatusBadge label={status === "active" ? "已启用" : "已停用"} tone={status === "active" ? "success" : "neutral"} /> },
         { key: "createdAt", title: "注册时间", dataIndex: "createdAt", width: 112, align: "center", render: (value) => <span className="tabular-nums" title={formatTime(value)}>{formatCompactTime(value)}</span> },
         {

@@ -7,6 +7,7 @@ import { useWorkspaceLogout } from "@/hooks/use-workspace-logout";
 import { accountStorageMeter } from "@/lib/account-storage-usage";
 import { useUserStore } from "@/stores/use-user-store";
 import { UserAvatar } from "./user-avatar";
+import { UserGroupAvatarRing, UserGroupBadge } from "./user-group-badge";
 import "./workspace-account-card.css";
 
 /** 账户菜单卡片；余额、积分购买与退出均复用真实服务。 */
@@ -20,8 +21,8 @@ export function WorkspaceAccountCard({ onBuyCredits, onNavigate }: { onBuyCredit
     if (!user) return null;
     return <section className="workspace-account-card" aria-label="我的账户">
         <header className="workspace-account-card-identity">
-            <UserAvatar user={user} className="workspace-account-card-avatar" />
-            <div><strong>{user.username}</strong><span>{user.email || `用户 ${user.id.slice(0, 8)}`}</span></div>
+            <UserGroupAvatarRing><UserAvatar user={user} className="workspace-account-card-avatar" /></UserGroupAvatarRing>
+            <div><strong className="workspace-account-card-name"><span>{user.username}</span><UserGroupBadge /></strong><span>{user.email || `用户 ${user.id.slice(0, 8)}`}</span></div>
             <em>{user.role === "admin" ? "管理员" : "创作者"}</em>
         </header>
         {creditsEnabled ? <div className="workspace-account-card-wallet">

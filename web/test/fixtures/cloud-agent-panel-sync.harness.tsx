@@ -34,7 +34,6 @@ const { useUserStore } = await import("@/stores/use-user-store");
 const { useGlobalAgentStore } = await import("@/stores/use-global-agent-store");
 const { createModelChannel, defaultConfig, normalizeConfigSnapshot, useConfigStore } = await import("@/stores/use-config-store");
 const { ApiError } = await import("@/services/api/request");
-const { buildImageToPrevisPrefill } = await import("@/lib/canvas/image-to-previs-agent");
 
 let local: CloudAgentConversation[] = [];
 let remote: CloudAgentConversation[] = [];
@@ -44,7 +43,6 @@ let refreshOverride: (() => Promise<CloudAgentConversation[]>) | undefined;
 const subscriptions: Array<{ id: string; after: number; event: (event: AgentEvent) => void; connection: (status: string) => void; closed: boolean }> = [];
 const sent: string[] = [];
 const sendInputs: Array<Record<string, any>> = [];
-const interjections: unknown[] = [];
 let sendFailure: Error | undefined;
 let capabilitiesOverride: (() => Promise<unknown>) | undefined;
 let sendOverride: (() => Promise<{ run: AgentRun }>) | undefined;
@@ -64,7 +62,8 @@ const MotionBox = ({ children, className, style }: any) => (
 );
 mock.module("motion/react", () => ({ AnimatePresence: ({ children }: any) => children, motion: { aside: MotionBox, div: MotionBox }, useReducedMotion: () => true }));
 mock.module("antd", () => ({
-    App: { useApp: () => ({ message: { info: silent, error: silent } }) },
+    App: { useApp: () => ({ message: { info: silent, error: silent, warning: silent, success: silent } }) },
+    Dropdown: ({ children }: any) => children,
     Button: ({ children, loading: _loading, icon, size: _size, ...props }: any) => (
         <button {...props}>
             {icon}
@@ -94,10 +93,6 @@ mock.module("@/services/api/agent", () => ({
     createAgentRun: async () => {
         generated++;
         throw new Error("不应新建独立轮次");
-    },
-    sendAgentInterjection: async (...input: unknown[]) => {
-        interjections.push(input);
-        throw new Error("图片规划不应作为旧轮次插话发送");
     },
     decideAgentApproval: async () => {
         generated++;
@@ -136,6 +131,7 @@ mock.module("@/services/api/skills", () => ({
     listSkillPresets: async () => ({ presets: [] }),
     listSkills: async () => ({ skills: [] }),
     listAddedSkills: async () => ({ skills: [] }),
+    listAgentInstalledSkills: async () => ({ skills: [] }),
     listSkillLibraryCategories: async () => ({ categories: [] }),
     addSkill: async () => {
         throw new Error("不应安装技能");
@@ -186,8 +182,10 @@ mock.module("@/components/canvas/canvas-cloud-agent-panel-parts", () => ({
     },
 }));
 mock.module("@/components/canvas/canvas-agent-skill-library-modal", () => ({ CanvasAgentSkillLibraryModal: () => null }));
-mock.module("@/components/canvas/canvas-agent-preset-confirmation", () => ({ AgentPresetConfirmation: () => null }));
-mock.module("@/components/canvas/canvas-cloud-agent-settings", () => ({ CanvasCloudAgentSettings: () => null }));
+mock.module("@/components/skills/skill-recommendations-modal", () => ({ SkillRecommendationsModal: () => null }));
+mock.module("@/components/canvas/canvas-cloud-agent-settings", () => ({ CanvasCloudAgentSettings: () => null, agentPermissionLabel: (mode: string) => mode }));
+mock.module("@/components/canvas/canvas-cloud-agent-composer", () => ({ AgentContextChip: () => null }));
+mock.module("@/services/cloud-agent-outbox", () => ({ loadCloudAgentOutbox: async () => null, saveCloudAgentOutbox: async () => {}, clearCloudAgentOutbox: async () => {} }));
 mock.module("@/components/canvas/canvas-cloud-agent-connectors", () => ({ AgentConnectorsBar: () => null }));
 mock.module("@/components/canvas/use-agent-panel-layout", () => ({ useAgentPanelLayout: () => ({ style: {}, pointerHandlers: {}, reset: silent, onResizeKeyDown: silent }) }));
 
@@ -223,6 +221,12 @@ const focus = async () => {
         await settle();
     });
 };
+// 面板合并写入本机对话缓存；断言缓存前先触发与页面隐藏相同的立即写入（缓存 mock 同步落盘）。
+const persist = async () => {
+    await act(async () => {
+        window.dispatchEvent(new Event("pagehide"));
+    });
+};
 async function mount(initial: CloudAgentConversation, cloud: CloudAgentConversation[], initialPending: CloudAgentPendingSubmission | null = null) {
     local = [initial];
     activeId = initial.id;
@@ -231,7 +235,6 @@ async function mount(initial: CloudAgentConversation, cloud: CloudAgentConversat
     refreshOverride = undefined;
     sent.length = 0;
     sendInputs.length = 0;
-    interjections.length = 0;
     sendFailure = undefined;
     capabilitiesOverride = undefined;
     sendOverride = undefined;
@@ -267,177 +270,6 @@ function configureModels(ambiguous: boolean) {
     useConfigStore.setState({ config });
 }
 
-const planningImage = { id: "planning-image", nodeId: "image-node", kind: "image", label: "场景图", title: "场景图", active: true } as const;
-function addVisionChannel() {
-    const config = useConfigStore.getState().config;
-    const vision = createModelChannel({
-        id: "chosen-vision",
-        scope: "system",
-        models: ["vision-text"],
-        modelCosts: [
-            {
-                model: "vision-text",
-                channelModelId: "chosen-vision-model",
-                capability: "text",
-                billingMode: "fixed_request",
-                unitPriceMicrocredits: 10_000_000,
-                capabilityConfig: { version: 1, text: { contextWindowTokens: 128000, maxOutputTokens: 16384, references: { promptMaxChars: 32000, maxImages: 3, maxImageBytes: 30 * 1024 * 1024, maxVideos: 0, maxVideoBytes: 0 } } },
-            },
-        ],
-    });
-    useConfigStore.setState({ config: normalizeConfigSnapshot({ config: { ...config, channels: [...config.channels, vision] } }).config });
-}
-
-function prefillPlanningImage(autoSubmit = false) {
-    useGlobalAgentStore.getState().setCanvas({ ...useGlobalAgentStore.getState().canvas!, selectedNodeIds: [planningImage.nodeId], references: [planningImage], prefillRequest: { id: 9876, ...buildImageToPrevisPrefill(planningImage), autoSubmit } });
-}
-
-test("图片规划只预填并保留已有草稿，选定支持图片的渠道后手动发送", async () => {
-    const current = { ...chat("local", makeRun("first")), model: "local-test::local-agent-test" };
-    const mounted = await mount(current, [current]);
-    try {
-        await act(async () => {
-            addVisionChannel();
-            composer.onPromptChange("保留原来的想法");
-        });
-        await act(async () => {
-            prefillPlanningImage();
-            await settle();
-        });
-        expect(sent).toEqual([]);
-        expect(generated).toBe(0);
-        expect(composer.prompt).toContain("保留原来的想法");
-        expect(composer.prompt).toContain("@[node:image-node]");
-        expect(controls.selectedModel).toBe("local-test::local-agent-test");
-        expect(mounted.host.textContent).toContain("请确认下方模型与渠道后发送");
-        await act(async () => {
-            composer.onSubmit();
-            await settle();
-        });
-        expect(sent).toEqual([]);
-        expect(controls.selectedModel).toBe("local-test::local-agent-test");
-        expect(conversationUI.messages.some((message: any) => message.text?.includes("不支持图片规划"))).toBe(true);
-        await act(async () => {
-            controls.onModelChange("chosen-vision::vision-text");
-            composer.onPromptChange(`${composer.prompt}\n只规划人物和相机`);
-        });
-        await act(async () => {
-            composer.onSubmit();
-            await settle();
-        });
-        expect(sent).toEqual(["first"]);
-        expect(sendInputs[0]).toMatchObject({ model: "vision-text", channelId: "chosen-vision", channelModelKey: "vision-text" });
-        expect(sendInputs[0].prompt).toContain("@[node:image-node]");
-        expect(sendInputs[0].prompt).toContain("只规划人物和相机");
-        expect(sendInputs[0].prompt).toContain("canvas_inspect_image");
-        expect(generated).toBe(0);
-    } finally {
-        await mounted.close();
-    }
-});
-
-test("旧图片入口即使传入自动发送也不执行，移除引用后恢复普通文本发送", async () => {
-    const current = { ...chat("local", makeRun("first")), model: "local-test::local-agent-test" };
-    const mounted = await mount(current, [current]);
-    try {
-        await act(async () => {
-            prefillPlanningImage(true);
-            await settle();
-        });
-        expect(sent).toEqual([]);
-        expect(generated).toBe(0);
-        await act(async () => {
-            composer.onPromptChange("改为普通文本讨论");
-        });
-        expect(mounted.host.textContent).not.toContain("请确认下方模型与渠道后发送");
-        await act(async () => {
-            composer.onSubmit();
-            await settle();
-        });
-        expect(sendInputs).toHaveLength(1);
-        expect(sendInputs[0]).toMatchObject({ prompt: "改为普通文本讨论", channelId: "local-test" });
-        expect(generated).toBe(0);
-    } finally {
-        await mounted.close();
-    }
-});
-
-test("已提交但结果未知的图片请求保留原模型渠道和幂等身份", async () => {
-    const current = { ...chat("local", makeRun("first")), model: "local-test::local-agent-test" };
-    const image = buildImageToPrevisPrefill(planningImage);
-    const original: CloudAgentPendingSubmission = {
-        key: "frozen-image-key",
-        fingerprint: "frozen-image-body",
-        parentRunId: "first",
-        messageId: "user-frozen-image-key",
-        displayText: image.displayText,
-        canvasReferenceNodeId: planningImage.nodeId,
-        request: { canvasId: "shared-canvas", prompt: image.text, model: "old-vision", channelId: "old-vision-route", idempotencyKey: "frozen-image-key" },
-    };
-    const mounted = await mount(current, [current], original);
-    try {
-        expect(sent).toEqual([]);
-        await act(async () => {
-            composer.onSubmit();
-            await settle();
-        });
-        expect(sent).toEqual(["first"]);
-        expect(sendInputs[0]).toEqual(original.request);
-        expect(generated).toBe(0);
-    } finally {
-        await mounted.close();
-    }
-});
-
-test("已有轮次运行时不将新图片规划作为另一模型的插话发送", async () => {
-    const current = { ...chat("local", makeRun("running-image-host", "running")), model: "local-test::local-agent-test" };
-    const mounted = await mount(current, [current]);
-    try {
-        await act(async () => {
-            prefillPlanningImage();
-            await settle();
-        });
-        expect(composer.submitDisabled).toBe(true);
-        expect(mounted.host.textContent).toContain("请等待当前轮次完成或停止后");
-        await act(async () => {
-            composer.onSubmit();
-            await settle();
-        });
-        expect(sent).toEqual([]);
-        expect(interjections).toEqual([]);
-        expect(composer.prompt).toContain("@[node:image-node]");
-        expect(generated).toBe(0);
-    } finally {
-        await mounted.close();
-    }
-});
-
-test("切换画布后新图片意图可复用局部编号，仍不自动执行", async () => {
-    const current = { ...chat("local", makeRun("first")), model: "local-test::local-agent-test" };
-    const mounted = await mount(current, [current]);
-    try {
-        await act(async () => {
-            prefillPlanningImage();
-            await settle();
-        });
-        await act(async () => {
-            useGlobalAgentStore.getState().setCanvas({ canvasId: "another-canvas", nodeCount: 1, references: [], selectedNodeIds: [] });
-            await settle();
-        });
-        const nextImage = { ...planningImage, nodeId: "another-image", id: "another-image-ref" };
-        await act(async () => {
-            useGlobalAgentStore.getState().setCanvas({ ...useGlobalAgentStore.getState().canvas!, references: [nextImage], selectedNodeIds: [nextImage.nodeId], prefillRequest: { id: 9876, ...buildImageToPrevisPrefill(nextImage) } });
-            await settle();
-        });
-        expect(composer.prompt).toContain("@[node:another-image]");
-        expect(sent).toEqual([]);
-        expect(interjections).toEqual([]);
-        expect(generated).toBe(0);
-    } finally {
-        await mounted.close();
-    }
-});
-
 test("手机空缓存接续同画布桌面会话，审批被另一端处理后自动收敛且不重复提交", async () => {
     const waiting = makeRun("desktop", "waiting_approval");
     waiting.approval = { approvalId: "approval-one", call: { id: "call", function: { name: "generate_media", arguments: "{}" } } };
@@ -457,6 +289,7 @@ test("手机空缓存接续同画布桌面会话，审批被另一端处理后�
             observation.event({ eventId: "status", runId: "desktop", seq: 6, type: "run_status", payload: { status: "running", revision: 2 }, createdAt: waiting.updatedAt });
         });
         expect(conversationUI.approval).toBeNull();
+        await persist();
         expect(local.find((item) => item.id === "server")?.lastEventSeq).toBe(6);
         expect(generated).toBe(0);
     } finally {
@@ -504,9 +337,11 @@ test("云端发现不能替换未提交草稿，明确新建后不会重新接�
             await settle();
         });
         expect(composer.prompt).toBe("");
+        await persist();
         expect(local.some((item) => item.id === "phone-draft" && item.draft === "尚未发送的草稿")).toBe(true);
         await focus();
         expect(conversationUI.messages).toHaveLength(0);
+        await persist();
         expect(local.find((item) => item.id === activeId)?.localNewCanvasId).toBe("shared-canvas");
         expect(generated).toBe(0);
     } finally {
@@ -534,6 +369,7 @@ test("旧账号云端请求迟到时不得写入已切换账号的面板", async
             await settle();
         });
         expect(conversationUI.messages.map((item: any) => item.text)).not.toContain("结果-secret");
+        await persist();
         expect(local.some((item) => item.serverConversationId === "shared-session")).toBe(false);
     } finally {
         await mounted.close();
@@ -556,6 +392,7 @@ test("手选同画布较早历史后不被其他会话抢走，但仍能跟随�
         });
         await focus();
         expect(conversationUI.messages.map((item: any) => item.text)).toContain("结果-earlier");
+        await persist();
         expect(local.find((item) => item.id === activeId)?.localSelectedCanvasId).toBe("shared-canvas");
         remote = [{ ...earlier, run: { ...makeRun("earlier-child"), parentId: "earlier" }, messages: [{ id: "new-result", role: "assistant", text: "所选会话的新轮次" }] }, newer];
         await focus();
@@ -574,6 +411,7 @@ test("未知提交的原请求与幂等身份保留，不能因发现云端同�
         expect(pending).toEqual(original);
         expect(composer.prompt).toBe("生成森林");
         expect(conversationUI.messages).toHaveLength(0);
+        await persist();
         expect(activeId).toBe("uncertain");
         expect(generated).toBe(0);
     } finally {
@@ -651,6 +489,7 @@ test("同名多渠道不能自动换到默认收费模型，手动选择后才�
         await focus();
         expect(controls.selectedModel).toBe("");
         expect(composer.submitDisabled).toBe(true);
+        await persist();
         expect(local.find((item) => item.id === activeId)?.model).toBe("local-agent-test");
         await act(async () => {
             composer.onPromptChange("等待确认渠道的草稿");
@@ -714,6 +553,7 @@ test("同轮历史已追赶到新水位后，延迟的旧 SSE delta 不会再次
             observation.event({ eventId: "new-seven", runId: "streaming", seq: 7, type: "assistant_delta", payload: { messageId: "live-answer", text: "新内容" }, createdAt: current.updatedAt });
         });
         expect(conversationUI.messages.find((item: any) => item.id === "live-answer")?.text).toBe("完整回答新内容");
+        await persist();
         expect(local.find((item) => item.id === activeId)?.lastEventSeq).toBe(7);
         expect(generated).toBe(0);
     } finally {
@@ -837,6 +677,7 @@ test("手动重新打开当前云端历史时同步水位，旧 SSE 缓冲不会
             observation.event({ eventId: "history-delayed-five", runId: "same-current", seq: 5, type: "assistant_delta", payload: { messageId: "manual-history-answer", text: "重复内容" }, createdAt: current.updatedAt });
         });
         expect(conversationUI.messages.find((item: any) => item.id === "manual-history-answer")?.text).toBe("手动恢复的完整回复");
+        await persist();
         expect(local.find((item) => item.id === activeId)?.lastEventSeq).toBe(6);
         expect(generated).toBe(0);
     } finally {

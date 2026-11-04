@@ -36,8 +36,9 @@ func (s *Service) AdminReferences(actor *model.User) (*AdminReferenceData, error
 		return nil, err
 	}
 	result := &AdminReferenceData{
-		Users:    []AdminUserReference{},
-		Channels: []AdminChannelReference{},
+		UserGroups: []PublicUserGroup{},
+		Users:      []AdminUserReference{},
+		Channels:   []AdminChannelReference{},
 	}
 	if actor.AdminLevel == model.AdminLevelFull || actor.AdminLevel == "" ||
 		actor.HasAdminPermission(model.AdminPermissionAnalyticsOverview) || actor.HasAdminPermission(model.AdminPermissionAPILogs) ||
@@ -53,7 +54,8 @@ func (s *Service) AdminReferences(actor *model.User) (*AdminReferenceData, error
 	}
 	if actor.AdminLevel == model.AdminLevelFull || actor.AdminLevel == "" ||
 		actor.HasAdminPermission(model.AdminPermissionAnalyticsOverview) || actor.HasAdminPermission(model.AdminPermissionAPILogs) ||
-		actor.HasAdminPermission(model.AdminPermissionChannels) || actor.HasAdminPermission(model.AdminPermissionLogicalModels) {
+		actor.HasAdminPermission(model.AdminPermissionChannels) || actor.HasAdminPermission(model.AdminPermissionLogicalModels) ||
+		actor.HasAdminPermission(model.AdminPermissionUserGroups) || actor.HasAdminPermission(model.AdminPermissionEcommerceConfig) {
 		channels, err := s.repo.AdminSystemChannelReferences()
 		if err != nil {
 			return nil, err
@@ -81,6 +83,15 @@ func (s *Service) AdminReferences(actor *model.User) (*AdminReferenceData, error
 				displayNames = append(displayNames, strings.TrimSpace(item.DisplayName))
 			}
 			result.Channels = append(result.Channels, AdminChannelReference{ID: channel.ID, Name: channel.Name, Enabled: channel.Enabled, Models: uniqueNonEmpty(models), ModelDisplayNames: uniqueNonEmpty(displayNames)})
+		}
+	}
+	if actor.AdminLevel == model.AdminLevelFull || actor.AdminLevel == "" || actor.HasAdminPermission(model.AdminPermissionUsers) || actor.HasAdminPermission(model.AdminPermissionUserGroups) {
+		groups, err := s.repo.UserGroups()
+		if err != nil {
+			return nil, err
+		}
+		for _, group := range groups {
+			result.UserGroups = append(result.UserGroups, PublicUserGroup{Code: group.Code, Name: group.Name, BadgeLabel: group.BadgeLabel, BadgeStyle: group.BadgeStyle})
 		}
 	}
 	return result, nil
@@ -136,6 +147,10 @@ func (s *Service) CreateAdminUser(actor *model.User, req CreateAdminUserRequest)
 			return nil, err
 		}
 	}
+	groupCode, err := s.requireExistingUserGroup(req.UserGroup)
+	if err != nil {
+		return nil, err
+	}
 	passwordHash, err := hashPassword(req.Password)
 	if err != nil {
 		return nil, err
@@ -153,6 +168,7 @@ func (s *Service) CreateAdminUser(actor *model.User, req CreateAdminUserRequest)
 		ProfileName:          displayName,
 		Role:                 req.Role,
 		AdminLevel:           adminLevel,
+		UserGroup:            groupCode,
 		Status:               req.Status,
 		PasswordHash:         passwordHash,
 		AdminRemark:          remark,
@@ -291,6 +307,13 @@ func (s *Service) UpdateUser(actor *model.User, userID string, req UpdateUserReq
 	user.Role = nextRole
 	user.AdminLevel = nextLevel
 	user.Status = nextStatus
+	if req.UserGroup != nil {
+		groupCode, groupErr := s.requireExistingUserGroup(*req.UserGroup)
+		if groupErr != nil {
+			return nil, groupErr
+		}
+		user.UserGroup = groupCode
+	}
 	user.UpdatedAt = time.Now()
 	if err := s.repo.SaveAdminManagedUser(user, nextPermissions, actor.ID, passwordReset || accessChanged || statusChanged, protectLastFull); errors.Is(err, repository.ErrLastActiveFullAdmin) {
 		return nil, BadAuthRequest("至少需要保留一个可用的全权限管理员")
@@ -438,7 +461,7 @@ func (s *Service) CreateAdministrator(actor *model.User, req CreateAdministrator
 func (s *Service) CreateOrdinaryUser(actor *model.User, req CreateOrdinaryUserRequest) (*AdminUser, error) {
 	return s.CreateAdminUser(actor, CreateAdminUserRequest{
 		Username: req.Username, Email: req.Email, Remark: req.Remark, Password: req.Password,
-		Role: model.UserRoleUser, Status: req.Status,
+		Role: model.UserRoleUser, Status: req.Status, UserGroup: req.UserGroup,
 	})
 }
 
@@ -653,13 +676,13 @@ func (s *Service) UpdateOrdinaryUser(actor *model.User, userID string, req Updat
 		return nil, err
 	}
 	return s.UpdateUser(actor, user.ID, UpdateUserRequest{
-		Email: req.Email, Remark: req.Remark, Password: req.Password, Role: model.UserRoleUser, Status: req.Status,
+		Email: req.Email, Remark: req.Remark, Password: req.Password, Role: model.UserRoleUser, Status: req.Status, UserGroup: req.UserGroup,
 	})
 }
 
 func (s *Service) adminUserPage(query AdminListQuery, hydrateAdminAccess bool) (*AdminUserPage, error) {
 	page, limit := normalizeAdminPage(query.Page, query.Limit)
-	users, total, err := s.repo.AdminUsers(query.Keyword, model.UserRole(query.Type), model.UserStatus(query.Status), limit, (page-1)*limit)
+	users, total, err := s.repo.AdminUsers(query.Keyword, model.UserRole(query.Type), model.UserStatus(query.Status), strings.ToLower(strings.TrimSpace(query.Group)), limit, (page-1)*limit)
 	if err != nil {
 		return nil, err
 	}
@@ -675,6 +698,10 @@ func (s *Service) adminUserPage(query AdminListQuery, hydrateAdminAccess bool) (
 	for _, account := range accounts {
 		accountByUserID[account.UserID] = account
 	}
+	totals, err := s.repo.UserCreditTotals(userIDs)
+	if err != nil {
+		return nil, err
+	}
 	result := make([]AdminUser, 0, len(users))
 	for _, user := range users {
 		if hydrateAdminAccess {
@@ -683,7 +710,8 @@ func (s *Service) adminUserPage(query AdminListQuery, hydrateAdminAccess bool) (
 			}
 		}
 		account := accountByUserID[user.ID]
-		result = append(result, AdminUser{User: user, Remark: user.AdminRemark, AvailableMicrocredits: account.AvailableMicrocredits, ReservedMicrocredits: account.ReservedMicrocredits, AdminAccess: adminAccessView(&user)})
+		total := totals[user.ID]
+		result = append(result, AdminUser{User: user, Remark: user.AdminRemark, AvailableMicrocredits: account.AvailableMicrocredits, ReservedMicrocredits: account.ReservedMicrocredits, RechargedMicrocredits: total.RechargedMicrocredits, ConsumedMicrocredits: total.ConsumedMicrocredits, AdminAccess: adminAccessView(&user)})
 	}
 	return &AdminUserPage{Users: result, Total: total, Page: page, Limit: limit}, nil
 }

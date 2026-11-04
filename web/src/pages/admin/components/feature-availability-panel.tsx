@@ -7,8 +7,12 @@ import { cn } from "@/lib/utils";
 import { getAdminFeatureAvailability, updateAdminFeatureAvailability } from "@/services/api/auth";
 import { useUserStore, type FeatureAvailability } from "@/stores/use-user-store";
 import { AdminStatusBadge } from "./admin-ui";
+import "./feature-availability-panel.css";
 
 type FeatureKey =
+	| "ecommerceEnabled"
+	| "ecommerceVideoEnabled"
+	| "siteAssistantEnabled"
     | "shortDramaEnabled"
     | "taskCenterEnabled"
     | "creditsEnabled"
@@ -43,6 +47,9 @@ type FeatureRow = {
 };
 
 const editableFeatureKeys: FeatureKey[] = [
+    "ecommerceEnabled",
+    "ecommerceVideoEnabled",
+    "siteAssistantEnabled",
     "shortDramaEnabled",
     "taskCenterEnabled",
     "creditsEnabled",
@@ -62,6 +69,40 @@ const editableFeatureKeys: FeatureKey[] = [
 ];
 
 const allFeatureRows: FeatureRow[] = [
+    {
+        key: "ecommerceEnabled",
+        section: "creation",
+        title: "电商创作",
+        description: "允许新建商品创作、策划和图片生成；关闭后保留历史项目与作品。",
+        icon: <Sparkles className="size-4" aria-hidden="true" />,
+        changeCopy: {
+            enabled: { title: "确认开启电商创作？", operation: "开放商品创作、策划和图片生成。", userImpact: "用户可提交新的电商创作任务，继续遵守积分、模型权限和配额规则。", okText: "确认开启" },
+            disabled: { title: "确认关闭电商创作？", operation: "停止新的电商创作与策划任务。", userImpact: "已有项目与作品保留，商品视频同时受电商创作开关限制。", okText: "确认关闭" },
+        },
+    },
+    {
+        key: "ecommerceVideoEnabled",
+        section: "creation",
+        title: "商品视频",
+        description: "允许从电商商品图片创建视频；同时需要电商创作与通用视频能力开放。",
+        icon: <Clapperboard className="size-4" aria-hidden="true" />,
+        dependsOn: "ecommerceEnabled",
+        changeCopy: {
+            enabled: { title: "确认开启商品视频？", operation: "开放电商商品图片生成视频。", userImpact: "用户可创建商品视频任务，仍需电商创作及相关视频能力开放，并按现有规则计费。", okText: "确认开启" },
+            disabled: { title: "确认关闭商品视频？", operation: "停止新建商品视频任务。", userImpact: "历史商品视频保留，不改变电商图片创作的开放状态。", okText: "确认关闭" },
+        },
+    },
+    {
+        key: "siteAssistantEnabled",
+        section: "entrances",
+        title: "创作助手问答",
+        description: "允许向工作台创作助手提问；模型与知识在电商 Agent 配置中设置。",
+        icon: <BookOpenCheck className="size-4" aria-hidden="true" />,
+        changeCopy: {
+            enabled: { title: "确认开启创作助手问答？", operation: "开放工作台创作助手问答入口。", userImpact: "助手仍按已配置的开放对象和模型工作，模型调用遵守现有积分规则。", okText: "确认开启" },
+            disabled: { title: "确认关闭创作助手问答？", operation: "关闭创作助手问答准入。", userImpact: "助手的模型与知识配置保留，自由画布 Agent 和电商创作的开关状态不变。", okText: "确认关闭" },
+        },
+    },
     {
         key: "shortDramaEnabled",
         section: "creation",
@@ -426,7 +467,7 @@ export default function FeatureAvailabilityPanel() {
         .map((row) => <FeatureSettingRow key={row.key} row={row} saved={savedFeatures} draft={draftFeatures} saving={saving} onChange={requestFeatureChange} />);
 
     return (
-        <div className="admin-settings-stack admin-feature-availability">
+        <div className="admin-settings-stack admin-feature-availability is-compact-layout">
             <div className="admin-feature-command-bar">
                 <div className="admin-feature-command-copy" aria-live="polite">
                     <div className="flex flex-wrap items-center gap-2">
@@ -501,9 +542,9 @@ export default function FeatureAvailabilityPanel() {
     );
 }
 
-function FeatureDomainPanel({ title, description, icon, status, children }: { title: string; description: string; icon: ReactNode; status: ReactNode; children: ReactNode }) {
+function FeatureDomainPanel({ className, title, description, icon, status, children }: { className?: string; title: string; description: string; icon: ReactNode; status: ReactNode; children: ReactNode }) {
     return (
-        <section className="admin-feature-domain">
+        <section className={cn("admin-feature-domain", className)}>
             <header className="admin-feature-domain-header">
                 <span className="admin-feature-domain-icon">{icon}</span>
                 <div className="admin-feature-domain-copy min-w-0 flex-1">
@@ -527,7 +568,7 @@ function FeatureSettingRow({ row, saved, draft, saving, onChange }: { row: Featu
             <div className="admin-feature-board-row-copy">
                 <span className="admin-feature-board-row-name">
                     <strong>{row.title}</strong>
-                    <span>{row.description}</span>
+                    <span title={row.description}>{row.description}</span>
                 </span>
                 {changed ? <span className="admin-feature-board-row-dirty">待保存</span> : null}
             </div>
@@ -564,6 +605,7 @@ function FeatureSourceRow({ saved, draft, saving, onChange }: { saved: FeatureAv
 
 function effectiveFeatureValue(features: FeatureAvailability, key: FeatureKey) {
     if (key === "systemPluginsVisibleToUsers") return features.pluginCenterEnabled && features.systemPluginsVisibleToUsers;
+    if (key === "ecommerceVideoEnabled") return features.ecommerceEnabled && features.ecommerceVideoEnabled;
     return features[key];
 }
 
@@ -579,6 +621,9 @@ function toEditablePayload(features: FeatureAvailability) {
         userFeedbackEnabled: features.userFeedbackEnabled,
         imageWorkbenchEnabled: features.imageWorkbenchEnabled,
         videoWorkbenchEnabled: features.videoWorkbenchEnabled,
+        ecommerceEnabled: features.ecommerceEnabled,
+        ecommerceVideoEnabled: features.ecommerceVideoEnabled,
+        siteAssistantEnabled: features.siteAssistantEnabled,
         frontendModelsEnabled: features.frontendModelsEnabled,
         skillLibraryEnabled: features.skillLibraryEnabled,
         pluginCenterEnabled: features.pluginCenterEnabled,
@@ -608,6 +653,9 @@ function parseFeatureAvailability(value: unknown): FeatureAvailability {
         userFeedbackEnabled: record.userFeedbackEnabled as boolean,
         imageWorkbenchEnabled: record.imageWorkbenchEnabled as boolean,
         videoWorkbenchEnabled: record.videoWorkbenchEnabled as boolean,
+        ecommerceEnabled: record.ecommerceEnabled as boolean,
+        ecommerceVideoEnabled: record.ecommerceVideoEnabled as boolean,
+        siteAssistantEnabled: record.siteAssistantEnabled as boolean,
         frontendModelsEnabled: record.frontendModelsEnabled as boolean,
         skillLibraryEnabled: record.skillLibraryEnabled as boolean,
         pluginCenterEnabled: record.pluginCenterEnabled as boolean,

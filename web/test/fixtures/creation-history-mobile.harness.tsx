@@ -2,7 +2,7 @@ import { afterAll, expect, mock, test } from "bun:test";
 import { Window } from "happy-dom";
 
 const dom = new Window({ url: "http://localhost/create", width: 390, height: 844 });
-for (const name of ["HTMLButtonElement", "HTMLInputElement", "HTMLTextAreaElement", "HTMLSelectElement", "MutationObserver", "KeyboardEvent", "FocusEvent"]) {
+for (const name of ["HTMLAnchorElement", "HTMLButtonElement", "HTMLInputElement", "HTMLTextAreaElement", "HTMLSelectElement", "MutationObserver", "KeyboardEvent", "FocusEvent"]) {
     Object.defineProperty(globalThis, name, { configurable: true, value: (dom as any)[name] });
 }
 for (const [key, value] of Object.entries({ window: dom, document: dom.document, navigator: dom.navigator, HTMLElement: dom.HTMLElement, Element: dom.Element, Node: dom.Node, SVGElement: dom.SVGElement, ShadowRoot: dom.ShadowRoot, ResizeObserver: dom.ResizeObserver, getComputedStyle: dom.getComputedStyle.bind(dom), requestAnimationFrame: dom.requestAnimationFrame.bind(dom), IS_REACT_ACT_ENVIRONMENT: true })) {

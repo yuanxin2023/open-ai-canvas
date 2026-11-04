@@ -59,11 +59,23 @@ export function getIsolatedAdminAntTheme(dark: boolean): ThemeConfig {
             motionDurationSlow: "0.18s",
         },
         components: {
+            // 后台只保留更高的密度（32 / 28 / 36px），圆角、字号、内边距、图标间距与配色沿用
+            // docs/ui-design-system.md §3.0 的统一按钮规范；主按钮实底由 primary-buttons.css 接管。
             Button: {
                 borderRadius: 8,
+                borderRadiusSM: 8,
+                borderRadiusLG: 8,
                 fontWeight: 500,
+                contentFontSize: 13,
+                contentFontSizeSM: 12,
+                contentFontSizeLG: 14,
                 paddingInline: 12,
                 paddingInlineSM: 8,
+                paddingInlineLG: 16,
+                iconGap: 6,
+                onlyIconSize: 16,
+                onlyIconSizeSM: 14,
+                onlyIconSizeLG: 16,
                 primaryShadow: "none",
                 dangerShadow: "none",
                 defaultBg: surface,

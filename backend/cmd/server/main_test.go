@@ -43,8 +43,8 @@ func TestEnsureBuiltinWorkbenchCatalogStartupWiring(t *testing.T) {
 		t.Fatal("startup initializer did not import image workbench tools")
 	}
 	for _, tool := range tools {
-		if tool.Enabled {
-			t.Fatal("startup published a new tool before administrator review")
+		if !tool.Enabled {
+			t.Fatal("startup did not enable a newly imported builtin tool")
 		}
 	}
 }

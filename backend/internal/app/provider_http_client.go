@@ -472,7 +472,7 @@ func providerRequestIsBillable(method, requestKind string) bool {
 		return false
 	}
 	switch requestKind {
-	case "cancel", "cache-create", "cache-delete":
+	case "cancel", "cache-create", "cache-delete", "upload":
 		return false
 	default:
 		return true

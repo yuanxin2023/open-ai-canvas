@@ -14,12 +14,15 @@ import { AdminUserDetailModal } from "../components/admin-user-detail-drawer";
 import { createUserColumns, userColumnOptions, type UserColumnKey } from "./users-columns";
 import { AdminUserCreateDrawer, AdminUserEditModal } from "./users-drawer";
 import { Select } from "@/components/ui/base/select";
+import { useAdminContext } from "../admin-context";
 
 const columnStorageKey = "admin-users-visible-columns-v2";
 const allColumnKeys = userColumnOptions.map((item) => item.key);
+const defaultColumnKeys = allColumnKeys.filter((key) => !["recharged", "consumed", "lastLoginAt"].includes(key));
 
 export default function UsersPanel({ onUserChanged, onUserDeleted }: { onUserChanged?: (user: LocalUser) => void; onUserDeleted?: (userId: string) => void }) {
     const actor = useUserStore((state) => state.user);
+    const { references } = useAdminContext();
     const { message, modal } = App.useApp();
     const { state, update } = useTableUrlState();
     const [filterDraft, setFilterDraft] = useState(state.filter);
@@ -36,19 +39,19 @@ export default function UsersPanel({ onUserChanged, onUserDeleted }: { onUserCha
     const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
     const [bulkDisabling, setBulkDisabling] = useState(false);
     const [visibleColumns, setVisibleColumns] = useState<Set<UserColumnKey>>(() => {
-        if (typeof window === "undefined") return new Set(allColumnKeys);
+        if (typeof window === "undefined") return new Set(defaultColumnKeys);
         try {
             const saved = JSON.parse(window.localStorage.getItem(columnStorageKey) || "[]") as UserColumnKey[];
             const valid = saved.filter((key) => allColumnKeys.includes(key));
-            return new Set(valid.length ? [...valid, "user", "remark", "actions"] : allColumnKeys);
+            return new Set(valid.length ? [...valid, "user", "remark", "actions"] : defaultColumnKeys);
         } catch {
-            return new Set(allColumnKeys);
+            return new Set(defaultColumnKeys);
         }
     });
     const requestSequence = useRef(0);
     const pendingFilterUrlRef = useRef<string | null>(null);
     const skipFilterUrlCommitRef = useRef(false);
-    const hasFilters = Boolean(filterDraft || state.status !== "all");
+    const hasFilters = Boolean(filterDraft || state.status !== "all" || state.group !== "all");
     const detailIndex = detailUserId ? users.findIndex((user) => user.id === detailUserId) : -1;
     const previousUserId = detailIndex > 0 ? users[detailIndex - 1]?.id : undefined;
     const nextUserId = detailIndex >= 0 && detailIndex < users.length - 1 ? users[detailIndex + 1]?.id : undefined;
@@ -86,6 +89,7 @@ export default function UsersPanel({ onUserChanged, onUserDeleted }: { onUserCha
         void listAdminUsers({
             keyword: state.filter || undefined,
             status: state.status === "all" ? undefined : state.status,
+            group: state.group === "all" ? undefined : state.group,
             page: state.page,
             pageSize: state.pageSize,
         })
@@ -105,7 +109,7 @@ export default function UsersPanel({ onUserChanged, onUserDeleted }: { onUserCha
             .finally(() => {
                 if (sequence === requestSequence.current) setLoading(false);
             });
-    }, [message, retry, state.filter, state.page, state.pageSize, state.status, update]);
+    }, [message, retry, state.filter, state.group, state.page, state.pageSize, state.status, update]);
 
     const replaceUser = useCallback((nextUser: LocalUser | AdminManagedUser) => {
         setUsers((items) => items.map((item) => item.id === nextUser.id ? { ...item, ...nextUser } : item));
@@ -128,6 +132,7 @@ export default function UsersPanel({ onUserChanged, onUserDeleted }: { onUserCha
     }, [onUserChanged, state.pageSize]);
 
     const columns = useMemo(() => createUserColumns({
+        groups: references.userGroups,
         actorId: actor?.id,
         visibleColumns,
         onView: (user) => setDetailUserId(user.id),
@@ -150,11 +155,11 @@ export default function UsersPanel({ onUserChanged, onUserDeleted }: { onUserCha
                 message.error(error instanceof Error ? error.message : "注销用户失败");
             }
         },
-    }), [actor?.id, detailUserId, editingUser?.id, message, onUserDeleted, replaceUser, visibleColumns]);
+    }), [actor?.id, detailUserId, editingUser?.id, message, onUserDeleted, references.userGroups, replaceUser, visibleColumns]);
 
     const resetFilters = () => {
         setFilterDraft("");
-        update({ filter: "", status: "all", page: 1 });
+        update({ filter: "", status: "all", group: "all", page: 1 });
     };
 
     const bulkDisable = () => {
@@ -206,6 +211,7 @@ export default function UsersPanel({ onUserChanged, onUserDeleted }: { onUserCha
                 onReset={resetFilters}
                 toolbarFilters={
                     <>
+                        <Select aria-label="筛选用户分组" className="w-36" value={state.group} options={[{ value: "all", label: "全部分组" }, { value: "default", label: "默认分组" }, ...references.userGroups.filter((group) => group.code !== "default").map((group) => ({ value: group.code, label: group.name }))]} onChange={(group) => update({ group, page: 1 })} />
                         <Select
                             aria-label="筛选用户状态"
                             className="w-32"

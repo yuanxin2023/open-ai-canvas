@@ -193,7 +193,7 @@
 [data-admin-root] .admin-nav-link {
     position: relative;
     display: flex;
-    min-height: 44px;
+    min-height: 34px;
     align-items: center;
     gap: 8px;
     padding: 0 12px;
@@ -401,7 +401,7 @@
     text-decoration: none;
 }
 
-[data-admin-root] .admin-page-location-section:hover {
+[data-admin-root] a.admin-page-location-section:hover {
     color: var(--admin-text);
 }
 
@@ -518,13 +518,14 @@
     display: flex;
 }
 
+/* 工具栏里的按钮、搜索框和选择器等高同圆角；圆角与全站按钮规范同为 8px（docs/ui-design-system.md §3.0）。 */
 [data-admin-root] .admin-list-toolbar .ant-input-affix-wrapper,
 [data-admin-root] .admin-list-toolbar .ant-select-selector,
 [data-admin-root] .admin-list-toolbar .ant-btn,
 [data-admin-root] .admin-page-actions .ant-btn {
     height: var(--admin-control-h) !important;
     min-height: var(--admin-control-h) !important;
-    border-radius: var(--admin-radius) !important;
+    border-radius: var(--admin-radius-lg) !important;
 }
 
 [data-admin-root] .admin-filter-chip {

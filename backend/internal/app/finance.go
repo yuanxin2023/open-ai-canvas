@@ -577,6 +577,21 @@ func (s *Service) AdminBillingOrderPage(actor *model.User, query AdminListQuery)
 	if err != nil {
 		return nil, err
 	}
+	// 用户名随当前页按 ID 批量读取；不能依赖只含最近注册用户的 /admin/references。
+	userIDs := make([]string, 0, len(items))
+	for _, item := range items {
+		userIDs = append(userIDs, item.UserID)
+	}
+	users, err := s.repo.UsersByIDs(uniqueNonEmpty(userIDs))
+	if err != nil {
+		return nil, err
+	}
+	for index := range items {
+		if user, exists := users[items[index].UserID]; exists {
+			items[index].UserDisplayName = user.DisplayName
+			items[index].UserAccount = user.Username
+		}
+	}
 	return &BillingOrderPage{Orders: items, Total: total, Page: page, Limit: limit}, nil
 }
 
@@ -808,6 +823,14 @@ func (s *Service) newLogicalModelBillingOrder(userID string, task *model.Task, i
 	if logicalModel.PricePolicy != "unified" {
 		return nil, BadAuthRequest("当前模型价格策略无效")
 	}
+	// 分组仅检查渠道权限，统一价继续按既有积分规则结算。
+	access, err := s.userGroupAccess(userID)
+	if err != nil {
+		return nil, err
+	}
+	if err := access.requireChannel(channelModel.ChannelID); err != nil {
+		return nil, err
+	}
 	quantity := int64(1)
 	tokenEstimate := estimateTaskBillingTokens(input, capability)
 	amount := int64(0)
@@ -827,8 +850,8 @@ func (s *Service) newLogicalModelBillingOrder(userID string, task *model.Task, i
 		if capability == "video" && (logicalModel.InputPriceMicrocredits != 0 || logicalModel.CachedPriceMicrocredits != 0) {
 			return nil, BadAuthRequest("视频 Token 仅按视频用量定价，请将输入与缓存价格设为 0")
 		}
-		pricing := &model.ChannelModel{InputTokenPriceMicrocredits: logicalModel.InputPriceMicrocredits, OutputTokenPriceMicrocredits: logicalModel.OutputPriceMicrocredits, CachedTokenPriceMicrocredits: logicalModel.CachedPriceMicrocredits}
-		amount, err = tokenEstimateAmount(pricing, tokenEstimate, 10_000)
+		tokenPricing := &model.ChannelModel{InputTokenPriceMicrocredits: logicalModel.InputPriceMicrocredits, OutputTokenPriceMicrocredits: logicalModel.OutputPriceMicrocredits, CachedTokenPriceMicrocredits: logicalModel.CachedPriceMicrocredits}
+		amount, err = tokenEstimateAmount(tokenPricing, tokenEstimate, 10_000)
 		quantity = tokenEstimate.InputTokens + tokenEstimate.OutputTokens
 	default:
 		return nil, BadAuthRequest("当前模型计费方式暂不支持")
@@ -852,6 +875,7 @@ func (s *Service) newLogicalModelBillingOrder(userID string, task *model.Task, i
 		ChannelID: channelModel.ChannelID, ChannelModelID: channelModel.ID, Model: logicalModel.Code, Capability: capability,
 		Scene: truncateRunes(firstNonEmpty(strings.TrimSpace(task.Operation), task.Type), 80), BillingMode: logicalModel.BillingMode, PriceVersion: int64(revision.Version),
 		UnitPriceMicrocredits: logicalModel.UnitPriceMicrocredits, MultiplierBasisPoints: 10_000, Quantity: quantity, AmountMicrocredits: amount,
+		UserGroup:                  access.groupCode(),
 		ReservedAmountMicrocredits: amount, InputTokenPriceMicrocredits: logicalModel.InputPriceMicrocredits,
 		OutputTokenPriceMicrocredits: logicalModel.OutputPriceMicrocredits, CachedTokenPriceMicrocredits: logicalModel.CachedPriceMicrocredits,
 		VideoFormulaTokens: videoFormulaTokens,
@@ -947,6 +971,13 @@ func (s *Service) newBillingOrderWithPriceTier(userID string, taskID string, ide
 	default:
 		return nil, BadAuthRequest("当前模型计费方式暂不支持")
 	}
+	access, err := s.userGroupAccess(userID)
+	if err != nil {
+		return nil, err
+	}
+	if err := access.requireChannel(channelID); err != nil {
+		return nil, err
+	}
 	policy, err := s.creditPolicy()
 	if err != nil {
 		return nil, err
@@ -975,6 +1006,7 @@ func (s *Service) newBillingOrderWithPriceTier(userID string, taskID string, ide
 		ReservedAmountMicrocredits: amount, InputTokenPriceMicrocredits: tier.InputTokenPriceMicrocredits,
 		OutputTokenPriceMicrocredits: tier.OutputTokenPriceMicrocredits, CachedTokenPriceMicrocredits: tier.CachedTokenPriceMicrocredits,
 		VideoFormulaTokens: videoFormulaTokens,
+		UserGroup:          access.groupCode(),
 		Status:             model.BillingStatusReserved,
 	}
 	snapshotCreditCost(order, tier, requestedQuantity, tokenEstimate)

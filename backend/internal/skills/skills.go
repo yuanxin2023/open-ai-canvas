@@ -85,6 +85,8 @@ type SkillItem struct {
 	IsAdded           bool                 `json:"isAdded"`
 	IsOwner           bool                 `json:"isOwner"`
 	LibraryCategoryID string               `json:"libraryCategoryId,omitempty"`
+	// AgentMode 只对已安装或自建的技能有意义：auto 允许 Agent 自动发现，manual 只在点名或固定时使用。
+	AgentMode string `json:"agentMode,omitempty"`
 }
 
 // AddedSkillReference is the small contract used by the runtime catalog.
@@ -101,6 +103,7 @@ type AddedSkillReference struct {
 	IsLike      bool   `json:"isLike"`
 	IsAdded     bool   `json:"isAdded"`
 	IsOwner     bool   `json:"isOwner"`
+	AgentMode   string `json:"agentMode,omitempty"`
 }
 
 type SkillCategory struct {
@@ -245,7 +248,7 @@ func (s *Service) AddedSkills(userID string) ([]AddedSkillReference, error) {
 		references = append(references, AddedSkillReference{
 			SkillID: item.SkillID, SkillName: item.SkillName, Description: item.Description,
 			VersionID: item.VersionID, Version: item.Version, Tag: item.Tag,
-			IsLike: item.IsLike, IsAdded: item.IsAdded, IsOwner: item.IsOwner,
+			IsLike: item.IsLike, IsAdded: item.IsAdded, IsOwner: item.IsOwner, AgentMode: item.AgentMode,
 		})
 	}
 	return references, nil
@@ -537,6 +540,10 @@ func (s *Service) skillItems(userID string, skills []model.Skill, includeInstruc
 		if includeInstruction {
 			instruction = skill.Instruction
 		}
+		agentMode := ""
+		if state.Added || skill.OwnerID == userID {
+			agentMode = NormalizeSkillAgentMode(state.AgentMode)
+		}
 		items = append(items, SkillItem{
 			SkillID: skill.ID, SkillName: skill.Name, Description: skill.Description, Instruction: instruction,
 			VersionID: skill.CurrentVersionID, Version: skill.VersionLabel, ContentHash: skill.ContentHash, FileCount: skill.FileCount, TotalBytes: skill.TotalBytes,
@@ -547,7 +554,7 @@ func (s *Service) skillItems(userID string, skills []model.Skill, includeInstruc
 			LikeCount: metric.LikeCount, IsLike: state.Liked, OwnerUID: skill.OwnerID,
 			EffectiveUser: SkillEffectiveUser{Name: ownerName, AvatarURL: ownerAvatarURL, UID: skill.OwnerID}, ShowcaseMedia: showcaseMedia,
 			AddedCount: metric.AddedCount, ExtraInfo: skill.ExtraInfo, IsAdded: state.Added || skill.OwnerID == userID, IsOwner: skill.OwnerID == userID,
-			LibraryCategoryID: state.LibraryCategoryID,
+			LibraryCategoryID: state.LibraryCategoryID, AgentMode: agentMode,
 		})
 	}
 	return items, nil

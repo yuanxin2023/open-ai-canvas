@@ -8,6 +8,7 @@ import (
 
 	"gorm.io/gorm"
 	"infinite-canvas/backend/internal/model"
+	"infinite-canvas/backend/internal/referrals"
 )
 
 type registrationReferralHost struct{ profileTestHost }
@@ -18,7 +19,14 @@ func combinedRegistrationFixture(t *testing.T) (*Service, *gorm.DB, RegisterRequ
 	t.Helper()
 	s, db, inviter, _ := newProfileTestService(t)
 	s.host = registrationReferralHost{}
-	if err := db.AutoMigrate(&model.ReferralProfile{}); err != nil {
+	if err := db.AutoMigrate(&model.ReferralProfile{}, &model.ReferralPolicyVersion{}); err != nil {
+		t.Fatal(err)
+	}
+	referralPolicy := referrals.Default()
+	referralPolicy.Enabled = true
+	referralPolicy.VersionID = "registration-test-policy"
+	policyJSON, err := json.Marshal(referralPolicy)
+	if err != nil {
 		t.Fatal(err)
 	}
 	policy := VerificationPolicy{SMSAndEmailRegistration: true}
@@ -27,6 +35,8 @@ func combinedRegistrationFixture(t *testing.T) (*Service, *gorm.DB, RegisterRequ
 		t.Fatal(err)
 	}
 	for _, row := range []any{
+		&model.ReferralPolicyVersion{ID: referralPolicy.VersionID, PolicyJSON: string(policyJSON)},
+		&model.SystemSetting{Key: referrals.SettingKey, ValueJSON: string(policyJSON)},
 		&model.SystemSetting{Key: registrationSettingKey, ValueJSON: `{"enabled":true}`},
 		&model.SystemSetting{Key: authPolicyKey, ValueJSON: string(raw)},
 		&model.ReferralProfile{UserID: inviter.ID, Code: "ABC234"},

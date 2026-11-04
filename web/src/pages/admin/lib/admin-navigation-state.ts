@@ -4,6 +4,7 @@ export const DEFAULT_ADMIN_NAVIGATION_GROUP_STATE = {
     analytics: true,
     platform: true,
     users: true,
+    ecommerce: true,
     commerce: true,
     finance: true,
     content: true,

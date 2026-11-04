@@ -2,7 +2,7 @@ import { afterAll, expect, mock, test } from "bun:test";
 import { Window } from "happy-dom";
 import type { GenerationTask } from "@/services/api/task-center";
 import type { WorkbenchRetryIntent } from "@/services/api/workbench";
-import { createWorkbenchSubmissionJournal, type PendingWorkbenchSubmission } from "@/services/workbench-submission-journal";
+import { createWorkbenchSubmissionJournal, workbenchPayloadHash, type PendingWorkbenchSubmission } from "@/services/workbench-submission-journal";
 
 const dom = new Window({ url: "http://localhost/" });
 for (const [key, value] of Object.entries({
@@ -10,6 +10,16 @@ for (const [key, value] of Object.entries({
     document: dom.document,
     navigator: dom.navigator,
     HTMLElement: dom.HTMLElement,
+    HTMLAnchorElement: dom.HTMLAnchorElement,
+    HTMLInputElement: dom.HTMLInputElement,
+    HTMLButtonElement: dom.HTMLButtonElement,
+    HTMLTextAreaElement: dom.HTMLTextAreaElement,
+    SVGElement: dom.SVGElement,
+    ShadowRoot: dom.ShadowRoot,
+    ResizeObserver: dom.ResizeObserver,
+    IntersectionObserver: dom.IntersectionObserver,
+    getComputedStyle: dom.getComputedStyle.bind(dom),
+    requestAnimationFrame: dom.requestAnimationFrame.bind(dom),
     Element: dom.Element,
     Node: dom.Node,
     Event: dom.Event,
@@ -60,7 +70,7 @@ const journal = createWorkbenchSubmissionJournal(
     },
     () => `request-key-${String(++sequence).padStart(16, "0")}`,
 );
-mock.module("@/services/workbench-submission-journal", () => ({ loadWorkbenchSubmission: journal.load, reserveWorkbenchSubmission: journal.reserve, clearWorkbenchSubmission: journal.clear }));
+mock.module("@/services/workbench-submission-journal", () => ({ loadWorkbenchSubmission: journal.load, reserveWorkbenchSubmission: journal.reserve, clearWorkbenchSubmission: journal.clear, workbenchPayloadHash }));
 const notices: string[] = [];
 const task: GenerationTask = { id: "accepted-task", type: "canvas_image", status: "queued", attempts: 0, prompt: "original", createdAt: "2026-10-26T00:00:00Z", updatedAt: "2026-10-26T00:00:00Z" };
 const app = {
@@ -76,7 +86,13 @@ function withReceipt(task: GenerationTask, key: string): GenerationTask {
     return { ...task, workbenchSubmission: { requestKey: key, replayed: false, quote } };
 }
 const Box = ({ children }: any) => <div>{children}</div>;
+mock.module("@/components/ui/aceternity/workspace-signal-icon", () => ({ WorkspaceSignalIcon: () => <svg aria-hidden="true" /> }));
+mock.module("@/components/ui/base/tooltip/ant-tooltip", () => ({ AntTooltip: Box }));
+mock.module("@/components/ui/base/segmented-control/segmented-control", () => ({ SegmentedControl: () => null }));
+mock.module("@/components/ui/base/segmented-control", () => ({ SegmentedControl: () => null }));
+const actualAnt = await import("antd");
 mock.module("antd", () => ({
+    ...actualAnt,
     App: { useApp: () => app },
     Button: ({ children, onClick, disabled, className, "aria-label": label }: any) => (
         <button aria-label={label} className={className} disabled={disabled} onClick={onClick}>
@@ -84,6 +100,7 @@ mock.module("antd", () => ({
         </button>
     ),
     Input: () => null,
+    Dropdown: Box,
     InputNumber: () => null,
     Modal: ({ open, children }: any) => (open ? <div>{children}</div> : null),
     Progress: () => null,
@@ -119,7 +136,7 @@ mock.module("@/components/canvas/canvas-resource-mention-textarea", () => ({
     },
 }));
 mock.module("@/lib/canvas/canvas-resource-references", () => ({ normalizeCanvasNodeMentionTokens: (value: string) => value }));
-const image = { size: { default: "1:1" }, quality: { default: "auto", supported: false }, resolution: { default: "auto", supported: false }, references: { maxImages: 2, promptMaxChars: 32000 }, maxOutputs: 1 };
+const image = { size: { default: "1:1" }, quality: { default: "auto", supported: false }, resolution: { default: "auto", supported: false }, references: { maxImages: 2, promptMaxChars: 32000 }, maxOutputs: 2 };
 const video = {
     duration: { default: 6, selection: "enum", values: [6, 8], min: 1, max: 8, step: 1 },
     defaultRatio: "16:9",
@@ -139,7 +156,8 @@ mock.module("@/lib/model-capabilities", () => ({
 mock.module("@/pages/create/creation-generation-config", () => ({
     creationVideoConfig: (current: any, model: string, settings: any) => ({ ...current, model, videoModel: model, size: settings.ratio, videoSeconds: settings.seconds, vquality: settings.videoQuality }),
 }));
-mock.module("@/lib/model-pricing", () => ({ modelQuoteRequest: () => null }));
+mock.module("@/lib/model-pricing", () => ({ modelQuoteRequest: () => null, requestCreditCost: () => null }));
+mock.module("@/services/browser-download", () => ({ resolveBrowserMediaDownloadHref: async () => "", startBrowserDownload: () => {} }));
 mock.module("@/services/api/logical-models", () => ({
     quoteModel: async () => {
         throw new Error("unexpected quote");
@@ -184,6 +202,8 @@ mock.module("@/services/api/workbench", () => ({
     resolveWorkbenchResourceURL: (id?: string) => resourcePreview(id),
 }));
 mock.module("@/services/api/resources", () => ({
+    playbackVariantUrl: (url: string) => url,
+    resourceIdFromStorageKey: (key: string) => key,
     resourceFileUrl: String,
     resourceStorageKey: String,
     resolveResourceUrl: async () => "",
@@ -231,7 +251,10 @@ function deferred<T>() {
     return { promise, resolve };
 }
 function submit() {
-    host.querySelector<HTMLButtonElement>(".workbench-submit")!.click();
+    const primary = host.querySelector<HTMLButtonElement>(".wb-submit")!;
+    const retry = [...host.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent === "重试原提交");
+    if (primary.disabled && retry) retry.click();
+    else primary.click();
 }
 
 test("accepted task remains visible after detail failure and rapid submit only creates once", async () => {
@@ -249,11 +272,11 @@ test("accepted task remains visible after detail failure and rapid submit only c
         submit();
         submit();
     });
-    expect(creates).toBe(1);
+    expect(creates, notices.join(" | ")).toBe(1);
     await act(async () => pending.resolve(task));
-    expect(reads).toBe(1);
+    expect(reads).toBe(0);
     expect(host.textContent).toContain("排队中");
-    expect(notices.some((message) => message.includes("任务已提交，详情暂时不可用"))).toBe(true);
+    expect(notices.some((message) => message.includes("已提交"))).toBe(true);
     expect(notices.some((message) => message.includes("任务提交失败"))).toBe(false);
 });
 
@@ -307,6 +330,7 @@ test("unknown creation response keeps the key and manual retry reuses it", async
     expect(host.textContent).toContain("有一笔提交待确认");
     expect(pendingRecords.has("retry-account:image")).toBe(true);
     await act(async () => submit());
+    await waitForUI(() => creates === 2);
     expect(creates).toBe(2);
     expect(requestKeys[0]).toBe(requestKeys[1]);
     expect(requestActors).toEqual(["retry-account", "retry-account"]);
@@ -359,7 +383,7 @@ test("remount restores only pending identity and lookup recovers the original ta
     await act(async () => button.click());
     expect(creates).toBe(1);
     expect(pendingRecords.has("reload-account:image")).toBe(false);
-    expect(host.textContent).toContain("原提交报价");
+    expect(host.textContent).toContain("original");
 });
 
 test("local request storage failure prevents generation", async () => {
@@ -368,7 +392,7 @@ test("local request storage failure prevents generation", async () => {
     await mount("storage-error-account");
     await input("draft");
     expect(host.textContent).toContain("request storage unavailable");
-    expect(host.querySelector<HTMLButtonElement>(".workbench-submit")!.disabled).toBe(true);
+    expect(host.querySelector<HTMLButtonElement>(".wb-submit")!.disabled).toBe(true);
     await act(async () => editor.onSubmit());
     expect(creates).toBe(0);
     storageFailure = false;
@@ -431,7 +455,7 @@ async function historyFixture(account: string, source = sourceTask(), options = 
     return source;
 }
 async function loadHistory() {
-    const button = host.querySelector<HTMLButtonElement>('button[aria-label="载入原参数"]');
+    const button = host.querySelector<HTMLButtonElement>('button[aria-label="复用参数"]');
     expect(button).not.toBeNull();
     await act(async () => button!.click());
 }

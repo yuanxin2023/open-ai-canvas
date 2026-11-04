@@ -165,7 +165,7 @@ function FeedbackDetailCard({ item, onPreviewVideo }: { item: FeedbackItem; onPr
     const typeConfig: Record<FeedbackType, { label: string; color: string; icon: typeof Bug }> = {
         bug: { label: "Bug 缺陷", color: "error", icon: Bug },
         feature: { label: "功能提议", color: "processing", icon: Lightbulb },
-        improvement: { label: "体验建议", color: "cyan", icon: Sparkles },
+        improvement: { label: "体验建议", color: "cyan", icon: Lightbulb },
         other: { label: "其他反馈", color: "default", icon: MessageSquare },
     };
 

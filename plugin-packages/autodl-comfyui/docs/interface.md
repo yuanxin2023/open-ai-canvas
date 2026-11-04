@@ -18,10 +18,10 @@
 
 | 统一字段 | 类型 | 上游映射 | 规则 |
 | --- | --- | --- | --- |
-| `model` | string | URL `{workflow_id}` | 必须是清单中工作流 ID。 |
+| `model` | string | URL `{workflow_id}` | 原样透传上游工作流 ID；不要求在清单中声明。 |
 | `prompt` | string | `prompt` | `minimax_h3_image_audio_to_video` 工作流不发送。 |
 | `duration` | integer | `duration` / `audio_duration` | 单图音频同步工作流使用 `audio_duration`。 |
-| `resolution` | string | `resolution` | 转小写后发送。 |
+| `resolution` | string | `resolution` | 转小写后发送；管理员可在模型能力中输入预设外的标签。 |
 | `images[role=first_frame]` | media | `first_frame` | 首帧工作流优先按 role 选择；旧无 role 请求才按 order 回退。 |
 | `images[role=last_frame]` | media | `last_frame` | 尾帧工作流优先按 role 选择；旧无 role 请求才按 order 回退。 |
 | 普通参考图 | media[] | `ref_image_0` … `ref_image_8` | 过滤 `reference_image/subject_reference/style_reference/edit_source` 后按 order 编号。 |
@@ -43,6 +43,7 @@
 | `minimax_h3_z0903` | `ref_image_0…5` | `ref_audio_0…2` | 六图三音频生视频（高质量音画融合）。 |
 | `minimax_h3_image_audio_to_video` | `ref_image_0` | `ref_audio_0` | 使用 `audio_duration`，不发送 `prompt/duration`。 |
 | `minimax_h3_image_audio_to_video_v2` / `_15s` | `ref_image_0…8` | `ref_audio_0…2` | 多图多音频。 |
+| 其他工作流 ID（清单 `*`） | `ref_image_0…8` | `ref_audio_0…2` | 通用透传：全部图片按 order 编号，不区分 role；参考数量由模型能力配置限制。分辨率默认预设 `480p竖/768p竖/960p竖/480p横/768p横/960p横`，默认 `768p竖`。 |
 
 ## 响应
 
@@ -62,7 +63,7 @@
   "apiVersion": "open-ai-canvas.plugin/v2",
   "id": "autodl-comfyui",
   "name": "AutoDL ComfyUI 视频与音频",
-  "version": "2.3.0",
+  "version": "2.4.0",
   "author": "AI 创作工作台社区",
   "description": "通过 AutoDL.Art ComfyUI 工作流 API 接入异步视频生成。",
   "permissions": [
@@ -119,7 +120,7 @@
             "name": "resolution",
             "type": "string",
             "mapping": "resolution",
-            "description": "输出分辨率档位，如 480p竖、768p竖、1080p竖、480p横、768p横、1080p横、480p(1:1)、768p(1:1) 等。"
+            "description": "输出分辨率标签，原样转小写发送。已声明工作流使用各自枚举；其他工作流默认提供 480p竖、768p竖、960p竖、480p横、768p横、960p横，管理员也可输入上游支持的其他标签。"
           },
           {
             "name": "images",
@@ -436,6 +437,69 @@
                     }
                   },
                   "else": {}
+                }
+              },
+              {
+                "$if": {
+                  "condition": {
+                    "$in": [
+                      {
+                        "$ref": "request.model"
+                      },
+                      [
+                        "minimax_h3_b99_002",
+                        "minimax_h3_b99_001",
+                        "minimax_h3_b99_003_12s",
+                        "minimax_h3_image_audio_to_video_v2_15s",
+                        "minimax_h3_lightx2v_v5_15s",
+                        "minimax_h3_image_audio_to_video_v2",
+                        "minimax_h3_image_audio_to_video",
+                        "minimax_h3_lightx2v_v5",
+                        "minimax_h3_lightx2v_no_pic",
+                        "minimax_h3_lightx2v",
+                        "minimax_h3_zm_u24",
+                        "minimax_h3_zm_u08",
+                        "minimax_h3_z0901",
+                        "minimax_h3_z0902",
+                        "minimax_h3_z0903"
+                      ]
+                    ]
+                  },
+                  "then": {},
+                  "else": {
+                    "$merge": [
+                      {
+                        "$indexObject": {
+                          "from": {
+                            "$sortByOrder": {
+                              "$ref": "request.images"
+                            }
+                          },
+                          "as": "media",
+                          "prefix": "ref_image_",
+                          "max": 9,
+                          "value": {
+                            "$ref": "media.value"
+                          }
+                        }
+                      },
+                      {
+                        "$indexObject": {
+                          "from": {
+                            "$sortByOrder": {
+                              "$ref": "request.audios"
+                            }
+                          },
+                          "as": "media",
+                          "prefix": "ref_audio_",
+                          "max": 3,
+                          "value": {
+                            "$ref": "media.value"
+                          }
+                        }
+                      }
+                    ]
+                  }
                 }
               }
             ]
@@ -1009,6 +1073,44 @@
         "defaults": {
           "duration": 5,
           "resolution": "768p竖(768*1376)"
+        }
+      },
+      {
+        "id": "*",
+        "label": "其他工作流（透传上游模型 ID）",
+        "providerId": "autodl-comfyui",
+        "capability": "video",
+        "parameters": [
+          {
+            "name": "prompt",
+            "type": "string",
+            "required": true,
+            "mapping": "prompt"
+          },
+          {
+            "name": "duration",
+            "type": "integer",
+            "mapping": "duration",
+            "description": "视频时长（秒），范围以上游工作流为准。"
+          },
+          {
+            "name": "resolution",
+            "type": "string",
+            "mapping": "resolution",
+            "values": [
+              "480p竖",
+              "768p竖",
+              "960p竖",
+              "480p横",
+              "768p横",
+              "960p横"
+            ],
+            "description": "默认预设；管理员可输入上游工作流支持的其他分辨率标签。"
+          }
+        ],
+        "defaults": {
+          "duration": 5,
+          "resolution": "768p竖"
         }
       }
     ]

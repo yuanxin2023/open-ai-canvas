@@ -160,12 +160,8 @@ for payment_plugin in $payment_plugins; do
   mkdir -p "$root_dir/$payment_plugin/backend"
 done
 
-for manifest in "$root_dir"/*/manifest.json; do
-  package_dir=${manifest%/manifest.json}
-  package_id=${package_dir##*/}
-  case "$package_id" in
-    src-*) continue ;;
-  esac
+package_ids=$(node "$root_dir/package-directories.mjs")
+for package_id in $package_ids; do
   package_plugin "$package_id"
 done
 

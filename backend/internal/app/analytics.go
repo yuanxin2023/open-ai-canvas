@@ -42,13 +42,14 @@ type AnalyticsKPI struct {
 	TotalConsumedMicrocredits int64            `json:"totalConsumedMicrocredits"`
 }
 
+// 成功率在分母为 0 时为 null：没有请求或任务的日子不能画成 0%。
 type AnalyticsTrendPoint struct {
-	Day                  string  `json:"day"`
-	Tasks                int     `json:"tasks"`
-	Requests             int     `json:"requests"`
-	ActiveUsers          int     `json:"activeUsers"`
-	RequestSuccessRate   float64 `json:"requestSuccessRate"`
-	ConsumedMicrocredits int64   `json:"consumedMicrocredits"`
+	Day                  string   `json:"day"`
+	Tasks                int      `json:"tasks"`
+	Requests             int      `json:"requests"`
+	ActiveUsers          int      `json:"activeUsers"`
+	RequestSuccessRate   *float64 `json:"requestSuccessRate"`
+	ConsumedMicrocredits int64    `json:"consumedMicrocredits"`
 }
 
 type AnalyticsModelRow struct {
@@ -57,8 +58,8 @@ type AnalyticsModelRow struct {
 	Tasks              int              `json:"tasks"`
 	Requests           int              `json:"requests"`
 	UniqueUsers        int              `json:"uniqueUsers"`
-	TaskSuccessRate    float64          `json:"taskSuccessRate"`
-	RequestSuccessRate float64          `json:"requestSuccessRate"`
+	TaskSuccessRate    *float64         `json:"taskSuccessRate"`
+	RequestSuccessRate *float64         `json:"requestSuccessRate"`
 	P50DurationMs      int64            `json:"p50DurationMs"`
 	P95DurationMs      int64            `json:"p95DurationMs"`
 	InputTokens        int64            `json:"inputTokens"`
@@ -136,6 +137,8 @@ func (s *Service) AdminAnalytics(actor *model.User, query AnalyticsQuery) (*Anal
 	if filter.ChannelID != "" {
 		tasks = tasksWithLoggedRequests(tasks, logs)
 	}
+	// 请求类指标只看 create；财务仍按全部日志找订单的首条可计费调用，口径见 analyticsFinancialRecords。
+	upstreamLogs := upstreamCreateLogs(logs)
 	activityFilter := filter
 	rollingFrom := filter.To.AddDate(0, 0, -30)
 	if rollingFrom.Before(activityFilter.From) {
@@ -174,7 +177,7 @@ func (s *Service) AdminAnalytics(actor *model.User, query AnalyticsQuery) (*Anal
 	if err != nil {
 		return nil, err
 	}
-	result := buildAnalyticsOverview(filter, tasks, rollingTasks, rollingLogs, logs, activities, users)
+	result := buildAnalyticsOverview(filter, tasks, rollingTasks, upstreamCreateLogs(rollingLogs), upstreamLogs, activities, users)
 	result.KPI.TotalBalanceMicrocredits = totalBalance
 	records, err := s.analyticsFinancialRecords(logs)
 	if err != nil {

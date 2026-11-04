@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { Box, Camera, Clapperboard, Lightbulb, LockKeyhole, Move3d, Sparkles, Timer } from "lucide-react";
+import { Box, Camera, Clapperboard, Lightbulb, LockKeyhole, Move3d, Timer, Sparkles } from "lucide-react";
 
 import { CachedResourceImage } from "@/components/cached-resource-image";
 import { canvasThemes, type CanvasTheme } from "@/lib/canvas-theme";

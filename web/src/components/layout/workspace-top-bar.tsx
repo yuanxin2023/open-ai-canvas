@@ -16,6 +16,7 @@ const PAGE_TITLES: Record<string, string> = {
     home: "创作",
     create: "创作",
     projects: "短剧制作",
+    ecommerce: "电商创作",
     canvas: "自由画布",
     tasks: "创作历史",
     assets: "资产",
@@ -31,8 +32,8 @@ export function WorkspaceTopBar({ sidebarOpen, onToggleSidebar, sidebarTriggerRe
     const user = useUserStore((state) => state.user);
     const creditsEnabled = useUserStore((state) => state.features.creditsEnabled);
     const { pathname } = useLocation();
-    const slug = pathname.split("/").filter(Boolean)[0];
-    const pageTitle = PAGE_TITLES[slug || "home"] || "工作台";
+    const [slug, subSlug] = pathname.split("/").filter(Boolean);
+    const pageTitle = slug === "toolbox" ? (subSlug === "video" ? "视频生成" : "图片生成") : PAGE_TITLES[slug || "home"] || "工作台";
 
     return (
         <header className="app-workspace-topbar">

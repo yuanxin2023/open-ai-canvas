@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef, type ClipboardEvent } from "react";
 import { App, Button, Checkbox, Input, Radio, Tag, Image as AntImage, Segmented } from "antd";
 import { AntTooltip as Tooltip } from "@/components/ui/base/tooltip/ant-tooltip";
-import { AlertCircle, Archive, Bug, CheckCircle2, Clock, Inbox, Lightbulb, MessageSquare, Paperclip, Play, Plus, RefreshCw, Send, Sparkles, Trash2, UploadCloud, X } from "lucide-react";
+import { AlertCircle, Archive, Bug, CheckCircle2, Clock, Inbox, Lightbulb, MessageSquare, Paperclip, Play, Plus, RefreshCw, Send, Trash2, UploadCloud, X } from "lucide-react";
 
 import { submitFeedback, getMyFeedbacks, uploadFeedbackAttachment, feedbackAttachmentURL, type FeedbackItem, type FeedbackType, type FeedbackAttachment } from "@/services/api/feedback";
 import { useUserStore } from "@/stores/use-user-store";
@@ -255,7 +255,7 @@ function FeedbackModalContent({ open, onClose, initialTab = "submit", actorId }:
                                     {[
                                         { value: "bug", label: "Bug 缺陷", icon: Bug, desc: "功能异常或报错" },
                                         { value: "feature", label: "功能提议", icon: Lightbulb, desc: "希望增加新能力" },
-                                        { value: "improvement", label: "体验建议", icon: Sparkles, desc: "操作与排版优化" },
+                                        { value: "improvement", label: "体验建议", icon: Lightbulb, desc: "操作与排版优化" },
                                         { value: "other", label: "其他意见", icon: MessageSquare, desc: "其他咨询与反馈" },
                                     ].map((item) => {
                                         const Icon = item.icon;
@@ -530,7 +530,7 @@ function FeedbackInboxCard({ item, onPreviewVideo }: { item: FeedbackItem; onPre
     const typeConfig: Record<FeedbackType, { label: string; color: string; icon: typeof Bug }> = {
         bug: { label: "Bug 缺陷", color: "error", icon: Bug },
         feature: { label: "功能提议", color: "processing", icon: Lightbulb },
-        improvement: { label: "体验建议", color: "cyan", icon: Sparkles },
+        improvement: { label: "体验建议", color: "cyan", icon: Lightbulb },
         other: { label: "其他反馈", color: "default", icon: MessageSquare },
     };
 

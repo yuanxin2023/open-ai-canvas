@@ -1,5 +1,6 @@
 import { lazy, Suspense, type ReactNode } from "react";
 import { createBrowserRouter, Navigate, Outlet, useLocation } from "react-router";
+import { lazyAdminPage } from "@/pages/admin/admin-page-loader";
 
 import { RequireAuth } from "@/components/auth/require-auth";
 import { WorkspaceAuthProvider } from "@/components/auth/workspace-auth-provider";
@@ -14,43 +15,47 @@ import RouteErrorPage from "@/pages/route-error";
 import { isGuestWorkspacePath } from "@/lib/guest-workspace";
 
 const AdminPage = lazy(() => import("@/pages/admin"));
-const AnalyticsPage = lazy(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.AnalyticsPage })));
-const ControlPreviewPage = lazy(() => import("@/pages/admin/control-preview/control-preview-page"));
-const AnnouncementsPage = lazy(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.AnnouncementsPage })));
-const BannerAnnouncementsPage = lazy(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.BannerAnnouncementsPage })));
-const StorageResourcesPage = lazy(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.StorageResourcesPage })));
-const CreditOperationsPage = lazy(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.CreditOperationsPage })));
-const AccessSettingsPage = lazy(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.AccessSettingsPage })));
-const EmailSettingsPage = lazy(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.EmailSettingsPage })));
-const FeatureAvailabilityPage = lazy(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.FeatureAvailabilityPage })));
-const AgentLessonsPage = lazy(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.AgentLessonsPage })));
-const InspirationsPage = lazy(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.InspirationsPage })));
-const ChannelsPage = lazy(() => import("@/pages/admin/channels/channels-page"));
-const LogicalModelsPage = lazy(() => import("@/pages/admin/logical-models/logical-models-page"));
-const AdminPluginsPage = lazy(() => import("@/pages/admin/plugins/plugins-page"));
-const AdminSkillsPage = lazy(() => import("@/pages/admin/skills/skills-page"));
-const SkillCurationPage = lazy(() => import("@/pages/admin/skill-curation-page"));
+const EcommercePage = lazy(() => import("@/pages/ecommerce"));
+const EcommerceManagementPage = lazyAdminPage(() => import("@/pages/admin/ecommerce-management-page"));
+const EcommerceAgentConfigPage = lazyAdminPage(() => import("@/pages/admin/ecommerce-agent-config-page"));
+const UserGroupsPage = lazyAdminPage(() => import("@/pages/admin/user-groups/user-groups-page"));
+const AnalyticsPage = lazyAdminPage(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.AnalyticsPage })));
+const ControlPreviewPage = lazyAdminPage(() => import("@/pages/admin/control-preview/control-preview-page"));
+const AnnouncementsPage = lazyAdminPage(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.AnnouncementsPage })));
+const BannerAnnouncementsPage = lazyAdminPage(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.BannerAnnouncementsPage })));
+const StorageResourcesPage = lazyAdminPage(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.StorageResourcesPage })));
+const CreditOperationsPage = lazyAdminPage(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.CreditOperationsPage })));
+const AccessSettingsPage = lazyAdminPage(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.AccessSettingsPage })));
+const EmailSettingsPage = lazyAdminPage(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.EmailSettingsPage })));
+const FeatureAvailabilityPage = lazyAdminPage(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.FeatureAvailabilityPage })));
+const AgentLessonsPage = lazyAdminPage(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.AgentLessonsPage })));
+const InspirationsPage = lazyAdminPage(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.InspirationsPage })));
+const ChannelsPage = lazyAdminPage(() => import("@/pages/admin/channels/channels-page"));
+const LogicalModelsPage = lazyAdminPage(() => import("@/pages/admin/logical-models/logical-models-page"));
+const AdminPluginsPage = lazyAdminPage(() => import("@/pages/admin/plugins/plugins-page"));
+const AdminSkillsPage = lazyAdminPage(() => import("@/pages/admin/skills/skills-page"));
+const SkillCurationPage = lazyAdminPage(() => import("@/pages/admin/skill-curation-page"));
 const AdminPaymentsPage = lazy(() => import("@/pages/admin/payments/payments-page"));
-const ProductOperationsPage = lazy(() => import("@/pages/admin/product-operations/product-operations-page"));
-const CustomerServicePage = lazy(() => import("@/pages/admin/customer-service/customer-service-page"));
-const LogsPage = lazy(() => import("@/pages/admin/logs/logs-page"));
-const LoginLogsPage = lazy(() => import("@/pages/admin/login-logs/login-logs-page"));
-const RedemptionCodesPage = lazy(() => import("@/pages/admin/redemption-codes/redemption-codes-page"));
-const ReferralsAdminPage = lazy(() => import("@/pages/admin/referrals/referrals-page"));
-const RuntimePolicySettingsPage = lazy(() => import("@/pages/admin/settings/runtime-policy-settings-page"));
-const AppearanceSettingsPage = lazy(() => import("@/pages/admin/settings/appearance-settings-page"));
-const DrawingEngineSettingsPage = lazy(() => import("@/pages/admin/settings/drawing-engine-settings-page"));
-const StorageSettingsPage = lazy(() => import("@/pages/admin/settings/storage-settings-page"));
-const ArkPrivateAssetsSettingsPage = lazy(() => import("@/pages/admin/settings/ark-private-assets-settings-page"));
-const ResponseInterceptionSettingsPage = lazy(() => import("@/pages/admin/settings/response-interception-settings-page"));
-const ThirdPartySettingsPage = lazy(() => import("@/pages/admin/settings/libtv-settings-page"));
-const WorkbenchToolsPage = lazy(() => import("@/pages/admin/workbench-tools/workbench-tools-page"));
-const SystemUpdatePage = lazy(() => import("@/pages/admin/settings/system-update-page"));
-const SystemPerformancePage = lazy(() => import("@/pages/admin/settings/system-performance-page"));
-const StoryboardPromptsPage = lazy(() => import("@/pages/admin/storyboard-prompts/storyboard-prompts-page"));
-const AdminFeedbacksPage = lazy(() => import("@/pages/admin/feedbacks/feedbacks-page"));
-const UsersPage = lazy(() => import("@/pages/admin/users/users-page"));
-const AdministratorsPage = lazy(() => import("@/pages/admin/users/administrators-page"));
+const ProductOperationsPage = lazyAdminPage(() => import("@/pages/admin/product-operations/product-operations-page"));
+const CustomerServicePage = lazyAdminPage(() => import("@/pages/admin/customer-service/customer-service-page"));
+const LogsPage = lazyAdminPage(() => import("@/pages/admin/logs/logs-page"));
+const LoginLogsPage = lazyAdminPage(() => import("@/pages/admin/login-logs/login-logs-page"));
+const RedemptionCodesPage = lazyAdminPage(() => import("@/pages/admin/redemption-codes/redemption-codes-page"));
+const ReferralsAdminPage = lazyAdminPage(() => import("@/pages/admin/referrals/referrals-page"));
+const RuntimePolicySettingsPage = lazyAdminPage(() => import("@/pages/admin/settings/runtime-policy-settings-page"));
+const AppearanceSettingsPage = lazyAdminPage(() => import("@/pages/admin/settings/appearance-settings-page"));
+const DrawingEngineSettingsPage = lazyAdminPage(() => import("@/pages/admin/settings/drawing-engine-settings-page"));
+const StorageSettingsPage = lazyAdminPage(() => import("@/pages/admin/settings/storage-settings-page"));
+const ArkPrivateAssetsSettingsPage = lazyAdminPage(() => import("@/pages/admin/settings/ark-private-assets-settings-page"));
+const ResponseInterceptionSettingsPage = lazyAdminPage(() => import("@/pages/admin/settings/response-interception-settings-page"));
+const ThirdPartySettingsPage = lazyAdminPage(() => import("@/pages/admin/settings/libtv-settings-page"));
+const WorkbenchToolsPage = lazyAdminPage(() => import("@/pages/admin/workbench-tools/workbench-tools-page"));
+const SystemUpdatePage = lazyAdminPage(() => import("@/pages/admin/settings/system-update-page"));
+const SystemPerformancePage = lazyAdminPage(() => import("@/pages/admin/settings/system-performance-page"));
+const StoryboardPromptsPage = lazyAdminPage(() => import("@/pages/admin/storyboard-prompts/storyboard-prompts-page"));
+const AdminFeedbacksPage = lazyAdminPage(() => import("@/pages/admin/feedbacks/feedbacks-page"));
+const UsersPage = lazyAdminPage(() => import("@/pages/admin/users/users-page"));
+const AdministratorsPage = lazyAdminPage(() => import("@/pages/admin/users/administrators-page"));
 const AssetsPage = lazy(loadAssetsPage);
 const PromptsPage = lazy(() => import("@/pages/prompts"));
 const LoginPage = lazy(() => import("@/pages/auth/login"));
@@ -144,6 +149,7 @@ export const router = createBrowserRouter([
         children: [
             { path: "/", element: deferred(<CreatePage />) },
             { path: "/create", element: deferred(<CreatePage />) },
+            { path: "/ecommerce", element: <RequireAuth>{deferred(<EcommercePage />)}</RequireAuth> },
             {
                 path: "/toolbox/image",
                 element: (
@@ -252,6 +258,12 @@ export const router = createBrowserRouter([
                     { index: true, element: <AdminLanding>{adminRoute("admin.analytics.overview", <AnalyticsPage />)}</AdminLanding> },
                     { path: "control-preview", element: adminRoute("admin.analytics.control_preview", <ControlPreviewPage />) },
                     { path: "users", element: adminRoute("admin.users.accounts", <UsersPage />) },
+                    { path: "user-groups", element: adminRoute("admin.users.groups", <UserGroupsPage />) },
+                    { path: "ecommerce", element: <Navigate to="/admin/ecommerce/agent" replace /> },
+                    { path: "ecommerce/agent", element: adminRoute("admin.ecommerce.config", <EcommerceAgentConfigPage />) },
+                    { path: "ecommerce/library", element: adminRoute("admin.ecommerce.knowledge", <EcommerceManagementPage />) },
+                    { path: "ecommerce/library/skills", element: adminRoute("admin.ecommerce.knowledge", <EcommerceManagementPage />) },
+                    { path: "ecommerce/library/categories", element: adminRoute("admin.ecommerce.knowledge", <EcommerceManagementPage />) },
                     { path: "login-logs", element: adminRoute("admin.users.accounts", <LoginLogsPage />) },
                     { path: "feedbacks", element: adminRoute("admin.users.feedbacks", <AdminFeedbacksPage />) },
                     { path: "administrators", element: <RequireFullAdmin><AdministratorsPage /></RequireFullAdmin> },

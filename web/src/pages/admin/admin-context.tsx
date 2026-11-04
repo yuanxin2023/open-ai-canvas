@@ -11,7 +11,7 @@ type AdminContextValue = {
     removeUserReference: (userId: string) => void;
 };
 
-const emptyReferences: AdminReferenceData = { users: [], channels: [] };
+const emptyReferences: AdminReferenceData = { users: [], channels: [], userGroups: [] };
 const AdminContext = createContext<AdminContextValue | null>(null);
 
 export function AdminProvider({ children }: { children: ReactNode }) {

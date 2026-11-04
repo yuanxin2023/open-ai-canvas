@@ -10,6 +10,7 @@ import (
 )
 
 type CreateAdminUserRequest struct {
+	UserGroup   string            `json:"userGroup"`
 	Username    string            `json:"username"`
 	DisplayName string            `json:"displayName"`
 	Email       string            `json:"email"`
@@ -21,11 +22,12 @@ type CreateAdminUserRequest struct {
 }
 
 type CreateOrdinaryUserRequest struct {
-	Username string           `json:"username"`
-	Email    string           `json:"email"`
-	Remark   string           `json:"remark"`
-	Password string           `json:"password"`
-	Status   model.UserStatus `json:"status"`
+	UserGroup string           `json:"userGroup"`
+	Username  string           `json:"username"`
+	Email     string           `json:"email"`
+	Remark    string           `json:"remark"`
+	Password  string           `json:"password"`
+	Status    model.UserStatus `json:"status"`
 }
 
 type CreateAdministratorRequest struct {
@@ -43,10 +45,11 @@ type PromoteAdministratorRequest struct {
 }
 
 type UpdateOrdinaryUserRequest struct {
-	Email    string           `json:"email"`
-	Remark   *string          `json:"remark"`
-	Password string           `json:"password"`
-	Status   model.UserStatus `json:"status"`
+	UserGroup *string          `json:"userGroup"`
+	Email     string           `json:"email"`
+	Remark    *string          `json:"remark"`
+	Password  string           `json:"password"`
+	Status    model.UserStatus `json:"status"`
 }
 
 type UpdateAdministratorRequest struct {
@@ -58,6 +61,7 @@ type UpdateAdministratorRequest struct {
 }
 
 type UpdateUserRequest struct {
+	UserGroup   *string           `json:"userGroup"`
 	DisplayName string            `json:"displayName"`
 	Email       string            `json:"email"`
 	Remark      *string           `json:"remark"`
@@ -87,6 +91,7 @@ type BulkDisableUsersResult struct {
 }
 
 type AdminListQuery struct {
+	Group         string
 	Keyword       string
 	Status        string
 	Type          string
@@ -106,6 +111,8 @@ type AdminUserPage struct {
 
 type AdminUser struct {
 	model.User
+	RechargedMicrocredits int64            `json:"rechargedMicrocredits"`
+	ConsumedMicrocredits  int64            `json:"consumedMicrocredits"`
 	Remark                string           `json:"remark"`
 	AvailableMicrocredits int64            `json:"availableMicrocredits"`
 	ReservedMicrocredits  int64            `json:"reservedMicrocredits"`
@@ -142,8 +149,9 @@ type AdminChannelReference struct {
 }
 
 type AdminReferenceData struct {
-	Users    []AdminUserReference    `json:"users"`
-	Channels []AdminChannelReference `json:"channels"`
+	UserGroups []PublicUserGroup       `json:"userGroups"`
+	Users      []AdminUserReference    `json:"users"`
+	Channels   []AdminChannelReference `json:"channels"`
 }
 
 type ChannelRequest struct {

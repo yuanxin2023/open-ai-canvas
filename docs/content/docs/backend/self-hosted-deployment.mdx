@@ -9,6 +9,12 @@ description: 匹配构建、自有正式发布源与后台手动更新
 
 `YINGCE_AGENT_URL` 在容器网络中为 `http://yingce-agent:8081`，`YINGCE_AGENT_BRIDGE_HOST` 为 `backend`。`YINGCE_AGENT_TOKEN` 由部署环境提供，至少 32 字符，两端一致且独立于 Updater Token；源码和示例中不填真实值。Agent 不发布端口，Backend 等待其健康检查。宿主机开发保留未配置远程地址时的内嵌路径；Docker 开发使用独立服务，运行时依赖变化后重建 Agent。Web 保留 Bun 锁文件，Agent 的独立 Node 运行时保留其 package-lock。
 
+## 预览环境的模型服务出网
+
+Backend 和独立 Agent 调用公网模型服务时，必须连接具有出网能力的容器网络。若预览编排使用 `internal: true` 隔离内部服务，不能让 Backend 和 Agent 只连接该网络；应额外接入可出网网络，Redis 等内部依赖继续保留在隔离网络中，无需发布 Backend 或 Agent 端口。
+
+系统渠道保存出现 `upstream_dns_failed` 时，先在 Backend 容器内检查域名解析，再检查网络是否仅有内部隔离网络。宿主机能解析、页面能登录或健康检查通过，都不能证明 Backend 能访问模型上游。网络没有出网通路时，单独更换 DNS 不能解决问题；恢复出网后仍保留现有 SSRF 校验。
+
 ## 后台正式版本更新
 
 唯一正式更新源为 `yuanxin2023/open-ai-canvas`。修改代码可触发 GitHub Actions 检查/构建；推送新版本标签后，匹配镜像发布成功再生成正式 Release，后台才能提供手动确认更新。普通提交、预发布、草稿及缺少完整发布文件的版本不进入可更新清单。每个版本须更新 VERSION、对应更新日志及版本标签，不重复改写已发布标签。自有标签必须指向包含本地定制的合并提交，不能直接复用指向纯官方代码的上游标签；本轮没有创建发布标签。

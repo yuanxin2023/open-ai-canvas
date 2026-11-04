@@ -24,9 +24,17 @@ export const ADMIN_PERMISSION_GROUPS = [
         label: "用户与服务",
         items: [
             { permission: "admin.users.accounts", label: "用户管理", path: "/admin/users" },
+            { permission: "admin.users.groups", label: "用户分组", path: "/admin/user-groups" },
             { permission: "admin.users.customer_service", label: "客服配置", path: "/admin/customer-service" },
             { permission: "admin.users.feedbacks", label: "用户反馈", path: "/admin/feedbacks" },
             { permission: "admin.users.agent_lessons", label: "Agent 记忆", path: "/admin/agent-lessons" },
+        ],
+    },
+    {
+        label: "电商 Agent",
+        items: [
+            { permission: "admin.ecommerce.config", label: "电商 Agent 配置", path: "/admin/ecommerce/agent" },
+            { permission: "admin.ecommerce.knowledge", label: "知识与技能", path: "/admin/ecommerce/library" },
         ],
     },
     {

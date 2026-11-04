@@ -227,7 +227,30 @@ export async function initializeRemoteUserDataSession(userId: string) {
         for (const pending of pendingCanvasMutations.values()) {
             if (pending.baseline) acknowledgedProjects.set(pending.projectId, pending.baseline);
         }
-        acknowledgedAssets = new Map(useAssetStore.getState().assets.map((asset) => [asset.id, asset]));
+        // 导入等待素材上传时刷新，缓存中已有 assetId，但远端可能尚无记录。
+        // 只重放已确认画布基线之后新增、且明确属于该导入节点的素材。
+        const unconfirmedImportAssets = new Map<string, Array<{ canvasId: string; nodeId: string }>>();
+        for (const project of useCanvasStore.getState().projects) {
+            const baseline = acknowledgedProjects.get(project.id);
+            if (!baseline) continue;
+            const confirmedNodes = new Set(baseline.nodes.map((node) => node.id));
+            for (const node of project.nodes) {
+                if (node.metadata?.importSource && node.metadata.assetId && !confirmedNodes.has(node.id)) {
+                    const owners = unconfirmedImportAssets.get(node.metadata.assetId) || [];
+                    owners.push({ canvasId: project.id, nodeId: node.id });
+                    unconfirmedImportAssets.set(node.metadata.assetId, owners);
+                }
+            }
+        }
+        acknowledgedAssets = new Map(
+            useAssetStore
+                .getState()
+                .assets.filter((asset) => {
+                    const pending = unconfirmedImportAssets.get(asset.id);
+                    return !pending?.some((owner) => asset.metadata?.canvasId === owner.canvasId && asset.metadata?.nodeId === owner.nodeId);
+                })
+                .map((asset) => [asset.id, asset]),
+        );
         remoteUserDataPhase = "ready";
         notifyRemoteUserDataReady();
         if (pendingCanvasMutations.size) scheduleRemoteUserDataSync();
@@ -1232,7 +1255,7 @@ async function submitCanvasMutation(entry: PendingCanvasMutation) {
         newId: newCanvasMutationId,
         send: async (request) => {
             try {
-                return await applyRemoteCanvasOperations(entry.projectId, request);
+                return await applyCanvasOperationsReplayingConcurrentWrites(entry.projectId, request, assertSession);
             } catch (error) {
                 assertSession();
                 // Only an explicit rejection permits a new request ID/body.
@@ -1248,10 +1271,26 @@ async function submitCanvasMutation(entry: PendingCanvasMutation) {
                     throw storageError;
                 }
                 assertSession();
-                return applyRemoteCanvasOperations(entry.projectId, entry.request);
+                return applyCanvasOperationsReplayingConcurrentWrites(entry.projectId, entry.request, assertSession);
             }
         },
     });
+}
+
+const CANVAS_CONCURRENT_WRITE_REPLAY_DELAYS_MS = [250, 600, 1200];
+
+// canvas_concurrent_write 表示事务已回滚、写入身份未被占用：按原 mutationId 和原请求体短暂重放，
+// 不重建基线，也不把这种瞬时并发上报成画布冲突。
+async function applyCanvasOperationsReplayingConcurrentWrites(projectId: string, request: CanvasOperationsRequest, assertSession: () => void) {
+    for (let attempt = 0; ; attempt++) {
+        try {
+            return await applyRemoteCanvasOperations(projectId, request);
+        } catch (error) {
+            if (!(error instanceof ApiError) || error.reason !== "canvas_concurrent_write" || attempt >= CANVAS_CONCURRENT_WRITE_REPLAY_DELAYS_MS.length) throw error;
+            await new Promise((resolve) => setTimeout(resolve, CANVAS_CONCURRENT_WRITE_REPLAY_DELAYS_MS[attempt]));
+            assertSession();
+        }
+    }
 }
 
 async function drainRemoteUserDataChanges(options: { projectId?: string | readonly string[] } = {}) {
@@ -1275,9 +1314,12 @@ async function drainRemoteUserDataChanges(options: { projectId?: string | readon
 }
 
 // Only a definitive rejection may discard a journal; unknown network outcomes
-// must keep their mutation ID for receipt replay.
+// must keep their mutation ID for receipt replay. canvas_mutation_id_reused
+// means the ID already has a receipt for another body: replaying can never
+// succeed, while a three-way rebase from the journal baseline applies the
+// committed part only once.
 function canReconcileCanvasRejection(error: unknown) {
-    return error instanceof ApiError && [400, 409].includes(error.status || 0) && ["canvas_field_conflict", "canvas_object_missing", "canvas_edit_lease_conflict", "canvas_media_assets_pending"].includes(error.reason || "");
+    return error instanceof ApiError && [400, 409].includes(error.status || 0) && ["canvas_field_conflict", "canvas_object_missing", "canvas_edit_lease_conflict", "canvas_media_assets_pending", "canvas_mutation_id_reused"].includes(error.reason || "");
 }
 
 async function preserveSyncRecovery(identity: string, value: object) {
@@ -1711,7 +1753,8 @@ async function saveRemoteUserDataBatch(uploaded: Map<string, string>, options: {
             const resourcesMissing = error instanceof ApiError && error.reason === "canvas_history_resources_missing";
             if (assetSyncEpoch !== sessionEpoch) throw error;
             const waitingForWriter = error instanceof ApiError && error.reason === "canvas_edit_lease_conflict";
-            const errorKind = waitingForWriter ? undefined : resourcesMissing ? "resources" : error instanceof ApiError && error.status === 409 ? "conflict" : error instanceof ApiError && error.retryable ? "network" : "local";
+            const transient = error instanceof ApiError && (error.retryable || error.reason === "canvas_concurrent_write");
+            const errorKind = waitingForWriter ? undefined : resourcesMissing ? "resources" : transient ? "network" : error instanceof ApiError && error.status === 409 ? "conflict" : "local";
             useSyncProgressStore.getState().setProjectProgress(source.id, {
                 phase: "pending",
                 errorKind,

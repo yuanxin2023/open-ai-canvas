@@ -46,8 +46,12 @@ func TestLegacySceneOperationKeepsDigestAndChecksCanonicalBaseline(t *testing.T)
 	if got[0]["title"] != "Edited title" {
 		t.Fatal("edit lost")
 	}
+	if err := applyCanvasOperations(canonical, converted.Operations); err != nil {
+		t.Fatal("already-applied target should converge", err)
+	}
+	converted.Operations[0].Value = json.RawMessage(`[]`)
 	if err := applyCanvasOperations(canonical, converted.Operations); err == nil {
-		t.Fatal("stale beforeValue bypassed concurrency check")
+		t.Fatal("stale beforeValue overwrote a different target")
 	}
 }
 

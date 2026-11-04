@@ -311,7 +311,7 @@ func adminResourceReferences(snapshot repository.ResourceReferenceSnapshot, reso
 	seen := make(map[string]map[string]struct{})
 	for _, reference := range snapshot.Direct {
 		switch reference.Kind {
-		case "个人头像":
+		case "个人头像", repository.DramaResourceReferenceKind:
 			appendAdminResourceReference(result, seen, reference.ResourceID, AdminResourceReferenceView{Kind: reference.Kind, ID: reference.ID, Title: reference.Title})
 		case "Agent 待执行引用":
 			appendAdminResourceReference(result, seen, reference.ResourceID, AdminResourceReferenceView{Kind: "活动 Agent", ID: reference.ID, Title: reference.Title})
@@ -339,6 +339,9 @@ func adminResourceReferences(snapshot repository.ResourceReferenceSnapshot, reso
 }
 
 func adminActiveResourceDocumentKind(document repository.ResourceReferenceDocument) (string, bool) {
+	if document.Kind == "电商项目" {
+		return document.Kind, true
+	}
 	switch document.TaskStatus {
 	case model.TaskStatusQueued, model.TaskStatusRunning, model.TaskStatusTextReplay:
 		return "活动任务", true

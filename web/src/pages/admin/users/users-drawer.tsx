@@ -15,11 +15,13 @@ import { AdminCreditAdjustmentPanel, AdminPasswordField, type CreditAdjustmentSt
 import { AdminStatusBadge } from "../components/admin-ui";
 import { buildUserProfilePatch, type UserProfileValues } from "./user-profile-patch";
 import { UserResourceQuotaPanel, type ResourceQuotaEditorState } from "./user-resource-quota-panel";
+import { useAdminContext } from "../admin-context";
 
 type UserEditorTab = "profile" | "security" | "credits" | "quota";
 const idleCreditState: CreditAdjustmentState = { dirty: false, busy: false, confirming: false };
 
 export function AdminUserEditModal({ user, actorId, onClose, onSaved, onCreditsAdjusted }: { user: AdminUser | null; actorId?: string; onClose: () => void; onSaved: (user: AdminManagedUser) => void; onCreditsAdjusted: (account: CreditAccount) => void }) {
+    const { references } = useAdminContext();
     const { message, modal } = App.useApp();
     const [activeTab, setActiveTab] = useState<UserEditorTab>("profile");
     const [currentUser, setCurrentUser] = useState<AdminUser | null>(null);
@@ -50,7 +52,7 @@ export function AdminUserEditModal({ user, actorId, onClose, onSaved, onCreditsA
         setCreditState(idleCreditState);
         setQuotaState({ dirty: false, busy: false });
         profileForm.resetFields();
-        profileForm.setFieldsValue({ email: user.email || "", remark: user.remark || "" });
+        profileForm.setFieldsValue({ email: user.email || "", remark: user.remark || "", userGroup: user.userGroup || "default" });
         passwordForm.resetFields();
         setProfileDirty(false);
         setPasswordDirty(false);
@@ -101,7 +103,7 @@ export function AdminUserEditModal({ user, actorId, onClose, onSaved, onCreditsA
             const result = await updateAdminUser(currentUser.id, input);
             mergeSavedUser(result.user);
             profileForm.resetFields();
-            profileForm.setFieldsValue({ email: result.user.email || "", remark: result.user.remark || "" });
+            profileForm.setFieldsValue({ email: result.user.email || "", remark: result.user.remark || "", userGroup: result.user.userGroup || "default" });
             setProfileDirty(false);
             message.success("用户账号资料已保存");
         } catch (error) {
@@ -195,6 +197,7 @@ export function AdminUserEditModal({ user, actorId, onClose, onSaved, onCreditsA
                                         <Form form={profileForm} layout="vertical" requiredMark={false} disabled={interactionLocked} onFieldsChange={() => setProfileDirty(Boolean(Object.keys(buildUserProfilePatch(currentUser, profileForm.getFieldsValue())).length))}>
                                             <Form.Item label="用户名"><Input value={`@${currentUser.username}`} disabled /></Form.Item>
                                             <Form.Item name="email" label="邮箱" rules={[{ type: "email", message: "请输入有效邮箱" }]}><Input placeholder="name@example.com" /></Form.Item>
+                                            <Form.Item name="userGroup" label="用户分组"><Select options={[{ value: "default", label: "默认分组" }, ...references.userGroups.filter((group) => group.code !== "default").map((group) => ({ value: group.code, label: group.name }))]} /></Form.Item>
                                             <Form.Item name="remark" label="备注" extra="仅管理员可见，可通过用户列表搜索。"><Input.TextArea rows={4} maxLength={500} showCount placeholder="例如：企业客户、工单编号或跟进说明" /></Form.Item>
                                         </Form>
                                     </div>
@@ -288,6 +291,7 @@ function UserEditorTabLabel({ label, dirty }: { label: string; dirty: boolean })
 }
 
 type CreateUserFormValues = {
+    userGroup?: string;
     username: string;
     email?: string;
     remark?: string;
@@ -296,6 +300,7 @@ type CreateUserFormValues = {
 };
 
 export function AdminUserCreateDrawer({ open, onClose, onCreated }: { open: boolean; onClose: () => void; onCreated: (user: AdminUser) => void }) {
+    const { references } = useAdminContext();
     const { message, modal } = App.useApp();
     const [saving, setSaving] = useState(false);
     const [form] = Form.useForm<CreateUserFormValues>();
@@ -303,7 +308,7 @@ export function AdminUserCreateDrawer({ open, onClose, onCreated }: { open: bool
     useEffect(() => {
         if (!open) return;
         form.resetFields();
-        form.setFieldsValue({ status: "active" });
+        form.setFieldsValue({ status: "active", userGroup: "default" });
     }, [form, open]);
 
     const close = () => {
@@ -332,6 +337,7 @@ export function AdminUserCreateDrawer({ open, onClose, onCreated }: { open: bool
                 remark: values.remark?.trim() || "",
                 password: values.password,
                 status: values.status,
+                userGroup: values.userGroup || "default",
             });
             onCreated(result.user);
             form.resetFields();
@@ -368,6 +374,7 @@ export function AdminUserCreateDrawer({ open, onClose, onCreated }: { open: bool
                 <Form.Item name="remark" label="备注" extra="仅管理员可见，可通过用户列表搜索。">
                     <Input.TextArea rows={3} maxLength={500} showCount placeholder="例如：企业客户、工单编号或跟进说明" />
                 </Form.Item>
+                <Form.Item name="userGroup" label="用户分组"><Select options={[{ value: "default", label: "默认分组" }, ...references.userGroups.filter((group) => group.code !== "default").map((group) => ({ value: group.code, label: group.name }))]} /></Form.Item>
                 <Form.Item name="password" label={"\u521d\u59cb\u5bc6\u7801"} rules={[{ required: true, message: "\u8bf7\u8bbe\u7f6e\u521d\u59cb\u5bc6\u7801" }]}>
                     <Input.Password placeholder={"\u81f3\u5c11 8 \u4f4d"} />
                 </Form.Item>

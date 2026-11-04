@@ -35,6 +35,39 @@ func TestRequireAdminPermissionAllowsFullAdmin(t *testing.T) {
 	}
 }
 
+func TestNewAdminModulesRejectOtherScopedGrants(t *testing.T) {
+	svc := &Service{}
+	checks := []struct {
+		name       string
+		permission model.AdminPermission
+		call       func(*model.User) error
+	}{
+		{"group list", model.AdminPermissionUserGroups, func(user *model.User) error { _, err := svc.AdminUserGroups(user); return err }},
+		{"group create", model.AdminPermissionUserGroups, func(user *model.User) error { _, err := svc.CreateUserGroup(user, UserGroupRequest{}); return err }},
+		{"stage settings", model.AdminPermissionEcommerceConfig, func(user *model.User) error { _, err := svc.EcommerceOrchestrationSetting(user); return err }},
+		{"assistant settings", model.AdminPermissionEcommerceConfig, func(user *model.User) error { _, err := svc.AdminYoruSettings(user); return err }},
+		{"assistant update", model.AdminPermissionEcommerceConfig, func(user *model.User) error { _, err := svc.UpdateYoruSettings(user, YoruSettings{}); return err }},
+		{"knowledge stats", model.AdminPermissionEcommerceKnowledge, func(user *model.User) error { _, err := svc.AdminEcommerceKnowledgeStats(user); return err }},
+		{"managed skills", model.AdminPermissionEcommerceKnowledge, func(user *model.User) error { _, err := svc.EcommerceManagedSkills(user); return err }},
+	}
+	permissions := []model.AdminPermission{model.AdminPermissionUsers, model.AdminPermissionUserGroups, model.AdminPermissionEcommerceConfig, model.AdminPermissionEcommerceKnowledge}
+	for _, check := range checks {
+		for _, granted := range permissions {
+			if granted == check.permission {
+				continue
+			}
+			t.Run(check.name+"/"+string(granted), func(t *testing.T) {
+				actor := &model.User{ID: "scoped-admin", Role: model.UserRoleAdmin, AdminLevel: model.AdminLevelScoped, AdminPermissions: []model.AdminPermission{granted}}
+				err := check.call(actor)
+				appErr, ok := err.(*AppError)
+				if !ok || appErr.Reason != kernel.ReasonAdminPermission {
+					t.Fatalf("expected module permission denial before accessing data, got %#v", err)
+				}
+			})
+		}
+	}
+}
+
 func TestNormalizeAdminAccessValidatesScopedPermissions(t *testing.T) {
 	level, permissions, err := normalizeAdminAccess(&AdminAccessInput{
 		Level: model.AdminLevelScoped,

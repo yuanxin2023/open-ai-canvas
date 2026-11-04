@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 
 import { ALL_ADMIN_PERMISSIONS, firstAdminPath, hasAdminPermission, type AdminAccess, type AdminPermission } from "../src/lib/admin-permissions";
 
-const newPermissions = ["admin.platform.workbench_tools", "admin.users.feedbacks", "admin.settings.sms"] as const;
+const newPermissions = ["admin.platform.workbench_tools", "admin.users.feedbacks", "admin.settings.sms", "admin.users.groups", "admin.ecommerce.config", "admin.ecommerce.knowledge"] as const;
 
 describe("merged admin permissions", () => {
     test("existing grants do not implicitly authorize any new module", () => {
@@ -32,6 +32,9 @@ describe("merged admin permissions", () => {
     });
 
     test("landing routes follow the granted module and skip unmounted modules", () => {
+        expect(firstAdminPath({ level: "scoped", permissions: ["admin.users.groups"] })).toBe("/admin/user-groups");
+        expect(firstAdminPath({ level: "scoped", permissions: ["admin.ecommerce.config"] })).toBe("/admin/ecommerce/agent");
+        expect(firstAdminPath({ level: "scoped", permissions: ["admin.ecommerce.knowledge"] })).toBe("/admin/ecommerce/library");
         expect(firstAdminPath({ level: "scoped", permissions: ["admin.users.feedbacks"] })).toBe("/admin/feedbacks");
         expect(firstAdminPath({ level: "scoped", permissions: ["admin.platform.workbench_tools"] })).toBe("/admin/workbench-tools");
         expect(firstAdminPath({ level: "scoped", permissions: ["admin.settings.sms"] })).toBe("/");

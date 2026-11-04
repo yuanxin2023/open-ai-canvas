@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Button } from "antd";
 import { AppModal } from "@/components/ui/product/app-modal";
-import { WandSparkles, X } from "lucide-react";
+import { X, WandSparkles } from "lucide-react";
 
 import { ImageSettingsPanel } from "@/components/image-settings-panel";
 import { ModelPicker } from "@/components/model-picker";

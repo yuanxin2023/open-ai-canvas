@@ -20,6 +20,7 @@ type User struct {
 	AdminLevel           AdminLevel        `json:"-" gorm:"index;size:24"`
 	AdminPermissions     []AdminPermission `json:"-" gorm:"-"`
 	Status               UserStatus        `json:"status" gorm:"index;size:24"`
+	UserGroup            string            `json:"userGroup" gorm:"size:40;not null;default:'';index"`
 	PasswordHash         string            `json:"-"`
 	AdminRemark          string            `json:"-" gorm:"size:500"`
 	RegistrationIP       string            `json:"-" gorm:"size:64"`

@@ -19,7 +19,7 @@ describe("admin navigation group state", () => {
 
     test("restores known preferences and defaults newly added groups", () => {
         const storage = memoryStorage(JSON.stringify({ platform: false, operations: true }));
-        expect(readAdminNavigationGroupState(storage)).toEqual({ analytics: true, platform: false, users: true, commerce: true, finance: true, content: true, settings: true, storage: true });
+        expect(readAdminNavigationGroupState(storage)).toEqual({ analytics: true, platform: false, users: true, ecommerce: true, commerce: true, finance: true, content: true, settings: true, storage: true });
     });
 
     test("persists group preferences", () => {

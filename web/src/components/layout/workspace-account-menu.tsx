@@ -7,6 +7,7 @@ import { useWorkspaceAuth } from "@/components/auth/workspace-auth-context";
 
 import { WorkspaceAccountCard } from "./workspace-account-card";
 import { UserAvatar } from "./user-avatar";
+import { UserGroupAvatarRing } from "./user-group-badge";
 import { openWorkspaceCreditProducts } from "@/lib/workspace-wallet";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { useUserStore } from "@/stores/use-user-store";
@@ -46,8 +47,8 @@ export function WorkspaceAccountMenu() {
                 </div>
             )}
         >
-            <button type="button" className="app-workspace-topbar-icon-button app-workspace-account-trigger" aria-label="账户菜单" title={user.username}>
-                <UserAvatar user={user} className="size-6" />
+            <button type="button" className="app-workspace-topbar-icon-button app-workspace-account-trigger" aria-label="账户菜单" title={user.displayName || user.username}>
+                <UserGroupAvatarRing><UserAvatar user={user} className="size-6" /></UserGroupAvatarRing>
             </button>
         </Popover></>
     ) : <Link to="/login" onClick={(event) => { event.preventDefault(); void openAuth(); }} className="inline-flex items-center gap-2 px-2 text-xs text-foreground/55" aria-label="登录" title="登录"><CircleUserRound className="size-5" /><span className="hidden sm:inline">游客</span></Link>;

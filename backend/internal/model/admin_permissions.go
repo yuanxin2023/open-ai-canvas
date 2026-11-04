@@ -19,6 +19,9 @@ const (
 	AdminPermissionPromptTemplates       AdminPermission = "admin.platform.prompt_templates"
 	AdminPermissionWorkbenchTools        AdminPermission = "admin.platform.workbench_tools"
 	AdminPermissionUsers                 AdminPermission = "admin.users.accounts"
+	AdminPermissionUserGroups            AdminPermission = "admin.users.groups"
+	AdminPermissionEcommerceConfig       AdminPermission = "admin.ecommerce.config"
+	AdminPermissionEcommerceKnowledge    AdminPermission = "admin.ecommerce.knowledge"
 	AdminPermissionCustomerService       AdminPermission = "admin.users.customer_service"
 	AdminPermissionFeedbacks             AdminPermission = "admin.users.feedbacks"
 	AdminPermissionAgentLessons          AdminPermission = "admin.users.agent_lessons"
@@ -52,6 +55,7 @@ var AllAdminPermissions = []AdminPermission{
 	AdminPermissionAnalyticsOverview, AdminPermissionControlPreview, AdminPermissionAPILogs,
 	AdminPermissionChannels, AdminPermissionLogicalModels, AdminPermissionPlugins, AdminPermissionSkills, AdminPermissionPromptTemplates, AdminPermissionWorkbenchTools,
 	AdminPermissionUsers, AdminPermissionCustomerService, AdminPermissionFeedbacks, AdminPermissionAgentLessons,
+	AdminPermissionUserGroups, AdminPermissionEcommerceConfig, AdminPermissionEcommerceKnowledge,
 	AdminPermissionProducts, AdminPermissionRedeemCodes,
 	AdminPermissionPaymentProviders, AdminPermissionPaymentOrders, AdminPermissionPaymentReconciliation, AdminPermissionCredits, AdminPermissionReferrals,
 	AdminPermissionInspirations, AdminPermissionAnnouncements, AdminPermissionBannerAnnouncements,

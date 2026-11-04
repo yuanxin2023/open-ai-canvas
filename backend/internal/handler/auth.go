@@ -177,7 +177,7 @@ func RegisterAuthRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
-		logicalModels, logicalModelsErr := svc.PublicLogicalModels(nil)
+		logicalModels, logicalModelsErr := svc.PublicLogicalModelsForUser(user, nil)
 		if logicalModelsErr != nil {
 			failService(c, logicalModelsErr)
 			return
@@ -197,7 +197,7 @@ func RegisterAuthRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
-		ok(c, gin.H{"user": publicUser, "runtimeLimits": limits, "drawingEngine": drawingEngine, "features": features, "logicalModels": logicalModels})
+		ok(c, gin.H{"user": publicUser, "userGroup": svc.PublicUserGroupFor(user), "runtimeLimits": limits, "drawingEngine": drawingEngine, "features": features, "logicalModels": logicalModels})
 	})
 	r.PATCH("/auth/profile", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
@@ -299,6 +299,7 @@ func linuxDOCallbackHandler(svc *service.Service) gin.HandlerFunc {
 
 func RegisterAdminRoutes(r *gin.RouterGroup, svc *service.Service) {
 	registerUserResourceQuotaRoutes(r, svc)
+	registerAdminUserGroupRoutes(r, svc)
 	r.GET("/admin/users", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {
@@ -310,7 +311,7 @@ func RegisterAdminRoutes(r *gin.RouterGroup, svc *service.Service) {
 			fail(c, http.StatusBadRequest, err)
 			return
 		}
-		users, err := svc.AdminUsers(user, service.AdminListQuery{Keyword: c.Query("keyword"), Status: c.Query("status"), Page: page, Limit: limit})
+		users, err := svc.AdminUsers(user, service.AdminListQuery{Keyword: c.Query("keyword"), Status: c.Query("status"), Group: c.Query("group"), Page: page, Limit: limit})
 		if err != nil {
 			failService(c, err)
 			return
@@ -1012,6 +1013,11 @@ func proxySystemRequest(c *gin.Context, svc *service.Service, user *model.User, 
 
 func proxySystemRequestPath(c *gin.Context, svc *service.Service, user *model.User, channel *model.ModelChannel, providerPath string) {
 	startedAt := time.Now()
+	// 分组只能使用绑定的系统渠道；中转入口与任务准入同样失败关闭。
+	if err := svc.RequireUserChannelAccess(user, channel.ID); err != nil {
+		failService(c, err)
+		return
+	}
 	policy, available := loadRuntimePolicy(c, svc)
 	if !available || !enforceRateLimit(c, "system-proxy:"+user.ID, policy.Request.SystemRelayPerMinute, time.Minute) {
 		return

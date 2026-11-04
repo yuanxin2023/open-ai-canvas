@@ -171,7 +171,7 @@ func topupProductFromRequest(id, actorID string, request TopupProductRequest, st
 		return nil, BadAuthRequest("充值商品名称不能为空且不能超过 120 个字符")
 	}
 	if request.AmountFen <= 0 || request.AmountFen > 100_000_000 {
-		return nil, BadAuthRequest("充值金额必须为 1 分至 100 万元")
+		return nil, BadAuthRequest("充值金额必须为 0.01 至 1,000,000 元")
 	}
 	kind := topupProductKind(request.Kind)
 	if request.Kind != "" && request.Kind != model.TopupProductKindCredits && request.Kind != model.TopupProductKindStorage {

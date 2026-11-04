@@ -21,7 +21,7 @@ func newProjectSettingsTestService(t *testing.T) (*Service, *gorm.DB) {
 		&model.User{},
 		&model.DramaProduction{}, &model.DramaCast{}, &model.DramaEpisode{}, &model.DramaSegment{}, &model.DramaTake{},
 		&model.Project{}, &model.ProjectUnit{}, &model.Resource{}, &model.Asset{}, &model.AssetVersion{}, &model.AssetRepresentation{},
-		&model.CanvasProject{}, &model.StyleProfile{}, &model.ProjectAssetCandidate{}, &model.WorkflowInstance{}, &model.WorkflowStepInstance{},
+		&model.CanvasProject{}, &model.EcommerceProject{}, &model.StyleProfile{}, &model.ProjectAssetCandidate{}, &model.WorkflowInstance{}, &model.WorkflowStepInstance{},
 		&model.CanvasSnapshot{}, &model.CanvasSnapshotResource{},
 		&model.Shot{}, &model.ShotArtifact{}, &model.VoiceProfile{},
 		&model.Task{}, &model.TaskLog{}, &model.Result{},
@@ -31,6 +31,7 @@ func newProjectSettingsTestService(t *testing.T) (*Service, *gorm.DB) {
 		&model.Announcement{}, &model.AnnouncementImageDraft{},
 		&model.Inspiration{}, &model.UserPrompt{}, &model.InspirationCoverDraft{},
 		&model.SystemSetting{}, &model.PaymentPromotionImageDraft{},
+		&model.DramaProduction{}, &model.DramaCast{}, &model.DramaEpisode{}, &model.DramaSegment{}, &model.DramaTake{},
 	); err != nil {
 		t.Fatal(err)
 	}

@@ -15,7 +15,7 @@ func TestAutoDLCanonicalPackageStopsLegacyAudioWithoutChangingVideoIdentity(t *t
 	if err != nil {
 		t.Fatal(err)
 	}
-	if pkg.Manifest.Metadata.ID != "autodl-comfyui" || pkg.Manifest.Metadata.Version != "2.3.0" {
+	if pkg.Manifest.Metadata.ID != "autodl-comfyui" || pkg.Manifest.Metadata.Version != "2.4.0" {
 		t.Fatal("AutoDL identity or reviewed version changed")
 	}
 	adapters, err := LoadInstalledProviders(pkg.ManifestRaw, nil)

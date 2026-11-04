@@ -1,5 +1,5 @@
 import { Popover } from "antd";
-import { BookOpen, ChevronDown, ChevronRight, CircleHelp, Headphones, Image as ImageIcon, Infinity as InfinityIcon, PanelLeftClose, PanelLeftOpen, Video } from "lucide-react";
+import { BookOpen, ChevronDown, ChevronRight, CircleHelp, Headphones, Image as ImageIcon, Infinity as InfinityIcon, PanelLeftClose, PanelLeftOpen, ShoppingBag, Video } from "lucide-react";
 import { LayoutGroup, motion, useReducedMotion } from "motion/react";
 import { useEffect, useMemo, useRef, useState, type ComponentType, type CSSProperties, type MouseEvent } from "react";
 import { useWorkspaceAuth } from "@/components/auth/workspace-auth-context";
@@ -44,6 +44,7 @@ export function buildNav(features: FeatureAvailability): { groups: WorkspaceNavG
             items: [
                 { ...toolItem("create", "/?home=1"), id: "home", title: "创作" },
                 ...(features.shortDramaEnabled ? [{ ...toolItem("projects", "/projects"), title: "短剧 Agent" }] : []),
+                { id: "ecommerce", title: "电商 Agent", icon: ShoppingBag, to: "/ecommerce" },
                 { ...toolItem("canvas", "/canvas"), title: "自由画布" },
             ],
         },

@@ -111,6 +111,12 @@ func (s *Service) deleteUserAssetsWithResources(userID string, ids []string, pur
 		if deleteReferencedResources {
 			// 彻底删除只需要知道哪些资源仍被「其他素材」复用（这些资源要保留），不扫描任务和画布。
 			snapshot, snapshotErr = s.repo.OtherAssetResourceReferences(userID, assetIDs)
+			if snapshotErr == nil {
+				// 短剧表直接持有的媒体同样保留：素材记录只是它在素材库里的入口。
+				var dramaReferences []repository.ResourceDirectReference
+				dramaReferences, snapshotErr = s.repo.DramaResourceReferences(userID, ownedIDs)
+				snapshot.Direct = append(snapshot.Direct, dramaReferences...)
+			}
 		} else {
 			snapshot, snapshotErr = s.repo.ResourceReferenceSnapshotExcludingAssets(userID, assetIDs, ownedIDs)
 		}

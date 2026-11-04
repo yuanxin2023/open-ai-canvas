@@ -6,6 +6,9 @@ import {
     BarChart3,
     BellRing,
     BookOpenCheck,
+    Bot,
+    Crown,
+    Palette,
     ChevronLeft,
     ChevronRight,
     ChevronDown,
@@ -15,6 +18,7 @@ import {
     CreditCard,
     Database,
     FileClock,
+    Gift,
     HardDrive,
     Home,
     Inbox,
@@ -26,18 +30,18 @@ import {
     Megaphone,
     MessageSquareText,
     Moon,
-    Palette,
     Paintbrush,
     PlugZap,
     RadioTower,
     RefreshCw,
     ReceiptText,
     Rows3,
-    Sparkles,
     Settings2,
+    Shapes,
     ShieldAlert,
     ShieldCheck,
     ShoppingBag,
+    Sparkles,
     Sun,
     TicketCheck,
     ToggleLeft,
@@ -61,6 +65,7 @@ import { readAdminNavigationGroupState, writeAdminNavigationGroupState, type Adm
 import { getIsolatedAdminAntTheme } from "../theme/admin-ant-theme";
 import { AdminTooltip } from "../ui/controls";
 import { AdminDensityProvider, useAdminDensity } from "./admin-density";
+import { preloadAdminPages } from "../admin-page-loader";
 import "@/styles/admin-ui.css";
 import "../theme/admin-tokens.css";
 import "../theme/admin-chrome.css";
@@ -68,9 +73,9 @@ import "../theme/admin-chrome.css";
 type AdminNavigationItem = {
     path: string;
     label: string;
+    description?: string;
     /** 折叠侧栏图标下方的两字名称，与用户端折叠导航保持一致。 */
     shortLabel: string;
-    description: string;
     icon: ReactNode;
     requireFeature?: "frontendModelsEnabled";
     fullAdminOnly?: boolean;
@@ -114,11 +119,21 @@ const adminNavigation: AdminNavigationGroup[] = [
         collapsible: true,
         items: [
             { path: "/admin/users", label: "用户管理", shortLabel: "用户", description: "普通用户账号与状态", icon: <UsersRound className="size-4" /> },
+            { path: "/admin/user-groups", label: "用户分组", shortLabel: "分组", description: "用户分组与可用渠道", icon: <Crown className="size-4" /> },
             { path: "/admin/administrators", label: "管理员配置", shortLabel: "管理", description: "管理员账号与模块权限", icon: <UserCog className="size-4" />, fullAdminOnly: true },
             { path: "/admin/customer-service", label: "客服配置", shortLabel: "客服", description: "客服入口、样式与移动", icon: <Headphones className="size-4" /> },
             { path: "/admin/login-logs", label: "用户登录日志", shortLabel: "用户", description: "登录、失败与主动退出", icon: <FileClock className="size-4" /> },
             { path: "/admin/feedbacks", label: "用户反馈", shortLabel: "用户", description: "Bug、功能提议与收件箱答复", icon: <Inbox className="size-4" /> },
             { path: "/admin/agent-lessons", label: "Agent 记忆", shortLabel: "Ag", description: "按用户查看个人记忆", icon: <Sparkles className="size-4" /> },
+        ],
+    },
+    {
+        id: "ecommerce",
+        label: "电商 Agent",
+        collapsible: true,
+        items: [
+            { path: "/admin/ecommerce/agent", label: "电商 Agent 配置", shortLabel: "配置", description: "开放状态、阶段模型与创作助手", icon: <Bot className="size-4" /> },
+            { path: "/admin/ecommerce/library", label: "知识与技能", shortLabel: "知识", description: "电商知识库、技能与品类", icon: <BookOpenCheck className="size-4" /> },
         ],
     },
     {
@@ -203,6 +218,32 @@ function isAdminNavigationPath(pathname: string, navigationPath: string) {
     return pathname === navigationPath || pathname.startsWith(`${navigationPath}/`);
 }
 
+function findAdminNavigation(pathname: string) {
+    for (const group of adminNavigation) {
+        const item = group.items.find((candidate) => isAdminNavigationPath(pathname, candidate.path));
+        if (item) return { group, item };
+    }
+    return undefined;
+}
+
+function visibleNavigationGroups(features: Partial<Record<"frontendModelsEnabled", boolean>>) {
+    return adminNavigation.map((group) => ({ ...group, items: group.items.filter((item) => !item.requireFeature || features[item.requireFeature]) })).filter((group) => group.items.length > 0);
+}
+
+// v2：从“全部展开”改为默认只展开当前所在分组，菜单更紧凑。
+const expandedGroupsStorageKey = "admin-nav-expanded-groups-v2";
+
+function readExpandedGroups(currentGroupKey?: string): Set<string> {
+    const fallback = new Set(currentGroupKey ? [currentGroupKey] : []);
+    if (typeof window === "undefined") return fallback;
+    try {
+        const saved = JSON.parse(window.localStorage.getItem(expandedGroupsStorageKey) || "null") as string[] | null;
+        return Array.isArray(saved) ? new Set(saved) : fallback;
+    } catch {
+        return fallback;
+    }
+}
+
 function adminPopupContainer(node?: HTMLElement) {
     return document.getElementById("admin-root") || node?.closest("[data-admin-root]") || document.body;
 }
@@ -221,6 +262,11 @@ function AdminShellLayout() {
     const appearance = useAppearanceStore((state) => state.appearance);
     const [collapsed, setCollapsed] = useState(readWorkspaceSidebarCollapsed);
     const dark = useThemeStore((state) => state.theme === "dark");
+
+    // 进入后台后空闲预取其他页面代码，切换菜单时不再出现加载白屏。
+    useEffect(() => {
+        preloadAdminPages();
+    }, []);
 
     useEffect(() => {
         document.body.classList.add("admin-overlays");
@@ -292,10 +338,7 @@ function AdminShellLayout() {
 
 export function AdminPageFrame({ title, description, actions, back, scroll = false, children }: { title: string; description?: string; actions?: ReactNode; back?: { label: string; onClick: () => void }; scroll?: boolean; children: ReactNode }) {
     const location = useLocation();
-    const currentSection = adminNavigation.find((section) => section.items.some((item) => isAdminNavigationPath(location.pathname, item.path)));
-    const currentItem = currentSection?.items.find((item) => isAdminNavigationPath(location.pathname, item.path));
-    const sectionLabel = back ? (currentItem?.label ?? currentSection?.label ?? "管理后台") : (currentSection?.label ?? "管理后台");
-    const sectionPath = back ? (currentItem?.path ?? currentSection?.items[0]?.path ?? "/admin") : (currentSection?.items[0]?.path ?? "/admin");
+    const current = findAdminNavigation(location.pathname);
 
     return (
         <div className={cn("admin-page-root", scroll && "admin-page-root-scrollable")}>
@@ -311,12 +354,20 @@ export function AdminPageFrame({ title, description, actions, back, scroll = fal
                         ) : null}
                         <div className="admin-page-title-block min-w-0">
                             <nav className="admin-page-location" aria-label="当前位置">
-                                <Link to={sectionPath} className="admin-page-location-section">
-                                    {sectionLabel}
-                                </Link>
+                                <span className="admin-page-location-section">{current?.group.label ?? "管理后台"}</span>
                                 <span className="admin-page-location-separator" aria-hidden="true">
                                     /
                                 </span>
+                                {back && current ? (
+                                    <>
+                                        <Link to={current.item.path} className="admin-page-location-section is-link">
+                                            {current.item.label}
+                                        </Link>
+                                        <span className="admin-page-location-separator" aria-hidden="true">
+                                            /
+                                        </span>
+                                    </>
+                                ) : null}
                                 <h1 className="admin-page-title truncate">{title}</h1>
                             </nav>
                             {description ? <p className="admin-page-description">{description}</p> : null}
@@ -369,7 +420,7 @@ function MobileAdminNavigation() {
     const currentItem = visibleItems.find((item) => item.path === location.pathname) || visibleItems[0];
     const menuItems: MenuProps["items"] = visibleGroups.map((group) => ({
         type: "group",
-        key: `group-${group.label}`,
+        key: `group-${group.id}`,
         label: group.label,
         children: group.items.map((item) => ({
             key: item.path,

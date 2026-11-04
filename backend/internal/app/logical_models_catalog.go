@@ -11,14 +11,21 @@ import (
 	"infinite-canvas/backend/internal/model"
 )
 
-func (s *Service) PublicLogicalModels(intent *ModelRequestIntent) ([]PublicLogicalModel, error) {
+// PublicLogicalModels 只发布当前分组可用渠道上的线路，保持既有积分价格。
+func (s *Service) PublicLogicalModels(access *userGroupAccess, intent *ModelRequestIntent) ([]PublicLogicalModel, error) {
+	if access == nil {
+		return nil, Unauthorized("请先登录")
+	}
 	snapshot, err := s.routeCatalogSnapshot()
 	if err != nil {
 		return nil, err
 	}
 	result := make([]PublicLogicalModel, 0, len(snapshot.Ordered))
 	for _, id := range snapshot.Ordered {
-		cached := snapshot.Models[id]
+		cached, visible, groupErr := groupLogicalModel(access, snapshot.Models[id])
+		if groupErr != nil || !visible {
+			continue
+		}
 		structuralSpecs := availableCachedRouteSpecs(cached.Routes)
 		coverageValid := logicalModelCapabilityCovered(cached.ProductSpec, structuralSpecs)
 		available := coverageValid && hasHealthyCachedRoute(s, cached.Routes)
@@ -43,6 +50,21 @@ func (s *Service) PublicLogicalModels(intent *ModelRequestIntent) ([]PublicLogic
 		result = append(result, publicLogicalModel(cached, available))
 	}
 	return result, nil
+}
+
+// groupLogicalModel 只过滤渠道，复制线路切片以免改变共享路由快照。
+func groupLogicalModel(access *userGroupAccess, cached cachedLogicalModel) (cachedLogicalModel, bool, error) {
+	routes := make([]cachedLogicalRoute, 0, len(cached.Routes))
+	for _, route := range cached.Routes {
+		if access.allowsChannel(route.ChannelModel.ChannelID) {
+			routes = append(routes, route)
+		}
+	}
+	if len(routes) == 0 && len(cached.Routes) > 0 {
+		return cached, false, nil
+	}
+	cached.Routes = routes
+	return cached, true, nil
 }
 
 func publicLogicalModel(cached cachedLogicalModel, available bool) PublicLogicalModel {

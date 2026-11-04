@@ -100,10 +100,11 @@ type PublicChannelModelPriceTier struct {
 
 // ModelCatalog 的创作端目录始终来自系统渠道模型，不反查逻辑模型或路由。
 // 系统渠道目录只负责安全发布可解释的读模型；任务创建仍会用持久化能力与价格档再次强校验。
-func (s *Service) ModelCatalog(intent *ModelRequestIntent) (*ModelCatalogResponse, error) {
+// access 决定可见渠道和展示价格；价格档单价已按用户分组换算为实际扣费的微积分。
+func (s *Service) ModelCatalog(access *userGroupAccess, intent *ModelRequestIntent) (*ModelCatalogResponse, error) {
 	// 两个集合都初始化成非 nil 空切片：空目录要发 []，不能因为“没有模型”而丢掉字段。
 	response := &ModelCatalogResponse{Models: []PublicLogicalModel{}, Channels: []PublicChannelCatalog{}}
-	channels, err := s.publicSystemChannelCatalog(intent)
+	channels, err := s.publicSystemChannelCatalog(access, intent)
 	if err != nil {
 		return nil, err
 	}
@@ -121,7 +122,10 @@ func (s *Service) ModelCatalog(intent *ModelRequestIntent) (*ModelCatalogRespons
 
 // publicSystemChannelCatalog 组装普通用户可见的系统渠道读模型，不暴露密钥、Base URL 等执行凭证。
 // 这是读展示路径：单个损坏模型被隔离并记录诊断；仓储查询失败仍整体返回错误，避免伪装成空目录。
-func (s *Service) publicSystemChannelCatalog(intent *ModelRequestIntent) ([]PublicChannelCatalog, error) {
+func (s *Service) publicSystemChannelCatalog(access *userGroupAccess, intent *ModelRequestIntent) ([]PublicChannelCatalog, error) {
+	if access == nil {
+		return nil, Unauthorized("请先登录")
+	}
 	channels, err := s.repo.SystemChannels(true)
 	if err != nil {
 		return nil, err
@@ -129,7 +133,7 @@ func (s *Service) publicSystemChannelCatalog(intent *ModelRequestIntent) ([]Publ
 
 	result := make([]PublicChannelCatalog, 0, len(channels))
 	for _, channel := range channels {
-		if !channel.Enabled {
+		if !channel.Enabled || !access.allowsChannel(channel.ID) {
 			continue
 		}
 

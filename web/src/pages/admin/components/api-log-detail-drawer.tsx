@@ -8,6 +8,7 @@ import { hasAdminPermission } from "@/lib/admin-permissions";
 import { getAdminApiLog, getAdminApiLogByBillingOrder, queryAdminApiLogTask, recoverAdminApiLogTaskMedia, recoverAdminApiLogVideoByURL, type ApiCallLog } from "@/services/api/auth";
 import { useUserStore } from "@/stores/use-user-store";
 import { AdminUserDetailModal } from "./admin-user-detail-drawer";
+import { videoRecoveryAvailable } from "../logs/log-view";
 
 export function ApiLogDetailModal({ logId = null, billingOrderId = null, onClose, onLogUpdated }: { logId?: string | null; billingOrderId?: string | null; onClose: () => void; onLogUpdated?: (log: ApiCallLog) => void }) {
     const { message, modal } = App.useApp();
@@ -118,7 +119,7 @@ export function ApiLogDetailModal({ logId = null, billingOrderId = null, onClose
         modal.confirm({
             title: charge ? "恢复作品并补扣积分？" : "恢复作品并免除扣费？",
             content: charge
-                ? `原订单已退回 ${formatCredits(log.billingAmountMicrocredits)} 积分。作品保存成功后会从用户可用余额补扣，余额不足时会变为负数。`
+                ? `原订单已退回 ${formatCredits(log.billingReservedMicrocredits)} 积分预授权。恢复作品时从用户可用余额补扣；余额不足时操作失败，保留原退款状态。`
                 : "原订单保持已退回状态，作品保存成功后不再扣费。",
             okText: charge ? "恢复并补扣" : "恢复，不扣费",
             cancelText: "取消",
@@ -321,7 +322,7 @@ function LogDetail({ log, providerRequestId, videoURL, resultText, querying, onP
                 </section>
             ) : null}
 
-            {log.capability === "video" ? (
+            {videoRecoveryAvailable(log) ? (
                 <section className="api-log-detail-section api-log-recovery-section">
                     <div className="api-log-detail-section-heading">
                         <div className="flex items-center gap-2">
@@ -342,8 +343,7 @@ function LogDetail({ log, providerRequestId, videoURL, resultText, querying, onP
                                 <small>默认使用当前记录，可手动覆盖</small>
                             </div>
                             <Input className="api-log-recovery-input" value={providerRequestId} onChange={(event) => onProviderRequestIdChange(event.target.value)} placeholder="输入供应商任务 ID" />
-                            <Button icon={<RefreshCw className="size-3.5" />} loading={querying} onClick={onQuery}>自动查询</Button>
-                            <Button type="primary" icon={<Save className="size-3.5" />} loading={querying} onClick={onQuery}>保存并查询</Button>
+                            <Button type="primary" icon={<RefreshCw className="size-3.5" />} loading={querying} onClick={onQuery}>查询上游任务</Button>
                         </div>
                         <div className="api-log-recovery-row">
                             <div className="api-log-recovery-label">
@@ -408,7 +408,8 @@ function billingText(log: ApiCallLog) {
     if (!log.billable) return "不计费";
     if (!log.billingAvailable) return "未扣积分";
     const labels = { settled: "已结算", refunded: "已退回", uncertain: "待核对", running: "运行中", reserved: "已预授权" } as const;
-    return `${formatCredits(log.billingAmountMicrocredits)} 积分 · ${labels[log.billingStatus || "reserved"]}`;
+    const settled = log.billingSettledMicrocredits !== undefined ? `实收 ${formatCredits(log.billingSettledMicrocredits)}` : "未结算";
+    return `预授权 ${formatCredits(log.billingReservedMicrocredits)} · ${settled} 积分 · ${labels[log.billingStatus || "reserved"]}`;
 }
 
 function mediaDeliveryText(log: ApiCallLog) {

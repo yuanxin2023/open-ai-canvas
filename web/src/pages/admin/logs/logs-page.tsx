@@ -1,10 +1,12 @@
-import { Alert, App, Button, Dropdown, Input, Modal, Segmented } from "antd";
+import { Alert, App, Button, DatePicker, Dropdown, Input, Segmented } from "antd";
+import { AdminModal } from "@/pages/admin/ui/overlays";
+import dayjs, { type Dayjs } from "dayjs";
 import { IconButton } from "@/pages/admin/ui/controls";
 import type { MenuProps } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { ChevronDown, Download, Eye, Play, RefreshCw, Search } from "lucide-react";
 import { saveAs } from "file-saver";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 
 import { PaginationBar } from "@/pages/admin/components/admin-ui";
@@ -17,10 +19,15 @@ import { ApiLogDetailModal } from "../components/api-log-detail-drawer";
 import { mediaDeliverySummary } from "@/lib/generation-task-display";
 import { AdminPageFrame } from "../components/admin-shell";
 import { AdminBatchBar, AdminDataTable, AdminExportButton, AdminFilterChip, AdminStatusBadge, AdminTableEmpty } from "../components/admin-ui";
-import { logBillingLabel, logStatus, normalizeLogView } from "./log-view";
+import { logBillingLabel, logStatus, normalizeLogView, videoRecoveryAvailable } from "./log-view";
 import "./logs-page.css";
 import { Select } from "@/components/ui/base/select";
 import { AdminSearchInput } from "../components/admin-search-input";
+import { useAdminContext } from "../admin-context";
+import { useAdminUserOptions } from "../components/use-admin-user-options";
+
+// 后端单次查询最多覆盖 366 天（含首尾），超出时服务端会静默截断，所以在界面上直接拒绝。
+const MAX_RANGE_DAYS = 366;
 
 const autoRefreshIntervals = [30, 60, 120] as const;
 type AutoRefreshInterval = (typeof autoRefreshIntervals)[number];
@@ -29,25 +36,54 @@ type AutoRefreshPreference = { enabled: boolean; intervalSeconds: AutoRefreshInt
 const defaultAutoRefreshPreference: AutoRefreshPreference = { enabled: false, intervalSeconds: 60 };
 
 export default function LogsPage() {
-    const { message } = App.useApp();
-    const userId = useUserStore((state) => state.user?.id);
+    const { message, modal } = App.useApp();
+    const { references } = useAdminContext();
+    const currentUserId = useUserStore((state) => state.user?.id);
     const [searchParams, setSearchParams] = useSearchParams();
     const keyword = searchParams.get("filter") || "";
     const view = normalizeLogView(searchParams.get("view"));
     const status = normalizeStatus(searchParams.get("status"));
     const recordType = searchParams.get("recordType") === "download" ? "download" : searchParams.get("recordType") === "all" ? "all" : "request";
     const capability = normalizeCapability(searchParams.get("capability"));
+    const fromDay = normalizeDay(searchParams.get("from"));
+    const toDay = normalizeDay(searchParams.get("to"));
+    const userId = searchParams.get("userId") || "";
+    const modelFilter = searchParams.get("model") || "";
+    const channelId = searchParams.get("channelId") || "";
     const page = positiveInt(searchParams.get("page"), 1);
     const pageSize = normalizePageSize(searchParams.get("pageSize"));
     const [keywordDraft, setKeywordDraft] = useState(keyword);
     const [isKeywordComposing, setIsKeywordComposing] = useState(false);
     const debouncedKeywordDraft = useDebouncedValue(isKeywordComposing ? keyword : keywordDraft);
+    const userOptions = useAdminUserOptions(userId || undefined);
+    const channelOptions = useMemo(() => references.channels.map((channel) => ({ value: channel.id, label: channel.name })), [references.channels]);
+    const modelOptions = useMemo(() => {
+        const names = new Set<string>();
+        references.channels.forEach((channel) => channel.models?.forEach((name) => names.add(name)));
+        if (modelFilter) names.add(modelFilter);
+        return [...names].sort().map((name) => ({ value: name, label: name }));
+    }, [modelFilter, references.channels]);
+    // 服务端按 UTC 自然日截取（含结束日）。未显式选择时不提交，由服务端取近 30 个 UTC 日，
+    // 界面同时按 UTC 日历显示这个默认范围，保证看到的范围与实际查询一致。
+    const defaultRange = useMemo(utcDefaultRange, []);
+    const explicitRange = Boolean(fromDay && toDay);
+    const rangeParams = explicitRange ? { from: fromDay, to: toDay } : {};
+    const queryFilters = {
+        recordType,
+        capability: capability === "all" ? undefined : capability,
+        keyword: keyword || undefined,
+        status: status === "all" ? undefined : status,
+        userId: userId || undefined,
+        model: modelFilter || undefined,
+        channelId: channelId || undefined,
+        ...rangeParams,
+    } as const;
     const [logs, setLogs] = useState<ApiCallLog[]>([]);
     const [total, setTotal] = useState(0);
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState("");
     const [retry, setRetry] = useState(0);
-    const [autoRefresh, setAutoRefresh] = useState<AutoRefreshPreference>(() => readAutoRefreshPreference(userId));
+    const [autoRefresh, setAutoRefresh] = useState<AutoRefreshPreference>(() => readAutoRefreshPreference(currentUserId));
     const [countdown, setCountdown] = useState<number>(autoRefresh.intervalSeconds);
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
     const [detailLogId, setDetailLogId] = useState<string | null>(null);
@@ -57,13 +93,13 @@ export default function LogsPage() {
     const searchParamsRef = useRef(searchParams);
     const pendingKeywordUrlRef = useRef<string | null>(null);
     const skipKeywordUrlCommitRef = useRef(false);
-    const hasFilters = Boolean(keywordDraft || status !== "all" || recordType !== "request" || capability !== "all");
+    const hasFilters = Boolean(keywordDraft || status !== "all" || recordType !== "request" || capability !== "all" || explicitRange || userId || modelFilter || channelId);
 
     useEffect(() => {
-        const preference = readAutoRefreshPreference(userId);
+        const preference = readAutoRefreshPreference(currentUserId);
         setAutoRefresh(preference);
         setCountdown(preference.intervalSeconds);
-    }, [userId]);
+    }, [currentUserId]);
 
     useEffect(() => {
         searchParamsRef.current = searchParams;
@@ -73,7 +109,7 @@ export default function LogsPage() {
         setSearchParams((current) => {
             const next = new URLSearchParams(searchParamsRef.current || current);
             Object.entries(patch).forEach(([key, value]) => {
-                const isDefault = (key === "filter" && value === "") || (key === "status" && value === "all") || (key === "page" && value === 1) || (key === "pageSize" && value === 20);
+                const isDefault = value === "" || (key === "status" && value === "all") || (key === "recordType" && value === "request") || (key === "capability" && value === "all") || (key === "page" && value === 1) || (key === "pageSize" && value === 20);
                 if (isDefault) next.delete(key);
                 else next.set(key, String(value));
             });
@@ -109,7 +145,7 @@ export default function LogsPage() {
         setLogs([]);
         setTotal(0);
         setSelectedIds([]);
-        void listAdminApiLogs({ recordType, capability: capability === "all" ? undefined : capability, keyword: keyword || undefined, status: status === "all" ? undefined : status, page, pageSize })
+        void listAdminApiLogs({ ...queryFilters, page, pageSize })
             .then((result) => {
                 if (sequence !== requestSequence.current) return;
                 setLogs(result.logs);
@@ -125,7 +161,7 @@ export default function LogsPage() {
             })
             .finally(() => sequence === requestSequence.current && setLoading(false));
         return () => { requestSequence.current += 1; };
-    }, [keyword, status, recordType, capability, page, pageSize, retry, updateUrl]);
+    }, [keyword, status, recordType, capability, fromDay, toDay, userId, modelFilter, channelId, currentUserId, page, pageSize, retry, updateUrl]);
 
     useEffect(() => {
         setCountdown(autoRefresh.intervalSeconds);
@@ -141,12 +177,12 @@ export default function LogsPage() {
         }, 1_000);
 
         return () => window.clearInterval(timer);
-    }, [autoRefresh, loading, keyword, status, recordType, capability, page, pageSize, retry]);
+    }, [autoRefresh, loading, keyword, status, recordType, capability, fromDay, toDay, userId, modelFilter, channelId, currentUserId, page, pageSize, retry]);
 
     const updateAutoRefresh = (preference: AutoRefreshPreference) => {
         setAutoRefresh(preference);
         setCountdown(preference.intervalSeconds);
-        writeAutoRefreshPreference(userId, preference);
+        writeAutoRefreshPreference(currentUserId, preference);
     };
 
     const handleAutoRefreshMenu: MenuProps["onClick"] = ({ key }) => {
@@ -231,7 +267,8 @@ export default function LogsPage() {
     ];
     const compactColumns: ColumnsType<ApiCallLog> = view === "billing" ? [
         ...identityColumns,
-        { title: "销售积分", key: "revenue", align: "right", width: 108, render: (_, log) => log.billable && log.billingAvailable ? formatCredits(log.billingAmountMicrocredits) : "—" },
+        { title: "预授权", key: "reserved", align: "right", width: 100, render: (_, log) => (log.billable && log.billingAvailable ? formatCredits(log.billingReservedMicrocredits) : "—") },
+        { title: "实收", key: "settled", align: "right", width: 100, render: (_, log) => (log.billable && log.billingAvailable && log.billingSettledMicrocredits !== undefined ? formatCredits(log.billingSettledMicrocredits) : "—") },
         { title: "成本积分", key: "cost", align: "right", width: 108, render: (_, log) => log.creditCostMicrocredits !== undefined ? formatCredits(log.creditCostMicrocredits) : log.creditCostConfigured ? "待核算" : "未配置" },
         { title: "账务状态", key: "billingStatus", width: 100, render: (_, log) => logBillingLabel(log) },
         { title: "Tokens 入 / 出", key: "usage", width: 142, render: (_, log) => log.usageAvailable ? `${log.inputTokens.toLocaleString()} / ${log.outputTokens.toLocaleString()}` : "未返回" },
@@ -242,18 +279,26 @@ export default function LogsPage() {
         { title: "错误摘要", key: "error", ellipsis: true, render: (_, log) => <span className={logStatus(log).tone === "error" ? "admin-log-error" : undefined} title={[log.errorCode, log.error].filter(Boolean).join(" · ")}>{[log.errorCode, log.error].filter(Boolean).join(" · ") || (logStatus(log).tone === "error" ? `HTTP ${log.statusCode || "失败"} · 未返回详情` : "—")}</span> },
     ];
     const baseColumns = view === "all" ? fullColumns : compactColumns;
-    const columns: ColumnsType<ApiCallLog> = [...baseColumns, { title: "操作", key: "actions", width: 126, fixed: "right", render: (_, log) => log.capability === "video" ? <Button type="link" size="small" icon={<RefreshCw className="size-3.5" />} onClick={() => setDetailLogId(log.id)}>恢复任务</Button> : <span className="text-foreground/30">--</span> }];
+    const columns: ColumnsType<ApiCallLog> = [...baseColumns, { title: "操作", key: "actions", width: 126, fixed: "right", render: (_, log) => videoRecoveryAvailable(log) ? <Button type="link" size="small" icon={<RefreshCw className="size-3.5" />} onClick={() => setDetailLogId(log.id)}>恢复任务</Button> : <span className="text-foreground/30">--</span> }];
+
+    const applyDateRange = (start: Dayjs | null, end: Dayjs | null) => {
+        if (start && end && end.diff(start, "day") + 1 > MAX_RANGE_DAYS) {
+            message.warning(`单次最多查询 ${MAX_RANGE_DAYS} 天，请缩小日期范围`);
+            return;
+        }
+        updateUrl({ from: start && end ? start.format("YYYY-MM-DD") : "", to: start && end ? end.format("YYYY-MM-DD") : "", page: 1 });
+    };
 
     const runBatchRecovery = async () => {
         const selectedLogs = logs.filter((log) => selectedIds.includes(log.id));
-        const videoIds = selectedLogs.filter((log) => log.capability === "video").map((log) => log.id);
+        const videoIds = selectedLogs.filter(videoRecoveryAvailable).map((log) => log.id);
         const skipped = selectedIds.length - videoIds.length;
-        if (videoIds.length === 0) { message.info("所选记录中没有视频任务可恢复"); return; }
+        if (videoIds.length === 0) { message.info("所选记录中没有可恢复的失败视频任务"); return; }
         setBatchRecovering(true);
         try {
             const result = await batchRecoverAdminApiLogs(videoIds);
             const totalSkipped = skipped + result.skipped;
-            Modal.info({ title: "批量恢复处理结果", width: 560, content: <div className="max-h-[50vh] space-y-2 overflow-auto"><div className="mb-3">成功 {result.success} 条，失败 {result.failed} 条，跳过 {totalSkipped} 条</div>{result.items.map((item) => <div key={item.logId} className="rounded border border-border/70 px-3 py-2 text-xs"><div className="font-mono">{item.logId}</div><div>{item.recovered ? "成功" : item.error?.startsWith("跳过") ? item.error : item.providerStatus ? `仍在生成中（${item.providerStatus}）` : `失败：${item.error || "未恢复"}`}</div></div>)}</div> });
+            modal.info({ title: "批量恢复处理结果", width: 560, content: <div className="max-h-[50vh] space-y-2 overflow-auto"><div className="mb-3">成功 {result.success} 条，失败 {result.failed} 条，跳过 {totalSkipped} 条</div>{result.items.map((item) => <div key={item.logId} className="rounded border border-border/70 px-3 py-2 text-xs"><div className="font-mono">{item.logId}</div><div>{item.recovered ? "成功" : item.error?.startsWith("跳过") ? item.error : item.providerStatus ? `仍在生成中（${item.providerStatus}）` : `失败：${item.error || "未恢复"}`}</div></div>)}</div> });
             if (result.success > 0) window.dispatchEvent(new CustomEvent("wallet:updated"));
             setRetry((value) => value + 1);
         } catch (error) { message.error(error instanceof Error ? error.message : "批量恢复失败"); }
@@ -284,7 +329,7 @@ export default function LogsPage() {
                         </Button>
                     </Dropdown>
                     <AdminExportButton
-                        exportFile={() => exportAdminApiLogs({ recordType, capability: capability === "all" ? undefined : capability, keyword: keyword || undefined, status: status === "all" ? undefined : status })}
+                        exportFile={() => exportAdminApiLogs(queryFilters)}
                         fileName={() => `请求明细-${new Date().toISOString().slice(0, 10)}.csv`}
                         label="导出当前筛选"
                         successMessage="已按当前筛选导出请求明细"
@@ -322,6 +367,29 @@ export default function LogsPage() {
                 }
                 toolbarFilters={
                     <>
+                    <DatePicker.RangePicker
+                        aria-label="请求日期范围"
+                        value={explicitRange ? [dayjs(fromDay), dayjs(toDay)] : [dayjs(defaultRange.from), dayjs(defaultRange.to)]}
+                        prefix={<span className="text-xs text-foreground/50" title="按 UTC 自然日筛选，含结束日；未选择时为近 30 天">UTC</span>}
+                        placeholder={["开始日期", "结束日期"]}
+                        disabledDate={(day) => day.format("YYYY-MM-DD") > defaultRange.to}
+                        onChange={(dates) => applyDateRange(dates?.[0] || null, dates?.[1] || null)}
+                    />
+                    <Select
+                        aria-label="按用户筛选"
+                        className="w-44"
+                        allowClear
+                        showSearch
+                        filterOption={false}
+                        placeholder="全部用户"
+                        loading={userOptions.searching}
+                        value={userId || undefined}
+                        options={userOptions.options}
+                        onSearch={userOptions.onSearch}
+                        onChange={(value) => updateUrl({ userId: value || "", page: 1 })}
+                    />
+                    <Select aria-label="按模型筛选" className="w-48" allowClear showSearch optionFilterProp="label" placeholder="全部模型" value={modelFilter || undefined} options={modelOptions} onChange={(value) => updateUrl({ model: value || "", page: 1 })} />
+                    <Select aria-label="按渠道筛选" className="w-40" allowClear showSearch optionFilterProp="label" placeholder="全部渠道" value={channelId || undefined} options={channelOptions} onChange={(value) => updateUrl({ channelId: value || "", page: 1 })} />
                     <Select aria-label="明细类型" className="w-32" value={recordType} onChange={(value) => updateUrl({ recordType: value, page: 1 })} options={[{ label: "仅请求", value: "request" }, { label: "仅下载", value: "download" }, { label: "全部明细", value: "all" }]} />
                     <Select aria-label="能力类型" className="w-28" value={capability} onChange={(value) => updateUrl({ capability: value, page: 1 })} options={[{ label: "全部能力", value: "all" }, { label: "文本", value: "text" }, { label: "图片", value: "image" }, { label: "视频", value: "video" }, { label: "音频", value: "audio" }]} />
                     <Select
@@ -338,10 +406,7 @@ export default function LogsPage() {
                     </>
                 }
                 toolbarActive={hasFilters}
-                onReset={() => {
-                    setKeywordDraft("");
-                    updateUrl({ filter: "", status: "all", recordType: "request", capability: "all", page: 1 });
-                }}
+                onReset={() => { setKeywordDraft(""); updateUrl({ filter: "", status: "all", recordType: "request", capability: "all", from: "", to: "", userId: "", model: "", channelId: "", page: 1 }); }}
                 batchActions={
                     <AdminBatchBar count={selectedIds.length} onClear={() => setSelectedIds([])}>
                         <Button size="small" icon={<RefreshCw className="size-3.5" />} loading={batchRecovering} onClick={() => void runBatchRecovery()}>批量恢复</Button>
@@ -380,7 +445,7 @@ export default function LogsPage() {
                 footer={<PaginationBar alwaysShow current={page} pageSize={pageSize} total={total} onChange={(nextPage, nextSize) => updateUrl({ page: nextSize !== pageSize ? 1 : nextPage, pageSize: nextSize })} />}
             />
             <ApiLogDetailModal logId={detailLogId} onClose={() => setDetailLogId(null)} onLogUpdated={(next) => setLogs((items) => items.map((item) => (item.id === next.id ? next : item)))} />
-            <Modal
+            <AdminModal
                 title={mediaPreview?.title || "媒体预览"}
                 open={Boolean(mediaPreview)}
                 width={880}
@@ -392,7 +457,6 @@ export default function LogsPage() {
                         </Button>
                     ) : null
                 }
-                destroyOnHidden
             >
                 {mediaPreview ? (
                     <MediaPreview
@@ -404,7 +468,7 @@ export default function LogsPage() {
                         fallbackClassName="min-h-[360px] rounded-lg bg-black/90 text-white/55"
                     />
                 ) : null}
-            </Modal>
+            </AdminModal>
         </AdminPageFrame>
     );
 }
@@ -429,6 +493,17 @@ function normalizePageSize(value: string | null) {
     return [20, 50, 100].includes(parsed) ? parsed : 20;
 }
 function normalizeCapability(value: string | null): "all" | "text" | "image" | "video" | "audio" { return value === "text" || value === "image" || value === "video" || value === "audio" ? value : "all"; }
+function normalizeDay(value: string | null) {
+    if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return "";
+    const parsed = dayjs(value);
+    return parsed.isValid() && parsed.format("YYYY-MM-DD") === value ? value : "";
+}
+// 与后端默认一致：结束于当前 UTC 日，含首尾共 30 天。
+function utcDefaultRange() {
+    const today = new Date();
+    const start = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() - 29));
+    return { from: start.toISOString().slice(0, 10), to: today.toISOString().slice(0, 10) };
+}
 function normalizeStatus(value: string | null): "all" | "succeeded" | "failed" {
     return value === "succeeded" || value === "failed" ? value : "all";
 }
@@ -487,7 +562,8 @@ function BillingSummary({ log }: { log: ApiCallLog }) {
     const statusLabel = ({ settled: "已结算", refunded: "已退回", uncertain: "待核对", running: "运行中", reserved: "已预授权" } as const)[status];
     return (
         <div>
-            <div className="tabular-nums">销售价格：{formatCredits(log.billingAmountMicrocredits)} 积分</div>
+            <div className="tabular-nums">预授权：{formatCredits(log.billingReservedMicrocredits)} 积分</div>
+            <div className="tabular-nums">实收：{log.billingSettledMicrocredits !== undefined ? `${formatCredits(log.billingSettledMicrocredits)} 积分` : "未结算"}</div>
             <div className="tabular-nums text-xs text-foreground/60">成本价格：{log.creditCostMicrocredits !== undefined ? `${formatCredits(log.creditCostMicrocredits)} 积分` : log.creditCostConfigured ? "待核算" : "未配置"}</div>
             <div className="text-xs text-foreground/40">{statusLabel}</div>
         </div>

@@ -12,6 +12,7 @@ import type { AdminAccess } from "@/lib/admin-permissions";
 
 import type { VerificationPolicy } from "./verification";
 import type { AccountFileStorageUsage } from "@/services/api/resources";
+import type { PublicUserGroup } from "@/services/api/user-groups";
 
 let authSessionRequest: Promise<AuthSessionPayload> | null = null;
 let authSessionCache: { payload: AuthSessionPayload; expiresAt: number } | null = null;
@@ -40,6 +41,9 @@ export type LocalUser = {
     role: "admin" | "user";
     adminAccess?: AdminAccess;
     status: "active" | "disabled";
+    isPromoter?: boolean;
+    /** 分组编码；空串属于 default 分组。 */
+    userGroup?: string;
     lastLoginAt?: string;
     createdAt: string;
     updatedAt: string;
@@ -49,6 +53,9 @@ export type AdminUser = LocalUser & {
     remark: string;
     availableMicrocredits: number;
     reservedMicrocredits: number;
+    /** 仅用户列表返回：累计充值到账积分与累计已结算消耗。 */
+    rechargedMicrocredits?: number;
+    consumedMicrocredits?: number;
 };
 
 export type AdminManagedUser = LocalUser & {
@@ -61,6 +68,8 @@ export type AuthSessionPayload = {
     runtimeLimits?: RuntimeLimits;
     drawingEngine?: CanvasDrawingEngineSetting;
     features?: FeatureAvailability;
+    /** 当前账号所属分组的展示信息；分组配置缺失时为空。 */
+    userGroup?: PublicUserGroup | null;
 };
 
 export type RuntimeLimits = {
@@ -83,7 +92,10 @@ export type ApiCallLog = {
     mediaStage?: GenerationTask["mediaStage"];
     billingOrderId?: string;
     billingStatus?: BillingOrder["status"];
-    billingAmountMicrocredits: number;
+    /** 订单预授权额；与实收分列，未结算时不能当成扣费额。 */
+    billingReservedMicrocredits: number;
+    /** 仅已结算订单返回实收。 */
+    billingSettledMicrocredits?: number;
     billingAvailable: boolean;
     source: string;
     capability: "text" | "image" | "video" | "audio" | "";
@@ -217,6 +229,7 @@ export type AdminUserReference = {
 };
 
 export type AdminReferenceData = {
+    userGroups: PublicUserGroup[];
     users: AdminUserReference[];
     channels: Array<{ id: string; name: string; enabled: boolean; models: string[]; modelDisplayNames?: string[] }>;
 };
@@ -247,15 +260,16 @@ export type AdminAnalytics = {
         totalConsumedMicrocredits?: number;
         finance?: AnalyticsFinance | null;
     };
-    trend: Array<{ day: string; tasks: number; requests: number; activeUsers: number; requestSuccessRate: number; consumedMicrocredits?: number }>;
+    /** 成功率为 null 表示当天没有已完成的请求，不是 0%。consumedMicrocredits 为已结算订单实收。 */
+    trend: Array<{ day: string; tasks: number; requests: number; activeUsers: number; requestSuccessRate: number | null; consumedMicrocredits: number }>;
     models: Array<{
         model: string;
         capability: string;
         tasks: number;
         requests: number;
         uniqueUsers: number;
-        taskSuccessRate: number;
-        requestSuccessRate: number;
+        taskSuccessRate: number | null;
+        requestSuccessRate: number | null;
         p50DurationMs: number;
         p95DurationMs: number;
         inputTokens: number;
@@ -576,14 +590,14 @@ function normalizeUserAvatar(user: LocalUser | null) {
     return { ...user, avatarUrl: resourceFileUrl(user.avatarResourceId) };
 }
 
-export type AdminListParams = { keyword?: string; status?: string; role?: string; page?: number; pageSize?: number };
+export type AdminListParams = { keyword?: string; status?: string; role?: string; group?: string; page?: number; pageSize?: number };
 export type AdminUserLedgerFilter = "all" | "increase" | "consume" | "admin";
 
 export function listAdminUsers(params: Omit<AdminListParams, "role"> = {}) {
     return http.get<{ users: AdminUser[]; total: number; page: number; pageSize: number }>("/admin/users", { params });
 }
 
-export function createAdminUser(input: { username: string; email?: string; remark?: string; password: string; status: LocalUser["status"] }) {
+export function createAdminUser(input: { username: string; email?: string; remark?: string; password: string; status: LocalUser["status"]; userGroup?: string }) {
     return http.post<{ user: AdminUser }>("/admin/users", input);
 }
 
@@ -639,7 +653,7 @@ export function listAdminUserAuditEvents(id: string, params: { page?: number; pa
     return http.get<{ events: AdminAuditEvent[]; total: number; page: number; pageSize: number }>(`/admin/users/${encodeURIComponent(id)}/audit-events`, { params });
 }
 
-export function updateAdminUser(id: string, input: Partial<Pick<LocalUser, "email" | "status">> & { remark?: string; password?: string }) {
+export function updateAdminUser(id: string, input: Partial<Pick<LocalUser, "email" | "status" | "userGroup">> & { remark?: string; password?: string }) {
     return http.patch<{ user: AdminManagedUser }>(`/admin/users/${encodeURIComponent(id)}`, input);
 }
 
@@ -759,7 +773,7 @@ export function updateAdminDrawingEngineSetting(input: Pick<CanvasDrawingEngineS
     return http.patch<{ setting: CanvasDrawingEngineSetting }>("/admin/settings/drawing-engine", input);
 }
 
-export type AdminApiLogParams = AdminListParams & { recordType?: "request" | "download" | "all"; capability?: "text" | "image" | "video" | "audio" };
+export type AdminApiLogParams = AdminListParams & Pick<AnalyticsFilters, "from" | "to" | "userId" | "model" | "channelId"> & { recordType?: "request" | "download" | "all"; capability?: "text" | "image" | "video" | "audio" };
 
 export function listAdminApiLogs(params: AdminApiLogParams = {}) {
     return http.get<{ logs: ApiCallLog[]; total: number; page: number; pageSize: number }>("/admin/api-logs", { params });
