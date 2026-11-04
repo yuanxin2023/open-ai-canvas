@@ -390,9 +390,11 @@ test("task-first settings reveal dependent configuration only after the primary 
     expect(accessSource).toContain('title="1. 是否允许创建新账号"');
     expect(accessSource).toContain('title="2. 是否开放 Linux.do 登录"');
 
-    expect(featureSource).toContain('title="1. 用户工作台入口"');
-    expect(featureSource).toContain('title="2. 插件开放范围"');
-    expect(featureSource).toContain('title="3. 用户模型来源"');
+    expect(featureSource).toContain('title="创作工作区"');
+    expect(featureSource).toContain('title="用户入口与展示"');
+    expect(featureSource).toContain('title="插件开放范围"');
+    expect(featureSource).toContain('title="模型来源与渠道"');
+    expect(featureSource).toContain('title="积分计费"');
     expect(appearanceSource).not.toContain("<WelcomeSetting />");
 
     expect(drawingSource).toContain('title="1. 选择新建绘图默认编辑器"');

@@ -31,6 +31,7 @@ type FeatureChangeCopy = {
 };
 type FeatureRow = {
     key: FeatureKey;
+    section: "creation" | "entrances" | "plugins" | "models" | "billing";
     title: string;
     description: string;
     icon: ReactNode;
@@ -60,19 +61,10 @@ const editableFeatureKeys: FeatureKey[] = [
     "userFeedbackEnabled",
 ];
 
-const workspaceFeatureRows: FeatureRow[] = [
-    {
-        key: "userFeedbackEnabled",
-        title: "用户反馈",
-        description: "在设置中开放我的反馈，保留现有客服入口，诊断信息须用户主动选择。",
-        icon: <BookOpenCheck className="size-4" aria-hidden="true" />,
-        changeCopy: {
-            enabled: { title: "确认开启用户反馈？", operation: "开放文字、图片和视频反馈及本人历史。", userImpact: "诊断默认不附带；管理员须具备独立反馈权限才能处理。", okText: "确认开启" },
-            disabled: { title: "确认关闭用户反馈？", operation: "隐藏设置入口并停止新提交和附件上传。", userImpact: "已有反馈、附件和站内答复保留，后台仍可处理。", okText: "确认关闭" },
-        },
-    },
+const allFeatureRows: FeatureRow[] = [
     {
         key: "shortDramaEnabled",
+        section: "creation",
         title: "短剧创作",
         description: "开放短剧入口、项目列表与项目详情。关闭不删除已有项目。",
         icon: <Clapperboard className="size-4" aria-hidden="true" />,
@@ -93,6 +85,7 @@ const workspaceFeatureRows: FeatureRow[] = [
     },
     {
         key: "taskCenterEnabled",
+        section: "entrances",
         title: "任务中心",
         description: "开放任务记录页面。关闭不会停止生成任务。",
         icon: <ListChecks className="size-4" aria-hidden="true" />,
@@ -113,6 +106,7 @@ const workspaceFeatureRows: FeatureRow[] = [
     },
     {
         key: "creditsEnabled",
+        section: "billing",
         title: "积分计费",
         description: "控制积分中心弹窗及新任务的积分预授权与结算。",
         icon: <Coins className="size-4" aria-hidden="true" />,
@@ -133,6 +127,7 @@ const workspaceFeatureRows: FeatureRow[] = [
     },
     {
         key: "customChannelsEnabled",
+        section: "models",
         title: "自定义渠道",
         description: "允许用户配置并使用自己的模型渠道。",
         icon: <RadioTower className="size-4" aria-hidden="true" />,
@@ -153,6 +148,7 @@ const workspaceFeatureRows: FeatureRow[] = [
     },
     {
         key: "skillLibraryEnabled",
+        section: "entrances",
         title: "用户技能库",
         description: "开放技能库入口、技能管理及创作中的技能调用能力。关闭不删除已有技能。",
         icon: <BookOpenCheck className="size-4" aria-hidden="true" />,
@@ -172,7 +168,19 @@ const workspaceFeatureRows: FeatureRow[] = [
         },
     },
     {
+        key: "userFeedbackEnabled",
+        section: "entrances",
+        title: "用户反馈",
+        description: "在设置中开放我的反馈，保留现有客服入口，诊断信息须用户主动选择。",
+        icon: <BookOpenCheck className="size-4" aria-hidden="true" />,
+        changeCopy: {
+            enabled: { title: "确认开启用户反馈？", operation: "开放文字、图片和视频反馈及本人历史。", userImpact: "诊断默认不附带；管理员须具备独立反馈权限才能处理。", okText: "确认开启" },
+            disabled: { title: "确认关闭用户反馈？", operation: "隐藏设置入口并停止新提交和附件上传。", userImpact: "已有反馈、附件和站内答复保留，后台仍可处理。", okText: "确认关闭" },
+        },
+    },
+    {
         key: "inspirationSourcesVisible",
+        section: "entrances",
         title: "素材来源署名",
         description: "显示创作首页的素材来源说明；关闭后隐藏该面板。",
         icon: <Sparkles className="size-4" aria-hidden="true" />,
@@ -183,6 +191,7 @@ const workspaceFeatureRows: FeatureRow[] = [
     },
     {
         key: "imageWorkbenchEnabled",
+        section: "creation",
         title: "图片生成",
         description: "开放生图入口并允许创建新的工作台图片任务；关闭不删除结果和历史。",
         icon: <Sparkles className="size-4" aria-hidden="true" />,
@@ -193,6 +202,7 @@ const workspaceFeatureRows: FeatureRow[] = [
     },
     {
         key: "videoWorkbenchEnabled",
+        section: "creation",
         title: "视频生成",
         description: "开放视频入口并允许创建新的工作台视频任务；关闭不删除结果和历史。",
         icon: <Clapperboard className="size-4" aria-hidden="true" />,
@@ -201,11 +211,9 @@ const workspaceFeatureRows: FeatureRow[] = [
             disabled: { title: "确认关闭视频生成？", operation: "关闭独立视频工作台入口和接口。", userImpact: "已有任务、结果和历史保留；创作首页与自由画布继续使用各自规则。", okText: "确认关闭" },
         },
     },
-];
-
-const pluginFeatureRows: FeatureRow[] = [
     {
         key: "pluginCenterEnabled",
+        section: "plugins",
         title: "插件中心",
         description: "开放插件中心及插件调用能力。",
         icon: <PlugZap className="size-4" aria-hidden="true" />,
@@ -226,6 +234,7 @@ const pluginFeatureRows: FeatureRow[] = [
     },
     {
         key: "systemPluginsVisibleToUsers",
+        section: "plugins",
         title: "系统插件可见性",
         description: "向普通用户展示系统协议插件和管理员上传插件。",
         icon: <ShieldCheck className="size-4" aria-hidden="true" />,
@@ -245,11 +254,9 @@ const pluginFeatureRows: FeatureRow[] = [
             },
         },
     },
-];
-
-const modelFeatureRows: FeatureRow[] = [
     {
         key: "frontendModelsEnabled",
+        section: "models",
         title: "前台模型目录",
         description: "选择前台模型目录，或直接使用系统渠道中的模型。",
         icon: <Sparkles className="size-4" aria-hidden="true" />,
@@ -270,7 +277,9 @@ const modelFeatureRows: FeatureRow[] = [
     },
 ];
 
-const allFeatureRows = [...workspaceFeatureRows, ...pluginFeatureRows, ...modelFeatureRows];
+const creationFeatureRows = allFeatureRows.filter((row) => row.section === "creation");
+const entranceFeatureRows = allFeatureRows.filter((row) => row.section === "entrances");
+const pluginFeatureRows = allFeatureRows.filter((row) => row.section === "plugins");
 const featureByKey = new Map(allFeatureRows.map((item) => [item.key, item]));
 
 export default function FeatureAvailabilityPanel() {
@@ -377,7 +386,7 @@ export default function FeatureAvailabilityPanel() {
                     <Skeleton active title={{ width: 180 }} paragraph={false} />
                 </div>
                 <div className="admin-feature-board is-loading">
-                    {Array.from({ length: 3 }).map((_, index) => (
+                    {Array.from({ length: 2 }).map((_, index) => (
                         <div key={index} className="admin-feature-domain">
                             <Skeleton active title={{ width: 120 }} paragraph={{ rows: 3 }} />
                         </div>
@@ -409,15 +418,19 @@ export default function FeatureAvailabilityPanel() {
         );
     }
 
-    const enabledWorkspaceFeatures = workspaceFeatureRows.filter((row) => effectiveFeatureValue(draftFeatures, row.key)).length;
+    const enabledCreationFeatures = creationFeatureRows.filter((row) => effectiveFeatureValue(draftFeatures, row.key)).length;
+    const enabledEntranceFeatures = entranceFeatureRows.filter((row) => effectiveFeatureValue(draftFeatures, row.key)).length;
     const enabledPluginFeatures = pluginFeatureRows.filter((row) => effectiveFeatureValue(draftFeatures, row.key)).length;
+    const renderFeatureRows = (rows: FeatureRow[]) => rows
+        .filter((row) => !row.dependsOn || draftFeatures[row.dependsOn])
+        .map((row) => <FeatureSettingRow key={row.key} row={row} saved={savedFeatures} draft={draftFeatures} saving={saving} onChange={requestFeatureChange} />);
 
     return (
         <div className="admin-settings-stack admin-feature-availability">
             <div className="admin-feature-command-bar">
                 <div className="admin-feature-command-copy" aria-live="polite">
                     <div className="flex flex-wrap items-center gap-2">
-                        <strong>{saving ? "正在保存更改" : "配置经二次确认后立即生效"}</strong>
+                        <strong>{saving ? "正在保存更改" : "逐项确认，立即生效"}</strong>
                         <AdminStatusBadge label={saving ? "提交中" : savedFeatures.configured ? "服务端配置" : "系统默认"} tone={saving ? "warning" : "neutral"} />
                     </div>
                 </div>
@@ -436,35 +449,53 @@ export default function FeatureAvailabilityPanel() {
             ) : null}
 
             <div className="admin-feature-board" aria-label="功能开放控制台">
-                <FeatureDomainPanel
-                    title="1. 用户工作台入口"
-                    description="先决定普通用户能进入哪些核心工作区"
-                    icon={<MonitorCog className="size-4" aria-hidden="true" />}
-                    status={<AdminStatusBadge label={`${enabledWorkspaceFeatures}/${workspaceFeatureRows.length} 开放`} tone={enabledWorkspaceFeatures === workspaceFeatureRows.length ? "success" : "neutral"} />}
-                >
-                    {workspaceFeatureRows.map((row) => (
-                        <FeatureSettingRow key={row.key} row={row} saved={savedFeatures} draft={draftFeatures} saving={saving} onChange={requestFeatureChange} />
-                    ))}
-                </FeatureDomainPanel>
+                <div className="admin-feature-column">
+                    <FeatureDomainPanel
+                        title="创作工作区"
+                        description="独立工作区入口与任务提交能力"
+                        icon={<MonitorCog className="size-4" aria-hidden="true" />}
+                        status={<AdminStatusBadge label={`${enabledCreationFeatures}/${creationFeatureRows.length} 开放`} tone="neutral" />}
+                    >
+                        {renderFeatureRows(creationFeatureRows)}
+                    </FeatureDomainPanel>
+                    <FeatureDomainPanel
+                        title="用户入口与展示"
+                        description="任务、技能、反馈与首页内容"
+                        icon={<BookOpenCheck className="size-4" aria-hidden="true" />}
+                        status={<AdminStatusBadge label={`${enabledEntranceFeatures}/${entranceFeatureRows.length} 开放`} tone="neutral" />}
+                    >
+                        {renderFeatureRows(entranceFeatureRows)}
+                    </FeatureDomainPanel>
+                </div>
 
-                <FeatureDomainPanel
-                    title="2. 插件开放范围"
-                    description="先开放插件中心，再决定系统插件是否可见"
-                    icon={<PlugZap className="size-4" aria-hidden="true" />}
-                    status={<AdminStatusBadge label={`${enabledPluginFeatures}/2 生效`} tone={enabledPluginFeatures === 2 ? "success" : "neutral"} />}
-                >
-                    <FeatureSettingRow row={pluginFeatureRows[0]} saved={savedFeatures} draft={draftFeatures} saving={saving} onChange={requestFeatureChange} step={1} />
-                    {draftFeatures.pluginCenterEnabled ? <FeatureSettingRow row={pluginFeatureRows[1]} saved={savedFeatures} draft={draftFeatures} saving={saving} onChange={requestFeatureChange} step={2} /> : null}
-                </FeatureDomainPanel>
+                <div className="admin-feature-column">
+                    <FeatureDomainPanel
+                        title="插件开放范围"
+                        description="先开放插件中心，再决定系统插件是否可见"
+                        icon={<PlugZap className="size-4" aria-hidden="true" />}
+                        status={<AdminStatusBadge label={`${enabledPluginFeatures}/2 生效`} tone={enabledPluginFeatures === 2 ? "success" : "neutral"} />}
+                    >
+                        {renderFeatureRows(pluginFeatureRows)}
+                    </FeatureDomainPanel>
 
-                <FeatureDomainPanel
-                    title="3. 用户模型来源"
-                    description="决定用户选模型时读取前台目录还是系统渠道"
-                    icon={<Sparkles className="size-4" aria-hidden="true" />}
-                    status={<AdminStatusBadge label={draftFeatures.frontendModelsEnabled ? "前台模型目录" : "系统渠道"} tone="info" />}
-                >
-                    <FeatureSourceRow row={modelFeatureRows[0]} saved={savedFeatures} draft={draftFeatures} saving={saving} onChange={requestFeatureChange} />
-                </FeatureDomainPanel>
+                    <FeatureDomainPanel
+                        title="模型来源与渠道"
+                        description="系统模型来源与用户自有渠道"
+                        icon={<Sparkles className="size-4" aria-hidden="true" />}
+                        status={<AdminStatusBadge label={draftFeatures.frontendModelsEnabled ? "前台模型目录" : "系统渠道"} tone="info" />}
+                    >
+                        <FeatureSourceRow saved={savedFeatures} draft={draftFeatures} saving={saving} onChange={requestFeatureChange} />
+                        {renderFeatureRows(allFeatureRows.filter((row) => row.key === "customChannelsEnabled"))}
+                    </FeatureDomainPanel>
+                    <FeatureDomainPanel
+                        title="积分计费"
+                        description="积分中心与新任务计费规则"
+                        icon={<Coins className="size-4" aria-hidden="true" />}
+                        status={<AdminStatusBadge label="涉及计费" tone="warning" />}
+                    >
+                        {renderFeatureRows(allFeatureRows.filter((row) => row.section === "billing"))}
+                    </FeatureDomainPanel>
+                </div>
             </div>
         </div>
     );
@@ -486,7 +517,7 @@ function FeatureDomainPanel({ title, description, icon, status, children }: { ti
     );
 }
 
-function FeatureSettingRow({ row, saved, draft, saving, onChange, step }: { row: FeatureRow; saved: FeatureAvailability; draft: FeatureAvailability; saving: boolean; onChange: (key: FeatureKey, enabled: boolean) => void; step?: number }) {
+function FeatureSettingRow({ row, saved, draft, saving, onChange }: { row: FeatureRow; saved: FeatureAvailability; draft: FeatureAvailability; saving: boolean; onChange: (key: FeatureKey, enabled: boolean) => void }) {
     const changed = saved[row.key] !== draft[row.key];
     const dependencyDisabled = Boolean(row.dependsOn && !draft[row.dependsOn]);
     const enabled = effectiveFeatureValue(draft, row.key);
@@ -494,9 +525,7 @@ function FeatureSettingRow({ row, saved, draft, saving, onChange, step }: { row:
     return (
         <article className={cn("admin-feature-board-row", changed && "is-dirty", !enabled && "is-off", row.dependsOn && "is-dependent")}>
             <div className="admin-feature-board-row-copy">
-                <span className="admin-feature-board-row-icon">{row.icon}</span>
                 <span className="admin-feature-board-row-name">
-                    {step ? <small>第 {step} 步</small> : null}
                     <strong>{row.title}</strong>
                     <span>{row.description}</span>
                 </span>
@@ -510,16 +539,14 @@ function FeatureSettingRow({ row, saved, draft, saving, onChange, step }: { row:
     );
 }
 
-function FeatureSourceRow({ row, saved, draft, saving, onChange }: { row: FeatureRow; saved: FeatureAvailability; draft: FeatureAvailability; saving: boolean; onChange: (key: FeatureKey, enabled: boolean) => void }) {
+function FeatureSourceRow({ saved, draft, saving, onChange }: { saved: FeatureAvailability; draft: FeatureAvailability; saving: boolean; onChange: (key: FeatureKey, enabled: boolean) => void }) {
     const changed = saved.frontendModelsEnabled !== draft.frontendModelsEnabled;
     return (
         <article className={cn("admin-feature-board-row is-source", changed && "is-dirty")}>
             <div className="admin-feature-board-row-copy">
-                <span className="admin-feature-board-row-icon">{row.icon}</span>
                 <span className="admin-feature-board-row-name">
-                    <small>模型来源</small>
                     <strong>用户模型目录</strong>
-                    <span>{row.description}</span>
+                    <span>{draft.frontendModelsEnabled ? "用户选模型时读取后台已配置并开放的前台模型目录。" : "用户选模型时，直接读取系统渠道中配置的模型。"}</span>
                 </span>
                 {changed ? <span className="admin-feature-board-row-dirty">待保存</span> : null}
             </div>
