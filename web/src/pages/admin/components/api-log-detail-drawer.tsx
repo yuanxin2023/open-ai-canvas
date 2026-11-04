@@ -186,7 +186,8 @@ function LogDetail({ log, providerRequestId, videoURL, resultText, querying, onP
     const userContent = (
         <div>
             <div className="font-medium text-foreground/90 group-hover:underline group-hover:underline-offset-2">{userLabel}</div>
-            {log.userAccount ? <div className="mt-0.5 text-xs text-foreground/50">@{log.userAccount}</div> : null}
+            {log.userAccount && log.userAccount !== userLabel ? <div className="mt-0.5 text-xs text-foreground/50">@{log.userAccount}</div> : null}
+            {log.userRemark ? <div className="mt-0.5 whitespace-pre-wrap break-words text-xs text-foreground/55">备注：{log.userRemark}</div> : null}
         </div>
     );
     const items = [

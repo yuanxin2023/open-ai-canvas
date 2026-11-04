@@ -104,6 +104,7 @@ type ApiCallLog struct {
 	RequestID              string        `json:"requestId,omitempty" gorm:"index;size:96"`
 	UserDisplayName        string        `json:"userDisplayName,omitempty" gorm:"-"`
 	UserAccount            string        `json:"userAccount,omitempty" gorm:"-"`
+	UserRemark             string        `json:"userRemark,omitempty" gorm:"-"`
 	ChannelID              string        `json:"channelId" gorm:"index;size:36;index:idx_api_logs_channel_created,priority:1"`
 	ChannelName            string        `json:"channelName" gorm:"-"`
 	TaskID                 string        `json:"taskId,omitempty" gorm:"index;size:36"`

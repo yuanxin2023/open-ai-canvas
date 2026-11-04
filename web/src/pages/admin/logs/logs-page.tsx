@@ -166,12 +166,7 @@ export default function LogsPage() {
         {
             title: "用户",
             width: 180,
-            render: (_, log) => (
-                <div className="min-w-0">
-                    <div className="truncate font-medium text-foreground/85">{log.userDisplayName || log.userAccount || "未知用户"}</div>
-                    <div className="truncate text-xs text-foreground/45">{log.userAccount ? `@${log.userAccount}` : "账号未记录"}</div>
-                </div>
-            ),
+            render: (_, log) => <LogUserCell log={log} />,
         },
         {
             title: "渠道 / 模型",
@@ -232,7 +227,7 @@ export default function LogsPage() {
         { title: "状态", key: "status", width: 88, render: (_, log) => <AdminStatusBadge {...logStatus(log)} /> },
         { title: "模型", dataIndex: "model", width: 170, ellipsis: true, render: (value) => value || "未识别模型" },
         { title: "渠道", dataIndex: "channelName", width: 116, ellipsis: true, render: (value) => value || "未记录渠道" },
-        { title: "用户", key: "user", width: 110, ellipsis: true, render: (_, log) => <span title={[log.userDisplayName, log.userAccount].filter(Boolean).join(" · ")}>{log.userDisplayName || log.userAccount || "未知用户"}</span> },
+        { title: "用户", key: "user", width: 180, render: (_, log) => <LogUserCell log={log} /> },
     ];
     const compactColumns: ColumnsType<ApiCallLog> = view === "billing" ? [
         ...identityColumns,
@@ -309,7 +304,7 @@ export default function LogsPage() {
                         className="app-list-search"
                         prefix={<Search className="size-4 text-foreground/40" />}
                         value={keywordDraft}
-                        placeholder="搜索用户、渠道、模型、路径或请求号"
+                        placeholder="搜索用户、备注、渠道、模型、路径或请求号"
                         onChange={(event) => setKeywordDraft(event.target.value)}
                         onCompositionStart={() => setIsKeywordComposing(true)}
                         onCompositionEnd={(event) => {
@@ -379,7 +374,7 @@ export default function LogsPage() {
                     tableLayout: "fixed",
                     dataSource: logs,
                     pagination: false,
-                    scroll: { x: view === "all" ? 1901 : view === "billing" ? 1246 : 1186 },
+                    scroll: { x: view === "all" ? 1901 : view === "billing" ? 1316 : 1256 },
                 }}
                 empty={loadError ? <span role="status">数据暂不可用，请重试</span> : <AdminTableEmpty filtered={hasFilters} />}
                 footer={<PaginationBar alwaysShow current={page} pageSize={pageSize} total={total} onChange={(nextPage, nextSize) => updateUrl({ page: nextSize !== pageSize ? 1 : nextPage, pageSize: nextSize })} />}
@@ -411,6 +406,17 @@ export default function LogsPage() {
                 ) : null}
             </Modal>
         </AdminPageFrame>
+    );
+}
+
+function LogUserCell({ log }: { log: ApiCallLog }) {
+    const label = log.userDisplayName || log.userAccount || "未知用户";
+    return (
+        <div className="min-w-0">
+            <div className="truncate font-medium text-foreground/85" title={label}>{label}</div>
+            {log.userAccount && log.userAccount !== label ? <div className="truncate text-xs text-foreground/45" title={`@${log.userAccount}`}>@{log.userAccount}</div> : null}
+            {log.userRemark ? <div className="truncate text-xs text-foreground/55" title={log.userRemark}>备注：{log.userRemark}</div> : null}
+        </div>
     );
 }
 

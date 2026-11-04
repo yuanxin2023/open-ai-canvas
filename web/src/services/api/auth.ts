@@ -75,6 +75,7 @@ export type ApiCallLog = {
     userId: string;
     userDisplayName?: string;
     userAccount?: string;
+    userRemark?: string;
     channelId: string;
     channelName: string;
     taskId?: string;

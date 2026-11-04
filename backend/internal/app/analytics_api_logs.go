@@ -31,7 +31,7 @@ func (s *Service) AdminAPICallLogs(actor *model.User, query APICallLogQuery) (*A
 	if err != nil {
 		return nil, err
 	}
-	if err := s.decorateAPICallLogs(logs); err != nil {
+	if err := s.decorateAPICallLogs(actor, logs); err != nil {
 		return nil, err
 	}
 	for index := range logs {
@@ -49,7 +49,9 @@ func (s *Service) AdminAPICallLogs(actor *model.User, query APICallLogQuery) (*A
 	return &APICallLogPage{Logs: logs, Total: total, Page: page, Limit: limit}, nil
 }
 
-func (s *Service) decorateAPICallLogs(logs []model.ApiCallLog) error {
+func (s *Service) decorateAPICallLogs(actor *model.User, logs []model.ApiCallLog) error {
+	// 计费订单详情也复用此装饰器；财务权限本身不授予内部备注读取权限。
+	canViewRemarks := s.RequireAdminPermission(actor, model.AdminPermissionAPILogs) == nil
 	// 历史日志允许读取逻辑删除渠道的名称，但不读取或返回渠道密钥。
 	channels, err := s.repo.HistoricalSystemChannelReferences()
 	if err != nil {
@@ -110,9 +112,13 @@ func (s *Service) decorateAPICallLogs(logs []model.ApiCallLog) error {
 		} else {
 			logs[index].ChannelName = "已删除渠道"
 		}
+		logs[index].UserRemark = ""
 		if user, exists := userByID[logs[index].UserID]; exists {
 			logs[index].UserDisplayName = user.DisplayName
 			logs[index].UserAccount = user.Username
+			if canViewRemarks {
+				logs[index].UserRemark = user.AdminRemark
+			}
 		}
 		if logs[index].Billable {
 			if order, exists := billingOrderByID[logs[index].BillingOrderID]; exists && order.UserID == logs[index].UserID {
@@ -208,7 +214,7 @@ func (s *Service) AdminAPICallLog(actor *model.User, id string) (*model.ApiCallL
 		return nil, err
 	}
 	logs := []model.ApiCallLog{*log}
-	if err := s.decorateAPICallLogs(logs); err != nil {
+	if err := s.decorateAPICallLogs(actor, logs); err != nil {
 		return nil, err
 	}
 	return &logs[0], nil
@@ -233,7 +239,7 @@ func (s *Service) AdminAPICallLogByBillingOrder(actor *model.User, billingOrderI
 		return nil, err
 	}
 	logs := []model.ApiCallLog{*log}
-	if err := s.decorateAPICallLogs(logs); err != nil {
+	if err := s.decorateAPICallLogs(actor, logs); err != nil {
 		return nil, err
 	}
 	return &logs[0], nil
@@ -258,7 +264,7 @@ func (s *Service) AdminAPICallLogsCSV(actor *model.User, query APICallLogQuery) 
 	if err != nil {
 		return nil, err
 	}
-	if err := s.decorateAPICallLogs(logs); err != nil {
+	if err := s.decorateAPICallLogs(actor, logs); err != nil {
 		return nil, err
 	}
 	var buffer bytes.Buffer

@@ -47,7 +47,7 @@ func TestDecorateAPICallLogsUsesBillingOrderSnapshot(t *testing.T) {
 	}
 
 	svc := &Service{repo: repository.New(db)}
-	if err := svc.decorateAPICallLogs(logs); err != nil {
+	if err := svc.decorateAPICallLogs(&model.User{Role: model.UserRoleAdmin, AdminLevel: model.AdminLevelFull}, logs); err != nil {
 		t.Fatal(err)
 	}
 
