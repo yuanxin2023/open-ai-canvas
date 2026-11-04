@@ -401,7 +401,7 @@ function ScopedWorkbenchPage({ kind, userId }: { kind: WorkbenchKind; userId: st
     const pickerRequirements = useMemo(() => quoteRequirementsFor(plan[0] || 1), [plan, quoteRequirementsFor]);
 
     useEffect(() => {
-        if (!creditsEnabled || !selectedModel) {
+        if (!settingsReady || !creditsEnabled || !selectedModel) {
             setEstimate({ credits: null, estimated: false, tone: "unavailable" });
             return;
         }
@@ -422,7 +422,8 @@ function ScopedWorkbenchPage({ kind, userId }: { kind: WorkbenchKind; userId: st
         const localTotal = plan.every((outputs) => localAmounts.get(outputs) !== null) ? plan.reduce((sum, outputs) => sum + (localAmounts.get(outputs) || 0), 0) : null;
         const requests = distinct.map((outputs) => ({ outputs, request: modelQuoteRequest(kind === "image" ? { ...composerConfig, count: String(outputs) } : composerConfig, selectedModel, capability, quoteRequirementsFor(outputs)) }));
         if (requests.some((item) => !item.request)) {
-            setEstimate({ credits: localTotal, estimated: false, tone: localTotal === null ? "usage" : "local" });
+            const usageBilling = priceChannel.modelCosts?.find((item) => item.model === modelOptionName(selectedModel))?.billingMode === "token";
+            setEstimate({ credits: localTotal, estimated: false, tone: localTotal === null ? (usageBilling ? "usage" : "unavailable") : "local" });
             return;
         }
         const controller = new AbortController();
@@ -438,7 +439,7 @@ function ScopedWorkbenchPage({ kind, userId }: { kind: WorkbenchKind; userId: st
                 setEstimate({ credits: localTotal, estimated: false, tone: localTotal === null ? "unavailable" : "local" });
             });
         return () => controller.abort();
-    }, [capability, composerConfig, config, creditsEnabled, kind, plan, quoteRequirementsFor, seconds, selectedModel]);
+    }, [capability, composerConfig, config, creditsEnabled, kind, plan, quoteRequirementsFor, seconds, selectedModel, settingsReady]);
 
     // ---------- 任务列表轮询 ----------
     const loadFailedRef = useRef(false);

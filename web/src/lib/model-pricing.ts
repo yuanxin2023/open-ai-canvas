@@ -38,6 +38,7 @@ export function requestCreditCost(options: { channelMode: string; modelCosts?: M
 
 export function priceTiersForCurrentSelection(tiers: ModelPriceTier[], capability: ModelCapability | undefined, config: AiConfig, requirements?: ModelRequirements) {
     const requested = priceSelectorForRequest(capability, config, requirements);
+    if (!requested) return [];
     let bestScore = -1;
     let matched: ModelPriceTier[] = [];
     for (const tier of tiers) {
@@ -84,6 +85,8 @@ export function modelQuoteRequest(config: AiConfig, value: string, capability?: 
     if (channel.scope !== "system") return undefined;
     const cost = channel.modelCosts?.find((item) => item.model === modelOptionName(value));
     if (!cost || (!cost.logicalModelId && capability !== "video" && capability !== "audio")) return undefined;
+    const options = pricingRequestOptions(config, capability);
+    if (!options) return undefined;
     const input = requirements?.input;
     const intent: ModelRequestIntent = {
         capability,
@@ -94,13 +97,22 @@ export function modelQuoteRequest(config: AiConfig, value: string, capability?: 
             audio: input?.audioCount || 0,
         },
         options: {
-            ...modelRequestOptions(config, capability),
+            ...options,
             ...(requirements?.options || {}),
             ...(requirements?.videoSeconds ? { videoSeconds: Number(requirements.videoSeconds) } : {}),
             ...(requirements?.imageSize ? { size: requirements.imageSize } : {}),
         },
     };
     return cost.logicalModelId ? { logicalModelID: cost.logicalModelId, intent } : { channelId: channel.id, modelKey: modelOptionName(value), intent };
+}
+
+// 价格展示会读到尚未恢复完成或正在编辑的参数；无效草稿不报价，提交仍走严格校验。
+function pricingRequestOptions(config: AiConfig, capability: ModelCapability) {
+    try {
+        return modelRequestOptions(config, capability);
+    } catch {
+        return undefined;
+    }
 }
 
 function creditAmount(billingMode: "fixed_request" | "per_second", unitPriceMicrocredits: number, count?: string | number, seconds?: string | number) {
@@ -110,6 +122,8 @@ function creditAmount(billingMode: "fixed_request" | "per_second", unitPriceMicr
 
 function priceSelectorForRequest(capability: ModelCapability | undefined, config: AiConfig, requirements?: ModelRequirements) {
     const requested: Record<string, string> = {};
+    const requestOptions = capability === "image" || capability === "video" ? pricingRequestOptions(config, capability) : {};
+    if (!requestOptions) return undefined;
     if (capability === "video") {
         const input = requirements?.input;
         if (input) {
@@ -117,7 +131,7 @@ function priceSelectorForRequest(capability: ModelCapability | undefined, config
             requested.operation = input.videoCount > 0 ? "video_to_video" : imageCount > 0 ? "image_to_video" : resolveVideoOperation(input, requirements?.videoOperation);
             if (imageCount > 0) requested.imageCount = String(imageCount);
         } else if (requirements?.videoOperation) requested.operation = requirements.videoOperation;
-        const options: Record<string, unknown> = { ...modelRequestOptions(config, "video"), ...requirements?.options, ...(requirements?.videoSeconds ? { videoSeconds: Number(requirements.videoSeconds) } : {}) };
+        const options: Record<string, unknown> = { ...requestOptions, ...requirements?.options, ...(requirements?.videoSeconds ? { videoSeconds: Number(requirements.videoSeconds) } : {}) };
         const resolution = normalizeTierResolution(String(options.vquality ?? ""));
         if (resolution !== "*") requested.vquality = resolution;
         const seconds = Math.max(0, Math.floor(Number(options.videoSeconds) || 0));
@@ -127,7 +141,7 @@ function priceSelectorForRequest(capability: ModelCapability | undefined, config
     }
     if (capability === "image") {
         requested.operation = imagePriceOperation(requirements);
-        const options: Record<string, unknown> = { ...modelRequestOptions(config, "image"), ...requirements?.options, ...(requirements?.imageSize ? { size: requirements.imageSize } : {}) };
+        const options: Record<string, unknown> = { ...requestOptions, ...requirements?.options, ...(requirements?.imageSize ? { size: requirements.imageSize } : {}) };
         const profile = modelCapabilityConfigFor(config, config.model || config.imageModel)?.image;
         if (profile?.parameters) {
             for (const field of profile.parameters) {

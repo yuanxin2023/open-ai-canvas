@@ -1,4 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { ModelPicker } from "../src/components/model-picker";
 
 import { modelQuoteRequest, normalizeTierResolution, priceTierSummaryLabel, priceTiersForCurrentSelection, requestCreditCost } from "../src/lib/model-pricing";
 import type { ModelRequirements } from "../src/lib/model-selection";
@@ -6,6 +9,9 @@ import { createModelChannel, defaultConfig, normalizeConfigSnapshot, resolveMode
 import { buildNodeConfig } from "../src/components/canvas/canvas-node-prompt-panel";
 import { buildGenerationConfig } from "../src/lib/canvas/canvas-project-generation";
 import { modelRequestOptions } from "../src/lib/model-selection";
+import { defaultImageCapabilityConfig, normalizeImageValue } from "../src/lib/model-capabilities";
+import { projectImageParameters } from "../src/lib/image-parameters";
+import { prepareBackendGenerationTask } from "../src/services/api/generation-task";
 import { CanvasNodeType, type CanvasNodeData } from "../src/types/canvas";
 
 function systemConfig(input: { capability?: "image" | "video"; logicalModelId?: string; tiers: Array<{ selector: Record<string, string>; billingMode: "fixed_request" | "per_second" | "token"; unitPriceMicrocredits: number; outputTokenPriceMicrocredits?: number }> }) {
@@ -62,6 +68,25 @@ const textVideoRequirements: ModelRequirements = {
 };
 
 describe("model request pricing", () => {
+    test("incomplete image settings do not crash pricing or bypass generation validation", async () => {
+        for (const missing of [false, true]) {
+            const config = systemConfig({ capability: "image", logicalModelId: "image-logical", tiers: [{ selector: {}, billingMode: "fixed_request", unitPriceMicrocredits: 1_000_000 }] });
+            const image = projectImageParameters(defaultImageCapabilityConfig(), [{ name: "size", label: "画幅 / 尺寸", type: "string", values: ["1024x1024", "1536x1024"], required: true, pricing: true, ...(missing ? {} : { default: "1024x1024" }) }]);
+            config.channels[0].modelCosts![0].capabilityConfig = { version: 1, image };
+            config.size = missing ? "" : "1:1";
+            expect(() => modelRequestOptions(config, "image")).toThrow("画幅 / 尺寸");
+            expect(modelQuoteRequest(config, config.model, "image")).toBeUndefined();
+            expect(priceTiersForCurrentSelection(config.channels[0].modelCosts![0].logicalPriceTiers!, "image", config)).toEqual([]);
+            expect(requestCreditCost({ channelMode: "remote", modelCosts: config.channels[0].modelCosts, model: "image-model", capability: "image", config })).toBeNull();
+            expect(renderToStaticMarkup(createElement(ModelPicker, { config, value: config.model, capability: "image", onChange() {} }))).toContain("canvas-model-picker");
+            await expect(prepareBackendGenerationTask({ mode: "image", prompt: "test image", config })).rejects.toThrow("画幅 / 尺寸");
+            if (!missing) {
+                const restored = { ...config, ...normalizeImageValue(image, config) };
+                expect(restored.size).toBe("1024x1024");
+                expect(modelQuoteRequest(restored, restored.model, "image")?.intent.options.size).toBe("1024x1024");
+            }
+        }
+    });
     test("keeps the panel quote and generation options aligned without selecting a price tier as quality", () => {
         const config = systemConfig({
             capability: "image",
