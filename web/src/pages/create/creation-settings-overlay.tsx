@@ -11,7 +11,13 @@ const subscribeViewport = (notify: () => void) => {
 const mobileViewport = () => window.matchMedia(mobileQuery).matches;
 const serverViewport = () => false;
 
-export function CreationSettingsOverlay({ open, onOpenChange, content, children, mobileDrawer }: {
+export function CreationSettingsOverlay({
+    open,
+    onOpenChange,
+    content,
+    children,
+    mobileDrawer,
+}: {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     content: ReactNode;
@@ -22,20 +28,37 @@ export function CreationSettingsOverlay({ open, onOpenChange, content, children,
     const triggerRef = useRef<HTMLButtonElement>(null);
     const trigger = cloneElement(children, { ref: triggerRef });
     if (mobile && mobileDrawer) {
-        return <>
-            {trigger}
-            <AppDrawer title="图片生成设置" placement="bottom" size="85dvh" open={open}
-                focusable={{ focusTriggerAfterClose: false }}
-                onClose={() => {
-                    onOpenChange(false);
-                    requestAnimationFrame(() => triggerRef.current?.focus({ preventScroll: true }));
-                }} rootClassName="creation-settings-drawer app-user-overlays">
-                {content}
-            </AppDrawer>
-        </>;
+        return (
+            <>
+                {trigger}
+                <AppDrawer
+                    title="图片生成设置"
+                    placement="bottom"
+                    size="85dvh"
+                    open={open}
+                    focusable={{ focusTriggerAfterClose: false }}
+                    onClose={() => {
+                        onOpenChange(false);
+                        requestAnimationFrame(() => triggerRef.current?.focus({ preventScroll: true }));
+                    }}
+                    rootClassName="creation-settings-drawer app-user-overlays"
+                >
+                    {content}
+                </AppDrawer>
+            </>
+        );
     }
-    return <Popover open={open} onOpenChange={onOpenChange} trigger="click" placement="bottom" arrow={false}
-        classNames={{ root: "creation-control-popover", container: "creation-control-popover-surface", content: "creation-control-popover-content" }} content={content}>
-        {trigger}
-    </Popover>;
+    return (
+        <Popover
+            open={open}
+            onOpenChange={onOpenChange}
+            trigger="click"
+            placement="bottom"
+            arrow={false}
+            classNames={{ root: "creation-control-popover", container: "creation-control-popover-surface", content: "creation-control-popover-content" }}
+            content={content}
+        >
+            {trigger}
+        </Popover>
+    );
 }

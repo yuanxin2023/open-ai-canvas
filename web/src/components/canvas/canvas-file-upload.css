@@ -50,7 +50,6 @@
     pointer-events: none;
 }
 
-
 .canvas-file-upload-frost::after {
     content: "";
     position: absolute;
@@ -165,7 +164,9 @@
 .canvas-file-upload[data-static] .canvas-file-upload-glow,
 .canvas-file-upload[data-static] .canvas-file-upload-frost::after,
 .canvas-file-upload[data-static] .canvas-file-upload-thumb,
-.canvas-file-upload[data-static] .canvas-file-upload-chip-dot { animation: none; }
+.canvas-file-upload[data-static] .canvas-file-upload-chip-dot {
+    animation: none;
+}
 .canvas-file-upload[data-static] .canvas-file-upload-glow,
 .canvas-file-upload[data-static] .canvas-file-upload-frost,
 .canvas-file-upload[data-static] .canvas-file-upload-preview {
@@ -173,6 +174,15 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .canvas-file-upload-glow, .canvas-file-upload-frost::after, .canvas-file-upload-thumb, .canvas-file-upload-chip-dot { animation: none; }
-    .canvas-file-upload-glow, .canvas-file-upload-frost, .canvas-file-upload-preview { transition: none; }
+    .canvas-file-upload-glow,
+    .canvas-file-upload-frost::after,
+    .canvas-file-upload-thumb,
+    .canvas-file-upload-chip-dot {
+        animation: none;
+    }
+    .canvas-file-upload-glow,
+    .canvas-file-upload-frost,
+    .canvas-file-upload-preview {
+        transition: none;
+    }
 }

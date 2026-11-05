@@ -21,6 +21,8 @@ Backend 和独立 Agent 调用公网模型服务时，必须连接具有出网�
 
 发布文件包括两个 Linux 架构的 Host Updater、SHA256SUMS 和 docker-compose.deploy.yml；镜像为自有 GHCR 的 `open-ai-canvas-web`、`open-ai-canvas-backend`、`open-ai-canvas-yingce-agent`，迁移复用 Backend。升级前校验镜像仓库 digest、版本、源码来源及三者一致的有效提交；缺失或不匹配时停止，不停旧服务或执行迁移。更换来源后清除旧来源的新版本缓存，保留既有备份。
 
+首次发布直接构建并推送镜像，不先探测尚不存在的 GHCR 包；重复构建使用 GHA 构建层缓存。实际构建和推送失败仍会阻止发布，不把权限、网络或限流错误当成镜像不存在。正式版本号、`VERSION`、更新日志和标签保持一致；不覆盖指向官方源码的同名标签。
+
 生产服务器首次须安装并配置自有 Host Updater，服务环境中的 `CANVAS_UPDATER_REPOSITORY` 为本仓库；镜像安装脚本会传递选定仓库并按同一版本标签下载 Compose 和安装脚本，不能仅修改一个下载链接。后台显示更新器实际连接的仓库，停止提供官方来源兜底。首次启用还须确认服务器能够读取自有 GHCR 镜像；如需认证，凭据只配置在服务器，不写入源码。
 
 在线更新适用于使用自有正式 Release 镜像、PostgreSQL/Redis 和 Host Updater 的受管 Linux 部署。纯源码/本地 SQLite 构建仍走手工更新。拥有 `admin.settings.system_update` 的管理员才能读取及操作后台；写请求带预期账号头，切换账号时旧弹窗失效。检查不自动升级，只有用户再次确认才发起更新；失败后恢复也须依据已校验备份，恢复未完成时明确提示人工处理。

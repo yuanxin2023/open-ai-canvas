@@ -6,7 +6,7 @@ export function normalizePreviewRefresh(value: unknown): PreviewRefreshPreferenc
     const saved = value as Partial<PreviewRefreshPreference> | null;
     return {
         enabled: typeof saved?.enabled === "boolean" ? saved.enabled : defaultPreviewRefresh.enabled,
-        intervalSeconds: previewRefreshIntervals.some(seconds => seconds === saved?.intervalSeconds) ? saved!.intervalSeconds! : defaultPreviewRefresh.intervalSeconds,
+        intervalSeconds: previewRefreshIntervals.some((seconds) => seconds === saved?.intervalSeconds) ? saved!.intervalSeconds! : defaultPreviewRefresh.intervalSeconds,
     };
 }
 

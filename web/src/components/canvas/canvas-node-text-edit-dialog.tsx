@@ -13,19 +13,7 @@ export function buildCanvasTextEditPrompt(lines: CanvasImageTextLine[]) {
     return `编辑提供的原图，仅修改指定位置的文字。保持原图构图、字体风格、字号、颜色、排版、材质和其他画面细节不变，不要新增水印或其他文字。${changed.map((line) => `在“${line.location}”位置，将“${line.original}”改为“${line.text}”。`).join("\n")}`;
 }
 
-export function CanvasNodeTextEditDialog({
-    dataUrl,
-    open,
-    onClose,
-    onDetect,
-    onConfirm,
-}: {
-    dataUrl: string;
-    open: boolean;
-    onClose: () => void;
-    onDetect: () => Promise<CanvasImageTextLine[]>;
-    onConfirm: (payload: CanvasImageTextEditPayload) => void;
-}) {
+export function CanvasNodeTextEditDialog({ dataUrl, open, onClose, onDetect, onConfirm }: { dataUrl: string; open: boolean; onClose: () => void; onDetect: () => Promise<CanvasImageTextLine[]>; onConfirm: (payload: CanvasImageTextEditPayload) => void }) {
     const config = useEffectiveConfig();
     const [lines, setLines] = useState<CanvasImageTextLine[]>([]);
     const [loading, setLoading] = useState(false);

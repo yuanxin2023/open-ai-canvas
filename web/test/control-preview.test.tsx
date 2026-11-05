@@ -22,7 +22,7 @@ describe("control preview", () => {
     });
     test("date picker shortcuts use Beijing dates across midnight and preserve custom bounds", () => {
         const now = Date.parse("2026-11-01T16:01:00Z");
-        const dates = (range: Parameters<typeof previewRangeDates>[0]) => previewRangeDates(range, now).map(date => date.format("YYYY-MM-DD"));
+        const dates = (range: Parameters<typeof previewRangeDates>[0]) => previewRangeDates(range, now).map((date) => date.format("YYYY-MM-DD"));
         expect(dates({ period: "day" })).toEqual(["2026-11-02", "2026-11-02"]);
         expect(dates({ period: "week" })).toEqual(["2026-11-02", "2026-11-02"]);
         expect(dates({ period: "month" })).toEqual(["2026-11-01", "2026-11-02"]);

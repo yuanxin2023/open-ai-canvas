@@ -5,14 +5,31 @@ const dom = new Window({ url: "http://localhost/create", width: 390, height: 844
 for (const name of ["HTMLAnchorElement", "HTMLButtonElement", "HTMLInputElement", "HTMLTextAreaElement", "HTMLSelectElement", "MutationObserver", "KeyboardEvent", "FocusEvent"]) {
     Object.defineProperty(globalThis, name, { configurable: true, value: (dom as any)[name] });
 }
-for (const [key, value] of Object.entries({ window: dom, document: dom.document, navigator: dom.navigator, HTMLElement: dom.HTMLElement, Element: dom.Element, Node: dom.Node, SVGElement: dom.SVGElement, ShadowRoot: dom.ShadowRoot, ResizeObserver: dom.ResizeObserver, getComputedStyle: dom.getComputedStyle.bind(dom), requestAnimationFrame: dom.requestAnimationFrame.bind(dom), IS_REACT_ACT_ENVIRONMENT: true })) {
+for (const [key, value] of Object.entries({
+    window: dom,
+    document: dom.document,
+    navigator: dom.navigator,
+    HTMLElement: dom.HTMLElement,
+    Element: dom.Element,
+    Node: dom.Node,
+    SVGElement: dom.SVGElement,
+    ShadowRoot: dom.ShadowRoot,
+    ResizeObserver: dom.ResizeObserver,
+    getComputedStyle: dom.getComputedStyle.bind(dom),
+    requestAnimationFrame: dom.requestAnimationFrame.bind(dom),
+    IS_REACT_ACT_ENVIRONMENT: true,
+})) {
     Object.defineProperty(globalThis, key, { configurable: true, writable: true, value });
 }
 const records = new Map<string, any>();
 const storage = {
     getItem: async (key: string) => records.get(key) ?? null,
-    setItem: async (key: string, value: any) => { records.set(key, value); },
-    removeItem: async (key: string) => { records.delete(key); },
+    setItem: async (key: string, value: any) => {
+        records.set(key, value);
+    },
+    removeItem: async (key: string) => {
+        records.delete(key);
+    },
 };
 mock.module("localforage", () => ({ default: { ...storage, config: () => {}, INDEXEDDB: "indexeddb", createInstance: () => storage } }));
 const { act } = await import("react");
@@ -20,7 +37,8 @@ const { createRoot } = await import("react-dom/client");
 const { MemoryRouter } = await import("react-router");
 const { App } = await import("antd");
 const workspace = await import("../../src/pages/create/creation-workspace");
-mock.module("@/pages/create/creation-workspace", () => ({ ...workspace,
+mock.module("@/pages/create/creation-workspace", () => ({
+    ...workspace,
     CreationComposer: () => <textarea data-testid="composer" defaultValue="未发送的草稿" />,
     CreationMessageView: ({ item }: any) => <div data-testid="message">{item.content}</div>,
     CreationWorkspaceToolbar: () => null,
@@ -37,14 +55,25 @@ document.body.append(host);
 const root = createRoot(host);
 const preference = "creation.sidebar.conversations-open";
 const history = ["测试生图一", "测试生图二"].map((title, i) => ({
-    id: `history-${i}`, title, titleEdited: true, updatedAt: new Date().toISOString(), messages: [
+    id: `history-${i}`,
+    title,
+    titleEdited: true,
+    updatedAt: new Date().toISOString(),
+    messages: [
         { id: `prompt-${i}`, role: "user", mode: "image", content: title, createdAt: new Date().toISOString() },
         { id: `result-${i}`, role: "assistant", mode: "image", content: "任务处理中", status: "pending", createdAt: new Date().toISOString() },
     ],
 }));
-afterAll(async () => { await act(async () => root.unmount()); dom.happyDOM.abort(); });
-async function frame() { await act(async () => new Promise<void>((resolve) => dom.requestAnimationFrame(() => resolve()))); }
-async function openHistory() { await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="展开创作对话"]')!.click()); }
+afterAll(async () => {
+    await act(async () => root.unmount());
+    dom.happyDOM.abort();
+});
+async function frame() {
+    await act(async () => new Promise<void>((resolve) => dom.requestAnimationFrame(() => resolve())));
+}
+async function openHistory() {
+    await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="展开创作对话"]')!.click());
+}
 
 test("mobile history opens on demand, switches and closes without unmounting the thread", async () => {
     dom.localStorage.setItem(preference, "0");
@@ -53,7 +82,15 @@ test("mobile history opens on demand, switches and closes without unmounting the
         useUserStore.setState({ hydrated: true, user: null });
         useCreationPreferencesStore.setState({ hydrated: true, preferences: {} });
         useModelCatalogStore.setState({ status: "ready" });
-        root.render(<App><MemoryRouter initialEntries={["/create"]}><WorkspaceAuthProvider><CreatePage /></WorkspaceAuthProvider></MemoryRouter></App>);
+        root.render(
+            <App>
+                <MemoryRouter initialEntries={["/create"]}>
+                    <WorkspaceAuthProvider>
+                        <CreatePage />
+                    </WorkspaceAuthProvider>
+                </MemoryRouter>
+            </App>,
+        );
     });
     expect(host.textContent).toContain("任务处理中");
     expect(document.querySelector(".creation-history-panel")).toBeNull();

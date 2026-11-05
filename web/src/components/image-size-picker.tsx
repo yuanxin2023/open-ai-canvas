@@ -72,12 +72,13 @@ export function ImageSizePicker({
         presets.find((preset) => preset.size === resolvedLegacySize) ||
         (restoredCustom && imageTierAvailable(profile, restoredCustom.tier) ? restoredCustom : undefined);
     const available = (value: ImageResolutionTier) => imageTierAvailable(profile, value) && (profile.size.allowCustom || presets.some((preset) => preset.tier === value));
-    const tier = (schemaSizePresets && !pixelTierSelection ? IMAGE_RESOLUTIONS[0] : undefined) ||
-          (active && visibleTiers.includes(active.tier) ? active.tier : undefined) ||
-          (profile.size.parameter === "aspect_ratio" && imageResolutionUsesQuality(profile) ? visibleTiers.find((value) => imageQualityForTier(profile, value) === (quality || profile.quality.default)) : undefined) ||
-          (selectedTier && visibleTiers.includes(selectedTier) ? selectedTier : undefined) ||
-          (visibleTiers.includes(chosenTier) ? chosenTier : visibleTiers[0]) ||
-          "1k";
+    const tier =
+        (schemaSizePresets && !pixelTierSelection ? IMAGE_RESOLUTIONS[0] : undefined) ||
+        (active && visibleTiers.includes(active.tier) ? active.tier : undefined) ||
+        (profile.size.parameter === "aspect_ratio" && imageResolutionUsesQuality(profile) ? visibleTiers.find((value) => imageQualityForTier(profile, value) === (quality || profile.quality.default)) : undefined) ||
+        (selectedTier && visibleTiers.includes(selectedTier) ? selectedTier : undefined) ||
+        (visibleTiers.includes(chosenTier) ? chosenTier : visibleTiers[0]) ||
+        "1k";
     const choices = presets.filter((preset) => preset.tier === tier);
     const select = (preset: ImageResolutionOption) => {
         if (!available(preset.tier)) return;
@@ -185,7 +186,7 @@ export function ImageSizePicker({
                     <div className="image-size-label">分辨率</div>
                     <div className="image-size-tiers">
                         {visibleTiers.map((value) => (
-                                <button type="button" key={value} aria-pressed={pixelTierSelection ? tier === value : size !== "auto" && active?.tier === value} onClick={() => changeTier(value)}>
+                            <button type="button" key={value} aria-pressed={pixelTierSelection ? tier === value : size !== "auto" && active?.tier === value} onClick={() => changeTier(value)}>
                                 {value.toUpperCase()}
                             </button>
                         ))}

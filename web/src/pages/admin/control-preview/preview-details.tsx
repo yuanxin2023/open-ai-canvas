@@ -34,7 +34,21 @@ export function previewModelColumns(onModel?: (row: PreviewModel) => void): Colu
     ];
 }
 
-export function PreviewDetails({ stack, onStackChange, range, overview, onRefresh, refreshing }: { stack: PreviewSelection[]; onStackChange: (stack: PreviewSelection[]) => void; range: PreviewRange; overview?: PreviewOverview; onRefresh: () => void; refreshing: boolean }) {
+export function PreviewDetails({
+    stack,
+    onStackChange,
+    range,
+    overview,
+    onRefresh,
+    refreshing,
+}: {
+    stack: PreviewSelection[];
+    onStackChange: (stack: PreviewSelection[]) => void;
+    range: PreviewRange;
+    overview?: PreviewOverview;
+    onRefresh: () => void;
+    refreshing: boolean;
+}) {
     const selection = stack.at(-1);
     const title = selection?.kind === "user" ? "用户消费明细" : selection?.kind === "models" ? "完整模型统计" : selection?.kind === "model" ? `${selection.row.model} · 用户统计` : "完整消费排行";
     const openUser = (id: string) => onStackChange([...stack, { kind: "user", id }]);
@@ -52,7 +66,9 @@ export function PreviewDetails({ stack, onStackChange, range, overview, onRefres
                             返回
                         </Button>
                     )}
-                    <Button icon={<RefreshCw className="size-4" />} loading={refreshing} onClick={onRefresh}>立即更新</Button>
+                    <Button icon={<RefreshCw className="size-4" />} loading={refreshing} onClick={onRefresh}>
+                        立即更新
+                    </Button>
                 </div>
             }
         >

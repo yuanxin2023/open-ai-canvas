@@ -2,11 +2,14 @@ import type { ReferralPolicy, ReferralReward } from "@/services/api/referrals";
 import { referralCredits } from "@/lib/referral-policy";
 
 export function referralRewardTotals(rewards: ReferralReward[]) {
-    return rewards.reduce((totals, reward) => {
-        if (reward.status === "approved") totals.approved += reward.rewardMicrocredits;
-        if (reward.status === "pending") totals.pending += reward.rewardMicrocredits;
-        return totals;
-    }, { approved: 0, pending: 0 });
+    return rewards.reduce(
+        (totals, reward) => {
+            if (reward.status === "approved") totals.approved += reward.rewardMicrocredits;
+            if (reward.status === "pending") totals.pending += reward.rewardMicrocredits;
+            return totals;
+        },
+        { approved: 0, pending: 0 },
+    );
 }
 
 export function referralStageLabel(policy: ReferralPolicy, index: number): string {

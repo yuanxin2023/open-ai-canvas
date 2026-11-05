@@ -175,7 +175,18 @@ export function ErrorContent({ node, theme, onRetry, onReloadResource, onOpenTas
             </span>
             {view.kind === "uncertain" || view.kind === "moderation" ? null : (
                 <span className="canvas-gen-actions">
-                    {node.type === CanvasNodeType.Image && node.metadata?.generationErrorReason === "insufficient_credits" ? <button {...actionProps} className="canvas-gen-action is-primary" onClick={(event) => { event.stopPropagation(); openWorkspaceCreditProducts(); }}>购买积分</button> : null}
+                    {node.type === CanvasNodeType.Image && node.metadata?.generationErrorReason === "insufficient_credits" ? (
+                        <button
+                            {...actionProps}
+                            className="canvas-gen-action is-primary"
+                            onClick={(event) => {
+                                event.stopPropagation();
+                                openWorkspaceCreditProducts();
+                            }}
+                        >
+                            购买积分
+                        </button>
+                    ) : null}
                     {view.kind === "recover-media" ? (
                         <button {...actionProps} className="canvas-gen-action is-primary" onClick={runAction(onRetry)}>
                             <RefreshCw aria-hidden="true" />

@@ -4,7 +4,7 @@ import { useUserStore } from "@/stores/use-user-store";
 import { defaultPreviewRefresh, normalizePreviewRefresh, previewRefreshRemaining, previewRefreshStorageKey, type PreviewRefreshPreference } from "./preview-refresh";
 
 export function usePreviewRefresh() {
-    const userId = useUserStore(state => state.user?.id);
+    const userId = useUserStore((state) => state.user?.id);
     const client = useQueryClient();
     const fresh = useRef(false);
     const refreshing = useRef(false);
@@ -20,17 +20,20 @@ export function usePreviewRefresh() {
     const [countdown, setCountdown] = useState(preference.intervalSeconds);
     const queryKey = ["admin-control-preview", userId];
     const fetching = useIsFetching({ queryKey }) > 0;
-    const refresh = useCallback(async (force = false) => {
-        if (!userId || refreshing.current || client.isFetching({ queryKey: ["admin-control-preview", userId] })) return;
-        refreshing.current = true;
-        fresh.current = force;
-        try {
-            await client.refetchQueries({ queryKey: ["admin-control-preview", userId], type: "active" }, { cancelRefetch: false });
-        } finally {
-            fresh.current = false;
-            refreshing.current = false;
-        }
-    }, [client, userId]);
+    const refresh = useCallback(
+        async (force = false) => {
+            if (!userId || refreshing.current || client.isFetching({ queryKey: ["admin-control-preview", userId] })) return;
+            refreshing.current = true;
+            fresh.current = force;
+            try {
+                await client.refetchQueries({ queryKey: ["admin-control-preview", userId], type: "active" }, { cancelRefetch: false });
+            } finally {
+                fresh.current = false;
+                refreshing.current = false;
+            }
+        },
+        [client, userId],
+    );
     useEffect(() => {
         const update = () => {
             const next = document.visibilityState !== "hidden";

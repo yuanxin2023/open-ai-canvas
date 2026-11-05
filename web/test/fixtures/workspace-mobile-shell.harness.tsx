@@ -2,18 +2,42 @@ import { afterAll, expect, mock, test } from "bun:test";
 import { Window } from "happy-dom";
 const dom = new Window({ url: "http://localhost/create", width: 390, height: 844 });
 for (const name of ["Event", "CustomEvent"]) Object.defineProperty(globalThis, name, { configurable: true, value: (dom as any)[name] });
-for (const name of ["HTMLElement", "HTMLButtonElement", "HTMLInputElement", "HTMLTextAreaElement", "HTMLSelectElement", "Element", "Node", "SVGElement", "ShadowRoot", "MutationObserver", "ResizeObserver", "KeyboardEvent"]) Object.defineProperty(globalThis, name, { configurable: true, value: (dom as any)[name] });
-for (const [name, value] of Object.entries({ window: dom, document: dom.document, navigator: dom.navigator, getComputedStyle: dom.getComputedStyle.bind(dom), requestAnimationFrame: dom.requestAnimationFrame.bind(dom), IS_REACT_ACT_ENVIRONMENT: true })) Object.defineProperty(globalThis, name, { configurable: true, value });
+for (const name of ["HTMLElement", "HTMLButtonElement", "HTMLInputElement", "HTMLTextAreaElement", "HTMLSelectElement", "Element", "Node", "SVGElement", "ShadowRoot", "MutationObserver", "ResizeObserver", "KeyboardEvent"])
+    Object.defineProperty(globalThis, name, { configurable: true, value: (dom as any)[name] });
+for (const [name, value] of Object.entries({ window: dom, document: dom.document, navigator: dom.navigator, getComputedStyle: dom.getComputedStyle.bind(dom), requestAnimationFrame: dom.requestAnimationFrame.bind(dom), IS_REACT_ACT_ENVIRONMENT: true }))
+    Object.defineProperty(globalThis, name, { configurable: true, value });
 mock.module("localforage", () => ({ default: { config: () => {}, getItem: async () => null, setItem: async () => {}, createInstance: () => ({ getItem: async () => null, setItem: async () => {} }) } }));
 for (const [path, name] of [
-    ["banner-announcements-slider", "BannerAnnouncementsSlider"], ["model-setup-guide", "ModelSetupGuide"],
-    ["workspace-wallet-modal", "WorkspaceWalletHost"], ["image-credit-shortfall-host", "ImageCreditShortfallHost"],
-    ["workspace-storage-limit-notice", "WorkspaceStorageLimitNotice"], ["workspace-top-bar-checkin", "WorkspaceTopBarCheckin"],
-] as const) mock.module(`@/components/layout/${path}`, () => ({ [name]: () => null }));
-mock.module("@/components/feedback/topbar-feedback-button", () => ({ TopbarFeedbackButton: () => <button aria-label="反馈" className="app-workspace-topbar-feedback-pill">反馈</button> }));
-mock.module("@/components/layout/system-announcement-center", () => ({ SystemAnnouncementCenter: () => <button aria-label="通知" className="app-workspace-topbar-icon-button">通知</button> }));
+    ["banner-announcements-slider", "BannerAnnouncementsSlider"],
+    ["model-setup-guide", "ModelSetupGuide"],
+    ["workspace-wallet-modal", "WorkspaceWalletHost"],
+    ["image-credit-shortfall-host", "ImageCreditShortfallHost"],
+    ["workspace-storage-limit-notice", "WorkspaceStorageLimitNotice"],
+    ["workspace-top-bar-checkin", "WorkspaceTopBarCheckin"],
+] as const)
+    mock.module(`@/components/layout/${path}`, () => ({ [name]: () => null }));
+mock.module("@/components/feedback/topbar-feedback-button", () => ({
+    TopbarFeedbackButton: () => (
+        <button aria-label="反馈" className="app-workspace-topbar-feedback-pill">
+            反馈
+        </button>
+    ),
+}));
+mock.module("@/components/layout/system-announcement-center", () => ({
+    SystemAnnouncementCenter: () => (
+        <button aria-label="通知" className="app-workspace-topbar-icon-button">
+            通知
+        </button>
+    ),
+}));
 mock.module("@/components/layout/workspace-credit-popover", () => ({ WorkspaceCreditPopover: () => <button className="app-workspace-credit-button">123456</button> }));
-mock.module("@/components/layout/workspace-account-menu", () => ({ WorkspaceAccountMenu: () => <button aria-label="账户" className="app-workspace-topbar-icon-button">账户</button> }));
+mock.module("@/components/layout/workspace-account-menu", () => ({
+    WorkspaceAccountMenu: () => (
+        <button aria-label="账户" className="app-workspace-topbar-icon-button">
+            账户
+        </button>
+    ),
+}));
 const { act } = await import("react");
 const { createRoot } = await import("react-dom/client");
 const { MemoryRouter, useNavigate } = await import("react-router");
@@ -25,16 +49,35 @@ const { useUserStore } = await import("../../src/stores/use-user-store");
 const { publishWorkspaceSidebarCollapsed, readWorkspaceSidebarCollapsed } = await import("../../src/components/layout/workspace-sidebar-state");
 const { apiClient } = await import("../../src/services/api/request");
 apiClient.request = (async () => ({ data: { code: 0, data: { customerService: { enabled: false } }, msg: "ok" } })) as any;
-const host = document.createElement("div"); document.body.append(host);
+const host = document.createElement("div");
+document.body.append(host);
 const root = createRoot(host);
 let navigate: ReturnType<typeof useNavigate>;
 function Screen() {
     navigate = useNavigate();
-    return <Shell><CreationWorkspaceToolbar shots={[]} onJumpToShot={() => {}} onNewConversation={() => {}} onContinueCanvas={() => {}} openingCanvas={false} /><textarea defaultValue="保留当前任务与输入" /></Shell>;
+    return (
+        <Shell>
+            <CreationWorkspaceToolbar shots={[]} onJumpToShot={() => {}} onNewConversation={() => {}} onContinueCanvas={() => {}} openingCanvas={false} />
+            <textarea defaultValue="保留当前任务与输入" />
+        </Shell>
+    );
 }
-const screen = (key: string) => <App><MemoryRouter key={key} initialEntries={["/create"]}><WorkspaceAuthContext.Provider value={{ openAuth: async () => {}, prepareDraft: { current: null } }}><Screen /></WorkspaceAuthContext.Provider></MemoryRouter></App>;
-afterAll(async () => { await act(async () => root.unmount()); dom.happyDOM.abort(); });
-async function frame() { await act(async () => new Promise<void>((resolve) => dom.requestAnimationFrame(() => resolve()))); }
+const screen = (key: string) => (
+    <App>
+        <MemoryRouter key={key} initialEntries={["/create"]}>
+            <WorkspaceAuthContext.Provider value={{ openAuth: async () => {}, prepareDraft: { current: null } }}>
+                <Screen />
+            </WorkspaceAuthContext.Provider>
+        </MemoryRouter>
+    </App>
+);
+afterAll(async () => {
+    await act(async () => root.unmount());
+    dom.happyDOM.abort();
+});
+async function frame() {
+    await act(async () => new Promise<void>((resolve) => dom.requestAnimationFrame(() => resolve())));
+}
 test("mobile navigation opens fully even when generation collapsed the desktop rail", async () => {
     await act(async () => {
         useUserStore.setState({ hydrated: true, user: { id: "fixture-user", username: "fixture", role: "user", status: "active" } as any });

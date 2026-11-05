@@ -354,147 +354,141 @@ export default function ChannelsPage() {
                 ]}
             />
             {view === "models" ? (
-                <AllChannelModelsPanel
-                    channels={channels}
-                    health={health}
-                    healthLoading={healthLoading}
-                    onChanged={syncChannels}
-                    onOpenChannel={(channelId) => updateUrl({ view: "", channel: channelId, filter: "", status: "all" })}
-                />
+                <AllChannelModelsPanel channels={channels} health={health} healthLoading={healthLoading} onChanged={syncChannels} onOpenChannel={(channelId) => updateUrl({ view: "", channel: channelId, filter: "", status: "all" })} />
             ) : (
-            <div className="admin-channel-workspace">
-                <aside className="admin-channel-sidebar" aria-label="系统渠道">
-                    <div className="admin-channel-sidebar-header">
-                        <div className="flex items-center justify-between gap-2">
-                            <h2 className="font-semibold">渠道</h2>
-                            <span className="admin-channel-count">{hasFilters ? `${visibleChannels.length} / ${channels.length}` : channels.length}</span>
-                        </div>
-                        <Button block type="primary" icon={<Plus className="size-4" />} onClick={() => openDrawer()}>
-                            新增渠道
-                        </Button>
-                        <div className="grid grid-cols-2 gap-2">
-                            <Button size="small" icon={<Upload className="size-3.5" />} loading={transferring} onClick={() => importInputRef.current?.click()}>
-                                导入
+                <div className="admin-channel-workspace">
+                    <aside className="admin-channel-sidebar" aria-label="系统渠道">
+                        <div className="admin-channel-sidebar-header">
+                            <div className="flex items-center justify-between gap-2">
+                                <h2 className="font-semibold">渠道</h2>
+                                <span className="admin-channel-count">{hasFilters ? `${visibleChannels.length} / ${channels.length}` : channels.length}</span>
+                            </div>
+                            <Button block type="primary" icon={<Plus className="size-4" />} onClick={() => openDrawer()}>
+                                新增渠道
                             </Button>
-                            <Button size="small" icon={<Download className="size-3.5" />} disabled={transferring || !channels.length} onClick={() => void exportChannels()} title="导出全部系统渠道，不含 API Key 等密钥">
-                                导出全部
-                            </Button>
-                        </div>
-                        <input
-                            ref={importInputRef}
-                            type="file"
-                            accept="application/json,.json"
-                            className="hidden"
-                            aria-label="选择系统渠道导入文件"
-                            onChange={(event) => {
-                                const file = event.target.files?.[0];
-                                event.target.value = "";
-                                if (file) void importChannels(file);
-                            }}
-                        />
-                        <AdminSearchInput
-                            id="admin-channel-search"
-                            aria-label="搜索系统渠道"
-                            autoComplete="off"
-                            allowClear
-                            prefix={<Search className="size-4 text-foreground/40" />}
-                            value={keyword}
-                            placeholder="搜索渠道名称或地址"
-                            onValueChange={(value) => updateUrl({ filter: value }, true)}
-                        />
-                        <Select
-                            aria-label="筛选渠道状态"
-                            value={status}
-                            onChange={(value) => updateUrl({ status: value })}
-                            options={[
-                                { label: "全部状态", value: "all" },
-                                { label: "已启用", value: "enabled" },
-                                { label: "已停用", value: "disabled" },
-                            ]}
-                        />
-                    </div>
-                    <div className="admin-channel-list" aria-busy={loading}>
-                        {loadError ? (
-                            <div className="admin-channel-load-error" role="alert">
-                                <p>{loadError}</p>
-                                <Button size="small" onClick={() => void reload()}>
-                                    重新加载渠道
+                            <div className="grid grid-cols-2 gap-2">
+                                <Button size="small" icon={<Upload className="size-3.5" />} loading={transferring} onClick={() => importInputRef.current?.click()}>
+                                    导入
+                                </Button>
+                                <Button size="small" icon={<Download className="size-3.5" />} disabled={transferring || !channels.length} onClick={() => void exportChannels()} title="导出全部系统渠道，不含 API Key 等密钥">
+                                    导出全部
                                 </Button>
                             </div>
-                        ) : null}
-                        {loading ? (
-                            <div className="admin-channel-loading" role="status" aria-label="正在加载渠道">
-                                <Spin size="small" />
-                            </div>
-                        ) : null}
-                        {visibleChannels.map((channel) => (
-                            <button type="button" key={channel.id} className="admin-channel-item" aria-pressed={selectedChannel?.id === channel.id} aria-controls="admin-channel-models" onClick={() => updateUrl({ channel: channel.id })}>
-                                <span className="admin-channel-item-topline">
-                                    <span className="admin-channel-item-name" title={channel.name}>
-                                        {channel.name}
-                                    </span>
-                                    <ChevronRight className="admin-channel-item-arrow size-3.5" aria-hidden="true" />
-                                </span>
-                                <span className="admin-channel-item-meta">
-                                    <span>{channel.models?.length || 0} 个模型</span>
-                                    <ChannelHealthBadge stats={channelHealth.get(channel.id)} />
-                                    <span className="admin-channel-item-status" data-enabled={channel.enabled !== false}>
-                                        {channel.enabled !== false ? "已启用" : "已停用"}
-                                    </span>
-                                </span>
-                            </button>
-                        ))}
-                        {!loading && !loadError && !visibleChannels.length ? (
-                            <AdminTableEmpty filtered={hasFilters} title={hasFilters ? undefined : "还没有系统渠道"} action={hasFilters ? <Button onClick={() => updateUrl({ filter: "", status: "all" })}>清除筛选</Button> : undefined} />
-                        ) : null}
-                    </div>
-                    <div className="admin-channel-sidebar-footer">
-                        <ChannelOrderDialog
-                            onSaved={async () => {
-                                await syncChannels();
-                                await reload();
-                            }}
-                        />
-                    </div>
-                </aside>
-                <section id="admin-channel-models" className="admin-channel-detail" aria-label={selectedChannel ? `${selectedChannel.name}的模型管理` : "渠道模型管理"}>
-                    {selectedChannel ? (
-                        <>
-                            <header className="admin-channel-detail-header">
-                                <div className="min-w-0 flex-1">
-                                    <div className="flex flex-wrap items-center gap-2">
-                                        <h2 className="admin-channel-detail-title">{selectedChannel.name}</h2>
-                                        <AdminStatusBadge label={selectedChannel.enabled !== false ? "已启用" : "已停用"} tone={selectedChannel.enabled !== false ? "success" : "neutral"} />
-                                    </div>
-                                    <p className="admin-channel-detail-url" title={selectedChannel.baseUrl}>
-                                        {selectedChannel.baseUrl}
-                                    </p>
-                                    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-foreground/50">
-                                        <span>{selectedChannel.hasApiKey ? (selectedChannel.hasSecretKey ? "AK/SK 已配置" : "API Key 已配置") : "凭证未配置"}</span>
-                                        <span>最大并发：{selectedChannel.concurrencyLimit || "跟随系统"}</span>
-                                    </div>
+                            <input
+                                ref={importInputRef}
+                                type="file"
+                                accept="application/json,.json"
+                                className="hidden"
+                                aria-label="选择系统渠道导入文件"
+                                onChange={(event) => {
+                                    const file = event.target.files?.[0];
+                                    event.target.value = "";
+                                    if (file) void importChannels(file);
+                                }}
+                            />
+                            <AdminSearchInput
+                                id="admin-channel-search"
+                                aria-label="搜索系统渠道"
+                                autoComplete="off"
+                                allowClear
+                                prefix={<Search className="size-4 text-foreground/40" />}
+                                value={keyword}
+                                placeholder="搜索渠道名称或地址"
+                                onValueChange={(value) => updateUrl({ filter: value }, true)}
+                            />
+                            <Select
+                                aria-label="筛选渠道状态"
+                                value={status}
+                                onChange={(value) => updateUrl({ status: value })}
+                                options={[
+                                    { label: "全部状态", value: "all" },
+                                    { label: "已启用", value: "enabled" },
+                                    { label: "已停用", value: "disabled" },
+                                ]}
+                            />
+                        </div>
+                        <div className="admin-channel-list" aria-busy={loading}>
+                            {loadError ? (
+                                <div className="admin-channel-load-error" role="alert">
+                                    <p>{loadError}</p>
+                                    <Button size="small" onClick={() => void reload()}>
+                                        重新加载渠道
+                                    </Button>
                                 </div>
-                                {channelActions(selectedChannel)}
-                            </header>
-                            <ChannelModelManager
-                                key={selectedChannel.id}
-                                channel={selectedChannel}
-                                health={health}
-                                healthLoading={healthLoading}
-                                onChanged={async () => {
+                            ) : null}
+                            {loading ? (
+                                <div className="admin-channel-loading" role="status" aria-label="正在加载渠道">
+                                    <Spin size="small" />
+                                </div>
+                            ) : null}
+                            {visibleChannels.map((channel) => (
+                                <button type="button" key={channel.id} className="admin-channel-item" aria-pressed={selectedChannel?.id === channel.id} aria-controls="admin-channel-models" onClick={() => updateUrl({ channel: channel.id })}>
+                                    <span className="admin-channel-item-topline">
+                                        <span className="admin-channel-item-name" title={channel.name}>
+                                            {channel.name}
+                                        </span>
+                                        <ChevronRight className="admin-channel-item-arrow size-3.5" aria-hidden="true" />
+                                    </span>
+                                    <span className="admin-channel-item-meta">
+                                        <span>{channel.models?.length || 0} 个模型</span>
+                                        <ChannelHealthBadge stats={channelHealth.get(channel.id)} />
+                                        <span className="admin-channel-item-status" data-enabled={channel.enabled !== false}>
+                                            {channel.enabled !== false ? "已启用" : "已停用"}
+                                        </span>
+                                    </span>
+                                </button>
+                            ))}
+                            {!loading && !loadError && !visibleChannels.length ? (
+                                <AdminTableEmpty filtered={hasFilters} title={hasFilters ? undefined : "还没有系统渠道"} action={hasFilters ? <Button onClick={() => updateUrl({ filter: "", status: "all" })}>清除筛选</Button> : undefined} />
+                            ) : null}
+                        </div>
+                        <div className="admin-channel-sidebar-footer">
+                            <ChannelOrderDialog
+                                onSaved={async () => {
                                     await syncChannels();
                                     await reload();
                                 }}
                             />
-                        </>
-                    ) : (
-                        <AdminTableEmpty
-                            title={loading ? "正在加载渠道" : loadError ? "暂时无法读取渠道" : hasFilters ? "没有匹配的渠道" : "添加渠道，开始管理模型"}
-                            description={loading ? "加载完成后将在此显示渠道模型。" : loadError ? "请在左侧重试加载。" : hasFilters ? "调整左侧搜索或状态筛选。" : "在左侧新增渠道，配置连接信息后即可拉取或新增模型。"}
-                        />
-                    )}
-                </section>
-            </div>
+                        </div>
+                    </aside>
+                    <section id="admin-channel-models" className="admin-channel-detail" aria-label={selectedChannel ? `${selectedChannel.name}的模型管理` : "渠道模型管理"}>
+                        {selectedChannel ? (
+                            <>
+                                <header className="admin-channel-detail-header">
+                                    <div className="min-w-0 flex-1">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <h2 className="admin-channel-detail-title">{selectedChannel.name}</h2>
+                                            <AdminStatusBadge label={selectedChannel.enabled !== false ? "已启用" : "已停用"} tone={selectedChannel.enabled !== false ? "success" : "neutral"} />
+                                        </div>
+                                        <p className="admin-channel-detail-url" title={selectedChannel.baseUrl}>
+                                            {selectedChannel.baseUrl}
+                                        </p>
+                                        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-foreground/50">
+                                            <span>{selectedChannel.hasApiKey ? (selectedChannel.hasSecretKey ? "AK/SK 已配置" : "API Key 已配置") : "凭证未配置"}</span>
+                                            <span>最大并发：{selectedChannel.concurrencyLimit || "跟随系统"}</span>
+                                        </div>
+                                    </div>
+                                    {channelActions(selectedChannel)}
+                                </header>
+                                <ChannelModelManager
+                                    key={selectedChannel.id}
+                                    channel={selectedChannel}
+                                    health={health}
+                                    healthLoading={healthLoading}
+                                    onChanged={async () => {
+                                        await syncChannels();
+                                        await reload();
+                                    }}
+                                />
+                            </>
+                        ) : (
+                            <AdminTableEmpty
+                                title={loading ? "正在加载渠道" : loadError ? "暂时无法读取渠道" : hasFilters ? "没有匹配的渠道" : "添加渠道，开始管理模型"}
+                                description={loading ? "加载完成后将在此显示渠道模型。" : loadError ? "请在左侧重试加载。" : hasFilters ? "调整左侧搜索或状态筛选。" : "在左侧新增渠道，配置连接信息后即可拉取或新增模型。"}
+                            />
+                        )}
+                    </section>
+                </div>
             )}
             <AdminModal
                 className="workspace-modal workspace-modal-wide admin-channel-modal"

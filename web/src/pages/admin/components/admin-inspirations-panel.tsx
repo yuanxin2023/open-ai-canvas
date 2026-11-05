@@ -505,7 +505,11 @@ export default function AdminInspirationsPanel() {
                             <Input placeholder="可选；留空时首页显示原创提示词" />
                         </Form.Item>
                         <div className="admin-inspiration-form-grid">
-                            <Form.Item label="来源链接" name="sourceUrl" rules={[{ max: 1000 }, { validator: (_, value: string | undefined) => !value?.trim() || isHTTPSURL(value.trim()) ? Promise.resolve() : Promise.reject(new Error("请输入有效的 HTTPS 链接")) }]}>
+                            <Form.Item
+                                label="来源链接"
+                                name="sourceUrl"
+                                rules={[{ max: 1000 }, { validator: (_, value: string | undefined) => (!value?.trim() || isHTTPSURL(value.trim()) ? Promise.resolve() : Promise.reject(new Error("请输入有效的 HTTPS 链接"))) }]}
+                            >
                                 <Input placeholder="可选；官方案例或仓库地址" />
                             </Form.Item>
                             <Form.Item label="来源分类" name="category" rules={[{ max: 120 }]}>
@@ -539,7 +543,9 @@ export default function AdminInspirationsPanel() {
                             <div>
                                 <strong>{watched?.title || "提示词标题"}</strong>
                                 <p>{watched?.description || "卡片说明会显示在这里"}</p>
-                                <small>{sourceLabels[editing?.sourceId || ""] || watched?.source || "后台新增"} · {modeLabels[watched?.mode || "image"]}</small>
+                                <small>
+                                    {sourceLabels[editing?.sourceId || ""] || watched?.source || "后台新增"} · {modeLabels[watched?.mode || "image"]}
+                                </small>
                             </div>
                         </div>
                         <p>图片按原始比例展示。预览不等于发布，新增内容保存后默认为停用状态。</p>

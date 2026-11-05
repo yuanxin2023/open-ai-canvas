@@ -23,7 +23,21 @@ import { prepareBackendGenerationTask } from "@/services/api/generation-task";
 import { quoteModel } from "@/services/api/logical-models";
 import { resourceStorageKey, uploadResourceFile } from "@/services/api/resources";
 import { cancelGenerationTask, createGenerationTask, queryGenerationTask, type CreateTaskInput, type GenerationTask } from "@/services/api/task-center";
-import { capabilitySupportedModes, createWorkbenchTask, getWorkbenchSubmission, getWorkbenchRetryIntent, listWorkbenchTasks, listWorkbenchTools, resolveWorkbenchResourceURL, type WorkbenchTaskIntent, type WorkbenchRetryReference, type WorkbenchKind, type WorkbenchPromptPreset, type WorkbenchReferenceSlot, type WorkbenchTool } from "@/services/api/workbench";
+import {
+    capabilitySupportedModes,
+    createWorkbenchTask,
+    getWorkbenchSubmission,
+    getWorkbenchRetryIntent,
+    listWorkbenchTasks,
+    listWorkbenchTools,
+    resolveWorkbenchResourceURL,
+    type WorkbenchTaskIntent,
+    type WorkbenchRetryReference,
+    type WorkbenchKind,
+    type WorkbenchPromptPreset,
+    type WorkbenchReferenceSlot,
+    type WorkbenchTool,
+} from "@/services/api/workbench";
 import { loadWorkbenchSubmission, reserveWorkbenchSubmission, clearWorkbenchSubmission, workbenchPayloadHash, type PendingWorkbenchSubmission } from "@/services/workbench-submission-journal";
 import { resolveWorkbenchRestoreModel, type WorkbenchRestoreModel } from "./workbench-restore-model";
 import { useCreationPreferencesStore } from "@/stores/use-creation-preferences-store";
@@ -163,7 +177,9 @@ function ScopedWorkbenchPage({ kind, userId }: { kind: WorkbenchKind; userId: st
     useEffect(() => () => restoreAbortRef.current?.abort(), []);
     useEffect(() => {
         mountedRef.current = true;
-        return () => { mountedRef.current = false; };
+        return () => {
+            mountedRef.current = false;
+        };
     }, []);
     const isCurrent = useCallback(() => mountedRef.current && useUserStore.getState().user?.id === userId, [userId]);
     const [pendingSubmission, setPendingSubmissionState] = useState<PendingWorkbenchSubmission | null>(null);
@@ -181,12 +197,17 @@ function ScopedWorkbenchPage({ kind, userId }: { kind: WorkbenchKind; userId: st
         setSubmissionError("");
         try {
             const pending = await loadWorkbenchSubmission(userId, kind);
-            if (isCurrent()) { setPendingSubmission(pending); setSubmissionReady(true); }
+            if (isCurrent()) {
+                setPendingSubmission(pending);
+                setSubmissionReady(true);
+            }
         } catch (error) {
             if (isCurrent()) setSubmissionError(errorMessage(error, "读取待确认请求失败"));
         }
     }, [isCurrent, kind, setPendingSubmission, userId]);
-    useEffect(() => { void readSubmission(); }, [readSubmission]);
+    useEffect(() => {
+        void readSubmission();
+    }, [readSubmission]);
     const { message, modal } = App.useApp();
     const navigate = useNavigate();
     const config = useEffectiveConfig();
@@ -954,17 +975,17 @@ function ScopedWorkbenchPage({ kind, userId }: { kind: WorkbenchKind; userId: st
           ? "请先核对上次提交"
           : modelChoiceRequired
             ? "原模型已不可用，请明确选择模型"
-        : !selectedModel
-        ? `先选择${kindLabel}模型`
-        : missingInput
-          ? `请上传“${missingInput.name || "必填素材"}”`
-          : references.some((reference) => reference.uploading)
-            ? "素材上传中，请稍候"
-            : references.some((reference) => reference.error)
-              ? "请移除上传失败的素材"
-              : promptRequired && !prompt.trim()
-                ? "请填写画面描述"
-                : undefined;
+            : !selectedModel
+              ? `先选择${kindLabel}模型`
+              : missingInput
+                ? `请上传“${missingInput.name || "必填素材"}”`
+                : references.some((reference) => reference.uploading)
+                  ? "素材上传中，请稍候"
+                  : references.some((reference) => reference.error)
+                    ? "请移除上传失败的素材"
+                    : promptRequired && !prompt.trim()
+                      ? "请填写画面描述"
+                      : undefined;
 
     const buildBatchRequest = (): BatchRequest | string => {
         const submittedPrompt = normalizeCanvasNodeMentionTokens(prompt.trim(), promptReferences);
@@ -1015,16 +1036,12 @@ function ScopedWorkbenchPage({ kind, userId }: { kind: WorkbenchKind; userId: st
         if (!isCurrent()) throw new Error("账号已切换，本次提交已停止");
         const scopedInput = {
             ...input,
-            ...(endpoint === "workbench"
-                ? { expectedUserId: userId, ...(retry || {}) }
-                : { workbenchExpectedUserId: userId, ...(retry ? { workbenchRetryOf: retry.retryOf, workbenchRetryVersion: retry.retryVersion } : {}) }),
+            ...(endpoint === "workbench" ? { expectedUserId: userId, ...(retry || {}) } : { workbenchExpectedUserId: userId, ...(retry ? { workbenchRetryOf: retry.retryOf, workbenchRetryVersion: retry.retryVersion } : {}) }),
         };
         const pending = await reserveWorkbenchSubmission(userId, kind, endpoint, scopedInput);
         if (!isCurrent()) throw new Error("账号已切换，本次提交已停止");
         setPendingSubmission(pending);
-        const task = endpoint === "workbench"
-            ? await createWorkbenchTask({ ...(scopedInput as WorkbenchTaskIntent), requestKey: pending.key })
-            : await createGenerationTask({ ...(scopedInput as CreateTaskInput), workbenchRequestKey: pending.key });
+        const task = endpoint === "workbench" ? await createWorkbenchTask({ ...(scopedInput as WorkbenchTaskIntent), requestKey: pending.key }) : await createGenerationTask({ ...(scopedInput as CreateTaskInput), workbenchRequestKey: pending.key });
         if (task.workbenchSubmission?.requestKey !== pending.key) throw new Error("任务已提交，但请求回执无法核对，请保留标识并查询原任务");
         if (isCurrent()) window.dispatchEvent(new CustomEvent("wallet:updated"));
         try {
@@ -1042,17 +1059,21 @@ function ScopedWorkbenchPage({ kind, userId }: { kind: WorkbenchKind; userId: st
         const parameters = request.kind === "image" ? { ...request.parameters, count: outputs } : request.parameters;
         const referenceSnapshot = request.references.map((reference) => ({ resourceId: reference.resourceId!, kind: reference.kind, role: reference.role, ...(reference.slotKey ? { slotKey: reference.slotKey } : {}) }));
         if (request.route === "workbench") {
-            const created = await sendScopedTask("workbench", {
-                kind: request.kind,
-                ...(request.toolId ? { toolId: request.toolId } : {}),
-                ...(request.presetId ? { presetId: request.presetId } : {}),
-                prompt: request.prompt,
-                model: request.model,
-                ...(request.logicalModelId ? { logicalModelId: request.logicalModelId } : { channelId: request.channelId }),
-                parameters,
-                references: referenceSnapshot,
-                batch,
-            }, request.retryReference);
+            const created = await sendScopedTask(
+                "workbench",
+                {
+                    kind: request.kind,
+                    ...(request.toolId ? { toolId: request.toolId } : {}),
+                    ...(request.presetId ? { presetId: request.presetId } : {}),
+                    prompt: request.prompt,
+                    model: request.model,
+                    ...(request.logicalModelId ? { logicalModelId: request.logicalModelId } : { channelId: request.channelId }),
+                    parameters,
+                    references: referenceSnapshot,
+                    batch,
+                },
+                request.retryReference,
+            );
             return receiptTask(created as Partial<GenerationTask> & { id: string }, request, batch);
         }
         const mediaReference = (reference: WorkbenchReference, type: string) => ({
@@ -1129,7 +1150,10 @@ function ScopedWorkbenchPage({ kind, userId }: { kind: WorkbenchKind; userId: st
 
     const submit = async () => {
         if (!isCurrent() || submittingRef.current || busy || !submissionReady) return;
-        if (pendingSubmissionRef.current || modelChoiceRequired) { message.warning(disabledReason); return; }
+        if (pendingSubmissionRef.current || modelChoiceRequired) {
+            message.warning(disabledReason);
+            return;
+        }
         const request = buildBatchRequest();
         if (typeof request === "string") {
             message.warning(request);
@@ -1175,10 +1199,13 @@ function ScopedWorkbenchPage({ kind, userId }: { kind: WorkbenchKind; userId: st
             const batchId = task.clientContext?.batchId;
             const index = task.clientContext?.batchIndex;
             if (typeof batchId === "string" && typeof index === "number") {
-                updateLocalBatch(batchId, (batch) => ({ ...batch, states: batch.states.map((state, itemIndex) => itemIndex === index ? "created" : state), receipts: { ...batch.receipts, [index]: task } }));
+                updateLocalBatch(batchId, (batch) => ({ ...batch, states: batch.states.map((state, itemIndex) => (itemIndex === index ? "created" : state)), receipts: { ...batch.receipts, [index]: task } }));
             }
             const remaining = await clearWorkbenchSubmission(userId, kind, pending.key);
-            if (isCurrent()) { setPendingSubmission(remaining); message.success("已找到原任务，未创建新任务"); }
+            if (isCurrent()) {
+                setPendingSubmission(remaining);
+                message.success("已找到原任务，未创建新任务");
+            }
         } catch (error) {
             if (isCurrent()) message.warning(errorMessage(error, "暂时无法确认原任务，请保留请求标识"));
         } finally {
@@ -1193,7 +1220,8 @@ function ScopedWorkbenchPage({ kind, userId }: { kind: WorkbenchKind; userId: st
         modal.confirm({
             title: "明确创建另一笔任务？",
             content: "原请求仍可能完成并计费。确认后允许下一次提交使用新标识，不会取消或退款原任务。",
-            okText: "允许创建新任务", cancelText: "返回核对",
+            okText: "允许创建新任务",
+            cancelText: "返回核对",
             onOk: async () => {
                 if (!isCurrent() || submittingRef.current) return;
                 const remaining = await clearWorkbenchSubmission(userId, kind, pending.key);
@@ -1206,12 +1234,12 @@ function ScopedWorkbenchPage({ kind, userId }: { kind: WorkbenchKind; userId: st
         const local = localBatchesRef.current.find((batch) => batch.states.some((state) => state === "failed"));
         if (!local || !isCurrent() || busy || submittingRef.current) return;
         const current = buildBatchRequest();
-        if (typeof current === "string" || await workbenchPayloadHash(current) !== await workbenchPayloadHash(local.request)) {
+        if (typeof current === "string" || (await workbenchPayloadHash(current)) !== (await workbenchPayloadHash(local.request))) {
             if (isCurrent()) message.warning("参数已改变，请先核对原任务，或明确创建新任务");
             return;
         }
         if (!isCurrent()) return;
-        const indices = local.states.flatMap((state, index) => state === "failed" || state === "pending" ? [index] : []);
+        const indices = local.states.flatMap((state, index) => (state === "failed" || state === "pending" ? [index] : []));
         void runBatchSubmission(local.id, indices);
     };
 
@@ -1646,10 +1674,38 @@ function ScopedWorkbenchPage({ kind, userId }: { kind: WorkbenchKind; userId: st
                     />
                 </div>
                 <aside className="wb-composer" aria-label={`${kindLabel}创作面板`} onPasteCapture={handlePaste}>
-                    {modelChoiceRequired ? <div role="alert" className="m-3 text-sm">历史模型或规格无法完整复用，请明确选择模型并核对报价。</div> : null}
-                    {retryReference ? <div role="status" className="m-3 text-sm">{modelChoiceRequired ? "原参数已载入，请重新选择模型、核对报价后手动生成" : "原参数已载入，请核对模型和当前报价后手动生成"}</div> : null}
-                    {submissionError ? <div role="alert" className="m-3 grid gap-2 rounded-[var(--r-md)] border border-border p-3 text-sm">{submissionError}<Button onClick={() => void readSubmission()}>重新读取请求记录</Button></div> : null}
-                    {pendingSubmission ? <div role="status" className="m-3 grid gap-2 rounded-[var(--r-md)] border border-border p-3 text-sm"><span className="break-all">有一笔提交待确认。请求标识：{pendingSubmission.key}</span><Button disabled={busy} onClick={() => void checkPendingSubmission()}>核对原任务</Button>{localBatches.some((batch) => batch.states.some((state) => state === "failed")) ? <Button disabled={busy} onClick={retryPendingSubmission}>重试原提交</Button> : null}<Button disabled={busy} onClick={requestNewSubmission}>明确创建新任务</Button></div> : null}
+                    {modelChoiceRequired ? (
+                        <div role="alert" className="m-3 text-sm">
+                            历史模型或规格无法完整复用，请明确选择模型并核对报价。
+                        </div>
+                    ) : null}
+                    {retryReference ? (
+                        <div role="status" className="m-3 text-sm">
+                            {modelChoiceRequired ? "原参数已载入，请重新选择模型、核对报价后手动生成" : "原参数已载入，请核对模型和当前报价后手动生成"}
+                        </div>
+                    ) : null}
+                    {submissionError ? (
+                        <div role="alert" className="m-3 grid gap-2 rounded-[var(--r-md)] border border-border p-3 text-sm">
+                            {submissionError}
+                            <Button onClick={() => void readSubmission()}>重新读取请求记录</Button>
+                        </div>
+                    ) : null}
+                    {pendingSubmission ? (
+                        <div role="status" className="m-3 grid gap-2 rounded-[var(--r-md)] border border-border p-3 text-sm">
+                            <span className="break-all">有一笔提交待确认。请求标识：{pendingSubmission.key}</span>
+                            <Button disabled={busy} onClick={() => void checkPendingSubmission()}>
+                                核对原任务
+                            </Button>
+                            {localBatches.some((batch) => batch.states.some((state) => state === "failed")) ? (
+                                <Button disabled={busy} onClick={retryPendingSubmission}>
+                                    重试原提交
+                                </Button>
+                            ) : null}
+                            <Button disabled={busy} onClick={requestNewSubmission}>
+                                明确创建新任务
+                            </Button>
+                        </div>
+                    ) : null}
                     <header className="wb-composer-head">
                         <h1 className="sr-only">{kindLabel}生成</h1>
                         {bothKinds ? (

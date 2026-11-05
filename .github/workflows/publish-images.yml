@@ -11,7 +11,7 @@ on:
 permissions:
   contents: read
 
-# main 和 tag 的同一提交串行进入；后到的一轮复用已校验的 SHA 镜像。
+# main 和 tag 的同一提交串行进入；构建层通过 GHA 缓存复用。
 concurrency:
   group: publish-${{ github.sha }}
   cancel-in-progress: false
@@ -119,16 +119,10 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Reuse an existing commit image
-        id: existing
-        env:
-          IMAGE_REF: ${{ env.IMAGE }}:sha-${{ github.sha }}-${{ matrix.arch }}
-        run: bash .github/scripts/resolve-image.sh "$IMAGE_REF"
       - name: Build and push immutable commit image
         id: build
-        # A version tag is a release boundary: rebuild its image even if a SHA tag
-        # already exists, so a stale/corrupt SHA tag cannot be promoted as a release.
-        if: startsWith(github.ref, 'refs/tags/v') || steps.existing.outputs.found != 'true'
+        # GHCR can return 403 before a package exists. Build directly so first
+        # publication reaches the authenticated push; registry errors still fail.
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -148,7 +142,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=${{ matrix.image }}-${{ matrix.arch }}
       - name: Record image digest
         env:
-          DIGEST: ${{ steps.existing.outputs.digest || steps.build.outputs.digest }}
+          DIGEST: ${{ steps.build.outputs.digest }}
         shell: bash
         run: |
           [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "Invalid image digest" >&2; exit 1; }

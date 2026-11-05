@@ -18,7 +18,7 @@ import "./control-preview.css";
 const inflowLabels = { redeem: "兑换码兑换", payment: "在线充值", admin: "管理员增加", reward: "其他奖励" };
 
 export default function ControlPreviewPage() {
-    const userId = useUserStore(state => state.user?.id);
+    const userId = useUserStore((state) => state.user?.id);
     return <ControlPreviewContent key={userId} />;
 }
 
@@ -73,7 +73,7 @@ function ControlPreviewContent() {
                                 trigger={["click"]}
                                 placement="bottomRight"
                                 menu={{
-                                    items: [{ key: "enabled", label: "启用自动刷新" }, { type: "divider" }, ...previewRefreshIntervals.map(seconds => ({ key: String(seconds), label: `${seconds} 秒` }))],
+                                    items: [{ key: "enabled", label: "启用自动刷新" }, { type: "divider" }, ...previewRefreshIntervals.map((seconds) => ({ key: String(seconds), label: `${seconds} 秒` }))],
                                     selectable: true,
                                     multiple: true,
                                     selectedKeys: [String(refresh.preference.intervalSeconds), ...(refresh.preference.enabled ? ["enabled"] : [])],
@@ -85,7 +85,9 @@ function ControlPreviewContent() {
                                     <ChevronDown className="size-3.5" aria-hidden="true" />
                                 </Button>
                             </Dropdown>
-                            <Button aria-label="立即更新控制预览" title="读取最新统计并更新当前明细" icon={<RefreshCw className="size-4" />} loading={refresh.fetching} onClick={() => void refresh.refresh(true)}>立即更新</Button>
+                            <Button aria-label="立即更新控制预览" title="读取最新统计并更新当前明细" icon={<RefreshCw className="size-4" />} loading={refresh.fetching} onClick={() => void refresh.refresh(true)}>
+                                立即更新
+                            </Button>
                             <span className="admin-preview-note" aria-live="polite">
                                 {data ? `更新于 ${previewTime(data.asOf)}` : "尚未更新"}
                             </span>

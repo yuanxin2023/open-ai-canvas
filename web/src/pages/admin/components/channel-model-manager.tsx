@@ -484,11 +484,19 @@ export function ChannelModelManager({ channel, onChanged, health, healthLoading 
                     />
                 }
             />
-            {repriceItems.length > 0 && <ChannelModelRepriceDialog channelId={channel.id} channelName={channel.name} items={repriceItems} onClose={() => setRepriceItems([])} onSaved={async () => {
-                setSelectedModelIds([]);
-                await reload();
-                await onChanged();
-            }} />}
+            {repriceItems.length > 0 && (
+                <ChannelModelRepriceDialog
+                    channelId={channel.id}
+                    channelName={channel.name}
+                    items={repriceItems}
+                    onClose={() => setRepriceItems([])}
+                    onSaved={async () => {
+                        setSelectedModelIds([]);
+                        await reload();
+                        await onChanged();
+                    }}
+                />
+            )}
             <AdminModal
                 title="选择要导入的模型"
                 open={fetchPreviewOpen}

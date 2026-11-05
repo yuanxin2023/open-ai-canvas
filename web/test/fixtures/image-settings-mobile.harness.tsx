@@ -4,7 +4,19 @@ import { multiTierPixelProfile } from "./image-multi-tier-profile";
 
 const dom = new Window({ url: "http://localhost/", width: 390, height: 844 });
 Object.defineProperty(globalThis, "requestAnimationFrame", { configurable: true, value: dom.requestAnimationFrame.bind(dom) });
-for (const [key, value] of Object.entries({ window: dom, document: dom.document, navigator: dom.navigator, HTMLElement: dom.HTMLElement, Element: dom.Element, Node: dom.Node, SVGElement: dom.SVGElement, ShadowRoot: dom.ShadowRoot, ResizeObserver: dom.ResizeObserver, getComputedStyle: dom.getComputedStyle.bind(dom), IS_REACT_ACT_ENVIRONMENT: true })) {
+for (const [key, value] of Object.entries({
+    window: dom,
+    document: dom.document,
+    navigator: dom.navigator,
+    HTMLElement: dom.HTMLElement,
+    Element: dom.Element,
+    Node: dom.Node,
+    SVGElement: dom.SVGElement,
+    ShadowRoot: dom.ShadowRoot,
+    ResizeObserver: dom.ResizeObserver,
+    getComputedStyle: dom.getComputedStyle.bind(dom),
+    IS_REACT_ACT_ENVIRONMENT: true,
+})) {
     Object.defineProperty(globalThis, key, { configurable: true, writable: true, value });
 }
 const { act, useState } = await import("react");
@@ -23,26 +35,45 @@ afterEach(async () => {
     root = createRoot(host);
     writes = 0;
 });
-afterAll(async () => { await act(async () => root.unmount()); dom.happyDOM.abort(); });
+afterAll(async () => {
+    await act(async () => root.unmount());
+    dom.happyDOM.abort();
+});
 
 function Harness({ profile = multiTierPixelProfile(), initialSize = "auto" }) {
     const [open, setOpen] = useState(false);
     const [config, setConfig] = useState({ ...defaultConfig, size: initialSize, quality: "high", count: "2" });
-    const content = <div className="creation-parameter-menu"><ImageParameterFields profile={profile} config={config} onChange={(key, value) => {
-        writes++;
-        setConfig((current) => ({ ...current, [key]: value }));
-    }} /></div>;
-    return <><output>{JSON.stringify(imageParameterRequest(profile, config, true))}</output>
-        <CreationSettingsOverlay open={open} onOpenChange={setOpen} content={content} mobileDrawer>
-            <button data-testid="settings" onClick={() => setOpen(!open)}>设置</button>
-        </CreationSettingsOverlay></>;
+    const content = (
+        <div className="creation-parameter-menu">
+            <ImageParameterFields
+                profile={profile}
+                config={config}
+                onChange={(key, value) => {
+                    writes++;
+                    setConfig((current) => ({ ...current, [key]: value }));
+                }}
+            />
+        </div>
+    );
+    return (
+        <>
+            <output>{JSON.stringify(imageParameterRequest(profile, config, true))}</output>
+            <CreationSettingsOverlay open={open} onOpenChange={setOpen} content={content} mobileDrawer>
+                <button data-testid="settings" onClick={() => setOpen(!open)}>
+                    设置
+                </button>
+            </CreationSettingsOverlay>
+        </>
+    );
 }
 function button(label: string) {
     const found = [...document.querySelectorAll<HTMLButtonElement>("button")].find((element) => element.textContent?.trim() === label);
     if (!found) throw new Error(`Missing button: ${label}`);
     return found;
 }
-async function open() { await act(async () => button("设置").click()); }
+async function open() {
+    await act(async () => button("设置").click());
+}
 
 test("mobile drawer groups sizes, submits only size and quality, and retains selection after closing", async () => {
     await act(async () => root.render(<Harness />));

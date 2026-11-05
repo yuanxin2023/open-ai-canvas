@@ -15,11 +15,26 @@ test("到账与待审核只统计返回记录的实际奖励，不计入拒绝�
 });
 
 test("阶梯文案区分首笔、连续单数及连续天数", () => {
-    const p = { ...defaultReferralPolicy, stages: [{ until: 1, rateBps: 2000 }, { until: 10, rateBps: 500 }, { until: 0, rateBps: 0 }] };
+    const p = {
+        ...defaultReferralPolicy,
+        stages: [
+            { until: 1, rateBps: 2000 },
+            { until: 10, rateBps: 500 },
+            { until: 0, rateBps: 0 },
+        ],
+    };
     expect(referralStageLabel(p, 0)).toBe("好友首笔充值");
     expect(referralStageLabel(p, 1)).toBe("好友第 2—10 笔充值");
     expect(referralStageLabel(p, 2)).toBe("好友第 11 笔充值起");
-    const time = { ...p, mode: "time" as const, stages: [{ until: 30, rateBps: 2000 }, { until: 90, rateBps: 500 }, { until: 0, rateBps: 0 }] };
+    const time = {
+        ...p,
+        mode: "time" as const,
+        stages: [
+            { until: 30, rateBps: 2000 },
+            { until: 90, rateBps: 500 },
+            { until: 0, rateBps: 0 },
+        ],
+    };
     expect(referralStageLabel(time, 0)).toBe("首次充值后前 30 天");
     expect(referralStageLabel(time, 1)).toBe("首次充值后 30—90 天");
     expect(referralStageLabel(time, 2)).toBe("首次充值满 90 天起");
