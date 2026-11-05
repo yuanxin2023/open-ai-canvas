@@ -31,6 +31,7 @@ description: AI 创作工作台后端核心持久化表与状态边界
 
 - `user_groups` 保存编码、名称、说明、徽章、排序和 `all_channels`；`user_group_channels` 用 `(group_id, channel_id)` 保存渠道范围。`users.user_group` 为空时属于默认组，未知分组拒绝目录、报价及下单；`billing_orders.user_group` 保存准入分组快照。默认组不能删除，其他组删除前必须无用户。管理操作要求 `admin.users.groups`。
 - 分组不改变积分单价、倍率和输入精度。没有新增货币、兑换率或模型价格覆盖列；不创建官方重复返佣表，保留 `referral_profiles`、版本规则和 `referral_rewards`。
+- 返利策略迁移 96 只重绑已有邀请关系的策略字段，保留关系的 `created_at` / `updated_at`，不改写历史奖励、余额或迁移账本。历史 Schema 51/83 升级和 SQLite 转 PostgreSQL 验证使用独立测试数据库及原始源码夹具。
 - `agent_memory_documents` 按用户保存 `entries_json`、`next_entry_seq`、`revision`、`hash`、容量与 `auto/review/off` 模式；`agent_memory_document_revisions` 保存前后快照、操作、状态和 `call_id`。写入使用 revision CAS，调用重放不重复修改；旧版已批准经验首次启用时导入为可撤销的 seed 修订。旧经验表留作查看及导出，Agent 使用新记忆文档。
 - `user_skill_states` 增加 `agent_mode`、`agent_use_count`、`agent_last_used_at`；`manual` 不参与自动发现，对话固定或点名仍可使用。
 - `drama_casts` 增加 `voice_profile_id`、`voice_sample_resource_id`、`parent_id`、`look_name`、`look_from_chapter`、`look_to_chapter`；`drama_shots.look_cast_ids_json` 选择镜头造型。造型与角色声音样本都参加资源引用检查。

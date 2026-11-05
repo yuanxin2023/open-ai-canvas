@@ -64,5 +64,6 @@ func migrateReferralPolicies(tx *gorm.DB) error {
 	if err := tx.Save(&setting).Error; err != nil {
 		return err
 	}
-	return tx.Model(&model.ReferralProfile{}).Where("inviter_id <> ''").Updates(map[string]any{"bound_policy_version_id": p.VersionID, "rate_bps": nil, "policy_version_id": ""}).Error
+	// Rebinding policy fields must preserve the relationship's historical timestamps.
+	return tx.Model(&model.ReferralProfile{}).Where("inviter_id <> ''").UpdateColumns(map[string]any{"bound_policy_version_id": p.VersionID, "rate_bps": nil, "policy_version_id": ""}).Error
 }

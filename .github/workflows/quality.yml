@@ -66,11 +66,13 @@ jobs:
           --health-timeout 5s
           --health-retries 12
     env:
-      CANVAS_TEST_POSTGRES_DSN: postgres://postgres:canvas_test@127.0.0.1:5432/canvas_merge_fixture?sslmode=disable
+      CANVAS_TEST_POSTGRES_DSN: postgres://postgres:canvas_test@codex-canvas-merge-v1692-postgres:5432/canvas_merge_fixture?sslmode=disable
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Map the isolated PostgreSQL fixture host
+        run: echo '127.0.0.1 codex-canvas-merge-v1692-postgres' | sudo tee -a /etc/hosts
       - uses: actions/setup-go@v5
         with:
           go-version-file: backend/go.mod

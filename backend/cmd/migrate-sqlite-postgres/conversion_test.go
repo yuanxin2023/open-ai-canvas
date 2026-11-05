@@ -138,6 +138,15 @@ func TestConversionPreservesBothHistoriesAndAllPersistedValues(t *testing.T) {
 	for _, lineage := range []string{"local", "upstream"} {
 		t.Run(lineage, func(t *testing.T) {
 			sourcePath := conversionSource(t, lineage)
+			source := writableSource(t, sourcePath)
+			var sourceInspirationCount int64
+			if err := source.Model(&model.Inspiration{}).Where("title = ?", "Keep operator content").Count(&sourceInspirationCount).Error; err != nil || sourceInspirationCount == 0 {
+				t.Fatalf("missing custom source content: %d %v", sourceInspirationCount, err)
+			}
+			sourceDB, _ := source.DB()
+			if err := sourceDB.Close(); err != nil {
+				t.Fatal(err)
+			}
 			before, err := fileDigest(sourcePath)
 			if err != nil {
 				t.Fatal(err)
@@ -162,7 +171,7 @@ func TestConversionPreservesBothHistoriesAndAllPersistedValues(t *testing.T) {
 				t.Fatalf("history rewritten: %#v", v24)
 			}
 			var count int64
-			if err := target.Model(&model.Inspiration{}).Where("title = ?", "Keep operator content").Count(&count).Error; err != nil || count != 22 {
+			if err := target.Model(&model.Inspiration{}).Where("title = ?", "Keep operator content").Count(&count).Error; err != nil || count != sourceInspirationCount {
 				t.Fatalf("custom seed overwritten: %d %v", count, err)
 			}
 			if err := target.Unscoped().Model(&model.SMSChannel{}).Where("id = ? AND deleted_at IS NOT NULL", "deleted-channel").Count(&count).Error; err != nil || count != 1 {
@@ -298,7 +307,7 @@ func TestConversionRejectsOldAndInvalidSources(t *testing.T) {
 	if root == "" {
 		t.Skip("CANVAS_TEST_MIGRATION_FIXTURES is not configured")
 	}
-	if _, err := runConversion(filepath.Join(root, "sqlite_local_51.db"), "postgres://must-not-connect.invalid/unreachable"); err == nil || !strings.Contains(err.Error(), "94") {
+	if _, err := runConversion(filepath.Join(root, "sqlite_local_51.db"), "postgres://must-not-connect.invalid/unreachable"); err == nil || !strings.Contains(err.Error(), fmt.Sprintf("Schema %d", database.CurrentSchemaVersion)) {
 		t.Fatalf("old source was not rejected first: %v", err)
 	}
 	for _, scenario := range []string{"checksum", "extra_column", "foreign_key", "empty_source", "extra_view", "extra_trigger"} {
@@ -410,7 +419,7 @@ func TestConversionExecutable(t *testing.T) {
 		return command.CombinedOutput()
 	}
 	old := filepath.Join(os.Getenv("CANVAS_TEST_MIGRATION_FIXTURES"), "sqlite_local_51.db")
-	if output, err := run(old, dsn); err == nil || !strings.Contains(string(output), "94") {
+	if output, err := run(old, dsn); err == nil || !strings.Contains(string(output), fmt.Sprintf("Schema %d", database.CurrentSchemaVersion)) {
 		t.Fatalf("old source command accepted: %v %s", err, output)
 	}
 	if output, err := run(path, dsn); err != nil || !strings.Contains(string(output), "转库事务已提交") {
