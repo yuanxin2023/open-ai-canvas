@@ -16,8 +16,7 @@ export function fitImageNodeSize(width: number, height: number, maxWidth: number
 
 /** 异步产物回填只更新媒体；用户在等待期间确定的显示尺寸仍然有效。 */
 export function preserveImageNodeSize(node: CanvasNodeData | null | undefined, suggested: { width: number; height: number }) {
-    return node && (node.metadata?.manualSize || node.metadata?.locked || node.metadata?.freeResize)
-        ? { width: node.width, height: node.height } : suggested;
+    return node && (node.metadata?.manualSize || node.metadata?.locked || node.metadata?.freeResize) ? { width: node.width, height: node.height } : suggested;
 }
 
 /** 素材使用有界预览框，极宽文字/极窄装饰不能把整组撑大；文件比例由 object-contain 保留。 */
@@ -78,6 +77,34 @@ export function imageNodeSizeFromRatio(size: string, baseWidth = 720, baseHeight
     return nodeSizeFromRatio(size, baseWidth, baseHeight, true);
 }
 
+/** 视频节点比例与真实画面相差超过该比例时才重新适配；差得少的节点保持当前尺寸，避免重载时抖动。 */
+const VIDEO_RATIO_TOLERANCE = 0.02;
+
+/**
+ * 让视频节点跟随真实画面比例。
+ *
+ * 占位框按生成参数或默认 16:9 创建；上游没回宽高、比例写成 adaptive 等情况下，
+ * 竖屏视频会被塞进横向盒子。这里用量到的画面尺寸（或首帧尺寸）校正，
+ * 手动拉过、自由比例或锁定的节点保持不动。只看比例：首帧可能是缩小后的图，
+ * 先放大到最大预览框再适配，得到的节点尺寸与原视频一致。
+ */
+export function fitVideoNodeToSource(node: CanvasNodeData, sourceWidth?: number, sourceHeight?: number): CanvasNodeData {
+    if (node.type !== CanvasNodeType.Video) return node;
+    const metadata = node.metadata;
+    if (metadata?.manualSize || metadata?.freeResize || metadata?.locked) return node;
+    if (!sourceWidth || !sourceHeight || sourceWidth <= 1 || sourceHeight <= 1 || node.width <= 0 || node.height <= 0) return node;
+    const sourceRatio = sourceWidth / sourceHeight;
+    if (Math.abs(node.width / node.height - sourceRatio) / sourceRatio <= VIDEO_RATIO_TOLERANCE) return node;
+    const upscale = Math.max(1, VIDEO_NODE_MAX_SIZE.width / sourceWidth, VIDEO_NODE_MAX_SIZE.height / sourceHeight);
+    const size = fitNodeSize(sourceWidth * upscale, sourceHeight * upscale, VIDEO_NODE_MAX_SIZE.width, VIDEO_NODE_MAX_SIZE.height);
+    return {
+        ...node,
+        width: size.width,
+        height: size.height,
+        position: { x: node.position.x + node.width / 2 - size.width / 2, y: node.position.y + node.height / 2 - size.height / 2 },
+    };
+}
+
 export function ensureMediaNodeMinimumSize(node: CanvasNodeData) {
     if (node.type !== CanvasNodeType.Image && node.type !== CanvasNodeType.Video) return node;
     const title = node.title === "New Generation" ? "图片" : node.title === "Video" ? "视频" : node.title;
@@ -85,16 +112,17 @@ export function ensureMediaNodeMinimumSize(node: CanvasNodeData) {
         const metadata = node.metadata;
         // 手动尺寸、自由拉伸及锁定布局必须跨保存和重载保持不变。
         if (metadata?.manualSize || metadata?.freeResize || metadata?.locked) return title === node.title ? node : { ...node, title };
-        const natural = metadata?.naturalWidth && metadata.naturalHeight
-            ? (metadata.imageLayerMaterial ? fitImageMaterialNodeSize(metadata.naturalWidth, metadata.naturalHeight) : fitImageNodeSize(metadata.naturalWidth, metadata.naturalHeight))
-            : null;
-        const size = natural || (!metadata?.content && metadata?.size ? imageNodeSizeFromRatio(metadata.size) : null)
-            || (node.width > 0 && node.height > 0 ? fitImageNodeSize(node.width, node.height) : NODE_DEFAULT_SIZE[CanvasNodeType.Image]);
+        const natural = metadata?.naturalWidth && metadata.naturalHeight ? (metadata.imageLayerMaterial ? fitImageMaterialNodeSize(metadata.naturalWidth, metadata.naturalHeight) : fitImageNodeSize(metadata.naturalWidth, metadata.naturalHeight)) : null;
+        const size = natural || (!metadata?.content && metadata?.size ? imageNodeSizeFromRatio(metadata.size) : null) || (node.width > 0 && node.height > 0 ? fitImageNodeSize(node.width, node.height) : NODE_DEFAULT_SIZE[CanvasNodeType.Image]);
         if (size.width === node.width && size.height === node.height && title === node.title) return node;
         return { ...node, title, width: size.width, height: size.height, position: { x: node.position.x + node.width / 2 - size.width / 2, y: node.position.y + node.height / 2 - size.height / 2 } };
     }
-    let width = node.width;
-    let height = node.height;
+    // 已有内容的视频按记录过的真实画面（或首帧）比例校正，未激活播放的节点重载后也不会继续横着显示竖屏视频。
+    const metadata = node.metadata;
+    const source = metadata?.naturalWidth && metadata.naturalHeight ? { width: metadata.naturalWidth, height: metadata.naturalHeight } : { width: metadata?.videoPreview?.width, height: metadata?.videoPreview?.height };
+    const fittedVideo = metadata?.content || metadata?.storageKey ? fitVideoNodeToSource(node, source.width, source.height) : node;
+    let width = fittedVideo.width;
+    let height = fittedVideo.height;
     const emptyStage = isBuiltinCanvasNodeType(node.type) ? NODE_DEFAULT_SIZE[node.type] : undefined;
 
     // 如果未完成节点（生成中/失败/空节点）指定了目标比例（如 3:4, 9:16），按目标比例保持占位框尺寸，不能强制变成 16:9 横屏。
@@ -103,11 +131,7 @@ export function ensureMediaNodeMinimumSize(node: CanvasNodeData) {
         width = targetSize.width;
         height = targetSize.height;
     } else {
-        const shouldPromoteEmptyStage = !node.metadata?.content
-            && !node.metadata?.freeResize
-            && !node.metadata?.locked
-            && emptyStage !== undefined
-            && (width <= 0 || height <= 0);
+        const shouldPromoteEmptyStage = !node.metadata?.content && !node.metadata?.freeResize && !node.metadata?.locked && emptyStage !== undefined && (width <= 0 || height <= 0);
         if (shouldPromoteEmptyStage) {
             width = emptyStage.width;
             height = emptyStage.height;

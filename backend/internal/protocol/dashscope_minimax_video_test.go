@@ -15,7 +15,7 @@ func dashscopeMiniMaxRequest() GenerationRequest {
 }
 
 func TestDashscopeMiniMaxVideoCreate(t *testing.T) {
-	data, err := os.ReadFile(filepath.Join("..", "..", "..", "plugin-packages", "dashscope-minimax-video.canvas-plugin"))
+	data, err := os.ReadFile(filepath.Join("..", "..", "..", "plugin-packages", "dashscope-minimax-video.yingce-plugin"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -27,7 +27,7 @@ func TestDashscopeMiniMaxVideoCreate(t *testing.T) {
 	if provider.ID != "dashscope-minimax-video" || provider.BaseURL != "" || !provider.RequiresPublicMediaURLs || provider.Auth.Type != "bearer" || provider.Auth.Field != "apiKey" {
 		t.Fatalf("provider = %#v", provider)
 	}
-	adapter := officialPackageAdapter(t, "dashscope-minimax-video.canvas-plugin", "dashscope-minimax-video")
+	adapter := officialPackageAdapter(t, "dashscope-minimax-video.yingce-plugin", "dashscope-minimax-video")
 	request := dashscopeMiniMaxRequest()
 	request.Watermark = true
 	request.GenerateAudio = true
@@ -50,7 +50,7 @@ func TestDashscopeMiniMaxVideoCreate(t *testing.T) {
 }
 
 func TestDashscopeMiniMaxVideoMediaRoles(t *testing.T) {
-	adapter := officialPackageAdapter(t, "dashscope-minimax-video.canvas-plugin", "dashscope-minimax-video")
+	adapter := officialPackageAdapter(t, "dashscope-minimax-video.yingce-plugin", "dashscope-minimax-video")
 	for _, tc := range []struct {
 		name   string
 		inputs []MediaReference
@@ -118,7 +118,7 @@ func TestDashscopeMiniMaxVideoMediaRoles(t *testing.T) {
 }
 
 func TestDashscopeMiniMaxVideoPositiveBoundaries(t *testing.T) {
-	adapter := officialPackageAdapter(t, "dashscope-minimax-video.canvas-plugin", "dashscope-minimax-video")
+	adapter := officialPackageAdapter(t, "dashscope-minimax-video.yingce-plugin", "dashscope-minimax-video")
 	request := dashscopeMiniMaxRequest()
 	request.Prompt = strings.Repeat("镜\U00020000", 3500)
 	request.Duration, request.Resolution, request.AspectRatio = 30, "1080p", "2:3"
@@ -157,7 +157,7 @@ func TestDashscopeMiniMaxVideoPositiveBoundaries(t *testing.T) {
 }
 
 func TestDashscopeMiniMaxVideoValidation(t *testing.T) {
-	adapter := officialPackageAdapter(t, "dashscope-minimax-video.canvas-plugin", "dashscope-minimax-video")
+	adapter := officialPackageAdapter(t, "dashscope-minimax-video.yingce-plugin", "dashscope-minimax-video")
 	tests := []struct {
 		name   string
 		change func(*GenerationRequest)
@@ -240,7 +240,7 @@ func TestDashscopeMiniMaxVideoValidation(t *testing.T) {
 }
 
 func TestDashscopeMiniMaxVideoLifecycle(t *testing.T) {
-	adapter := officialPackageAdapter(t, "dashscope-minimax-video.canvas-plugin", "dashscope-minimax-video")
+	adapter := officialPackageAdapter(t, "dashscope-minimax-video.yingce-plugin", "dashscope-minimax-video")
 	created, err := adapter.ParseCreate(context.Background(), []byte(`{"output":{"task_id":"minimax-task","task_status":"PENDING"}}`))
 	if err != nil || created.TaskID != "minimax-task" || created.Status != StatusPending {
 		t.Fatalf("create = %#v err=%v", created, err)

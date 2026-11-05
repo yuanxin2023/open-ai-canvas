@@ -49,7 +49,7 @@
 
 ```json
 {
-  "apiVersion": "open-ai-canvas.plugin/v2",
+  "apiVersion": "yingce.plugin/v2",
   "enabled": false,
   "id": "maxforai-video",
   "name": "MaxForAI Video",

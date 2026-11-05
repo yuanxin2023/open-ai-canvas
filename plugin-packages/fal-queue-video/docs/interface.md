@@ -91,7 +91,7 @@
 
 ```json
 {
-  "apiVersion": "open-ai-canvas.plugin/v2",
+  "apiVersion": "yingce.plugin/v2",
   "id": "fal-queue-video",
   "name": "fal.ai Queue Video",
   "version": "2.0.0",

@@ -22,19 +22,19 @@ import (
 func newTestFeedbackHandler(t *testing.T) (*gin.Engine, *model.User, *model.User) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
-	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "feedback.db")+"?_foreign_keys=on"), &gorm.Config{})
+	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "feedback.db")), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
 	}
-	if err := db.AutoMigrate(&model.User{}, &model.UserFeedback{}, &model.FeedbackResourceReference{}, &model.Resource{}, &model.AuthSession{}, &model.SystemSetting{}, &model.AdminAuditEvent{}, &model.AdminPermissionGrant{}); err != nil {
+	if err := db.AutoMigrate(&model.User{}, &model.UserFeedback{}, &model.AuthSession{}, &model.SystemSetting{}); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
 
 	repo := repository.New(db)
-	svc := app.New(repo, t.TempDir())
 	if err := db.Create(&model.SystemSetting{Key: "feature_availability", ValueJSON: `{"userFeedbackEnabled":true}`}).Error; err != nil {
 		t.Fatal(err)
 	}
+	svc := app.New(repo, t.TempDir())
 
 	admin := &model.User{ID: "admin_u1", Username: "admin", Role: "admin", Status: "active", CreatedAt: time.Now()}
 	user := &model.User{ID: "normal_u1", Username: "normal", Email: "normal@example.com", Role: "user", Status: "active", CreatedAt: time.Now()}
@@ -62,7 +62,6 @@ func TestFeedbackHTTPEndpoints(t *testing.T) {
 
 	// 1. Submit feedback
 	payload := map[string]any{
-		"requestId":   "feedback-http-request-001",
 		"type":        "bug",
 		"title":       "测试反馈标题",
 		"content":     "测试反馈正文内容描述详细信息",
@@ -73,7 +72,6 @@ func TestFeedbackHTTPEndpoints(t *testing.T) {
 	body, _ := json.Marshal(payload)
 	req := httptest.NewRequest(http.MethodPost, "/api/feedbacks", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Canvas-Expected-User-ID", "normal_u1")
 	req.AddCookie(&http.Cookie{Name: "open_ai_canvas_session", Value: "sess_user.user-tok"})
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
@@ -121,8 +119,6 @@ func TestFeedbackHTTPEndpoints(t *testing.T) {
 	patchBody, _ := json.Marshal(patchPayload)
 	reqPatch := httptest.NewRequest(http.MethodPatch, "/api/admin/feedbacks/"+submitResp.Data.ID, bytes.NewReader(patchBody))
 	reqPatch.Header.Set("Content-Type", "application/json")
-	reqPatch.Header.Set("X-Canvas-Expected-User-ID", "admin_u1")
-	reqPatch.Header.Set("X-Canvas-Feedback-Version", "1")
 	reqPatch.AddCookie(&http.Cookie{Name: "open_ai_canvas_session", Value: "sess_admin.admin-tok"})
 	wPatch := httptest.NewRecorder()
 	r.ServeHTTP(wPatch, reqPatch)
@@ -133,8 +129,6 @@ func TestFeedbackHTTPEndpoints(t *testing.T) {
 
 	// 5. Admin archive feedback
 	reqArchive := httptest.NewRequest(http.MethodPost, "/api/admin/feedbacks/"+submitResp.Data.ID+"/archive", nil)
-	reqArchive.Header.Set("X-Canvas-Expected-User-ID", "admin_u1")
-	reqArchive.Header.Set("X-Canvas-Feedback-Version", "2")
 	reqArchive.AddCookie(&http.Cookie{Name: "open_ai_canvas_session", Value: "sess_admin.admin-tok"})
 	wArchive := httptest.NewRecorder()
 	r.ServeHTTP(wArchive, reqArchive)

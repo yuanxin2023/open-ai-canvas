@@ -36,7 +36,7 @@ Dola-pool 的任务按 API Key 隔离；创建与查询必须使用同一把 Key
 
 ```json
 {
-  "apiVersion": "open-ai-canvas.plugin/v2",
+  "apiVersion": "yingce.plugin/v2",
   "enabled": false,
   "id": "dola-pool",
   "name": "Dola-pool Seedance Video",

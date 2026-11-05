@@ -82,7 +82,7 @@
 
 ```json
 {
-  "apiVersion": "open-ai-canvas.plugin/v2",
+  "apiVersion": "yingce.plugin/v2",
   "id": "tencent-hunyuan-image",
   "name": "腾讯混元图片",
   "version": "2.0.0",

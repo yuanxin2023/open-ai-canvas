@@ -23,7 +23,7 @@ func normalizeAutoDLVideoScreenSpec(profile *VideoCapabilityConfig, modelName st
 	if err != nil {
 		return nil, BadAuthRequest("无法读取 AutoDL 工作流规格")
 	}
-	pkg, err := inspectOfficialPluginPackage(filepath.Join(dir, "autodl-comfyui.canvas-plugin"))
+	pkg, err := inspectOfficialPluginPackage(filepath.Join(dir, "autodl-comfyui.yingce-plugin"))
 	if err != nil {
 		return nil, BadAuthRequest("无法读取 AutoDL 工作流规格")
 	}

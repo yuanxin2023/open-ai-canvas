@@ -81,7 +81,7 @@
 
 ```json
 {
-  "apiVersion": "open-ai-canvas.plugin/v2",
+  "apiVersion": "yingce.plugin/v2",
   "id": "minimax-text-native",
   "name": "MiniMax Text Native",
   "version": "2.0.0",

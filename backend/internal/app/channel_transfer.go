@@ -110,7 +110,8 @@ func exportChannelModel(item model.ChannelModel) (SystemChannelExportModel, erro
 			CostPricing: tier.CostPricing, Selector: selector, Resolution: tier.Resolution, VideoSeconds: tier.VideoSeconds,
 			ProviderModelKey: tier.ProviderModelKey, BillingMode: tier.BillingMode, UnitPriceMicrocredits: tier.UnitPriceMicrocredits,
 			InputTokenPriceMicrocredits: tier.InputTokenPriceMicrocredits, OutputTokenPriceMicrocredits: tier.OutputTokenPriceMicrocredits,
-			CachedTokenPriceMicrocredits: tier.CachedTokenPriceMicrocredits, PriceConfigured: tier.PriceConfigured, Enabled: &tierEnabled,
+			CachedTokenPriceMicrocredits: tier.CachedTokenPriceMicrocredits, CacheWriteTokenPriceMicrocredits: tier.CacheWriteTokenPriceMicrocredits,
+			PriceConfigured: tier.PriceConfigured, Enabled: &tierEnabled,
 		})
 	}
 	return SystemChannelExportModel{
@@ -120,7 +121,8 @@ func exportChannelModel(item model.ChannelModel) (SystemChannelExportModel, erro
 			Tags: item.Tags, Description: item.Description, Icon: item.Icon, Capability: item.Capability, Protocol: string(item.Protocol),
 			BillingMode: item.BillingMode, UnitPriceMicrocredits: item.UnitPriceMicrocredits, InputTokenPriceMicrocredits: item.InputTokenPriceMicrocredits,
 			OutputTokenPriceMicrocredits: item.OutputTokenPriceMicrocredits, CachedTokenPriceMicrocredits: item.CachedTokenPriceMicrocredits,
-			PriceConfigured: item.PriceConfigured, Enabled: &enabled, CapabilityConfig: capabilityConfig, PriceTiers: tiers,
+			CacheWriteTokenPriceMicrocredits: item.CacheWriteTokenPriceMicrocredits,
+			PriceConfigured:                  item.PriceConfigured, Enabled: &enabled, CapabilityConfig: capabilityConfig, PriceTiers: tiers,
 		},
 	}, nil
 }

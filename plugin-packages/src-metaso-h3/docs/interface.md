@@ -68,7 +68,7 @@ status 取值：queued / running / succeeded / failed / cancelled。
 
 ```json
 {
-  "apiVersion": "open-ai-canvas.plugin/v2",
+  "apiVersion": "yingce.plugin/v2",
   "id": "metaso-h3",
   "name": "METASO MiniMax H3",
   "version": "1.0.1",

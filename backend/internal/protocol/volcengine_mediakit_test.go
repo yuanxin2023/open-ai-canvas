@@ -8,7 +8,7 @@ import (
 const mediaKitEnhanceProvider = "volcengine-mediakit-enhance-video"
 
 func TestVolcengineMediaKitEnhanceVideoBuildsCreateRequest(t *testing.T) {
-	adapter := officialPackageAdapter(t, "volcengine-mediakit.canvas-plugin", mediaKitEnhanceProvider)
+	adapter := officialPackageAdapter(t, "volcengine-mediakit.yingce-plugin", mediaKitEnhanceProvider)
 	metadata := adapter.Metadata()
 	if !metadata.Kind.IsProcessing() || !metadata.RequiresPublicMediaURLs {
 		t.Fatalf("metadata = %#v", metadata)
@@ -37,7 +37,7 @@ func TestVolcengineMediaKitEnhanceVideoBuildsCreateRequest(t *testing.T) {
 }
 
 func TestVolcengineMediaKitEnhanceVideoKeepsSourceFpsByDefault(t *testing.T) {
-	adapter := officialPackageAdapter(t, "volcengine-mediakit.canvas-plugin", mediaKitEnhanceProvider)
+	adapter := officialPackageAdapter(t, "volcengine-mediakit.yingce-plugin", mediaKitEnhanceProvider)
 	spec, err := adapter.BuildCreate(context.Background(), RequestContext{Request: GenerationRequest{
 		Videos: []MediaReference{{URL: "https://cdn.example/source.mp4"}},
 	}})
@@ -56,14 +56,14 @@ func TestVolcengineMediaKitEnhanceVideoKeepsSourceFpsByDefault(t *testing.T) {
 }
 
 func TestVolcengineMediaKitEnhanceVideoRequiresSourceVideo(t *testing.T) {
-	adapter := officialPackageAdapter(t, "volcengine-mediakit.canvas-plugin", mediaKitEnhanceProvider)
+	adapter := officialPackageAdapter(t, "volcengine-mediakit.yingce-plugin", mediaKitEnhanceProvider)
 	if _, err := adapter.BuildCreate(context.Background(), RequestContext{Request: GenerationRequest{}}); err == nil {
 		t.Fatal("create without source video was accepted")
 	}
 }
 
 func TestVolcengineMediaKitEnhanceVideoParsesResponses(t *testing.T) {
-	adapter := officialPackageAdapter(t, "volcengine-mediakit.canvas-plugin", mediaKitEnhanceProvider)
+	adapter := officialPackageAdapter(t, "volcengine-mediakit.yingce-plugin", mediaKitEnhanceProvider)
 	created, err := adapter.ParseCreate(context.Background(), []byte(`{"success":true,"task_id":"amk-1","request_id":"r"}`))
 	if err != nil || created.TaskID != "amk-1" || created.Status == StatusFailed {
 		t.Fatalf("created = %#v, err = %v", created, err)

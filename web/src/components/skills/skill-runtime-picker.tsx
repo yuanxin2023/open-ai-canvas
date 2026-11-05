@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-
+import { useTranslation } from "react-i18next";
 
 import { listAddedSkills, type Skill } from "@/services/api/skills";
 import { SKILL_RUNTIME_PROFILES, type SkillRuntimeProfile } from "@/services/skill-runtime";
@@ -37,11 +37,23 @@ export function useSkillRuntimeCatalog() {
     return { skills, loading, enabled };
 }
 
-export function SkillRuntimePicker({ skills, loading, value, onChange, placeholder = "选择本次生成使用的技能", profile = "canvas" }: { skills: Skill[]; loading?: boolean; value: string[]; onChange: (skillIds: string[]) => void; placeholder?: string; profile?: SkillRuntimeProfile }) {
-    const options = useMemo(
-        () => skills.map((skill) => ({ value: skill.skillId, label: skill.skillName, title: skill.description })),
-        [skills],
-    );
+export function SkillRuntimePicker({
+    skills,
+    loading,
+    value,
+    onChange,
+    placeholder,
+    profile = "canvas",
+}: {
+    skills: Skill[];
+    loading?: boolean;
+    value: string[];
+    onChange: (skillIds: string[]) => void;
+    placeholder?: string;
+    profile?: SkillRuntimeProfile;
+}) {
+    const { t } = useTranslation();
+    const options = useMemo(() => skills.map((skill) => ({ value: skill.skillId, label: skill.skillName, title: skill.description })), [skills]);
     const maxSkills = SKILL_RUNTIME_PROFILES[profile].maxSkills;
 
     return (
@@ -55,12 +67,12 @@ export function SkillRuntimePicker({ skills, loading, value, onChange, placehold
             maxTagCount="responsive"
             loading={loading}
             value={value}
-            placeholder={placeholder}
+            placeholder={placeholder ?? t("library.skills.runtime.placeholder")}
             optionFilterProp="label"
             options={options}
             onChange={onChange}
-            notFoundContent={loading ? "正在读取技能库" : "暂无已加入的技能"}
-            aria-label="本次生成使用的技能"
+            notFoundContent={loading ? t("library.skills.runtime.loading") : t("library.skills.runtime.empty")}
+            aria-label={t("library.skills.runtime.ariaLabel")}
         />
     );
 }

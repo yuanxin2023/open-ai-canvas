@@ -140,7 +140,9 @@ if (wantBackend) {
     if (spawnSync("golangci-lint", ["--version"], { encoding: "utf8" }).status === 0) {
         tasks.push({ name: "backend:agent-lint", cwd: BACKEND, cmd: "golangci-lint", args: ["run", "--config=.golangci.yml", "./internal/agent/..."], weight: 60 });
     } else notCovered.push("Agent 静态检查 golangci-lint v2.5.0（本机未安装；Agent 架构测试已包含在 backend:test-rest）");
-    const appPackage = "yingce/backend/internal/app";
+    const modulePath = spawnSync("go", ["list", "-m"], { cwd: BACKEND, encoding: "utf8" });
+    if (modulePath.status !== 0 || !modulePath.stdout.trim()) fail("无法读取 backend/go.mod 的模块路径");
+    const appPackage = `${modulePath.stdout.trim()}/internal/app`;
     const otherPackages = lines(spawnSync("go", ["list", "./..."], { cwd: BACKEND, encoding: "utf8" }).stdout).filter((pkg) => pkg !== appPackage);
     tasks.push({ name: "backend:test-rest", cwd: BACKEND, cmd: "go", args: ["test", "-timeout=20m", ...otherPackages], weight: 100 });
     // 与 CI 相同：internal/app 的顶层用例按名字排序后轮转分片，子用例跟随顶层用例。

@@ -9,7 +9,7 @@ import (
 // 不是同一个入口，但多模态图像报文形状相同：参考图放在 input.messages[].content[].image，
 // 任务结果在 output.choices[0].message.content[].image。
 func TestQianwenaiMaasImageUsesMaasMultimodalEndpoint(t *testing.T) {
-	adapter := officialPackageAdapter(t, "qianwenai-maas-image.canvas-plugin", "qianwenai-maas-image")
+	adapter := officialPackageAdapter(t, "qianwenai-maas-image.yingce-plugin", "qianwenai-maas-image")
 	create, err := adapter.BuildCreate(context.Background(), RequestContext{Request: GenerationRequest{
 		Model: "qwen-image-3.0-pro", Prompt: "灰色圆点", AspectRatio: "3:4", ImageCount: 1,
 	}})
@@ -54,7 +54,7 @@ func TestQianwenaiMaasImageUsesMaasMultimodalEndpoint(t *testing.T) {
 }
 
 func TestQianwenaiMaasImagePutsReferencesInMessageContent(t *testing.T) {
-	adapter := officialPackageAdapter(t, "qianwenai-maas-image.canvas-plugin", "qianwenai-maas-image")
+	adapter := officialPackageAdapter(t, "qianwenai-maas-image.yingce-plugin", "qianwenai-maas-image")
 	create, err := adapter.BuildCreate(context.Background(), RequestContext{Request: GenerationRequest{
 		Model: "qwen-image-3.0-pro", Prompt: "换装", AspectRatio: "1:1", ImageCount: 2,
 		Images: []MediaReference{
@@ -94,7 +94,7 @@ func TestQianwenaiMaasImagePutsReferencesInMessageContent(t *testing.T) {
 }
 
 func TestQianwenaiMaasImageOmitsUnregisteredSize(t *testing.T) {
-	adapter := officialPackageAdapter(t, "qianwenai-maas-image.canvas-plugin", "qianwenai-maas-image")
+	adapter := officialPackageAdapter(t, "qianwenai-maas-image.yingce-plugin", "qianwenai-maas-image")
 	create, err := adapter.BuildCreate(context.Background(), RequestContext{Request: GenerationRequest{
 		Model: "qwen-image-3.0-pro", Prompt: "circle", AspectRatio: "2880x2880",
 	}})
@@ -108,7 +108,7 @@ func TestQianwenaiMaasImageOmitsUnregisteredSize(t *testing.T) {
 }
 
 func TestQianwenaiMaasImageLifecycleReadsMultimodalChoices(t *testing.T) {
-	adapter := officialPackageAdapter(t, "qianwenai-maas-image.canvas-plugin", "qianwenai-maas-image")
+	adapter := officialPackageAdapter(t, "qianwenai-maas-image.yingce-plugin", "qianwenai-maas-image")
 	created, err := adapter.ParseCreate(context.Background(), []byte(`{"output":{"task_id":"task-qw-1","task_status":"PENDING"},"request_id":"req-1"}`))
 	if err != nil {
 		t.Fatal(err)
@@ -145,7 +145,7 @@ func TestQianwenaiMaasImageLifecycleReadsMultimodalChoices(t *testing.T) {
 }
 
 func TestQianwenaiMaasImageSurfacesFailureMessage(t *testing.T) {
-	adapter := officialPackageAdapter(t, "qianwenai-maas-image.canvas-plugin", "qianwenai-maas-image")
+	adapter := officialPackageAdapter(t, "qianwenai-maas-image.yingce-plugin", "qianwenai-maas-image")
 	failed, err := adapter.ParsePoll(context.Background(), PollContext{TaskID: "task-qw-1"}, []byte(`{"output":{"task_id":"task-qw-1","task_status":"FAILED","code":"InvalidParameter","message":"url error, please check url！"},"request_id":"req-3"}`))
 	if err != nil {
 		t.Fatal(err)

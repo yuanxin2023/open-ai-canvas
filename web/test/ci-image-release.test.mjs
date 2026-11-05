@@ -45,10 +45,17 @@ function fixture(overrides = {}) {
         MOCK_GH_ERROR: "",
         MOCK_MAIN: sha,
         MOCK_CALL: path.join(root, "docker-call"),
+        CANVAS_TEST_BIN: bin,
         ...overrides,
     };
     return {
-        run: (script, ...args) => spawnSync(bash, [path.join(scripts, script), ...args], { env, encoding: "utf8" }),
+        run: (script, ...args) => {
+            const command = [path.join(scripts, script), ...args];
+            // Git Bash launched by Bun does not always add its Unix utilities to PATH.
+            // Keep fixture executables first so these tests never invoke real Docker or gh.
+            const argv = process.platform === "win32" ? ["-c", 'export PATH="/usr/bin:/bin:$PATH"; export PATH="$(cygpath -u "$CANVAS_TEST_BIN"):$PATH"; exec bash "$@"', "canvas-fixture", ...command] : command;
+            return spawnSync(bash, argv, { env, encoding: "utf8" });
+        },
         output: () => readFileSync(output, "utf8"),
         call: () => (existsSync(env.MOCK_CALL) ? readFileSync(env.MOCK_CALL, "utf8") : ""),
     };
@@ -57,7 +64,8 @@ function fixture(overrides = {}) {
 describe("commit image reuse", () => {
     test("reuses the exact existing digest", () => {
         const repo = fixture();
-        expect(repo.run("resolve-image.sh", "ghcr.io/fixture/image:sha-test").status).toBe(0);
+        const result = repo.run("resolve-image.sh", "ghcr.io/fixture/image:sha-test");
+        expect(result.status, result.stderr || String(result.error || "")).toBe(0);
         expect(repo.output()).toBe(`found=true\ndigest=sha256:${digest}\n`);
     });
     test("only a missing manifest permits a rebuild", () => {

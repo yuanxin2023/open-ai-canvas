@@ -80,7 +80,7 @@
 
 ```json
 {
-  "apiVersion": "open-ai-canvas.plugin/v2",
+  "apiVersion": "yingce.plugin/v2",
   "id": "baidu-video",
   "name": "百度千帆视频",
   "version": "2.0.0",

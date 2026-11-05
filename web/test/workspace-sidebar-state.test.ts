@@ -1,11 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 
-import {
-    readWorkspaceSidebarCollapsed,
-    WORKSPACE_SIDEBAR_STORAGE_KEY,
-    writeWorkspaceSidebarCollapsed,
-} from "../src/components/layout/workspace-sidebar-state";
+import { readWorkspaceSidebarCollapsed, WORKSPACE_SIDEBAR_STORAGE_KEY, writeWorkspaceSidebarCollapsed } from "../src/components/layout/workspace-sidebar-state";
 
 const sidebarSource = readFileSync(new URL("../src/components/layout/workspace-sidebar-nav.tsx", import.meta.url), "utf8");
 
@@ -21,9 +17,9 @@ function memoryStorage(initial?: string) {
 
 describe("workspace sidebar state", () => {
     test("keeps visible collapse and expand controls wired to their callbacks", () => {
-        expect(sidebarSource).toContain('aria-label="收起侧栏"');
+        expect(sidebarSource).toContain('aria-label={translate("shell.collapseSidebar")}');
         expect(sidebarSource).toContain("onClick={onCollapse}");
-        expect(sidebarSource).toContain('aria-label="展开侧栏菜单"');
+        expect(sidebarSource).toContain('aria-label={translate("shell.expandSidebarMenu")}');
         expect(sidebarSource).toContain("onClick={onExpand}");
     });
 

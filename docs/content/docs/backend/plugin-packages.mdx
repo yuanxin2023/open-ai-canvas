@@ -3,7 +3,7 @@ title: 插件包与构建合同
 description: 插件声明、分发格式、支付执行文件和升级保护
 ---
 
-插件清单是构建合同。直接维护 `plugin-packages/<插件 ID>/manifest.json`、README 和接口文档；第一方只分发 `.canvas-plugin`，导入仍支持 `.yingce-plugin` 与 `.lovwow-plugin`。第三方原有身份和格式保留，不能通过全仓替换修改供应商 ID、协议标识或持久化键。
+插件清单是构建合同。直接维护 `plugin-packages/<插件 ID>/manifest.json`、README 和接口文档；第一方只分发 `.yingce-plugin`，导入仍支持 `.yingce-plugin` 与 `.lovwow-plugin`。第三方原有身份和格式保留，不能通过全仓替换修改供应商 ID、协议标识或持久化键。
 
 `generate-catalog.mjs` 只为缺失的目录创建初始文件，已有维护中的清单不会被旧模板覆盖。`embed-documentation.mjs` 从真实清单更新完整接口文档，替换旧生成标记，再嵌入清单；不把文档中的模板当作运行合同。
 

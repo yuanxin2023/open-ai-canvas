@@ -9,7 +9,7 @@ import (
 func TestNewOptionalPackagesDoNotEnableBusinessProtocolsByDefault(t *testing.T) {
 	for _, id := range []string{"cangyuan-midjourney", "cheaperinference-chat", "dashscope-minimax-video", "dola-pool", "doubao-streaming-tts", "kacang-midjourney", "km-kemei-seedream", "km-kemei-video", "maxforai-video", "qianwenai-maas-image", "volcengine-mediakit"} {
 		t.Run(id, func(t *testing.T) {
-			data, err := os.ReadFile(filepath.Join("..", "..", "..", "plugin-packages", id+".canvas-plugin"))
+			data, err := os.ReadFile(filepath.Join("..", "..", "..", "plugin-packages", id+".yingce-plugin"))
 			if err != nil {
 				t.Fatal(err)
 			}

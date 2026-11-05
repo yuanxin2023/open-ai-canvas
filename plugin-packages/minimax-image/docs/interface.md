@@ -74,7 +74,7 @@
 
 ```json
 {
-  "apiVersion": "open-ai-canvas.plugin/v2",
+  "apiVersion": "yingce.plugin/v2",
   "id": "minimax-image",
   "name": "MiniMax Image",
   "version": "2.0.0",

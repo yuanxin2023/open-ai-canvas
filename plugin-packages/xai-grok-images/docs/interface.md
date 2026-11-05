@@ -82,7 +82,7 @@
 
 ```json
 {
-  "apiVersion": "open-ai-canvas.plugin/v2",
+  "apiVersion": "yingce.plugin/v2",
   "id": "xai-grok-images",
   "name": "xAI Grok Images",
   "version": "2.1.0",

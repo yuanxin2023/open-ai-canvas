@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { zhCN as accountZh } from "../src/i18n/messages/areas/account/zh-CN";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -57,7 +58,7 @@ describe("workspace account storage meter", () => {
         expect(card).toContain("accountStorageMeter(storageQuery.data)");
         expect(card).toContain("storageMeter.usedLabel} / ${storageMeter.totalLabel}");
         expect(card).toContain("storageMeter.remainingLabel");
-        expect(card).toContain('aria-label="账号文件容量使用进度"');
+        expect(card).toContain('aria-label={translate("account.layout.storage.progress")}');
         expect(css).toContain(".workspace-account-card-storage");
     });
 });

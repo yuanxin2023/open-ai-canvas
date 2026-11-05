@@ -7,7 +7,7 @@ import (
 )
 
 func TestMetasoH3VideoDurationRange(t *testing.T) {
-	adapter := officialPackageAdapter(t, "metaso-h3.canvas-plugin", "metaso-h3")
+	adapter := officialPackageAdapter(t, "metaso-h3.yingce-plugin", "metaso-h3")
 	for seconds := 4; seconds <= 30; seconds++ {
 		t.Run(strconv.Itoa(seconds), func(t *testing.T) {
 			spec, err := adapter.BuildCreate(context.Background(), RequestContext{Request: GenerationRequest{Model: "MiniMax-H3", Prompt: "a clip", Duration: seconds}})

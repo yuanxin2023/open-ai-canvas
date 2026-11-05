@@ -93,7 +93,7 @@
 
 ```json
 {
-  "apiVersion": "open-ai-canvas.plugin/v2",
+  "apiVersion": "yingce.plugin/v2",
   "id": "rolldek-wan-video",
   "name": "RollDek WAN 3.0 Video",
   "version": "2.0.0",

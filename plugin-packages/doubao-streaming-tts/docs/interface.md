@@ -71,7 +71,7 @@
 
 ```json
 {
-  "apiVersion": "open-ai-canvas.plugin/v2",
+  "apiVersion": "yingce.plugin/v2",
   "enabled": false,
   "id": "doubao-streaming-tts",
   "name": "豆包音频生成",

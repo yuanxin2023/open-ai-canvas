@@ -107,7 +107,7 @@
 
 ```json
 {
-  "apiVersion": "open-ai-canvas.plugin/v2",
+  "apiVersion": "yingce.plugin/v2",
   "id": "newapi-chat",
   "name": "NewAPI Chat",
   "version": "2.0.0",

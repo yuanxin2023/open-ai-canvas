@@ -83,6 +83,7 @@ type PublicAuthSettings struct {
 	AgreementContent       string `json:"agreementContent,omitempty"`
 	EmailFirstRegistration bool   `json:"emailFirstRegistration"`
 	ReferralEnabled        bool   `json:"referralEnabled"`
+	LoginMode              string `json:"loginMode"`
 }
 
 type AuthSessionResult struct {
@@ -124,7 +125,12 @@ func (s *Service) PublicAuthSettings() (*PublicAuthSettings, error) {
 	if count == 0 {
 		// 首个管理员同样要看到服务协议，不能因为跳过注册校验就丢失协议字段。
 		agreementTitle, agreementContent := s.RegistrationAgreement()
-		return &PublicAuthSettings{FirstUser: true, RegistrationEnabled: true, LinuxDOEnabled: false, AgreementTitle: agreementTitle, AgreementContent: agreementContent, EmailFirstRegistration: true}, nil
+		// 与协议字段一致：首个账号创建前配置读取失败只影响展示，打开方式保持默认弹窗。
+		loginMode := LoginModeModal
+		if _, registration, err := s.readRegistrationSetting(); err == nil {
+			loginMode = normalizeLoginMode(registration.LoginMode)
+		}
+		return &PublicAuthSettings{FirstUser: true, RegistrationEnabled: true, LinuxDOEnabled: false, AgreementTitle: agreementTitle, AgreementContent: agreementContent, LoginMode: loginMode, EmailFirstRegistration: true}, nil
 	}
 	referralEnabled := false
 	if checker, ok := s.host.(interface{ ReferralEnabled() (bool, error) }); ok {
@@ -133,7 +139,7 @@ func (s *Service) PublicAuthSettings() (*PublicAuthSettings, error) {
 			return nil, err
 		}
 	}
-	registrationEnabled, err := s.RegistrationEnabled()
+	_, registration, err := s.readRegistrationSetting()
 	if err != nil {
 		return nil, err
 	}
@@ -170,12 +176,13 @@ func (s *Service) PublicAuthSettings() (*PublicAuthSettings, error) {
 		SMSBindingAvailable:    smsBind,
 		EmailBindingAvailable:  emailEnabled,
 		FirstUser:              false,
-		RegistrationEnabled:    registrationEnabled,
+		RegistrationEnabled:    registration.Enabled,
 		LinuxDOEnabled:         s.LinuxDOEnabled(),
 		EmailEnabled:           emailEnabled,
 		EmailCodeRequired:      p.EmailRegistration || p.SMSAndEmailRegistration,
 		AgreementTitle:         agreementTitle,
 		AgreementContent:       agreementContent,
+		LoginMode:              normalizeLoginMode(registration.LoginMode),
 	}, nil
 }
 

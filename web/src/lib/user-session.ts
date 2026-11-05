@@ -230,6 +230,7 @@ export function systemChannelModelChannels(channels: PublicChannelCatalog[]): Mo
                     inputTokenPriceMicrocredits: tier.inputTokenPriceMicrocredits || 0,
                     outputTokenPriceMicrocredits: tier.outputTokenPriceMicrocredits || 0,
                     cachedTokenPriceMicrocredits: tier.cachedTokenPriceMicrocredits || 0,
+                    cacheWriteTokenPriceMicrocredits: tier.cacheWriteTokenPriceMicrocredits || 0,
                 }));
 
                 return {
@@ -247,6 +248,7 @@ export function systemChannelModelChannels(channels: PublicChannelCatalog[]): Mo
                     inputTokenPriceMicrocredits: inputPrice,
                     outputTokenPriceMicrocredits: outputPrice,
                     cachedTokenPriceMicrocredits: cachedPrice,
+                    cacheWriteTokenPriceMicrocredits: firstTier?.cacheWriteTokenPriceMicrocredits || 0,
                     capabilityConfig: (model.capabilityConfig as ModelCapabilityConfig | undefined) || defaultModelCapabilityConfig(),
                     channelModelId: model.id,
                     channelId: channel.id,

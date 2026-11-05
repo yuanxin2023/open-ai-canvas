@@ -87,15 +87,16 @@ type PublicChannelModel struct {
 
 // PublicChannelModelPriceTier 公开的渠道模型价格档（脱敏）
 type PublicChannelModelPriceTier struct {
-	ID                           string            `json:"id"`
-	Selector                     map[string]string `json:"selector,omitempty"`
-	Resolution                   string            `json:"resolution"`
-	VideoSeconds                 int               `json:"videoSeconds"`
-	BillingMode                  string            `json:"billingMode"`
-	UnitPriceMicrocredits        int64             `json:"unitPriceMicrocredits"`
-	InputTokenPriceMicrocredits  int64             `json:"inputTokenPriceMicrocredits"`
-	OutputTokenPriceMicrocredits int64             `json:"outputTokenPriceMicrocredits"`
-	CachedTokenPriceMicrocredits int64             `json:"cachedTokenPriceMicrocredits"`
+	ID                               string            `json:"id"`
+	Selector                         map[string]string `json:"selector,omitempty"`
+	Resolution                       string            `json:"resolution"`
+	VideoSeconds                     int               `json:"videoSeconds"`
+	BillingMode                      string            `json:"billingMode"`
+	UnitPriceMicrocredits            int64             `json:"unitPriceMicrocredits"`
+	InputTokenPriceMicrocredits      int64             `json:"inputTokenPriceMicrocredits"`
+	OutputTokenPriceMicrocredits     int64             `json:"outputTokenPriceMicrocredits"`
+	CachedTokenPriceMicrocredits     int64             `json:"cachedTokenPriceMicrocredits"`
+	CacheWriteTokenPriceMicrocredits int64             `json:"cacheWriteTokenPriceMicrocredits"`
 }
 
 // ModelCatalog 的创作端目录始终来自系统渠道模型，不反查逻辑模型或路由。
@@ -216,15 +217,16 @@ func (s *Service) sanitizeChannelModel(cm *model.ChannelModel) (PublicChannelMod
 			}
 		}
 		publicTiers = append(publicTiers, PublicChannelModelPriceTier{
-			ID:                           tier.ID,
-			Selector:                     selector,
-			Resolution:                   tier.Resolution,
-			VideoSeconds:                 tier.VideoSeconds,
-			BillingMode:                  tier.BillingMode,
-			UnitPriceMicrocredits:        tier.UnitPriceMicrocredits,
-			InputTokenPriceMicrocredits:  tier.InputTokenPriceMicrocredits,
-			OutputTokenPriceMicrocredits: tier.OutputTokenPriceMicrocredits,
-			CachedTokenPriceMicrocredits: tier.CachedTokenPriceMicrocredits,
+			ID:                               tier.ID,
+			Selector:                         selector,
+			Resolution:                       tier.Resolution,
+			VideoSeconds:                     tier.VideoSeconds,
+			BillingMode:                      tier.BillingMode,
+			UnitPriceMicrocredits:            tier.UnitPriceMicrocredits,
+			InputTokenPriceMicrocredits:      tier.InputTokenPriceMicrocredits,
+			OutputTokenPriceMicrocredits:     tier.OutputTokenPriceMicrocredits,
+			CachedTokenPriceMicrocredits:     tier.CachedTokenPriceMicrocredits,
+			CacheWriteTokenPriceMicrocredits: tier.CacheWriteTokenPriceMicrocredits,
 		})
 	}
 

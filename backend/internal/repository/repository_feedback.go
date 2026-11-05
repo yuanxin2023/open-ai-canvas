@@ -1,13 +1,30 @@
 package repository
 
 import (
-	"fmt"
 	"strings"
 
-	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 	"infinite-canvas/backend/internal/model"
 )
+
+// FeedbackResourceReferenceKind 标记反馈附件对资源的引用；孤儿清理和管理员删除都保留这些资源。
+const FeedbackResourceReferenceKind = "用户反馈"
+
+// Both orphan cleanup and explicit deletion must scan the official attachment JSON contract.
+func (r *Repository) feedbackReferenceDocuments(userID string) ([]ResourceReferenceDocument, error) {
+	var feedbacks []model.UserFeedback
+	query := r.db.Select("id", "title", "attachments").Where("attachments <> ? AND attachments <> ?", "", "[]")
+	if userID != "" {
+		query = query.Where("user_id = ?", userID)
+	}
+	if err := query.Find(&feedbacks).Error; err != nil {
+		return nil, err
+	}
+	documents := make([]ResourceReferenceDocument, 0, len(feedbacks))
+	for _, feedback := range feedbacks {
+		documents = append(documents, ResourceReferenceDocument{Kind: FeedbackResourceReferenceKind, ID: feedback.ID, Title: feedback.Title, PrimaryJSON: feedback.Attachments})
+	}
+	return documents, nil
+}
 
 type FeedbackFilter struct {
 	Type     string
@@ -18,43 +35,12 @@ type FeedbackFilter struct {
 	Limit    int
 }
 
-func (r *Repository) CreateFeedbackWithResources(fb *model.UserFeedback, resourceIDs []string) (*model.UserFeedback, error) {
-	var saved model.UserFeedback
-	err := r.db.Transaction(func(tx *gorm.DB) error {
-		// Lock resource rows before inserting FK references, in the same order as deletion.
-		if len(resourceIDs) > 0 {
-			var resources []model.Resource
-			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("user_id = ? AND id IN ?", fb.UserID, resourceIDs).Order("id").Find(&resources).Error; err != nil {
-				return err
-			}
-			if len(resources) != len(resourceIDs) {
-				return fmt.Errorf("反馈附件已删除，请重新选择")
-			}
-			for _, resource := range resources {
-				if resource.Status != model.ResourceStatusReady {
-					return fmt.Errorf("反馈附件尚未就绪")
-				}
-			}
-		}
-		created := tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "id"}}, DoNothing: true}).Create(fb)
-		if created.Error != nil {
-			return created.Error
-		}
-		if created.RowsAffected > 0 {
-			for _, id := range resourceIDs {
-				ref := model.FeedbackResourceReference{FeedbackID: fb.ID, ResourceID: id, UserID: fb.UserID}
-				if err := tx.Create(&ref).Error; err != nil {
-					return err
-				}
-			}
-		}
-		return tx.Where("id = ? AND user_id = ?", fb.ID, fb.UserID).First(&saved).Error
-	})
-	return &saved, err
+func (r *Repository) CreateFeedback(fb *model.UserFeedback) error {
+	return r.db.Create(fb).Error
 }
 
 func (r *Repository) ListFeedbacksByUser(userID string) ([]model.UserFeedback, error) {
-	list := []model.UserFeedback{}
+	var list []model.UserFeedback
 	err := r.db.Where("user_id = ?", userID).Order("created_at DESC").Find(&list).Error
 	return list, err
 }
@@ -102,38 +88,15 @@ func (r *Repository) ListAllFeedbacks(filter FeedbackFilter) ([]model.UserFeedba
 	}
 	offset := (page - 1) * limit
 
-	list := []model.UserFeedback{}
+	var list []model.UserFeedback
 	err := query.Order("created_at DESC").Offset(offset).Limit(limit).Find(&list).Error
 	return list, total, err
 }
 
-func (r *Repository) UpdateFeedbackIfVersion(fb *model.UserFeedback, expected int64) (bool, error) {
-	result := r.db.Model(&model.UserFeedback{}).Where("id = ? AND version = ?", fb.ID, expected).Updates(map[string]any{
-		"status": fb.Status, "admin_reply": fb.AdminReply, "replied_at": fb.RepliedAt,
-		"archived": fb.Archived, "archived_at": fb.ArchivedAt, "updated_at": fb.UpdatedAt, "version": expected + 1,
-	})
-	return result.RowsAffected == 1, result.Error
+func (r *Repository) UpdateFeedback(fb *model.UserFeedback) error {
+	return r.db.Save(fb).Error
 }
 
-func (r *Repository) DeleteFeedbackIfVersion(id string, expected int64) (bool, error) {
-	result := r.db.Where("id = ? AND version = ?", id, expected).Delete(&model.UserFeedback{})
-	if result.Error != nil || result.RowsAffected != 1 {
-		return false, result.Error
-	}
-	if err := r.db.Where("feedback_id = ?", id).Delete(&model.FeedbackResourceReference{}).Error; err != nil {
-		return false, err
-	}
-	return true, nil
-}
-
-func (r *Repository) feedbackReferenceDocuments(userID string) ([]ResourceReferenceDocument, error) {
-	var list []model.UserFeedback
-	if err := r.db.Where("user_id = ?", userID).Find(&list).Error; err != nil {
-		return nil, err
-	}
-	documents := make([]ResourceReferenceDocument, 0, len(list))
-	for _, fb := range list {
-		documents = append(documents, ResourceReferenceDocument{Kind: "用户反馈", ID: fb.ID, Title: fb.Title, PrimaryJSON: fb.Attachments})
-	}
-	return documents, nil
+func (r *Repository) DeleteFeedback(id string) error {
+	return r.db.Where("id = ?", id).Delete(&model.UserFeedback{}).Error
 }

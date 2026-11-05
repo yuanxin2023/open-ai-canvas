@@ -10,7 +10,7 @@ import (
 )
 
 func TestParsePluginPackageRejectsBareManifest(t *testing.T) {
-	if _, err := ParsePluginPackage([]byte(`{"apiVersion":"open-ai-canvas.plugin/v1"}`)); err == nil {
+	if _, err := ParsePluginPackage([]byte(`{"apiVersion":"yingce.plugin/v1"}`)); err == nil {
 		t.Fatal("bare JSON manifest was accepted as a plugin package")
 	}
 }
@@ -27,10 +27,10 @@ func TestParsePluginPackageAcceptsCompatibleBrandedV2(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if pkg.Manifest.APIVersion != "open-ai-canvas.plugin/v2" || PluginPackageExtensionForAPIVersion(pkg.Manifest.APIVersion) != ".canvas-plugin" || PluginPackageExtensionForAPIVersion("yingce.plugin/v2") != ".yingce-plugin" {
+	if pkg.Manifest.APIVersion != "yingce.plugin/v2" || PluginPackageExtensionForAPIVersion(pkg.Manifest.APIVersion) != ".yingce-plugin" || PluginPackageExtensionForAPIVersion("yingce.plugin/v2") != ".yingce-plugin" {
 		t.Fatalf("package = %#v", pkg.Manifest)
 	}
-	if !IsPluginPackageFileName("compat-image.yingce-plugin") || !IsPluginPackageFileName("lovwow-image.lovwow-plugin") || !IsPluginPackageFileName("neutral.canvas-plugin") || IsPluginPackageFileName("manifest.json") {
+	if !IsPluginPackageFileName("compat-image.yingce-plugin") || !IsPluginPackageFileName("lovwow-image.lovwow-plugin") || !IsPluginPackageFileName("neutral.yingce-plugin") || IsPluginPackageFileName("manifest.json") {
 		t.Fatal("plugin package extension recognition is inconsistent")
 	}
 }
@@ -47,7 +47,7 @@ func TestCompatibleManifestEscapesModelPathSegments(t *testing.T) {
 
 func TestParsePluginPackageValidatesWebEntry(t *testing.T) {
 	manifest := []byte(`{
-        "apiVersion":"open-ai-canvas.plugin/v1",
+        "apiVersion":"yingce.plugin/v1",
         "id":"ui-extension",
         "name":"UI Extension",
         "version":"1.0.0",
@@ -77,7 +77,7 @@ func TestParsePluginPackageValidatesWebEntry(t *testing.T) {
 
 func TestParsePluginPackageAcceptsTaggedRPCBackend(t *testing.T) {
 	manifest := []byte(`{
-        "apiVersion":"open-ai-canvas.plugin/v1",
+        "apiVersion":"yingce.plugin/v1",
         "id":"tagged-payment",
         "name":"Tagged Payment",
         "version":"1.0.0",
@@ -103,7 +103,7 @@ func TestParsePluginPackageAcceptsTaggedRPCBackend(t *testing.T) {
 }
 
 func TestParsePluginPackageNormalizesEarlierProtocolNamespace(t *testing.T) {
-	earlierNamespace := string([]byte{121, 105, 110, 103, 99, 101})
+	earlierNamespace := "open-ai-canvas"
 	manifest := []byte(fmt.Sprintf(`{
         "apiVersion":%q,
         "id":"compatible-extension",
@@ -115,14 +115,14 @@ func TestParsePluginPackageNormalizesEarlierProtocolNamespace(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if pkg.Manifest.APIVersion != "open-ai-canvas.plugin/v1" || pkg.RPCVersion != earlierNamespace+".payment/v1" {
+	if pkg.Manifest.APIVersion != "yingce.plugin/v1" || pkg.RPCVersion != earlierNamespace+".payment/v1" {
 		t.Fatalf("normalized package = %#v", pkg)
 	}
 	var stored Manifest
 	if err := json.Unmarshal(pkg.ManifestRaw, &stored); err != nil {
 		t.Fatal(err)
 	}
-	if stored.APIVersion != "open-ai-canvas.plugin/v1" || strings.Contains(strings.ToLower(string(pkg.ManifestRaw)), earlierNamespace) {
+	if stored.APIVersion != "yingce.plugin/v1" || strings.Contains(strings.ToLower(string(pkg.ManifestRaw)), earlierNamespace) {
 		t.Fatalf("normalized manifest = %s", pkg.ManifestRaw)
 	}
 }

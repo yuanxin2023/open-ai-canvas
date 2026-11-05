@@ -78,7 +78,7 @@
 
 ```json
 {
-  "apiVersion": "open-ai-canvas.plugin/v2",
+  "apiVersion": "yingce.plugin/v2",
   "id": "coolhs-wan3-relay",
   "name": "WAN 3.0 拼车中转（班次发车）",
   "version": "1.1.0",

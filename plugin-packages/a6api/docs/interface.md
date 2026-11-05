@@ -35,7 +35,7 @@ GET `https://api.a6api.com/models`
 
 ```json
 {
-  "apiVersion": "open-ai-canvas.plugin/v2",
+  "apiVersion": "yingce.plugin/v2",
   "id": "a6api",
   "name": "A6api",
   "version": "1.0.0",

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { App, Button, Input } from "antd";
+import { useTranslation } from "react-i18next";
 import { startVerification, type VerificationDraft, type VerificationMethod, type VerificationPurpose } from "@/services/api/verification";
 
 // 验证码输入框与「获取验证码」按钮同排显示：按钮贴右侧、竖线分隔。
@@ -65,6 +66,7 @@ export function VerificationFields({
     password?: string;
 }) {
     const { message } = App.useApp();
+    const { t } = useTranslation();
     const [sending, setSending] = useState(false);
     const [remaining, setRemaining] = useState(0);
     const inFlight = useRef(false);

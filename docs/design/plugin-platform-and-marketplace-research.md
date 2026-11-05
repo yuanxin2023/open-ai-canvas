@@ -31,7 +31,7 @@
 
 | 面向用户的能力 | 当前证据 | 判断 |
 | --- | --- | --- |
-| 安装新模型协议 | `.canvas-plugin` 经校验、存储、加载为 `manifestAdapter`，进入运行时 registry | 现有 DSL 范围内是真扩展，不只是开关 |
+| 安装新模型协议 | `.yingce-plugin` 经校验、存储、加载为 `manifestAdapter`，进入运行时 registry | 现有 DSL 范围内是真扩展，不只是开关 |
 | 工作流声明 | 统一 `contributes.workflows` 与 Provider 引用合同；另有 RunningHub/ComfyUI 专用状态及配置流程 | 有可扩展基础，但不能从清单推导所有工作流集成都已通用化 |
 | 新应用/UI | builtin 静态导入；上传记录转为 `{ manifest, source }`，未构造外部代码实例 | 主要仍是宿主内置能力管理 |
 | 新画布节点 | 节点注册表可接声明；通用 declarative 分支按 schema 展示数据 | 有基础声明式显示，不是任意交互组件运行时 |
@@ -46,7 +46,7 @@
 
 只读取 ZIP 中的清单，未运行包内程序：
 
-- `plugin-packages/*.canvas-plugin` 共 **80** 个文件，均可读取 `manifest.json`。
+- `plugin-packages/*.yingce-plugin` 共 **80** 个文件，均可读取 `manifest.json`。
 - **78** 个包含 Provider 贡献，未显式声明 backend/web runtime；现有加载路径按声明式处理。
 - **2** 个包含支付贡献，声明 `runtime.backend=rpc`。
 - **0** 个声明 Web `entry`。

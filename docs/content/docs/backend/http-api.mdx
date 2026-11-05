@@ -1059,13 +1059,13 @@ API、追加迁移、SQLite/PostgreSQL 真事务和真实路由尚待完整验�
 
 `POST /agent/runs/:id/undo` 必须同时提交原执行回执的 `stepId` 与 `expectedSnapshotHash`，不允许缺少步骤身份时改为操作最新步骤。请求校验本人、运行、最新变更和完整画布版本；后续修改、无完整快照或已提交生成任务会拒绝。成功原请求可幂等重放；此接口不取消任务、不自动退款。候选仍有跨模块冲突，数据库事务与真实路由尚未完成验收。
 
-## v1.6.9.2 合并候选：反馈接口
+## 反馈接口当前合同
 
-`POST /api/feedbacks` 及 `POST /api/feedbacks/attachments` 需要登录、`userFeedbackEnabled` 和 `X-Canvas-Expected-User-ID` 与当前账号匹配。提交携带 16–96 位 ASCII 字母/数字/下划线/连字符的 requestId，重试同内容返回原记录，同键改变内容返回 409 `feedback_submission_conflict`。正文最多 10000、标题最多 200 个 Unicode 字符。附件最多 5 个、每个 50 MiB，并由服务端复核归属、资源状态和 MIME；继续受既有上传额度限制。诊断默认 `{}`，只允许 userAgent、platform、language、screen、viewport、pathname；动态路由 ID、查询和片段被移除，未知字段拒绝。
+反馈采用官方 JSON 合同，同时保留平台 `userFeedbackEnabled` 和后台 `admin.users.feedbacks` 权限。提交与附件上传需要登录且功能已开放；关闭后仍可认证读取本人历史。接口、归档与取消归档路径见本文“用户反馈”表。
 
-`GET /api/feedbacks/my` 只返回本人记录，关闭新提交后仍可认证读取历史。`GET /api/feedbacks/:id/attachments/:resourceID` 验证记录内附件、本人的资源归属或 `admin.users.feedbacks`，私有响应支持 Range。通用资源授权不放宽。
+本地 requestId 幂等、预期账号头、反馈版本头和专用附件读取路由已移除；客户端不再提交 `X-Canvas-Feedback-Version`。普通附件返回资源地址，后台通过管理员资源接口预览；资源引用扫描从反馈附件 JSON 读取，避免孤儿清理误删。
 
-后台 `GET/PATCH/DELETE /api/admin/feedbacks[/:id]` 和归档/取消归档 POST 都需独立反馈权限；写请求另带预期账号头及 `X-Canvas-Feedback-Version`，版本不符返回 409 `feedback_changed`，不得自动覆盖回复。PATCH 的 adminReply 未提供时保留原回复，明确空字符串才清空；归档独立保留回复。变更与不含正文/联系方式的审计同事务提交。前端通过现有 `http` 调用。完整路由和数据库集成尚待验收。
+本轮缓存写入字段、登录打开方式和插件合同见 [v1.7.3.7 本地整合](./upstream-v1737-integration)。人民币支付、积分计价和已有自有更新源保持不变。
 
 ## v1.6.9.2 合并候选：自有系统更新
 

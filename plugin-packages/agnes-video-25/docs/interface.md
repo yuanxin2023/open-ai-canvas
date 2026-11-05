@@ -91,7 +91,7 @@
 
 ```json
 {
-  "apiVersion": "open-ai-canvas.plugin/v2",
+  "apiVersion": "yingce.plugin/v2",
   "id": "agnes-video-25",
   "name": "Agnes Video 2.5 / 2.5 Flash",
   "version": "2.0.0",

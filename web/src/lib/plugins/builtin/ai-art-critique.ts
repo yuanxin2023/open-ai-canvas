@@ -5,7 +5,7 @@ import { ART_CRITIQUE_NODE_TYPE, ART_CRITIQUE_PLUGIN_ID, artCritiqueSourceFinger
 import { prepareAnalysisNodeAction } from "../analysis-node-action";
 
 const manifest: PluginManifest = {
-    apiVersion: "open-ai-canvas.plugin/v1",
+    apiVersion: "yingce.plugin/v1",
     id: ART_CRITIQUE_PLUGIN_ID,
     name: "AI 审美批改",
     version: "0.1.0",
@@ -38,7 +38,18 @@ export const artCritiquePlugin: RegisteredPlugin = {
         const state = node.metadata?.artCritique;
         const sources = snapshot.nodes.filter((item) => item.type === "image" && snapshot.connections.some((edge) => edge.fromNodeId === item.id && edge.toNodeId === node.id));
         const currentReport = state?.report && sources.length === 1 && state.report.sourceFingerprint === artCritiqueSourceFingerprint(sources[0]) ? state.report : undefined;
-        return { status: state?.report && !currentReport ? "stale" : state?.status || "idle", stage: state?.analysisStage, stageTaskIds: state?.stageTaskIds, sourceNodeId: state?.sourceNodeId, summary: currentReport?.summary, strengths: currentReport?.strengths, issues: currentReport?.issues, options: currentReport?.options, error: state?.errorMessage, execution: "已有报告仅在输入指纹一致时返回；canvas_start_art_critique 准备分析报价，用户确认后执行。" };
+        return {
+            status: state?.report && !currentReport ? "stale" : state?.status || "idle",
+            stage: state?.analysisStage,
+            stageTaskIds: state?.stageTaskIds,
+            sourceNodeId: state?.sourceNodeId,
+            summary: currentReport?.summary,
+            strengths: currentReport?.strengths,
+            issues: currentReport?.issues,
+            options: currentReport?.options,
+            error: state?.errorMessage,
+            execution: "已有报告仅在输入指纹一致时返回；canvas_start_art_critique 准备分析报价，用户确认后执行。",
+        };
     },
 };
 

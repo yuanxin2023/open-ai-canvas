@@ -6,7 +6,7 @@
  * 所有等待都有硬超时；任何断言失败 → exit 1。
  * finally 只终止本脚本记录的 PID，只删除本脚本 mkdtemp 创建的 profile。
  */
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -74,12 +74,10 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /** 启动 Vite DEV，等待 ready 行或 TCP 可连接；超时即抛。 */
 async function launchVite(port) {
-    // package.json 仍可由 Bun 直接执行；没有 Bun 时用 Node 调本地 Vite 入口。
-    // 不能把 `vite` 同时当作 bunx 子命令和 Vite 根目录传入，否则会启动到
-    // <web>/vite，SPA 根路径与 /dev/previs-repro 都会返回 404。
+    // 直接启动 Vite 入口，避免 Windows 的 bunx/cmd 包装层遗留子进程。
     const viteEntry = join(process.cwd(), "node_modules", "vite", "bin", "vite.js");
-    const command = process.versions.bun ? "bunx" : process.execPath;
-    const args = process.versions.bun ? ["vite"] : [viteEntry];
+    const command = process.versions.bun ? "node" : process.execPath;
+    const args = [viteEntry];
     const child = spawn(command, [...args, "--host", "127.0.0.1", "--port", String(port), "--strictPort"], {
         cwd: process.cwd(),
         stdio: ["ignore", "pipe", "pipe"],
@@ -243,6 +241,9 @@ async function connectCdp(cdpPort) {
     await send("Page.enable");
     await send("Log.enable");
     await send("Network.enable");
+    // 场景 G 从 Resource Timing 里取 Vite 预构建依赖的真实 URL，才能拿到页面正在用的同一模块实例。
+    // 浏览器默认只记 250 条，开发模式下应用启动加载的源码模块就能占满，之后的 three / r3f 不会被记录。
+    await send("Page.addScriptToEvaluateOnNewDocument", { source: "performance.setResourceTimingBufferSize(10000);" });
 
     const evaluate = async (expression) => {
         const r = await send("Runtime.evaluate", { expression, returnByValue: true, awaitPromise: true });
@@ -359,6 +360,10 @@ async function stopExact(child, name) {
     const stopped = () => child.exitCode !== null || child.signalCode !== null;
     if (stopped()) return;
 
+    if (process.platform === "win32") {
+        // Only terminate the process tree rooted at this run's recorded child PID.
+        spawnSync("taskkill", ["/PID", String(child.pid), "/T", "/F"], { windowsHide: true, timeout: 8000, stdio: "ignore" });
+    }
     try {
         child.kill("SIGTERM");
     } catch {
@@ -897,8 +902,8 @@ async function shotOutputs(cdp, baseUrl) {
     const reused = await cdp.evaluate(`(async () => {
         const {openPrevisMonitorWindow}=await import('/src/components/canvas/previs/previs-monitor-window.ts');
         let firstClosed=0,secondClosed=0;
-        const first=openPrevisMonitorWindow({renderFrame:()=>null,onClosed:()=>firstClosed++});
-        const second=openPrevisMonitorWindow({renderFrame:()=>null,onClosed:()=>secondClosed++});
+        const first=openPrevisMonitorWindow({brandName:'监看测试',renderFrame:()=>null,onClosed:()=>firstClosed++});
+        const second=openPrevisMonitorWindow({brandName:'监看测试',renderFrame:()=>null,onClosed:()=>secondClosed++});
         const count=window.__previsPopup.document.querySelectorAll('canvas').length;
         first.close();const live=!second.closed();second.close();
         return {count,live,firstClosed,secondClosed};

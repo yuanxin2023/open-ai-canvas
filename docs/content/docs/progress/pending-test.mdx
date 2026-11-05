@@ -5,6 +5,13 @@ description: 当前项目已实现功能的手工验证清单与未确认边界
 
 # 待测试
 
+## 官方 v1.7.3.7 本地整合
+
+- 已按确认的十二项取舍整合，保留本地界面、权限、人民币支付和价格精度；反馈与预演台采用官方核心，插件与 RPC 采用官方格式。
+- Schema 104/105 只在隔离测试库验证，保留原 1–103 迁移身份、账本和积分；没有升级现有数据库。
+- 本轮待验收：真实账号登录与草稿恢复、六种语言与手机布局、电商五步完整生成、实际支付/关单/对账、第三方真人 H5 认证、TOS/BytePlus 资源链路。不得将编译或自动检查记为这些路径已经通过。
+- 自动检查：最终验证脚本 12 项全部通过，前端全量 3,425 项与真实 Chrome 预演台 76 项断言通过；后端非 app 包与 app 四分片通过。未覆盖范围及取舍清单见 [本轮整合说明](../backend/upstream-v1737-integration)。
+
 ## 合并后的本机预览与图片工作台修复
 
 - 用户已在合并后授权启动本机预览，继续使用端口 3141。预览复制旧环境数据，在副本上完成 Schema 96→103 和重复执行，原 96 条账本及账号、积分、账单、画布、任务、资源和返利记录核对一致；旧环境及升级前备份保留，原数据库仍为 96。
@@ -1154,15 +1161,15 @@ description: 当前项目已实现功能的手工验证清单与未确认边界
 
 ## 插件协议与包命名迁移
 
-- [x] 插件协议更新为 `open-ai-canvas.plugin/v1|v2`，支付 RPC ABI 更新为 `open-ai-canvas.payment/v1`，正式插件包扩展名更新为 `.canvas-plugin`。
+- [x] 插件协议更新为 `yingce.plugin/v1|v2`，支付 RPC ABI 更新为 `yingce.payment/v1`，正式插件包扩展名更新为 `.yingce-plugin`。
 - [x] 运行时会迁移上一代注册表、缓存包名和协议字段，并为上一代支付插件保留对应 RPC 版本；97 个正式插件包与规范化源码集合一致。
-- [ ] 备份现有数据目录后启动一次，确认已安装插件、启用状态、官方插件升级和历史支付订单回调/查单正常；再上传一个 `.canvas-plugin` 验证安装、启用和停用。
+- [ ] 备份现有数据目录后启动一次，确认已安装插件、启用状态、官方插件升级和历史支付订单回调/查单正常；再上传一个 `.yingce-plugin` 验证安装、启用和停用。
 
 ## 第一方身份中性化与兼容迁移
 
 - [x] 内置站点身份改为“AI 创作工作台”，画布及创作页默认助手改为“创作助手”；站点品牌与助手称呼使用独立配置。
 - [x] 外观合同升级到版本 10，并为此前的内置默认身份增加按精确摘要识别的自动迁移；部署方自定义品牌和用户内容不改写。
-- [x] 插件协议改为 `open-ai-canvas.plugin/v1|v2`、支付 ABI 改为 `open-ai-canvas.payment/v1`、包扩展名改为 `.canvas-plugin`；已有注册表、缓存文件和上一代官方协议在运行时自动迁移。
+- [x] 插件协议改为 `yingce.plugin/v1|v2`、支付 ABI 改为 `yingce.payment/v1`、包扩展名改为 `.yingce-plugin`；已有注册表、缓存文件和上一代官方协议在运行时自动迁移。
 - [x] 官方插件包及支付原生执行文件已重新生成；仓库检查器覆盖文件名、普通文件内容和插件压缩包条目。
 - [x] 已在具备 CGO 的 Linux Go 容器运行外观 SQLite 专项测试，包含此前内置身份到合同版本 10 的持久化迁移。
 - [ ] 用已有数据目录启动一次，确认旧外观、旧插件缓存和启用状态完成迁移；执行前先备份数据目录。
@@ -3188,7 +3195,7 @@ PR #507 核心能力已按主分支实现保留，并补齐小视口尺寸约束
 
 - `runImageTask` / `runAudioTask` 对白名单官方接口只走声明式插件：`ensureOfficialProtocolAdapter` → declarative；未安装时报「…插件未安装」，不再回退手写组包。
 - 图片白名单：`openai-image`、`grok-image`、`volcengine-ark-image`、`volcengine-jimeng-image`、`gemini-image`。音频白名单：`openai-audio`、`async-audio`。
-- 已从 Builtins 移除对应 host adapter；真相源为 `plugin-packages/*.canvas-plugin`（含新建 `openai-audio` / `async-audio`，以及重写的 openai-images / grok / ark / jimeng）。
+- 已从 Builtins 移除对应 host adapter；真相源为 `plugin-packages/*.yingce-plugin`（含新建 `openai-audio` / `async-audio`，以及重写的 openai-images / grok / ark / jimeng）。
 - 表达式引擎补 `$divide`（配合 `$split` / `$toFloat`）；同步音频支持 `BinaryPayload`。
 - [x] `go test ./internal/protocol/ ./internal/service/ -count=1`：协议与 provider 回归。
 - [ ] 用 OpenAI Images（generations + edits）、Grok Images、方舟 Seedream、即梦图片、Gemini Image 各跑一条，确认创建与结果落库走对应官方包。
@@ -3755,7 +3762,7 @@ PR #507 核心能力已按主分支实现保留，并补齐小视口尺寸约束
 
 ## 支付插件跨平台构建
 
-- [x] 微信与支付宝 provider 已使用同一 target-aware 构建脚本完成 `CGO_ENABLED=0` 的 linux/amd64、linux/arm64 交叉编译；目录 provider 与 `.canvas-plugin` 内 provider 的 ELF 架构和内容一致性校验通过。
+- [x] 微信与支付宝 provider 已使用同一 target-aware 构建脚本完成 `CGO_ENABLED=0` 的 linux/amd64、linux/arm64 交叉编译；目录 provider 与 `.yingce-plugin` 内 provider 的 ELF 架构和内容一致性校验通过。
 - [x] 包内外产物一致性、完整包摘要缓存、同版本 provider 更新失效、未完成解包恢复等专项测试通过；RPC 错误映射的跨平台单元测试通过。
 - [ ] 在 Linux CI 完成无文件、无权限、错误格式、异常退出与无效 JSON 的 RPC 进程测试，并使用 Docker Buildx/QEMU 执行 `payment-package-smoke` 的 amd64/arm64 双平台构建，确认目标容器内两个 provider 均能真实执行无效 JSON 冒烟请求。
 - [ ] 保留含旧 Mach-O runtime 的生产 `/data` 卷升级到修复镜像，确认启动后自动选择新 package digest，管理后台保存微信和支付宝配置进入真实凭证校验。
@@ -4800,7 +4807,7 @@ PR #507 核心能力已按主分支实现保留，并补齐小视口尺寸约束
 - 新增官方协议插件：`volcengine-ark-agent-plan-seedream`（provider `volcengine-ark-agent-plan-image`）与 `volcengine-ark-agent-plan-seedance`（provider `volcengine-ark-agent-plan-video`）。
 - 与官方 Ark 插件的差异只在接入面：默认 Base URL 为 `https://ark.cn-beijing.volces.com/api/plan/v3`，创建路径分别为 `/api/plan/v3/images/generations` 与 `/api/plan/v3/contents/generations/tasks`；请求体、参考素材 role、能力档位与官方 Seedream/Seedance 对齐。必须使用 Agent Plan 专属 API Key，不可与 `/api/v3` 官方 Key 混用。
 - 宿主已把 Agent Plan 协议纳入与官方 Ark 相同的能力默认值、Token 计费校验、方舟素材引用、取消任务与前端 payload 分支。
-- 待管理端安装这两个 `.canvas-plugin` 后：分别创建图片/视频渠道，确认默认 Base URL 为 `/api/plan/v3`；用 Agent Plan Key 文生图、参考图生图、Seedance 文生视频与全模态参考成功；故意混用官方 Key 应失败；官方 `volcengine-ark-*` 渠道行为不受影响。
+- 待管理端安装这两个 `.yingce-plugin` 后：分别创建图片/视频渠道，确认默认 Base URL 为 `/api/plan/v3`；用 Agent Plan Key 文生图、参考图生图、Seedance 文生视频与全模态参考成功；故意混用官方 Key 应失败；官方 `volcengine-ark-*` 渠道行为不受影响。
 
 ## Seedream 声明式结果裸 b64_json（2026-09-17）
 
@@ -5107,7 +5114,7 @@ PR #507 核心能力已按主分支实现保留，并补齐小视口尺寸约束
 
 ## 百炼多模态图像协议插件（dashscope-qwen-image）
 
-- 新增官方协议包 `plugin-packages/dashscope-qwen-image.canvas-plugin`，解决 `qwen-image-3.0-pro` / `wan2.7-image-pro` 无法调用的问题：这两个模型属于百炼多模态模型，走 OpenAI 图片端点会被网关判为“模型与端点不匹配”，官方错误码表现为 `url error, please check url`。
+- 新增官方协议包 `plugin-packages/dashscope-qwen-image.yingce-plugin`，解决 `qwen-image-3.0-pro` / `wan2.7-image-pro` 无法调用的问题：这两个模型属于百炼多模态模型，走 OpenAI 图片端点会被网关判为“模型与端点不匹配”，官方错误码表现为 `url error, please check url`。
 - 协议形态：`POST /api/v1/services/aigc/image-generation/generation`（`X-DashScope-Async: enable`）+ 轮询 `GET /api/v1/tasks/{taskId}`；参考图放在 `input.messages[].content[].image`（优先 Base64 data URL），不使用 `/v1/images/edits` 的 multipart。
 - 已由单元测试覆盖：端点与异步头、文生图只发 text、图生图按 order 排序并优先 Base64、`size` 采用 DashScope 的星号格式且未登记档位省略、`enable_thinking` 固定 false、响应从 `output.choices[0].message.content[].image` 取图、上游失败保留错误信息。`go test ./internal/protocol/` 与 `go build ./...` 通过。
 - 待真实账号验收：用北京地域 Key 走一次文生图与一次图生图（换装），确认出图成功、参考图不报 url error。
@@ -5116,7 +5123,7 @@ PR #507 核心能力已按主分支实现保留，并补齐小视口尺寸约束
 
 ## Agnes 图像协议插件（agnes-image）
 
-- 新增官方协议包 `plugin-packages/agnes-image.canvas-plugin`，解决 Agnes 图片模型无法调用的问题：内置 OpenAI 图片路径会固定发送 `n`，并按渠道能力开关发送 `output_format` 与顶层 `response_format`，而 Agnes 的参数表没有这些字段，`POST /v1/images/generations` 直接返回 HTTP 400 `invalid_request`，上游原话为“output_format 不是文生图队列支持的字段”。`n` 无法通过任何开关摘除，因此必须独立协议。
+- 新增官方协议包 `plugin-packages/agnes-image.yingce-plugin`，解决 Agnes 图片模型无法调用的问题：内置 OpenAI 图片路径会固定发送 `n`，并按渠道能力开关发送 `output_format` 与顶层 `response_format`，而 Agnes 的参数表没有这些字段，`POST /v1/images/generations` 直接返回 HTTP 400 `invalid_request`，上游原话为“output_format 不是文生图队列支持的字段”。`n` 无法通过任何开关摘除，因此必须独立协议。
 - 协议形态：同步 `POST /v1/images/generations`（`originPath`），文生图与图生图共用同一入口。`size` 必填，由统一层质量归一为 `1K`/`2K`/`3K`/`4K` 档位，`WxH` 像素尺寸原样透传；画面比例走独立的 `ratio` 字段；参考图放 `extra_body.image` 并优先 Base64 data URL，多图合成传多张，不使用 `/v1/images/edits` multipart；输出格式只能声明在 `extra_body.response_format`（默认 `url`，可用 `providerOptions.agnes-image.response_format` 覆盖为 `b64_json`）。
 - 前端能力默认值同步新增 `agnes-image` 分支：尺寸按“比例 + 1k/2k/4k 档位”选择，关闭上游不支持的 `output_format`、顶层 `response_format`、透明背景和蒙版编辑，`maxOutputs` 固定为 1（该端点不接受 `n`，单次请求固定返回一张）。官方另有 `3K` 档位，统一层只提供 1k/2k/4k 三档，故界面不露出。
 - 已由单元测试覆盖：逐项断言 `n`、`output_format`、`quality`、`background`、顶层 `response_format` 与顶层 `image` 均不出现在请求体中，参考图进 `extra_body.image` 且按 order 排序并优先 Base64，比例落档位 / 像素原样透传 / `auto` 与空值回落档位，不在官方比例表内的取值在校验阶段拒绝，响应同时读取 `data[0].url` 与 `data[0].b64_json`。`go test ./internal/protocol/`、`go build ./...`、`bun run typecheck` 与相关前端测试均通过。
@@ -5421,7 +5428,7 @@ SSE 现在按 revision 变化发送紧凑快照，无变化只 heartbeat；客�
 
 ## SubRouter Gemini 图片链接响应兼容
 
-新增 `subrouter-gemini-image.canvas-plugin` 协议插件，Manifest 使用 `open-ai-canvas.plugin/v2`。请求使用 Gemini `generateContent`，不固定模型 ID；同类图片模型由渠道配置。插件支持同步文生图和图生图，参考图 Data URL 映射为 `inlineData`，远程 URL 映射为 `fileData`；输出参数优先读取 `request.output`，响应同时支持标准 `inlineData` 和 `parts[].text` 中的 Markdown 图片链接。短时签名 URL 通过 `resultEphemeral: true` 标记，由后端立即下载后进入项目资源持久化流程。
+新增 `subrouter-gemini-image.yingce-plugin` 协议插件，Manifest 使用 `yingce.plugin/v2`。请求使用 Gemini `generateContent`，不固定模型 ID；同类图片模型由渠道配置。插件支持同步文生图和图生图，参考图 Data URL 映射为 `inlineData`，远程 URL 映射为 `fileData`；输出参数优先读取 `request.output`，响应同时支持标准 `inlineData` 和 `parts[].text` 中的 Markdown 图片链接。短时签名 URL 通过 `resultEphemeral: true` 标记，由后端立即下载后进入项目资源持久化流程。
 
 - [ ] 在系统渠道安装并选择 `SubRouter Gemini Image`，使用 `gemini-3.1-flash-image`、`16:9`、`4K` 生成，确认前端显示图片而不再报“声明式协议已完成但没有返回媒体地址”。
 - [ ] 等上游签名链接过期后重新打开画布，确认图片仍由项目资源地址正常加载，不依赖原始 R2 临时链接。
@@ -5683,7 +5690,7 @@ SQLite 与 HTTP recorder 已验证；PostgreSQL 16／17、前端构建及浏览�
 - [ ] 目录来源迁移及相邻迁移测试待 DB-01 完整映射确认后统一调整；后端目录路由应为 404，手工创建/编辑/导入导出与权限需真实路由验收。
 - [x] PLG-02/03 已确认并整合：新合同按协议保留旧语义，价格条件同步而金额不变；未知/冲突配置拒绝，OpenAI URL 优先且自有本地资源可受限内联。四个相关图片包已同步清单/文档并核对归档；前端 48 项、181 个 Bun 断言和后端参数/包解析专项通过。
 - [x] 早期完整协议测试发现的产物差异已处理，最新完整 protocol 包通过；较大的图片参数/交互测试此前连续被未合并依赖阻断，最后阻断为 `image-utils.ts`，尚未复跑。服务/数据库媒体归属、URL 失败回退、价格匹配及真实 UI 仍待运行验收。
-- [x] PLG-04/05 已确认：全部 11 个新增协议作为可选配置能力，第一方只分发 `.canvas-plugin`，保留第三方身份/格式和三格式导入；保留本地 ZPay、SubRouter，不自动创建渠道/模型/价格或开启新工作台入口。
+- [x] PLG-04/05 已确认：全部 11 个新增协议作为可选配置能力，第一方只分发 `.yingce-plugin`，保留第三方身份/格式和三格式导入；保留本地 ZPay、SubRouter，不自动创建渠道/模型/价格或开启新工作台入口。
 - [x] 生成器、全部目录/归档/checksum 及对应平台支付执行文件已统一，产物核对结果见下；后端运行时和真实路由验收仍待完成。
 - [x] PLG-04 至 PLG-06 已按决定形成单套分发：109 个包及其源目录、文档、校验和一致，移除 20 个本轮重复归档，三格式解析保留；新增 11 项首次默认关闭。AutoDL 只保留视频，旧音频配置保留但标为不可用且执行拒绝，不自动迁移。
 - [x] 最新完整 protocol 包通过；前端本批 49 项、185 个 Bun 断言通过。支付库测试通过、SDK 包无测试文件；六类支付程序六平台共 36 个产物编译标记核对，Windows 14 次无付款 RPC 通过。

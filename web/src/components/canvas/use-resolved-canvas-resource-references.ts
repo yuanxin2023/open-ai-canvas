@@ -4,6 +4,7 @@ import type { CanvasResourceReference } from "@/lib/canvas/canvas-resource-refer
 import { loadCanvasDrawingPreview } from "@/lib/canvas/canvas-drawing-storage";
 import { getResourceAccess, resolveResourceAccessURL, resourceIdFromStorageKey } from "@/services/api/resources";
 import { resolveImageUrl } from "@/services/image-storage";
+import { translate } from "@/i18n";
 
 type ResolvedPreview = {
     identity: string;
@@ -54,10 +55,11 @@ export function useResolvedCanvasResourceReferences(references: CanvasResourceRe
         };
     }, []);
     const requests = useMemo(
-        () => references.flatMap((reference) => {
-            const identity = previewIdentity(reference, projectId);
-            return identity ? [{ reference, identity }] : [];
-        }),
+        () =>
+            references.flatMap((reference) => {
+                const identity = previewIdentity(reference, projectId);
+                return identity ? [{ reference, identity }] : [];
+            }),
         [projectId, references],
     );
     const [resolvedById, setResolvedById] = useState<Record<string, ResolvedPreview>>({});
@@ -90,11 +92,12 @@ export function useResolvedCanvasResourceReferences(references: CanvasResourceRe
     }, [projectId, requests, refreshEpoch]);
 
     return useMemo(
-        () => references.map((reference) => {
-            const identity = previewIdentity(reference, projectId);
-            const resolved = identity ? resolvedById[reference.id] : undefined;
-            return resolved?.identity === identity && resolved.url !== reference.previewUrl ? { ...reference, previewUrl: resolved.url } : reference;
-        }),
+        () =>
+            references.map((reference) => {
+                const identity = previewIdentity(reference, projectId);
+                const resolved = identity ? resolvedById[reference.id] : undefined;
+                return resolved?.identity === identity && resolved.url !== reference.previewUrl ? { ...reference, previewUrl: resolved.url } : reference;
+            }),
         [projectId, references, resolvedById],
     );
 }
@@ -147,7 +150,7 @@ function resolveReferencePreview(reference: CanvasResourceReference, identity: s
 function blobToDataUrl(blob: Blob) {
     return new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
-        reader.onerror = () => reject(reader.error || new Error("读取绘图预览失败"));
+        reader.onerror = () => reject(reader.error || new Error(translate("canvasC.resourceRefs.drawingPreviewReadFailed")));
         reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : "");
         reader.readAsDataURL(blob);
     });

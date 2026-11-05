@@ -113,7 +113,7 @@
 
 ```json
 {
-  "apiVersion": "open-ai-canvas.plugin/v2",
+  "apiVersion": "yingce.plugin/v2",
   "id": "openai-responses",
   "name": "OpenAI Responses",
   "version": "2.0.1",

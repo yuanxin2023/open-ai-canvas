@@ -1,6 +1,6 @@
 # 支付FM 接口协议说明
 
-遵循 `open-ai-canvas.payment/v1` 标准，自动转换AI 创作工作台系统订单至支付FM `/startOrder` 接口，并在收到通知时按 MD5 规则完成异步验签。
+遵循 `yingce.payment/v1` 标准，自动转换AI 创作工作台系统订单至支付FM `/startOrder` 接口，并在收到通知时按 MD5 规则完成异步验签。
 
 <!-- OPEN_AI_CANVAS_MANIFEST_CONTRACT_START -->
 ## Manifest 完整接口定义
@@ -9,7 +9,7 @@
 
 ```json
 {
-  "apiVersion": "open-ai-canvas.plugin/v1",
+  "apiVersion": "yingce.plugin/v1",
   "id": "official-payment-zhifufm",
   "name": "支付FM",
   "version": "1.0.0",

@@ -74,7 +74,7 @@
 
 ```json
 {
-  "apiVersion": "open-ai-canvas.plugin/v2",
+  "apiVersion": "yingce.plugin/v2",
   "id": "baidu-qianfan-image",
   "name": "百度千帆图片",
   "version": "2.0.0",

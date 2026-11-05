@@ -107,7 +107,7 @@
 
 ```json
 {
-  "apiVersion": "open-ai-canvas.plugin/v2",
+  "apiVersion": "yingce.plugin/v2",
   "id": "zhipu-glm-chat",
   "name": "智谱 GLM Chat",
   "version": "2.0.0",

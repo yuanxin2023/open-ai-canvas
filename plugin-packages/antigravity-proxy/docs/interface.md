@@ -76,7 +76,7 @@
 
 ```json
 {
-  "apiVersion": "open-ai-canvas.plugin/v2",
+  "apiVersion": "yingce.plugin/v2",
   "id": "antigravity-proxy",
   "name": "Antigravity Proxy",
   "version": "1.0.0",

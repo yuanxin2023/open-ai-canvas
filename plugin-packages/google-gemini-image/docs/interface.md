@@ -92,7 +92,7 @@ imageSize 只映射 1K/2K/4K；未知质量值（如视频清晰度 720）必须
 
 ```json
 {
-  "apiVersion": "open-ai-canvas.plugin/v2",
+  "apiVersion": "yingce.plugin/v2",
   "id": "google-gemini-image",
   "name": "Google Gemini Image",
   "version": "2.1.0",

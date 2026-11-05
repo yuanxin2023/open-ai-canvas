@@ -1,4 +1,4 @@
-## open-ai-canvas.payment/v1
+## yingce.payment/v1
 
 支持 `validate_config`、`create_order`、`query_order`、`close_order`、`verify_notification` 和 `download_trade_bill`，统一返回 JSON 响应。
 
@@ -11,7 +11,7 @@
 
 ```json
 {
-  "apiVersion": "open-ai-canvas.plugin/v1",
+  "apiVersion": "yingce.plugin/v1",
   "id": "official-payment-xunhupay",
   "name": "虎皮椒聚合支付",
   "version": "1.0.0",

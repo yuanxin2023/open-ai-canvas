@@ -1,3 +1,4 @@
+import { translate } from "@/i18n";
 // 创作页消息流：用户消息、媒体结果、生成中占位、引用素材与预览。
 
 import { conversationTimeFormatter, type CreationMessage } from "./creation-types";
@@ -71,8 +72,8 @@ export function CreationMessageView({
                 <span className="creation-message-mark">
                     <Orbit />
                 </span>
-                <strong>{mode === "image" ? "图像生成" : "视频生成"}</strong>
-                {item.status === "done" ? <span className="creation-message-progress-copy">你的{mode === "video" ? "视频" : "图像"}已创建</span> : null}
+                <strong>{mode === "image" ? translate("create.message.imageGeneration") : translate("create.message.videoGeneration")}</strong>
+                {item.status === "done" ? <span className="creation-message-progress-copy">你的{mode === "video" ? translate("create.mode.video") : "图像"}已创建</span> : null}
                 {item.status === "done" ? (
                     <button type="button" className="creation-message-variant-action" onClick={onCreateVariant}>
                         <RefreshCw />
@@ -151,11 +152,11 @@ type CreationMessageStateTone = "pending" | "syncing" | "sync" | "error" | "canc
 
 // 消息头部的状态标签：区分“生成中 / 重新连接中 / 结果待同步 / 生成失败 / 已停止”，不把页面没跟上说成生成失败。
 function creationMessageState(item: CreationMessage): { tone: CreationMessageStateTone; label: string } | null {
-    if (item.status === "pending" || item.status === "streaming") return item.syncInterrupted ? { tone: "syncing", label: "重新连接中" } : item.status === "pending" ? { tone: "pending", label: "生成中" } : null;
-    if (item.status === "cancelled") return { tone: "cancelled", label: "已停止" };
+    if (item.status === "pending" || item.status === "streaming") return item.syncInterrupted ? { tone: "syncing", label: "重新连接中" } : item.status === "pending" ? { tone: "pending", label: translate("canvasPage.taskStatus.running") } : null;
+    if (item.status === "cancelled") return { tone: "cancelled", label: translate("create.status.stopped") };
     if (item.status === "error") {
         if (creationMessageNeedsResultSync(item)) return { tone: "sync", label: "结果待同步" };
-        return item.mediaRecoverable ? { tone: "sync", label: "保存未完成" } : { tone: "error", label: "生成失败" };
+        return item.mediaRecoverable ? { tone: "sync", label: "保存未完成" } : { tone: "error", label: translate("create.status.failed") };
     }
     return null;
 }
@@ -190,7 +191,7 @@ export function CreationUserMessage({ item, shotNumber, onEditUserMessage }: { i
             <div className="creation-user-message-meta">
                 {shotNumber > 0 ? <span className="creation-shot-badge">镜 {shotNumber}</span> : null}
                 {item.createdAt ? <time dateTime={item.createdAt}>{formatMessageTime(item.createdAt)}</time> : null}
-                <strong>{user?.username || "你"}</strong>
+                <strong>{user?.username || translate("create.message.you")}</strong>
                 {user ? (
                     <UserAvatar user={user} className="creation-user-avatar" />
                 ) : (
@@ -244,8 +245,8 @@ export function CreationUserMessage({ item, shotNumber, onEditUserMessage }: { i
                 </div>
             ) : null}
             <div className="creation-user-message-actions">
-                <Tooltip title="复制提示词">
-                    <button type="button" className="creation-user-message-copy" aria-label="复制提示词" onClick={() => copyText(visiblePrompt, "提示词已复制")}>
+                <Tooltip title={translate("canvasA.artCritique.copyPrompt")}>
+                    <button type="button" className="creation-user-message-copy" aria-label={translate("canvasA.artCritique.copyPrompt")} onClick={() => copyText(visiblePrompt, "提示词已复制")}>
                         <Copy />
                     </button>
                 </Tooltip>
@@ -428,13 +429,13 @@ export function MediaResult({
                                 setPreviewType("image");
                                 setPreviewUrl(url);
                             }}
-                            aria-label={mediaStates[key] === "error" ? "图片加载失败，点击重新加载" : mediaStates[key] === "loaded" ? "预览生成图片" : "图片加载中"}
+                            aria-label={mediaStates[key] === "error" ? "图片加载失败，点击重新加载" : mediaStates[key] === "loaded" ? "预览生成图片" : translate("canvasB.imagePreview.loadingLabel")}
                             aria-busy={mediaStates[key] === "loaded" || mediaStates[key] === "error" ? undefined : true}
                         >
                             <img
                                 key={`${key}:${mediaAttempts[key] || 0}`}
                                 src={url}
-                                alt="生成结果"
+                                alt={translate("library.tasks.detail.generated")}
                                 decoding="async"
                                 onLoad={(event) => {
                                     const { naturalWidth, naturalHeight } = event.currentTarget;
@@ -471,7 +472,7 @@ export function MediaResult({
                         ) : (
                             <>
                                 <Download />
-                                下载
+                                {translate("canvasA.assetView.download")}
                             </>
                         )}
                     </a>
@@ -632,7 +633,7 @@ function CreationMediaFailure({ item, refreshing, onRefresh, onRecoverMedia, onR
         <CreationMediaNotice
             tone="error"
             icon={AlertCircle}
-            title={started ? "生成失败" : "未能开始生成"}
+            title={started ? translate("create.status.failed") : "未能开始生成"}
             description={reason}
             actions={
                 <CreationNoticeButton primary icon={RotateCcw} onClick={onRetry}>

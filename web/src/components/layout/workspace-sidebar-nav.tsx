@@ -1,4 +1,6 @@
 import { Popover } from "antd";
+import { useTranslation } from "react-i18next";
+import { translate } from "@/i18n";
 import { BookOpen, ChevronDown, ChevronRight, CircleHelp, Headphones, Image as ImageIcon, Infinity as InfinityIcon, PanelLeftClose, PanelLeftOpen, ShoppingBag, Video } from "lucide-react";
 import { LayoutGroup, motion, useReducedMotion } from "motion/react";
 import { useEffect, useMemo, useRef, useState, type ComponentType, type CSSProperties, type MouseEvent } from "react";
@@ -6,6 +8,7 @@ import { useWorkspaceAuth } from "@/components/auth/workspace-auth-context";
 import { isGuestWorkspacePath } from "@/lib/guest-workspace";
 import { Link, useLocation, useSearchParams } from "react-router";
 
+import { AuthLoginLink } from "@/components/auth/auth-login-link";
 import { BrandLogoFrame } from "@/components/brand/brand-logo";
 import { Kbd } from "@/components/ui/base/kbd";
 import { navigationTools, type NavigationToolSlug } from "@/constant/navigation-tools";
@@ -33,54 +36,57 @@ type WorkspaceNavGroup = {
     items: WorkspaceNavItem[];
 };
 
-function toolItem(slug: NavigationToolSlug, to: string): WorkspaceNavItem {
+// 收起侧栏时只显示短名称。
+const COLLAPSED_TITLE_KEYS: Record<string, string> = {
+    home: "nav.collapsed.home",
+    projects: "nav.collapsed.projects",
+    canvas: "nav.collapsed.canvas",
+    assets: "nav.collapsed.assets",
+    skills: "nav.collapsed.skills",
+    plugins: "nav.collapsed.plugins",
+    tasks: "nav.collapsed.tasks",
+};
+
+function toolItem(slug: NavigationToolSlug, to: string, t: typeof translate = translate): WorkspaceNavItem {
     const tool = navigationTools.find((item) => item.slug === slug);
-    return { id: slug, title: tool?.label ?? slug, icon: tool?.icon, to };
+    return { id: slug, title: tool ? t(tool.labelKey) : slug, icon: tool?.icon, to };
 }
 
-export function buildNav(features: FeatureAvailability): { groups: WorkspaceNavGroup[]; footer: WorkspaceNavItem[] } {
+export function buildNav(features: FeatureAvailability, t: typeof translate = translate): { groups: WorkspaceNavGroup[]; footer: WorkspaceNavItem[] } {
     const groups: WorkspaceNavGroup[] = [
         {
             items: [
-                { ...toolItem("create", "/?home=1"), id: "home", title: "创作" },
-                ...(features.shortDramaEnabled ? [{ ...toolItem("projects", "/projects"), title: "短剧 Agent" }] : []),
-                { id: "ecommerce", title: "电商 Agent", icon: ShoppingBag, to: "/ecommerce" },
-                { ...toolItem("canvas", "/canvas"), title: "自由画布" },
+                { ...toolItem("create", "/?home=1"), id: "home", title: translate("nav.tools.create") },
+                ...(features.shortDramaEnabled ? [{ ...toolItem("projects", "/projects"), title: translate("local.ui.dramaAgent") }] : []),
+                ...(features.ecommerceEnabled ? [{ id: "ecommerce", title: t("nav.sidebar.ecommerce"), icon: ShoppingBag, to: "/ecommerce" }] : []),
+                { ...toolItem("canvas", "/canvas"), title: translate("nav.sidebar.canvas") },
             ],
         },
         {
-            heading: "资源与工具",
+            heading: t("nav.sidebar.headingTools"),
             items: [
-                { ...toolItem("assets", "/assets"), title: "资产" },
-                { ...toolItem("prompts", "/prompts"), title: "提示词" },
-                ...(features.imageWorkbenchEnabled ? [{ id: "toolbox-image", title: "图片生成", icon: ImageIcon, to: "/toolbox/image" }] : []),
-                ...(features.videoWorkbenchEnabled ? [{ id: "toolbox-video", title: "视频生成", icon: Video, to: "/toolbox/video" }] : []),
-                ...(features.skillLibraryEnabled ? [{ ...toolItem("skills", "/skills"), title: "技能" }] : []),
-                ...(features.pluginCenterEnabled ? [{ ...toolItem("plugins", "/plugins"), title: "插件" }] : []),
+                { ...toolItem("assets", "/assets"), title: translate("nav.sidebar.assets") },
+                { ...toolItem("prompts", "/prompts"), title: translate("local.nav.prompts") },
+                ...(features.imageWorkbenchEnabled ? [{ id: "toolbox-image", title: translate("nav.sidebar.toolboxImage"), icon: ImageIcon, to: "/toolbox/image" }] : []),
+                ...(features.videoWorkbenchEnabled ? [{ id: "toolbox-video", title: translate("nav.sidebar.toolboxVideo"), icon: Video, to: "/toolbox/video" }] : []),
+                ...(features.skillLibraryEnabled ? [{ ...toolItem("skills", "/skills"), title: translate("nav.sidebar.skills") }] : []),
+                ...(features.pluginCenterEnabled ? [{ ...toolItem("plugins", "/plugins"), title: translate("nav.sidebar.plugins") }] : []),
             ],
         },
     ];
 
-    const footer: WorkspaceNavItem[] = [
-        { id: "help", title: "帮助", icon: CircleHelp },
-    ];
+    const footer: WorkspaceNavItem[] = [{ id: "help", title: translate("local.ui.help"), icon: CircleHelp }];
 
     return { groups, footer };
 }
 
 function WorkspaceSwitcher({ collapsed, onNavigate, onExpand, onCollapse }: { collapsed: boolean; onNavigate: () => void; onExpand: () => void; onCollapse: () => void }) {
     const appearance = useAppearanceStore((state) => state.appearance);
-
+    const { t } = useTranslation();
     if (collapsed) {
         return (
             <div className="app-workspace-sidebar-rail-header shrink-0">
-                <button
-                    type="button"
-                    className="app-workspace-sidebar-rail-button"
-                    aria-label="展开侧栏菜单"
-                    title="展开侧栏菜单"
-                    onClick={onExpand}
-                >
+                <button type="button" className="app-workspace-sidebar-rail-button" aria-label={translate("shell.expandSidebarMenu")} title={translate("shell.expandSidebarMenu")} onClick={onExpand}>
                     <PanelLeftOpen className="size-4" strokeWidth={1.7} />
                 </button>
             </div>
@@ -91,17 +97,16 @@ function WorkspaceSwitcher({ collapsed, onNavigate, onExpand, onCollapse }: { co
         <div className="app-workspace-sidebar-brand-row relative shrink-0 px-3 pt-3">
             <Link to="/?home=1" onClick={onNavigate} className="app-workspace-sidebar-brand-button group" aria-label={`${appearance.brandName}首页`}>
                 <span className="flex min-w-0 items-center gap-2">
-                    <BrandLogoFrame className="app-workspace-brand-mark grid size-8 shrink-0 place-items-center rounded-[var(--r-sm)] shadow-sm" logoClassName="size-5 object-contain" alt="" fallback={<InfinityIcon className="size-4" strokeWidth={2.2} />} />
+                    <BrandLogoFrame
+                        className="app-workspace-brand-mark grid size-8 shrink-0 place-items-center rounded-[var(--r-sm)] shadow-sm"
+                        logoClassName="size-5 object-contain"
+                        alt=""
+                        fallback={<InfinityIcon className="size-4" strokeWidth={2.2} />}
+                    />
                     <span className="app-workspace-brand-wordmark truncate text-[var(--fs-body)] leading-none font-semibold">{appearance.brandName}</span>
                 </span>
             </Link>
-            <button
-                type="button"
-                className="app-workspace-sidebar-collapse-button"
-                aria-label="收起侧栏"
-                title="收起侧栏"
-                onClick={onCollapse}
-            >
+            <button type="button" className="app-workspace-sidebar-collapse-button" aria-label={translate("shell.collapseSidebar")} title={translate("shell.collapseSidebar")} onClick={onCollapse}>
                 <PanelLeftClose className="size-4" strokeWidth={1.7} />
             </button>
         </div>
@@ -125,6 +130,7 @@ function NavItem({
     level?: number;
     collapsed?: boolean;
 }) {
+    const { t } = useTranslation();
     const isActive = activeId === item.id || (item.id === "settings" && activeId.startsWith("settings:"));
     const { openAuth } = useWorkspaceAuth();
     const user = useUserStore((state) => state.user);
@@ -142,7 +148,24 @@ function NavItem({
         ...(collapsed ? {} : { paddingLeft: `${level * 12 + 10}px` }),
     } as CSSProperties;
 
-    const collapsedTitle = item.id === "home" ? "创作" : item.id === "projects" ? "短剧" : item.id === "canvas" ? "画布" : item.id === "assets" ? "资产" : item.id === "prompts" ? "提示" : item.id === "skills" ? "技能" : item.id === "plugins" ? "插件" : item.id === "tasks" ? "历史" : item.title.slice(0, 2);
+    const collapsedTitle =
+        item.id === "home"
+            ? "创作"
+            : item.id === "projects"
+              ? "短剧"
+              : item.id === "canvas"
+                ? "画布"
+                : item.id === "assets"
+                  ? "资产"
+                  : item.id === "prompts"
+                    ? "提示"
+                    : item.id === "skills"
+                      ? "技能"
+                      : item.id === "plugins"
+                        ? "插件"
+                        : item.id === "tasks"
+                          ? "历史"
+                          : item.title.slice(0, 2);
     const rowContent = (
         <>
             <span className="app-workspace-nav-main flex min-w-0 items-center gap-2">
@@ -295,28 +318,32 @@ function WorkspaceHelpMenu({ collapsed, selected, onSelect, onNavigate }: { coll
             open={open}
             onOpenChange={setOpen}
             rootClassName="workspace-help-popover"
-            content={(
+            content={
                 <div className="w-44 py-0.5">
                     {tutorialUrl ? (
                         <button type="button" className="flex h-9 w-full items-center gap-2.5 rounded px-2 text-xs text-foreground/65 hover:bg-surface-hover hover:text-foreground" onClick={openTutorial}>
                             <BookOpen className="size-3.5" aria-hidden />
-                            <span>使用教程</span>
+                            <span>{translate("local.ui.tutorial")}</span>
                         </button>
                     ) : null}
                     {contactVisible ? (
                         <button type="button" className="flex h-9 w-full items-center gap-2.5 rounded px-2 text-xs text-foreground/65 hover:bg-surface-hover hover:text-foreground" onClick={openCustomerService}>
                             <Headphones className="size-3.5" aria-hidden />
-                            <span>联系客服</span>
+                            <span>{translate("local.ui.contactSupport")}</span>
                         </button>
                     ) : null}
                 </div>
-            )}
+            }
         >
             <button
                 type="button"
-                className={cn("app-workspace-nav-link group flex min-h-9 w-full items-center justify-between gap-2 rounded-[var(--r-sm)] px-2.5 py-2 text-[var(--fs-body)] text-foreground/62 transition-colors duration-200 select-none hover:bg-surface-hover hover:text-foreground", selected && "is-active font-medium", collapsed && "is-collapsed")}
-                aria-label={collapsed ? "帮助" : undefined}
-                title={collapsed ? "帮助" : undefined}
+                className={cn(
+                    "app-workspace-nav-link group flex min-h-9 w-full items-center justify-between gap-2 rounded-[var(--r-sm)] px-2.5 py-2 text-[var(--fs-body)] text-foreground/62 transition-colors duration-200 select-none hover:bg-surface-hover hover:text-foreground",
+                    selected && "is-active font-medium",
+                    collapsed && "is-collapsed",
+                )}
+                aria-label={collapsed ? translate("local.ui.help") : undefined}
+                title={collapsed ? translate("local.ui.help") : undefined}
                 aria-haspopup="menu"
                 aria-expanded={open}
                 onClick={onSelect}
@@ -324,7 +351,7 @@ function WorkspaceHelpMenu({ collapsed, selected, onSelect, onNavigate }: { coll
                 {selected ? <span className="app-workspace-nav-active-pill" aria-hidden /> : null}
                 <span className="app-workspace-nav-main flex min-w-0 items-center gap-2.5">
                     <CircleHelp className="size-4 shrink-0 text-foreground/60 group-hover:text-foreground/80" strokeWidth={1.6} />
-                    <span className="app-workspace-nav-title truncate">帮助</span>
+                    <span className="app-workspace-nav-title truncate">{translate("local.ui.help")}</span>
                 </span>
             </button>
         </Popover>
@@ -386,7 +413,8 @@ export function WorkspaceSidebarNav({ collapsed, onNavigate, onOpenSearch, onExp
     const [searchParams] = useSearchParams();
     const features = useUserStore((state) => state.features);
     const { handleLogout } = useWorkspaceLogout();
-    const { groups, footer } = useMemo(() => buildNav(features), [features]);
+    const { t, i18n } = useTranslation();
+    const { groups, footer } = useMemo(() => buildNav(features, t), [features, t, i18n.language]);
 
     const activeId = workspaceNavActiveId(pathname, searchParams.get("section"));
     const [selectedNavId, setSelectedNavId] = useState(activeId);
@@ -416,25 +444,34 @@ export function WorkspaceSidebarNav({ collapsed, onNavigate, onOpenSearch, onExp
             <WorkspaceSwitcher collapsed={collapsed} onNavigate={onNavigate} onExpand={onExpand} onCollapse={onCollapse} />
 
             <LayoutGroup id="workspace-sidebar-nav">
-            <div
-                ref={scrollRef}
-                onScroll={handleScroll}
-                className={cn("app-workspace-sidebar-scroll-area flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-3 pb-3 pt-7", collapsed && "is-collapsed", scrollState.hasTopFade && "has-top-fade", scrollState.hasBottomFade && "has-bottom-fade")}
-            >
-                {groups.map((group, index) => (
-                    <NavGroup key={index} group={group} activeId={selectedNavId} onNavigate={selectNavigationItem} onOpenSearch={onOpenSearch} onLogout={() => void handleLogout()} collapsed={collapsed} />
-                ))}
-            </div>
+                <div
+                    ref={scrollRef}
+                    onScroll={handleScroll}
+                    className={cn(
+                        "app-workspace-sidebar-scroll-area flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-3 pb-3 pt-7",
+                        collapsed && "is-collapsed",
+                        scrollState.hasTopFade && "has-top-fade",
+                        scrollState.hasBottomFade && "has-bottom-fade",
+                    )}
+                >
+                    {groups.map((group, index) => (
+                        <NavGroup key={index} group={group} activeId={selectedNavId} onNavigate={selectNavigationItem} onOpenSearch={onOpenSearch} onLogout={() => void handleLogout()} collapsed={collapsed} />
+                    ))}
+                </div>
             </LayoutGroup>
 
             <div className="app-workspace-sidebar-footer shrink-0 px-3 py-3">
-                {footer.length ? <div className="flex flex-col gap-0.5">
-                    {footer.map((item) => (
-                        item.id === "help"
-                            ? <WorkspaceHelpMenu key={item.id} collapsed={collapsed} selected={selectedNavId === item.id} onSelect={() => setSelectedNavId(item.id)} onNavigate={onNavigate} />
-                            : <NavItem key={item.id} item={item} activeId={selectedNavId} onSelect={selectNavigationItem} onOpenSearch={onOpenSearch} onLogout={() => void handleLogout()} collapsed={collapsed} />
-                    ))}
-                </div> : null}
+                {footer.length ? (
+                    <div className="flex flex-col gap-0.5">
+                        {footer.map((item) =>
+                            item.id === "help" ? (
+                                <WorkspaceHelpMenu key={item.id} collapsed={collapsed} selected={selectedNavId === item.id} onSelect={() => setSelectedNavId(item.id)} onNavigate={onNavigate} />
+                            ) : (
+                                <NavItem key={item.id} item={item} activeId={selectedNavId} onSelect={selectNavigationItem} onOpenSearch={onOpenSearch} onLogout={() => void handleLogout()} collapsed={collapsed} />
+                            ),
+                        )}
+                    </div>
+                ) : null}
             </div>
         </div>
     );

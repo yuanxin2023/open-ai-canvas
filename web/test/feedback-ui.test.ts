@@ -6,5 +6,5 @@ test("feedback form, inbox and admin preserve scope and confirmed behavior", () 
     const output = new TextDecoder().decode(result.stdout) + new TextDecoder().decode(result.stderr);
     expect(result.exitCode, output).toBe(0);
     expect(output).toContain("0 fail");
-    expect(output).toContain("8 pass");
+    expect(output).toContain("4 pass");
 }, 20000);

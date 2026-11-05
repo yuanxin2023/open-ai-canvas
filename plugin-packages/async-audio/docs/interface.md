@@ -83,7 +83,7 @@
 
 ```json
 {
-  "apiVersion": "open-ai-canvas.plugin/v2",
+  "apiVersion": "yingce.plugin/v2",
   "id": "async-audio",
   "name": "Async Audio Tasks",
   "version": "2.0.0",

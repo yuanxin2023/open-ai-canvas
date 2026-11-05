@@ -4,10 +4,10 @@
 
 ## 1. 包格式
 
-新插件上传文件使用 `.canvas-plugin` ZIP 包，大小不超过 48 MiB；宿主继续兼容已有 `.lovwow-plugin` 和 `.yingce-plugin`。包内必须有根目录 `manifest.json`，不能上传裸 JSON。清单和可选的 Web 运行时代码、静态资源属于同一个版本、权限和生命周期：
+新插件上传文件使用 `.yingce-plugin` ZIP 包，大小不超过 48 MiB；宿主继续兼容已有 `.lovwow-plugin` 和 `.canvas-plugin`。包内必须有根目录 `manifest.json`，不能上传裸 JSON。清单和可选的 Web 运行时代码、静态资源属于同一个版本、权限和生命周期：
 
 ```text
-my-plugin.canvas-plugin
+my-plugin.yingce-plugin
 ├── manifest.json
 ├── web/entry.js       # 可选；必须配合 runtime.web=sandbox 或 worker
 ├── web/assets/...     # 可选静态资源
@@ -22,24 +22,42 @@ my-plugin.canvas-plugin
 
 ```json
 {
-  "apiVersion": "open-ai-canvas.plugin/v1",
-  "id": "acme-comfyui", "name": "Acme ComfyUI", "version": "1.0.0", "author": "Acme", "description": "通过工作流贡献提供视频生成能力",
-  "permissions": ["generation.run", "media.read"],
-  "configuration": { "fields": [{ "name": "apiKey", "type": "secret", "label": "API Token", "required": true }] },
-  "contributes": {
-    "providers": [{
-      "id": "acme-comfyui", "label": "Acme ComfyUI", "capabilities": ["video"], "scopes": ["user.custom-channel", "canvas"],
-      "baseUrl": "https://api.example.com", "auth": { "type": "bearer", "field": "apiKey" },
-      "create": { "method": "POST", "path": "/workflows/{{model}}", "fields": { "prompt": "request.prompt", "duration": "request.duration" } },
-      "poll": { "method": "GET", "path": "/tasks/{{taskId}}" },
-      "response": { "taskIdPaths": ["data.task_id"], "statusPaths": ["data.status"], "resultPaths": ["data.results"], "resultKind": "video", "resultEphemeral": true }
-    }],
-    "workflows": [{
-      "id": "minimax-h3", "label": "MiniMax H3 文生视频", "providerId": "acme-comfyui", "capability": "video",
-      "parameters": [{ "name": "duration", "type": "number", "required": true }, { "name": "resolution", "type": "string", "values": ["720p", "1080p"] }],
-      "defaults": { "duration": 5, "resolution": "720p" }
-    }]
-  }
+    "apiVersion": "yingce.plugin/v1",
+    "id": "acme-comfyui",
+    "name": "Acme ComfyUI",
+    "version": "1.0.0",
+    "author": "Acme",
+    "description": "通过工作流贡献提供视频生成能力",
+    "permissions": ["generation.run", "media.read"],
+    "configuration": { "fields": [{ "name": "apiKey", "type": "secret", "label": "API Token", "required": true }] },
+    "contributes": {
+        "providers": [
+            {
+                "id": "acme-comfyui",
+                "label": "Acme ComfyUI",
+                "capabilities": ["video"],
+                "scopes": ["user.custom-channel", "canvas"],
+                "baseUrl": "https://api.example.com",
+                "auth": { "type": "bearer", "field": "apiKey" },
+                "create": { "method": "POST", "path": "/workflows/{{model}}", "fields": { "prompt": "request.prompt", "duration": "request.duration" } },
+                "poll": { "method": "GET", "path": "/tasks/{{taskId}}" },
+                "response": { "taskIdPaths": ["data.task_id"], "statusPaths": ["data.status"], "resultPaths": ["data.results"], "resultKind": "video", "resultEphemeral": true }
+            }
+        ],
+        "workflows": [
+            {
+                "id": "minimax-h3",
+                "label": "MiniMax H3 文生视频",
+                "providerId": "acme-comfyui",
+                "capability": "video",
+                "parameters": [
+                    { "name": "duration", "type": "number", "required": true },
+                    { "name": "resolution", "type": "string", "values": ["720p", "1080p"] }
+                ],
+                "defaults": { "duration": 5, "resolution": "720p" }
+            }
+        ]
+    }
 }
 ```
 
@@ -47,9 +65,9 @@ my-plugin.canvas-plugin
 
 ```json
 {
-  "entry": "web/entry.js",
-  "surfaces": ["fullscreen"],
-  "runtime": { "web": "sandbox" }
+    "entry": "web/entry.js",
+    "surfaces": ["fullscreen"],
+    "runtime": { "web": "sandbox" }
 }
 ```
 

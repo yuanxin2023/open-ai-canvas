@@ -14,7 +14,8 @@ test("模型行只保留选中高亮，价格使用独立的彩色标签", async
     expect(styles).toContain('.canvas-model-picker-brand[aria-pressed="true"]');
     expect(styles).toContain('.canvas-model-picker-option[aria-selected="true"]');
     expect(styles).toContain(".canvas-model-picker-option:focus-visible");
-    expect(compactStyles).toContain(".creation-model-picker-surface .canvas-model-picker-brand { display: flex;");
+    const brand = styles.match(/\.canvas-model-picker-brand\s*\{([^}]+)\}/)?.[1] || "";
+    expect(brand).toContain("display: flex;");
     expect(compactStyles).toContain("text-align: left; transition: none;");
     expect(component).toContain("memo(function ModelPickerGroupButton");
     const price = styles.match(/\.model-picker-price \{([^}]+)\}/)?.[1] || "";
@@ -43,7 +44,7 @@ test("手机端从模型列表打开，桌面端定位当前选中目录", async
 
 test("单渠道平台模型从一级目录直接选择并关闭菜单", async () => {
     const component = await Bun.file(new URL("../src/components/model-picker.tsx", import.meta.url)).text();
-    const directSelection = component.match(/const selectGroup = useCallback\(\(group: ModelPickerGroup\) => \{([\s\S]*?)\n    \}, \[directGroupModel, onChange\]\);/)?.[1] || "";
+    const directSelection = component.match(/const selectGroup = useCallback\(\s*\(group: ModelPickerGroup\) => \{([\s\S]*?)\},\s*\[directGroupModel, onChange\],?\s*\);/)?.[1] || "";
     expect(directSelection).toContain("if (modelPickerGroupHasSubmenu(group))");
     expect(directSelection).toContain("onChange(model)");
     expect(directSelection).toContain("setOpen(false)");

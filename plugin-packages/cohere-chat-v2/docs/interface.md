@@ -95,7 +95,7 @@
 
 ```json
 {
-  "apiVersion": "open-ai-canvas.plugin/v2",
+  "apiVersion": "yingce.plugin/v2",
   "id": "cohere-chat-v2",
   "name": "Cohere Chat v2",
   "version": "2.0.0",

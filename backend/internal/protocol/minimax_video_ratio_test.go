@@ -7,7 +7,7 @@ import (
 
 // 短剧续接段同时带首帧（上一段尾帧）和角色/场景参考图；adaptive 会被横版参考图带偏，必须按请求比例出片。
 func TestMiniMaxVideoRatioWithFirstFrameAndReferences(t *testing.T) {
-	adapter := officialPackageAdapter(t, "minimax-hailuo-video-v2.canvas-plugin", "minimax-video")
+	adapter := officialPackageAdapter(t, "minimax-hailuo-video-v2.yingce-plugin", "minimax-video")
 	firstFrame := MediaReference{Kind: "image", Role: "first_frame", URL: "https://cdn.example/first.png"}
 	reference := MediaReference{Kind: "image", Role: "reference_image", URL: "https://cdn.example/cast.png", Order: 1}
 	for _, tc := range []struct {

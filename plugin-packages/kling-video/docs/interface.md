@@ -80,7 +80,7 @@
 
 ```json
 {
-  "apiVersion": "open-ai-canvas.plugin/v2",
+  "apiVersion": "yingce.plugin/v2",
   "id": "kling-video",
   "name": "Kling Video",
   "version": "2.0.0",

@@ -3,19 +3,17 @@ import { X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router";
+import { useTranslation } from "react-i18next";
 
 import { getActiveBanners, type BannerAnnouncement } from "@/services/api/announcements";
-import {
-    BannerAnnouncementLinkHint,
-    BannerAnnouncementTitle,
-    bannerAnnouncementBarStyle,
-} from "@/components/layout/banner-announcement-content";
+import { BannerAnnouncementLinkHint, BannerAnnouncementTitle, bannerAnnouncementBarStyle } from "@/components/layout/banner-announcement-content";
 import { useUserStore } from "@/stores/use-user-store";
 
 const BANNER_AUTO_SLIDE_MS = 4000;
 const BANNER_DISMISS_STORAGE_PREFIX = "open-ai-canvas.banner-announcements.dismissed";
 
 export function BannerAnnouncementsSlider() {
+    const { t } = useTranslation();
     const navigate = useNavigate();
     const reducedMotion = useReducedMotion();
     const userId = useUserStore((state) => state.user?.id);
@@ -73,16 +71,13 @@ export function BannerAnnouncementsSlider() {
 
     // 底色随每条通知的类型切换：加过渡让不同风格的条目轮播时平滑换色，与标题动画节奏一致。
     return (
-        <div
-            className="relative flex min-h-10 w-full shrink-0 items-center justify-center px-4 py-2 text-white transition-colors duration-200 ease-out"
-            style={bannerAnnouncementBarStyle(currentBanner.noticeType)}
-        >
+        <div className="relative flex min-h-10 w-full shrink-0 items-center justify-center px-4 py-2 text-white transition-colors duration-200 ease-out" style={bannerAnnouncementBarStyle(currentBanner.noticeType)}>
             <button
                 type="button"
                 onClick={handleClick}
                 disabled={!hasLink}
                 className="group flex h-full w-full min-w-0 items-center justify-center px-8 transition-opacity enabled:hover:opacity-90 disabled:cursor-default"
-                title={hasLink ? "点击查看详情" : undefined}
+                title={hasLink ? t("account.layout.banner.viewDetails") : undefined}
             >
                 <span className="flex min-w-0 items-center justify-center gap-2">
                     {/* 标题内容区：通过外层弹性居中对齐，不用固定高度控制 */}
@@ -106,8 +101,8 @@ export function BannerAnnouncementsSlider() {
             <button
                 type="button"
                 onClick={handleDismiss}
-                aria-label="关闭通知"
-                title="关闭"
+                aria-label={t("account.layout.banner.dismiss")}
+                title={t("common.close")}
                 className="absolute right-3 top-1/2 grid size-6 -translate-y-1/2 place-items-center rounded-full text-white transition-colors hover:bg-white/20"
             >
                 <X className="size-3.5" aria-hidden="true" />

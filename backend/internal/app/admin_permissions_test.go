@@ -45,8 +45,6 @@ func TestNewAdminModulesRejectOtherScopedGrants(t *testing.T) {
 		{"group list", model.AdminPermissionUserGroups, func(user *model.User) error { _, err := svc.AdminUserGroups(user); return err }},
 		{"group create", model.AdminPermissionUserGroups, func(user *model.User) error { _, err := svc.CreateUserGroup(user, UserGroupRequest{}); return err }},
 		{"stage settings", model.AdminPermissionEcommerceConfig, func(user *model.User) error { _, err := svc.EcommerceOrchestrationSetting(user); return err }},
-		{"assistant settings", model.AdminPermissionEcommerceConfig, func(user *model.User) error { _, err := svc.AdminYoruSettings(user); return err }},
-		{"assistant update", model.AdminPermissionEcommerceConfig, func(user *model.User) error { _, err := svc.UpdateYoruSettings(user, YoruSettings{}); return err }},
 		{"knowledge stats", model.AdminPermissionEcommerceKnowledge, func(user *model.User) error { _, err := svc.AdminEcommerceKnowledgeStats(user); return err }},
 		{"managed skills", model.AdminPermissionEcommerceKnowledge, func(user *model.User) error { _, err := svc.EcommerceManagedSkills(user); return err }},
 	}

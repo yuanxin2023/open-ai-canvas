@@ -83,7 +83,7 @@
 
 ```json
 {
-  "apiVersion": "open-ai-canvas.plugin/v2",
+  "apiVersion": "yingce.plugin/v2",
   "id": "vertex-gemini",
   "name": "Vertex AI Gemini",
   "version": "2.0.0",

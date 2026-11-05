@@ -5,7 +5,7 @@ description: AI 创作工作台后端核心持久化表与状态边界
 
 # 后端数据库
 
-本轮 v1.7.3.5 合并候选 Schema 为 **103**。沿用本地 1–96 的名称、校验和与迁移历史，在其后追加 97–103；官方来源编号不作为本地执行号。临时 SQLite/PostgreSQL 已验证由本地起点代码生成的 Schema 96 升级及重复执行，原账本、测试积分和返利记录保持一致。本轮不访问或升级现有业务数据库。
+本轮 v1.7.3.7 整合的 Schema 为 **105**。保留本地 1–103 的名称、校验和与迁移历史，追加 104–105；官方来源编号不作为本地执行号。本轮只验证隔离测试库，不访问或升级现有业务数据库。取舍和验收边界见 [v1.7.3.7 本地整合](./upstream-v1737-integration)。
 
 | 本地执行号 | 迁移名称 | 官方来源 / 本地取舍 |
 | --- | --- | --- |
@@ -16,6 +16,16 @@ description: AI 创作工作台后端核心持久化表与状态边界
 | 101 | `agent_memory_document_columns` | 官方 77；记忆序号、修订调用标识补列 |
 | 102 | `drama_cast_voice_looks` | 官方 78；角色声音、样本和造型 |
 | 103 | `ecommerce_agent_and_knowledge` | 官方 79；电商 Agent 与知识库 |
+| 104 | `ark_portrait_assets` | 官方 81；方舟真人认证会话、素材组与素材 |
+| 105 | `token_cache_write_price` | 官方 82；缓存写入价格与用量；不重算历史账单 |
+
+### 本轮新增数据
+
+- `ark_portrait_sessions` 保存用户、一次性 state、名称、站点、区域、项目、加密认证令牌、状态、结果码、素材组、错误、到期及创建/更新时间；state 唯一，令牌不对外返回。
+- `ark_portrait_groups` 保存用户、名称、站点、区域、项目、上游组 ID、来源及时间；项目与上游组 ID 组成唯一索引。
+- `ark_portrait_assets` 保存用户、组、资源、上游素材 ID、名称、媒体类型、状态、错误及时间。组与上游素材的具体约束以模型声明为准，读取和使用仍校验用户归属。
+- `channel_models`、`channel_model_price_tiers`、`billing_orders` 增加 `cache_write_token_price_microcredits`；价格档与账单增加 `cost_cache_write_token_price_microcredits`；账单和调用日志增加 `cache_write_tokens`；逻辑模型增加 `cache_write_price_microcredits`。新增列均使用非空整数和零默认值，零价表示不单独收取缓存写入费用。
+- 不增加官方支付换汇迁移；人民币订单继续使用本地金额与货币字段。历史反馈引用表和版本列保留，运行接口采用官方附件 JSON 合同。
 
 ### 分组、记忆与造型数据
 
@@ -477,7 +487,7 @@ docker compose -f docker-compose.deploy.yml up -d backend web
 | `payment_notifications` | 保存已验签的支付通知收件箱 | 以渠道事件 ID 幂等；只保存用于异步入账的标准化证据，重复通知不会重复发放积分 |
 | `payment_reconciliation_runs` / `payment_reconciliation_items` | 保存渠道账单下载和对账结果 | 账单只能作为发现线索，金额、币种和交易号仍需由插件查单确认；历史订单继续绑定原插件版本 |
 
-支付宝、微信及后续聚合平台都只作为支付插件包提供 `open-ai-canvas.payment/v1` 适配器，宿主数据库不保存平台专用字段。插件升级不会改写历史订单的 `plugin_version`；存在未完成订单时，原插件版本和配置必须继续可解析通知、查单和关单。
+支付宝、微信及后续聚合平台都只作为支付插件包提供 `yingce.payment/v1` 适配器，宿主数据库不保存平台专用字段。插件升级不会改写历史订单的 `plugin_version`；存在未完成订单时，原插件版本和配置必须继续可解析通知、查单和关单。
 
 ## 模型渠道与目录
 
@@ -621,9 +631,9 @@ F-09 已确认采用 `user_feedbacks`，附件和诊断分别为 JSON 字符串�
 up 和 verify 先核对全部既有账本及连续前缀。未知名称/校验和、缺号、超出版本、极旧充值权益 16 或极旧官方工作台 51 都停止并报告；不会自动改号或换签名。已知 6/7 历史仅选择原身份，不改写账本。PostgreSQL 使用迁移事务锁。全新库和两套历史夹具在 Linux SQLite/PostgreSQL 通过，但正式升级仍必须另做真实业务副本、备份恢复及应用验收。
 
 
-## Schema 94 副本转为 PostgreSQL
+## 当前 Schema 副本转为 PostgreSQL
 
-转换工具只接受已在副本上执行 up / verify 到当前 Schema 94 的独立 SQLite 离线快照。不能直接转换 51，也不能把正在写入或尚有 WAL / journal 的文件作为快照。源始终只读，不在转换工具中执行检查点、升级或数据修复；开始及提交前核对源文件哈希。
+转换工具只接受已在副本上执行 up / verify 到当前 Schema 105 的独立 SQLite 离线快照。不能直接转换 51，也不能把正在写入或尚有 WAL / journal 的文件作为快照。源始终只读，不在转换工具中执行检查点、升级或数据修复；开始及提交前核对源文件哈希。
 
 在包含 GCC / CGO 的 backend 源码构建环境，通过环境变量指定副本和独立 PostgreSQL 目标，执行 go run ./cmd/migrate-sqlite-postgres。SQLITE_SOURCE_PATH 指向快照文件，DATABASE_URL 为目标连接；目标使用 public schema。真实密码通过受保护环境传入，不写入日志或仓库。
 

@@ -82,7 +82,7 @@
 
 ```json
 {
-  "apiVersion": "open-ai-canvas.plugin/v2",
+  "apiVersion": "yingce.plugin/v2",
   "id": "aws-bedrock-converse",
   "name": "AWS Bedrock Converse",
   "version": "2.0.0",

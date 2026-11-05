@@ -115,8 +115,8 @@ test("auth scene consumes resolved appearance instead of hardcoded media constan
 test("auth footer follows the form content instead of covering the scroll area", async () => {
     const source = await Bun.file(new URL("../src/pages/auth/auth-scene.tsx", import.meta.url)).text();
 
-    expect(source).toContain('className="flex flex-1 items-center justify-center');
-    expect(source).toContain('<SiteComplianceFooter variant="auth" className="shrink-0" />');
+    expect(source).toContain('className="flex w-full flex-1 items-center justify-center');
+    expect(source).toContain('<SiteComplianceFooter variant="auth" className="relative inset-auto w-full shrink-0" />');
     expect(source).not.toContain('<SiteComplianceFooter variant="auth" className="absolute');
 });
 

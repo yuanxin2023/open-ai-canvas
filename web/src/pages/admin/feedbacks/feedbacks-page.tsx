@@ -1,38 +1,15 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { App, Button, Input, Popconfirm, Select, Space, Table, Tag, Image as AntImage, Segmented } from "antd";
+import { AdminDrawer, AdminModal } from "@/pages/admin/ui/overlays";
 import type { ColumnsType } from "antd/es/table";
 import { AlertCircle, Archive, ArchiveRestore, Bug, CheckCircle2, Clock, FileText, Inbox, Lightbulb, MessageSquare, Paperclip, Play, RefreshCw, Search, Send, UserRound, Clock3 } from "lucide-react";
 
-import { getAdminFeedbacks, updateAdminFeedback, archiveAdminFeedback, feedbackAttachmentURL, type FeedbackItem, type FeedbackType, type FeedbackStatus, type FeedbackAttachment } from "@/services/api/feedback";
+import { getAdminFeedbacks, updateAdminFeedback, archiveAdminFeedback, type FeedbackItem, type FeedbackType, type FeedbackStatus, type FeedbackAttachment } from "@/services/api/feedback";
+import { adminResourceFileUrl } from "@/services/api/admin-storage";
 import { AdminPageFrame } from "../components/admin-shell";
 import { cn } from "@/lib/utils";
-import { AppModal } from "@/components/ui/product/app-modal";
-import { AppDrawer } from "@/components/ui/product/app-drawer";
-import { useUserStore } from "@/stores/use-user-store";
-import { hasAdminPermission } from "@/lib/admin-permissions";
 
 export default function AdminFeedbacksPage() {
-    const user = useUserStore((state) => state.user);
-    if (!user?.id || user.role !== "admin" || !hasAdminPermission(user.adminAccess, "admin.users.feedbacks")) return <p role="alert">没有用户反馈管理权限</p>;
-    return <AdminFeedbacksContent key={user.id} actorId={user.id} />;
-}
-
-function AdminFeedbacksContent({ actorId }: { actorId: string }) {
-    const alive = useRef(true);
-    const busy = useRef(false);
-    const request = useRef<AbortController | null>(null);
-    const [loadError, setLoadError] = useState("");
-    useEffect(() => {
-        alive.current = true;
-        return () => {
-            alive.current = false;
-            request.current?.abort();
-        };
-    }, []);
-    const current = useCallback(() => {
-        const user = useUserStore.getState().user;
-        return alive.current && user?.id === actorId && user.role === "admin" && hasAdminPermission(user.adminAccess, "admin.users.feedbacks");
-    }, [actorId]);
     const { message } = App.useApp();
 
     const [loading, setLoading] = useState(false);
@@ -58,37 +35,27 @@ function AdminFeedbacksContent({ actorId }: { actorId: string }) {
     const [previewVideoUrl, setPreviewVideoUrl] = useState<string | null>(null);
 
     const loadData = useCallback(async () => {
-        if (!current()) return;
-        request.current?.abort();
-        const controller = new AbortController();
-        request.current = controller;
         setLoading(true);
-        setLoadError("");
         try {
-            const res = await getAdminFeedbacks(
-                {
-                    type: typeFilter,
-                    status: statusFilter,
-                    archived: archivedTab === "all" ? "all" : archivedTab === "archived",
-                    keyword: keyword.trim() || undefined,
-                    page,
-                    limit,
-                },
-                controller.signal,
-            );
-            if (!current() || controller.signal.aborted) return;
+            const res = await getAdminFeedbacks({
+                type: typeFilter,
+                status: statusFilter,
+                archived: archivedTab === "all" ? "all" : archivedTab === "archived",
+                keyword: keyword.trim() || undefined,
+                page,
+                limit,
+            });
             setList(res.list);
             setTotal(res.total);
         } catch (error) {
-            if (current() && !controller.signal.aborted) setLoadError(error instanceof Error ? error.message : "获取反馈列表失败");
+            message.error(error instanceof Error ? error.message : "获取反馈列表失败");
         } finally {
-            if (current() && !controller.signal.aborted) setLoading(false);
+            setLoading(false);
         }
-    }, [typeFilter, statusFilter, archivedTab, keyword, page, limit, current]);
+    }, [typeFilter, statusFilter, archivedTab, keyword, page, limit, message]);
 
     useEffect(() => {
         void loadData();
-        return () => request.current?.abort();
     }, [loadData]);
 
     const handleOpenDetail = (item: FeedbackItem) => {
@@ -99,46 +66,34 @@ function AdminFeedbacksContent({ actorId }: { actorId: string }) {
     };
 
     const handleSaveReply = async () => {
-        if (!selectedItem || !current() || busy.current) return;
-        busy.current = true;
+        if (!selectedItem) return;
         setSaving(true);
         try {
-            const updated = await updateAdminFeedback(
-                selectedItem.id,
-                {
-                    status: statusChange,
-                    adminReply: replyText.trim(),
-                },
-                actorId,
-                selectedItem.version,
-            );
-            if (!current()) return;
+            const updated = await updateAdminFeedback(selectedItem.id, {
+                status: statusChange,
+                adminReply: replyText.trim(),
+            });
             message.success("已更新反馈状态与答复内容");
             setSelectedItem(updated);
             // Refresh list in place
             setList((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
         } catch (error) {
-            if (current()) message.error(error instanceof Error ? error.message : "更新失败");
+            message.error(error instanceof Error ? error.message : "更新失败");
         } finally {
-            busy.current = false;
-            if (current()) setSaving(false);
+            setSaving(false);
         }
     };
 
-    const handleArchive = async (item: FeedbackItem, archive: boolean) => {
-        if (!current() || busy.current) return;
-        busy.current = true;
-        setSaving(true);
+    const handleArchive = async (id: string, archive: boolean) => {
         try {
-            await archiveAdminFeedback(item.id, archive, actorId, item.version);
-            if (!current()) return;
-            message.success(archive ? "反馈已归档；已打开的回复草稿请重新核对版本" : "反馈已恢复；已打开的回复草稿请重新核对版本");
+            const updated = await archiveAdminFeedback(id, archive);
+            message.success(archive ? "已将反馈移入历史归档" : "已将反馈移出归档并恢复活跃");
+            if (selectedItem?.id === id) {
+                setSelectedItem(updated);
+            }
             void loadData();
         } catch (error) {
-            if (current()) message.error(error instanceof Error ? error.message : "操作失败");
-        } finally {
-            busy.current = false;
-            if (current()) setSaving(false);
+            message.error(error instanceof Error ? error.message : "操作失败");
         }
     };
 
@@ -276,7 +231,7 @@ function AdminFeedbacksContent({ actorId }: { actorId: string }) {
                     <Popconfirm
                         title={record.archived ? "确定将此反馈移出归档吗？" : "确定归档此反馈吗？"}
                         description={record.archived ? "移出后将重新回到活跃收件箱中跟进" : "归档后移入历史归档，用户与管理员仍可随时完整查阅"}
-                        onConfirm={() => handleArchive(record, !record.archived)}
+                        onConfirm={() => handleArchive(record.id, !record.archived)}
                         okText={record.archived ? "移出归档" : "归档"}
                         cancelText="取消"
                     >
@@ -302,11 +257,6 @@ function AdminFeedbacksContent({ actorId }: { actorId: string }) {
     return (
         <AdminPageFrame title="用户反馈收件箱" description="集中查阅全站用户提交的 Bug 缺陷、功能提议与体验建议，支持收件箱式答复与历史归档管理" scroll>
             <div className="space-y-4">
-                {loadError ? (
-                    <p role="alert" className="text-destructive">
-                        {loadError}
-                    </p>
-                ) : null}
                 {/* Metrics Cards */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     <div className="rounded-xl border border-border/70 bg-card p-4 flex items-center justify-between">
@@ -318,15 +268,15 @@ function AdminFeedbacksContent({ actorId }: { actorId: string }) {
                     </div>
                     <div className="rounded-xl border border-orange-500/30 bg-orange-500/5 p-4 flex items-center justify-between">
                         <div>
-                            <p className="text-xs text-orange-600 dark:text-orange-400">本页待处理</p>
-                            <p className="text-xl font-bold text-orange-600 dark:text-orange-400 mt-0.5">{pendingCount}</p>
+                            <p className="text-xs text-orange-600 dark:text-orange-400">待处理</p>
+                            <p className="text-xl font-semibold text-orange-600 dark:text-orange-400 mt-0.5">{pendingCount}</p>
                         </div>
                         <Clock className="size-5 text-orange-500 opacity-60" />
                     </div>
                     <div className="rounded-xl border border-blue-500/30 bg-blue-500/5 p-4 flex items-center justify-between">
                         <div>
-                            <p className="text-xs text-blue-600 dark:text-blue-400">本页处理中</p>
-                            <p className="text-xl font-bold text-blue-600 dark:text-blue-400 mt-0.5">{processingCount}</p>
+                            <p className="text-xs text-blue-600 dark:text-blue-400">处理中</p>
+                            <p className="text-xl font-semibold text-blue-600 dark:text-blue-400 mt-0.5">{processingCount}</p>
                         </div>
                         <Clock3 className="size-5 text-blue-500 opacity-60" />
                     </div>
@@ -438,7 +388,7 @@ function AdminFeedbacksContent({ actorId }: { actorId: string }) {
             </div>
 
             {/* Detail & Reply Drawer */}
-            <AppDrawer
+            <AdminDrawer
                 open={drawerOpen}
                 onClose={() => setDrawerOpen(false)}
                 width={560}
@@ -489,27 +439,27 @@ function AdminFeedbacksContent({ actorId }: { actorId: string }) {
                             <div>
                                 <label className="block text-xs font-semibold text-foreground mb-2">附件清单 ({selectedAttachments.length})</label>
                                 <div className="grid grid-cols-2 gap-2">
-                                    {selectedAttachments.map((att) => (
-                                        <div key={att.id} className="flex items-center gap-2 rounded-lg border border-border/60 bg-muted/25 p-2">
-                                            {att.type === "image" ? (
-                                                <AntImage src={feedbackAttachmentURL(selectedItem.id, att.id)} alt={att.name} width={36} height={36} className="rounded object-cover" />
-                                            ) : (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setPreviewVideoUrl(feedbackAttachmentURL(selectedItem.id, att.id))}
-                                                    className="size-9 rounded bg-black/70 flex items-center justify-center text-primary hover:bg-black transition-colors"
-                                                >
-                                                    <Play className="size-4 fill-current ml-0.5" />
-                                                </button>
-                                            )}
-                                            <div className="min-w-0 flex-1">
-                                                <p className="truncate text-xs font-medium" title={att.name}>
-                                                    {att.name}
-                                                </p>
-                                                <p className="text-[var(--fs-label)] text-muted-foreground">{(att.size / (1024 * 1024)).toFixed(1)} MB</p>
+                                    {selectedAttachments.map((att) => {
+                                        // att.url 是提交者本人的 /api/resources/:id/file，管理员会被资源归属校验拒绝，后台改走管理员资源接口。
+                                        const fileUrl = adminResourceFileUrl(att.id);
+                                        return (
+                                            <div key={att.id} className="flex items-center gap-2 rounded-lg border border-border/60 bg-muted/25 p-2">
+                                                {att.type === "image" ? (
+                                                    <AntImage src={fileUrl} alt={att.name} width={36} height={36} className="rounded object-cover" />
+                                                ) : (
+                                                    <button type="button" onClick={() => setPreviewVideoUrl(fileUrl)} className="size-9 rounded bg-black/70 flex items-center justify-center text-primary hover:bg-black transition-colors">
+                                                        <Play className="size-4 fill-current ml-0.5" />
+                                                    </button>
+                                                )}
+                                                <div className="min-w-0 flex-1">
+                                                    <p className="truncate text-xs font-medium" title={att.name}>
+                                                        {att.name}
+                                                    </p>
+                                                    <p className="text-[var(--fs-label)] text-muted-foreground">{(att.size / (1024 * 1024)).toFixed(1)} MB</p>
+                                                </div>
                                             </div>
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
                             </div>
                         ) : null}
@@ -550,18 +500,11 @@ function AdminFeedbacksContent({ actorId }: { actorId: string }) {
 
                             <div>
                                 <label className="block text-xs text-muted-foreground mb-1">官方处理答复 (用户可在其收件箱与历史归档中直接查看)</label>
-                                <Input.TextArea
-                                    rows={4}
-                                    maxLength={10000}
-                                    value={replyText}
-                                    onChange={(e) => setReplyText(e.target.value)}
-                                    placeholder="输入回复内容，例如：已定位问题并将在下一版本发布修复；或者感谢提议，该需求已排入排期计划..."
-                                    className="rounded-lg"
-                                />
+                                <Input.TextArea rows={4} value={replyText} onChange={(e) => setReplyText(e.target.value)} placeholder="输入回复内容，例如：已定位问题并将在下一版本发布修复；或者感谢提议，该需求已排入排期计划..." className="rounded-lg" />
                             </div>
 
                             <div className="flex items-center justify-between pt-1">
-                                <Button icon={selectedItem.archived ? <ArchiveRestore className="size-3.5" /> : <Archive className="size-3.5" />} onClick={() => handleArchive(selectedItem, !selectedItem.archived)}>
+                                <Button icon={selectedItem.archived ? <ArchiveRestore className="size-3.5" /> : <Archive className="size-3.5" />} onClick={() => handleArchive(selectedItem.id, !selectedItem.archived)}>
                                     {selectedItem.archived ? "移出归档" : "归档此反馈"}
                                 </Button>
                                 <div className="flex items-center gap-2">
@@ -574,15 +517,15 @@ function AdminFeedbacksContent({ actorId }: { actorId: string }) {
                         </div>
                     </div>
                 ) : null}
-            </AppDrawer>
+            </AdminDrawer>
 
             {/* Video Preview Modal */}
             {previewVideoUrl ? (
-                <AppModal open={Boolean(previewVideoUrl)} onCancel={() => setPreviewVideoUrl(null)} footer={null} width={720} destroyOnHidden title="附件视频预览">
+                <AdminModal open={Boolean(previewVideoUrl)} onCancel={() => setPreviewVideoUrl(null)} footer={null} width={720} title="附件视频预览">
                     <div className="py-2">
                         <video src={previewVideoUrl} controls autoPlay className="w-full max-h-[60vh] rounded-lg bg-black" />
                     </div>
-                </AppModal>
+                </AdminModal>
             ) : null}
         </AdminPageFrame>
     );

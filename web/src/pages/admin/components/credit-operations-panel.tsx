@@ -416,7 +416,7 @@ export default function CreditOperationsPanel({ users, activeOperation, onOperat
                                 ? `公式结算 · ${order.outputTokens.toLocaleString()} 视频 Token`
                                 : order.capability === "video"
                                   ? `上游用量 · ${order.outputTokens.toLocaleString()} 视频 Token`
-                                  : `输入 ${order.inputTokens} · 输出 ${order.outputTokens} · 缓存 ${order.cachedTokens}`}
+                                  : `输入 ${order.inputTokens} · 输出 ${order.outputTokens} · 缓存命中 ${order.cachedTokens}${order.cacheWriteTokens ? ` · 缓存写入 ${order.cacheWriteTokens}` : ""}`}
                         </div>
                     </div>
                 ) : (
@@ -620,23 +620,32 @@ export default function CreditOperationsPanel({ users, activeOperation, onOperat
                 open={Boolean(pendingPolicy)}
                 okText="确认并保存赠送策略"
                 cancelText="返回修改"
-                onCancel={() => { if (!savingPolicy) setPendingPolicy(null); }}
-                onOk={() => { if (pendingPolicy && policyLoaded && !loadingPolicy && !savingPolicy) void savePolicy(pendingPolicy); }}
+                onCancel={() => {
+                    if (!savingPolicy) setPendingPolicy(null);
+                }}
+                onOk={() => {
+                    if (pendingPolicy && policyLoaded && !loadingPolicy && !savingPolicy) void savePolicy(pendingPolicy);
+                }}
                 confirmLoading={savingPolicy}
                 okButtonProps={{ disabled: !pendingPolicy || !policyLoaded || loadingPolicy || savingPolicy }}
                 mask={{ closable: !savingPolicy }}
                 closable={!savingPolicy}
                 destroyOnHidden
             >
-                {pendingPolicy ? <div className="space-y-3">
-                    <p className="text-sm leading-6 text-foreground/70">本次保存包含正数赠送，以下按 1000 个新注册账号与 1000 次签到展示对应发放量；实际发放会随注册和签到持续累积。</p>
-                    <dl className="grid grid-cols-2 gap-2 border-y border-border/60 py-3 text-sm">
-                        <dt>1000 个新账号</dt><dd className="text-right tabular-nums">{formatCredits(toMicrocredits(pendingPolicy.signupBonus) * 1000)} 积分</dd>
-                        <dt>1000 次签到</dt><dd className="text-right tabular-nums">{formatCredits(toMicrocredits(pendingPolicy.checkinBonus) * 1000)} 积分</dd>
-                        <dt className="font-semibold">对应发放总额</dt><dd className="text-right font-semibold tabular-nums">{formatCredits((toMicrocredits(pendingPolicy.signupBonus) + toMicrocredits(pendingPolicy.checkinBonus)) * 1000)} 积分</dd>
-                    </dl>
-                    <p className="text-xs leading-5 text-foreground/55">设为 0 可关闭对应赠送；策略只影响后续注册和签到，不会修改或收回历史积分。此处为积分发放额，不等同于现金成本。</p>
-                </div> : null}
+                {pendingPolicy ? (
+                    <div className="space-y-3">
+                        <p className="text-sm leading-6 text-foreground/70">本次保存包含正数赠送，以下按 1000 个新注册账号与 1000 次签到展示对应发放量；实际发放会随注册和签到持续累积。</p>
+                        <dl className="grid grid-cols-2 gap-2 border-y border-border/60 py-3 text-sm">
+                            <dt>1000 个新账号</dt>
+                            <dd className="text-right tabular-nums">{formatCredits(toMicrocredits(pendingPolicy.signupBonus) * 1000)} 积分</dd>
+                            <dt>1000 次签到</dt>
+                            <dd className="text-right tabular-nums">{formatCredits(toMicrocredits(pendingPolicy.checkinBonus) * 1000)} 积分</dd>
+                            <dt className="font-semibold">对应发放总额</dt>
+                            <dd className="text-right font-semibold tabular-nums">{formatCredits((toMicrocredits(pendingPolicy.signupBonus) + toMicrocredits(pendingPolicy.checkinBonus)) * 1000)} 积分</dd>
+                        </dl>
+                        <p className="text-xs leading-5 text-foreground/55">设为 0 可关闭对应赠送；策略只影响后续注册和签到，不会修改或收回历史积分。此处为积分发放额，不等同于现金成本。</p>
+                    </div>
+                ) : null}
             </AdminModal>
 
             <AdminModal

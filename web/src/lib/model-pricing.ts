@@ -64,12 +64,19 @@ export function priceTierSummaryLabel(tiers: ModelPriceTier[], capability?: Mode
             .filter((value) => Number.isFinite(value) && value >= 0);
     const fixedRequestValues = unitPrices("fixed_request");
     const perSecondValues = unitPrices("per_second");
-    const tokenValues = tiers.filter((tier) => tier.billingMode === "token").map((tier) => tier.outputTokenPriceMicrocredits / 1_000_000).filter((value) => Number.isFinite(value) && value >= 0);
-    return [
-        fixedRequestValues.length ? formatPriceRange(fixedRequestValues, "积分") : "",
-        perSecondValues.length ? formatPriceRange(perSecondValues, "积分/秒") : "",
-        tokenValues.length ? `${capability === "video" ? "" : "输出 "}${formatPriceRange(tokenValues, capability === "video" ? "积分/百万视频 Token" : "积分/百万 Token")}` : "",
-    ].filter(Boolean).join(" · ") || "未配置";
+    const tokenValues = tiers
+        .filter((tier) => tier.billingMode === "token")
+        .map((tier) => tier.outputTokenPriceMicrocredits / 1_000_000)
+        .filter((value) => Number.isFinite(value) && value >= 0);
+    return (
+        [
+            fixedRequestValues.length ? formatPriceRange(fixedRequestValues, "积分") : "",
+            perSecondValues.length ? formatPriceRange(perSecondValues, "积分/秒") : "",
+            tokenValues.length ? `${capability === "video" ? "" : "输出 "}${formatPriceRange(tokenValues, capability === "video" ? "积分/百万视频 Token" : "积分/百万 Token")}` : "",
+        ]
+            .filter(Boolean)
+            .join(" · ") || "未配置"
+    );
 }
 
 export function formatPriceRange(values: number[], suffix: string) {
@@ -78,13 +85,28 @@ export function formatPriceRange(values: number[], suffix: string) {
     return unique.length === 1 ? `${format(unique[0])} ${suffix}` : `${format(unique[0])}-${format(unique[unique.length - 1])} ${suffix}`;
 }
 
-
+/**
+ * 通用入口的报价请求：直连系统渠道的文本 / 图片模型在前端按价格档位直接算价，不发服务端报价；
+ * 逻辑模型和直连视频模型（Token / 时长计费）才需要服务端报价。
+ */
 export function modelQuoteRequest(config: AiConfig, value: string, capability?: ModelCapability, requirements?: ModelRequirements): ModelQuoteRequest | undefined {
+    if (!capability || !value) return undefined;
+    const channel = resolveModelChannel(config, value);
+    const cost = channel.modelCosts?.find((item) => item.model === modelOptionName(value));
+    if (channel.scope === "system" && cost && !cost.logicalModelId && capability !== "video") return undefined;
+    return systemModelQuoteRequest(config, value, capability, requirements);
+}
+
+/**
+ * 任意系统模型（逻辑模型或直连渠道模型、任意能力）的服务端报价请求。
+ * 必须先拿到服务端报价才允许提交的流程（例如电商 Agent 的分析与整套出图）用这个入口。
+ */
+export function systemModelQuoteRequest(config: AiConfig, value: string, capability?: ModelCapability, requirements?: ModelRequirements): ModelQuoteRequest | undefined {
     if (!capability || !value) return undefined;
     const channel = resolveModelChannel(config, value);
     if (channel.scope !== "system") return undefined;
     const cost = channel.modelCosts?.find((item) => item.model === modelOptionName(value));
-    if (!cost || (!cost.logicalModelId && capability !== "video" && capability !== "audio")) return undefined;
+    if (!cost) return undefined;
     const options = pricingRequestOptions(config, capability);
     if (!options) return undefined;
     const input = requirements?.input;
@@ -149,7 +171,9 @@ function priceSelectorForRequest(capability: ModelCapability | undefined, config
             }
             return requested;
         }
-        const imageQuality = String(options.quality ?? "").trim().toLowerCase();
+        const imageQuality = String(options.quality ?? "")
+            .trim()
+            .toLowerCase();
         const imageSize = String(options.size ?? "").trim();
         Object.assign(requested, imagePriceSelector(imageQuality, imageSize, modelCapabilityConfigFor(config, config.model || config.imageModel)?.image));
     }

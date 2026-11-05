@@ -8,7 +8,7 @@ import (
 )
 
 func TestMiniMaxVideoDurationOptions(t *testing.T) {
-	adapter := officialPackageAdapter(t, "minimax-hailuo-video-v2.canvas-plugin", "minimax-video")
+	adapter := officialPackageAdapter(t, "minimax-hailuo-video-v2.yingce-plugin", "minimax-video")
 	for _, parameter := range adapter.Metadata().Parameters {
 		if parameter.Name != "duration" {
 			continue
@@ -27,7 +27,7 @@ func TestMiniMaxVideoDurationOptions(t *testing.T) {
 }
 
 func TestMiniMaxVideoDurationRange(t *testing.T) {
-	adapter := officialPackageAdapter(t, "minimax-hailuo-video-v2.canvas-plugin", "minimax-video")
+	adapter := officialPackageAdapter(t, "minimax-hailuo-video-v2.yingce-plugin", "minimax-video")
 	for seconds := 4; seconds <= 30; seconds++ {
 		t.Run(strconv.Itoa(seconds), func(t *testing.T) {
 			spec, err := adapter.BuildCreate(context.Background(), RequestContext{Request: GenerationRequest{Model: "MiniMax-H3", Prompt: "a clip", Duration: seconds}})
@@ -50,7 +50,7 @@ func TestMiniMaxVideoDurationRange(t *testing.T) {
 }
 
 func TestMiniMaxVideoFailureMessages(t *testing.T) {
-	adapter := officialPackageAdapter(t, "minimax-hailuo-video-v2.canvas-plugin", "minimax-video")
+	adapter := officialPackageAdapter(t, "minimax-hailuo-video-v2.yingce-plugin", "minimax-video")
 	const dimensionError = "content[1].image_url: media dimensions must be between 256 and 5760 pixels"
 	for _, tc := range []struct {
 		name, payload, message string

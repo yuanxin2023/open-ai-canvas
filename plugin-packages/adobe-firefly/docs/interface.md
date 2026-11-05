@@ -74,7 +74,7 @@
 
 ```json
 {
-  "apiVersion": "open-ai-canvas.plugin/v2",
+  "apiVersion": "yingce.plugin/v2",
   "id": "adobe-firefly",
   "name": "Adobe Firefly",
   "version": "2.0.0",

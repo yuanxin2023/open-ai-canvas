@@ -107,7 +107,7 @@
 
 ```json
 {
-  "apiVersion": "open-ai-canvas.plugin/v2",
+  "apiVersion": "yingce.plugin/v2",
   "id": "fireworks-chat",
   "name": "Fireworks Chat",
   "version": "2.0.0",

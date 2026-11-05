@@ -12,9 +12,9 @@ import (
 )
 
 const (
-	PluginPackageFormat        = "open-ai-canvas.plugin/package-v1"
-	PluginPackageExtension     = ".canvas-plugin"
-	CompatiblePackageExtension = ".yingce-plugin"
+	PluginPackageFormat        = "yingce.plugin/package-v1"
+	PluginPackageExtension     = ".yingce-plugin"
+	CompatiblePackageExtension = ".canvas-plugin"
 	LovwowPackageExtension     = ".lovwow-plugin"
 	PluginPackageMaxBytes      = 48 << 20
 	PluginManifestMaxBytes     = 512 << 10
@@ -32,7 +32,7 @@ func PluginPackageExtensions() []string {
 }
 
 func PluginPackageExtensionForAPIVersion(apiVersion string) string {
-	if strings.HasPrefix(strings.TrimSpace(apiVersion), "yingce.plugin/") {
+	if strings.HasPrefix(strings.TrimSpace(apiVersion), earlierPluginProtocolNamespace+".plugin/") {
 		return CompatiblePackageExtension
 	}
 	if strings.HasPrefix(strings.TrimSpace(apiVersion), "lovwow.plugin/") {
@@ -182,7 +182,7 @@ func paymentRPCVersionForPluginAPI(apiVersion string) string {
 			return earlierPluginProtocolNamespace + ".payment/v1"
 		}
 	}
-	return "open-ai-canvas.payment/v1"
+	return "yingce.payment/v1"
 }
 
 func validatePluginPackagePath(name string) (string, error) {

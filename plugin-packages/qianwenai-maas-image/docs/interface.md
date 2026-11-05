@@ -89,7 +89,7 @@
 
 ```json
 {
-  "apiVersion": "open-ai-canvas.plugin/v2",
+  "apiVersion": "yingce.plugin/v2",
   "enabled": false,
   "id": "qianwenai-maas-image",
   "name": "QianWenAI MAAS",

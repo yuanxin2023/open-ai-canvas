@@ -93,7 +93,7 @@
 
 ```json
 {
-  "apiVersion": "open-ai-canvas.plugin/v2",
+  "apiVersion": "yingce.plugin/v2",
   "id": "volcengine-ark-seedance",
   "name": "Volcengine Ark Seedance",
   "version": "2.0.0",

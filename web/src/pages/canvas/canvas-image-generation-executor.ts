@@ -1,3 +1,4 @@
+import { translate } from "@/i18n";
 import { nanoid } from "nanoid";
 
 import { NODE_DEFAULT_SIZE } from "@/constant/canvas";
@@ -283,7 +284,8 @@ export async function executeImageGeneration(
             } catch (error) {
                 if (isGenerationCanceled(error)) return false;
                 const failure = generationFailureMetadata(error, prompt);
-                if (!representativeFailure || failure.generationErrorReason === "insufficient_credits" || failure.generationErrorCode === CONTENT_MODERATION_ERROR_CODE && representativeFailure.generationErrorReason !== "insufficient_credits") representativeFailure = failure;
+                if (!representativeFailure || failure.generationErrorReason === "insufficient_credits" || (failure.generationErrorCode === CONTENT_MODERATION_ERROR_CODE && representativeFailure.generationErrorReason !== "insufficient_credits"))
+                    representativeFailure = failure;
                 hasFailure = true;
                 failureCount += 1;
                 setNodes((current) => {
@@ -309,7 +311,7 @@ export async function executeImageGeneration(
         });
         return;
     }
-    if (hasFailure) showError(hasSuccess ? "部分图片生成失败" : "全部图片生成失败");
+    if (hasFailure) showError(hasSuccess ? translate("canvasPage.generation.someImagesFailed") : translate("canvasPage.generation.allImagesFailed"));
     setNodes((current) => {
         const next = current.map((node) => {
             if (node.id === nodeId && isConfigNode) {

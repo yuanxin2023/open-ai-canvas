@@ -1,6 +1,7 @@
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { forwardRef, useEffect, useState, type CSSProperties, type FocusEvent, type MouseEvent, type ReactNode } from "react";
 
+import { translate } from "@/i18n";
 import { cn } from "@/lib/utils";
 import { aceternityMotion } from "@/lib/aceternity-motion";
 
@@ -61,7 +62,7 @@ function coarsePointerQuery(): MediaQueryList | undefined {
  * getBoundingClientRect 并改变宽高，导致整条 dock 重排、相邻按钮抖动；这里改为
  * 固定格子 + 纯色 hover，只保留按压反馈与提示气泡。
  */
-export const FloatingDock = forwardRef<HTMLDivElement, FloatingDockProps>(function FloatingDock({ items, size = "default", embedded = false, className, style, ariaLabel = "画布工具", showLabels = false }, forwardedRef) {
+export const FloatingDock = forwardRef<HTMLDivElement, FloatingDockProps>(function FloatingDock({ items, size = "default", embedded = false, className, style, ariaLabel = translate("account.ui.canvasTools"), showLabels = false }, forwardedRef) {
     const reducedMotion = useReducedMotion();
     const [coarsePointer, setCoarsePointer] = useState(() => coarsePointerQuery()?.matches ?? false);
     // 窄屏下允许横向滚动，保证按钮始终可达；此时自定义提示会被裁剪，改用原生 title。
@@ -123,7 +124,9 @@ function renderDockItems(items: FloatingDockEntry[], props: DockItemRenderProps)
         if (!dangerGroup.length) return;
         result.push(
             <span key={`danger-group-${index}`} className="aceternity-dock-danger-group flex shrink-0 items-center gap-0.5">
-                {dangerGroup.map((command) => <DockCommandButton key={command.id} command={command} {...props} />)}
+                {dangerGroup.map((command) => (
+                    <DockCommandButton key={command.id} command={command} {...props} />
+                ))}
             </span>,
         );
         dangerGroup = [];
@@ -263,7 +266,10 @@ function DockSwitch({ entry, compact, showLabel, nativeTitle, motionEnabled }: {
             onKeyDown={(event) => {
                 if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
                 event.preventDefault();
-                const selectedIndex = Math.max(0, entry.options.findIndex((option) => option.value === entry.value));
+                const selectedIndex = Math.max(
+                    0,
+                    entry.options.findIndex((option) => option.value === entry.value),
+                );
                 const direction = event.key === "ArrowRight" ? 1 : -1;
                 const next = entry.options[(selectedIndex + direction + entry.options.length) % entry.options.length];
                 if (next) entry.onChange(next.value);

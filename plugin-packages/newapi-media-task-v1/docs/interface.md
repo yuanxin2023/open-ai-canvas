@@ -65,7 +65,7 @@
 | --- | --- |
 | `response.taskId` | `{"$coalesce":[{"$ref":"response.id"},{"$ref":"response.task_id"},{"$ref":"response.taskId"},{"$ref":"response.data.id"},{"$ref":"taskId"}]}` |
 | `response.status` | `{"$coalesce":[{"$ref":"response.status"},{"$ref":"response.state"},{"$ref":"response.data.status"},"pending"]}` |
-| `response.message` | `{"$coalesce":[{"$ref":"response.error.message"},{"$ref":"response.message"},{"$ref":"response.fail_reason"}]}` |
+| `response.message` | `{"$coalesce":[{"$ref":"response.error.message"},{"$ref":"response.message"},{"$ref":"response.fail_reason"},{"$ref":"response.data.fail_reason"},{"$ref":"response.data.error.message"}]}` |
 | `response.videos` | `{"$coalesce":[{"$ref":"response.video_url"},{"$ref":"response.videoUrl"},{"$ref":"response.result_url"},{"$ref":"response.url"},{"$ref":"response.data.video_url"},{"$ref":"response.output.url"}]}` |
 | `response.errorPaths[0]` | `"error.code"` |
 | `response.resultEphemeral` | `true` |
@@ -85,11 +85,11 @@
 
 ```json
 {
-  "apiVersion": "open-ai-canvas.plugin/v2",
+  "apiVersion": "yingce.plugin/v2",
   "id": "newapi-media-task-v1",
   "name": "NewAPI Media Task Channel 1",
   "version": "2.0.0",
-  "author": "NewAPI / AI 创作工作台",
+  "author": "NewAPI / 影策",
   "description": "NewAPI Media Task Channel 1 独立请求协议插件。",
   "documentation": "<当前插件的完整 documentation，由 README.md 与 docs/interface.md 拼接而成；为避免 JSON 递归，此处不重复展开正文。>",
   "permissions": [
@@ -389,6 +389,12 @@
               },
               {
                 "$ref": "response.fail_reason"
+              },
+              {
+                "$ref": "response.data.fail_reason"
+              },
+              {
+                "$ref": "response.data.error.message"
               }
             ]
           },

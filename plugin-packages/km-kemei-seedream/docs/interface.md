@@ -63,7 +63,7 @@ Pro / Flash 不支持 sequential_image_generation、组图、联网搜索、流�
 
 ```json
 {
-  "apiVersion": "open-ai-canvas.plugin/v2",
+  "apiVersion": "yingce.plugin/v2",
   "enabled": false,
   "id": "km-kemei-seedream",
   "name": "KM 可美 Seedream 5.0",

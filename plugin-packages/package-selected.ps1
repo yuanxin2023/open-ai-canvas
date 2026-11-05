@@ -19,7 +19,7 @@ foreach ($id in $ids) {
   $extension = switch -Wildcard ([string]$manifest.apiVersion) {
     'yingce.plugin/*' { '.yingce-plugin'; break }
     'lovwow.plugin/*' { '.lovwow-plugin'; break }
-    default { '.canvas-plugin' }
+    default { '.yingce-plugin' }
   }
   $output = Join-Path $root ($id + $extension)
   $temporary = Join-Path $root ('.' + $id + $extension + '.tmp')

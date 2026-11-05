@@ -74,7 +74,7 @@
 
 ```json
 {
-  "apiVersion": "open-ai-canvas.plugin/v2",
+  "apiVersion": "yingce.plugin/v2",
   "id": "openai-audio",
   "name": "OpenAI Audio Speech",
   "version": "2.0.0",

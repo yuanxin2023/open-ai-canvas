@@ -93,7 +93,7 @@ Agent Plan 专属接入：创建/查询/取消走 /api/plan/v3/contents/generati
 
 ```json
 {
-  "apiVersion": "open-ai-canvas.plugin/v2",
+  "apiVersion": "yingce.plugin/v2",
   "id": "volcengine-ark-agent-plan-seedance",
   "name": "Volcengine Ark Agent Plan Seedance",
   "version": "2.0.0",

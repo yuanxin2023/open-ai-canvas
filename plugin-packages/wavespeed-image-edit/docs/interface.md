@@ -88,7 +88,7 @@ WaveSpeed 异步任务响应结构：
 
 ```json
 {
-  "apiVersion": "open-ai-canvas.plugin/v2",
+  "apiVersion": "yingce.plugin/v2",
   "id": "wavespeed-image-edit",
   "name": "WaveSpeed Image Edit",
   "version": "1.0.0",

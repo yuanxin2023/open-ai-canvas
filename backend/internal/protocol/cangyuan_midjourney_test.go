@@ -8,7 +8,7 @@ import (
 
 func cangyuanAdapter(t *testing.T, provider string) Adapter {
 	t.Helper()
-	return officialPackageAdapter(t, "cangyuan-midjourney.canvas-plugin", provider)
+	return officialPackageAdapter(t, "cangyuan-midjourney.yingce-plugin", provider)
 }
 
 func TestCangyuanMidjourneyV7RequestAndEditPolling(t *testing.T) {

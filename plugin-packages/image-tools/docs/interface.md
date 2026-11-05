@@ -21,7 +21,7 @@
 
 ```json
 {
-  "apiVersion": "open-ai-canvas.plugin/v2",
+  "apiVersion": "yingce.plugin/v2",
   "id": "image-tools",
   "name": "Image Tools",
   "version": "1.0.1",

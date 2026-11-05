@@ -107,7 +107,7 @@
 
 ```json
 {
-  "apiVersion": "open-ai-canvas.plugin/v2",
+  "apiVersion": "yingce.plugin/v2",
   "id": "vllm-chat",
   "name": "vLLM OpenAI-Compatible",
   "version": "2.0.0",

@@ -123,7 +123,7 @@ func TestAutoDLScreenSpecUsesEachPackagedWorkflowExactly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	pkg, err := inspectOfficialPluginPackage(filepath.Join(dir, "autodl-comfyui.canvas-plugin"))
+	pkg, err := inspectOfficialPluginPackage(filepath.Join(dir, "autodl-comfyui.yingce-plugin"))
 	if err != nil {
 		t.Fatal(err)
 	}

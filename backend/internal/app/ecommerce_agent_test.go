@@ -17,6 +17,7 @@ import (
 	"gorm.io/gorm"
 	"infinite-canvas/backend/internal/ecommerceagent"
 	"infinite-canvas/backend/internal/model"
+	"infinite-canvas/backend/internal/outbound/outboundtest"
 	"infinite-canvas/backend/internal/repository"
 	_ "modernc.org/sqlite"
 )
@@ -139,6 +140,7 @@ func TestEcommerceAgentLiveTextUsesAdminChannelWithoutEnvKey(t *testing.T) {
 }
 
 func TestEcommerceAgentLiveImageUsesConfiguredChannelModel(t *testing.T) {
+	outboundtest.PublicDNS(t, "example.com")
 	svc, db := mockEcommerceAgentService(t)
 	t.Setenv("AI_MODE", "live")
 	t.Setenv("ECOMMERCE_PROMOTION_CHANNEL_ID", "image-channel")

@@ -1,31 +1,15 @@
 import { afterAll, describe, expect, it } from "bun:test";
 
-import {
-    EDITOR_SLOT_REQUIRED_PERMISSION,
-    assertEditorPermission,
-    checkEditorPermission,
-    pluginMayRenderEditorSlot,
-    pluginPermissions,
-    requiredPermissionForEditorSlot,
-} from "@/lib/plugins/plugin-permission-check";
+import { EDITOR_SLOT_REQUIRED_PERMISSION, assertEditorPermission, checkEditorPermission, pluginMayRenderEditorSlot, pluginPermissions, requiredPermissionForEditorSlot } from "@/lib/plugins/plugin-permission-check";
 import { registerPlugin, unregisterPlugin } from "@/lib/plugins/plugin-registry";
 import type { RegisteredPlugin } from "@/lib/plugins/plugin-types";
 
-const ALL_SLOTS = [
-    "timeline-panel",
-    "preview-renderer",
-    "inspector",
-    "asset-ingest",
-    "subtitle-tool",
-    "transcription-provider",
-    "export-renderer",
-    "ai-assistant",
-] as const;
+const ALL_SLOTS = ["timeline-panel", "preview-renderer", "inspector", "asset-ingest", "subtitle-tool", "transcription-provider", "export-renderer", "ai-assistant"] as const;
 
 function fakePlugin(id: string, permissions: string[], slots: string[]): RegisteredPlugin {
     return {
         manifest: {
-            apiVersion: "open-ai-canvas.plugin/v2",
+            apiVersion: "yingce.plugin/v2",
             id,
             name: id,
             version: "0.0.1",
@@ -99,9 +83,7 @@ describe("pluginMayRenderEditorSlot", () => {
         expect(pluginMayRenderEditorSlot(FAKE_READ_ONLY_ID, "preview-renderer").allowed).toBe(true);
     });
     it("权限齐备 → 放行", () => {
-        registerPlugin(
-            fakePlugin(FAKE_FULL_ID, ["timeline.read", "timeline.command", "export.run"], ["export-renderer"]),
-        );
+        registerPlugin(fakePlugin(FAKE_FULL_ID, ["timeline.read", "timeline.command", "export.run"], ["export-renderer"]));
         for (const slot of ALL_SLOTS) {
             expect(pluginMayRenderEditorSlot(FAKE_FULL_ID, slot).allowed).toBe(true);
         }

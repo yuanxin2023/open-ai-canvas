@@ -1,158 +1,150 @@
 package app
 
 import (
-	"encoding/json"
-	"errors"
 	"path/filepath"
 	"testing"
 	"time"
 
-	"gorm.io/driver/sqlite"
-	"gorm.io/gorm"
-	"infinite-canvas/backend/internal/kernel"
 	"infinite-canvas/backend/internal/model"
 	"infinite-canvas/backend/internal/repository"
+
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 )
 
-func newTestFeedbackService(t *testing.T) (*Service, *model.User, *model.User, *gorm.DB) {
+func newTestFeedbackService(t *testing.T) (*Service, *model.User, *model.User) {
 	t.Helper()
-	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "feedback.db")+"?_foreign_keys=on"), &gorm.Config{})
+	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "feedback.db")), &gorm.Config{})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("open sqlite: %v", err)
 	}
-	if err := db.AutoMigrate(&model.User{}, &model.SystemSetting{}, &model.AdminAuditEvent{}, &model.Resource{}, &model.UserFeedback{}, &model.FeedbackResourceReference{}); err != nil {
-		t.Fatal(err)
+	if err := db.AutoMigrate(&model.User{}, &model.UserFeedback{}, &model.SystemSetting{}, &model.AdminAuditEvent{}); err != nil {
+		t.Fatalf("migrate: %v", err)
 	}
+
 	repo := repository.New(db)
-	svc := &Service{repo: repo}
-	admin := &model.User{ID: "admin_1", Username: "admin", Role: "admin", AdminLevel: model.AdminLevelFull, Status: "active", CreatedAt: time.Now()}
-	user := &model.User{ID: "user_1", Username: "testuser", Email: "test@example.com", Role: "user", Status: "active", CreatedAt: time.Now()}
-	for _, value := range []any{admin, user, &model.SystemSetting{Key: "feature_availability", ValueJSON: `{"userFeedbackEnabled":true}`}, &model.Resource{ID: "owned-image", UserID: user.ID, Kind: "image", MimeType: "image/png", Status: model.ResourceStatusReady, Size: 1024}} {
-		if err := db.Create(value).Error; err != nil {
-			t.Fatal(err)
-		}
+	if err := db.Create(&model.SystemSetting{Key: "feature_availability", ValueJSON: `{"userFeedbackEnabled":true}`}).Error; err != nil {
+		t.Fatal(err)
 	}
-	return svc, admin, user, db
+	svc := &Service{repo: repo}
+
+	admin := &model.User{ID: "admin_1", Username: "admin", Role: "admin", Status: "active", CreatedAt: time.Now()}
+	user := &model.User{ID: "user_1", Username: "testuser", Email: "test@example.com", Role: "user", Status: "active", CreatedAt: time.Now()}
+
+	if err := db.Create(admin).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(user).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	return svc, admin, user
 }
 
-func feedbackTestRequest() SubmitFeedbackRequest {
-	return SubmitFeedbackRequest{RequestID: "feedback-request-0001", Type: model.FeedbackTypeBug, Title: "视频下载按钮未响应", Content: "点击下载按钮无反应", Attachments: `[{"id":"owned-image","name":"screen.png","url":"https://untrusted.example/ignored","type":"video","size":1}]`, Environment: `{"userAgent":"Chrome","pathname":"/canvas/private?token=secret"}`}
-}
+func TestFeedbackSubmitAndList(t *testing.T) {
+	svc, admin, user := newTestFeedbackService(t)
 
-func TestFeedbackSubmitReplayOwnershipAndReferences(t *testing.T) {
-	svc, _, user, db := newTestFeedbackService(t)
-	req := feedbackTestRequest()
+	// 1. Submit feedback as user
+	req := SubmitFeedbackRequest{
+		Type:        model.FeedbackTypeBug,
+		Title:       "视频下载按钮未响应",
+		Content:     "在生成视频后，点击卡片右上角的下载按钮无反应。",
+		Contact:     "test@example.com",
+		Attachments: `[{"id":"res_1","name":"screen.png","type":"image","url":"/api/resources/res_1/file","size":1024}]`,
+		Environment: `{"browser":"Chrome 120","os":"macOS"}`,
+	}
+
 	fb, err := svc.SubmitFeedback(user, req)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("SubmitFeedback failed: %v", err)
 	}
-	replay, err := svc.SubmitFeedback(user, req)
-	if err != nil || replay.ID != fb.ID {
-		t.Fatalf("replay: %#v %v", replay, err)
+	if fb.ID == "" || fb.Status != model.FeedbackStatusPending {
+		t.Fatalf("unexpected feedback created: %+v", fb)
 	}
-	list, err := svc.MyFeedbacks(user)
-	if err != nil || len(list) != 1 {
-		t.Fatalf("duplicate submission: %d, %v", len(list), err)
+
+	// 2. User view their own feedbacks
+	myList, err := svc.MyFeedbacks(user)
+	if err != nil {
+		t.Fatalf("MyFeedbacks failed: %v", err)
 	}
-	var items []model.FeedbackAttachment
-	if err := json.Unmarshal([]byte(fb.Attachments), &items); err != nil {
-		t.Fatal(err)
+	if len(myList) != 1 || myList[0].Title != req.Title {
+		t.Fatalf("expected 1 feedback, got %d", len(myList))
 	}
-	if len(items) != 1 || items[0].Size != 1024 || items[0].Type != "image" || items[0].ResourceID != "owned-image" {
-		t.Fatalf("untrusted attachment metadata retained: %#v", items)
+
+	// 3. Admin view feedbacks
+	adminList, err := svc.AdminListFeedbacks(admin, repository.FeedbackFilter{Status: "pending"})
+	if err != nil {
+		t.Fatalf("AdminListFeedbacks failed: %v", err)
 	}
-	req.Content = "different"
-	_, err = svc.SubmitFeedback(user, req)
-	var appErr *kernel.AppError
-	if !errors.As(err, &appErr) || appErr.Reason != "feedback_submission_conflict" {
-		t.Fatalf("key reuse accepted: %v", err)
+	if adminList.Total != 1 || len(adminList.List) != 1 {
+		t.Fatalf("admin expected 1 feedback, got total=%d", adminList.Total)
 	}
-	stranger := &model.User{ID: "other", Role: "user", Status: "active"}
-	req.RequestID = "feedback-request-0002"
-	if _, err := svc.SubmitFeedback(stranger, req); err == nil {
-		t.Fatal("foreign attachment accepted")
+
+	// 4. Admin reply and resolve
+	updated, err := svc.AdminUpdateFeedback(admin, fb.ID, AdminUpdateFeedbackRequest{
+		Status:     model.FeedbackStatusResolved,
+		AdminReply: "已修复该问题，感谢您的反馈！",
+	})
+	if err != nil {
+		t.Fatalf("AdminUpdateFeedback failed: %v", err)
 	}
-	own, err := svc.MyFeedbacks(stranger)
-	if err != nil || len(own) != 0 {
-		t.Fatalf("cross-account list: %v %v", own, err)
+	if updated.Status != model.FeedbackStatusResolved || updated.AdminReply == "" || updated.RepliedAt == nil {
+		t.Fatalf("AdminUpdateFeedback not updated properly: %+v", updated)
 	}
-	if err := db.Where("id = ?", "owned-image").Delete(&model.Resource{}).Error; err == nil {
-		t.Fatal("FK did not protect attached resource")
+
+	// 5. User checks inbox again
+	myList2, err := svc.MyFeedbacks(user)
+	if err != nil {
+		t.Fatalf("MyFeedbacks 2 failed: %v", err)
+	}
+	if myList2[0].Status != model.FeedbackStatusResolved || myList2[0].AdminReply != "已修复该问题，感谢您的反馈！" {
+		t.Fatalf("user inbox did not reflect admin reply: %+v", myList2[0])
+	}
+
+	// 6. Admin archives feedback
+	archived, err := svc.AdminArchiveFeedback(admin, fb.ID, true)
+	if err != nil {
+		t.Fatalf("AdminArchiveFeedback failed: %v", err)
+	}
+	if !archived.Archived || archived.ArchivedAt == nil {
+		t.Fatalf("expected feedback to be archived: %+v", archived)
+	}
+
+	// 7. Verify admin filter by archived
+	archivedFilter := true
+	adminArchivedList, err := svc.AdminListFeedbacks(admin, repository.FeedbackFilter{Archived: &archivedFilter})
+	if err != nil || adminArchivedList.Total != 1 {
+		t.Fatalf("expected 1 archived feedback, got %d", adminArchivedList.Total)
+	}
+
+	notArchivedFilter := false
+	adminActiveList, err := svc.AdminListFeedbacks(admin, repository.FeedbackFilter{Archived: &notArchivedFilter})
+	if err != nil || adminActiveList.Total != 0 {
+		t.Fatalf("expected 0 active feedbacks, got %d", adminActiveList.Total)
 	}
 }
 
-func TestFeedbackPermissionsVersionAndArchivePreserveReply(t *testing.T) {
-	svc, admin, user, db := newTestFeedbackService(t)
-	fb, err := svc.SubmitFeedback(user, feedbackTestRequest())
+func TestFeedbackFeatureGateKeepsExistingHistory(t *testing.T) {
+	svc, admin, user := newTestFeedbackService(t)
+	if _, err := svc.SubmitFeedback(user, SubmitFeedbackRequest{Title: "Existing feedback", Content: "History remains readable"}); err != nil {
+		t.Fatal(err)
+	}
+	availability, err := svc.FeatureAvailability()
 	if err != nil {
 		t.Fatal(err)
 	}
-	scoped := &model.User{ID: "scoped", Role: "admin", AdminLevel: model.AdminLevelScoped}
-	if _, err := svc.AdminListFeedbacks(scoped, repository.FeedbackFilter{}); err == nil {
-		t.Fatal("ungranted admin can read")
-	}
-	if _, err := svc.OpenFeedbackAttachment(scoped, fb.ID, "owned-image", ""); err == nil {
-		t.Fatal("ungranted admin can read attachment")
-	}
-	if _, err := svc.OpenFeedbackAttachment(&model.User{ID: "stranger"}, fb.ID, "owned-image", ""); err == nil {
-		t.Fatal("stranger can read attachment")
-	}
-	scoped.AdminPermissions = []model.AdminPermission{model.AdminPermissionFeedbacks}
-	if list, err := svc.AdminListFeedbacks(scoped, repository.FeedbackFilter{}); err != nil || list.Total != 1 {
-		t.Fatalf("granted admin: %v", err)
-	}
-	reply := "已处理"
-	updated, err := svc.AdminUpdateFeedback(admin, fb.ID, AdminUpdateFeedbackRequest{ExpectedVersion: fb.Version, Status: model.FeedbackStatusResolved, AdminReply: &reply})
-	if err != nil || updated.Version != 2 {
-		t.Fatalf("reply: %v %v", updated, err)
-	}
-	if _, err := svc.AdminUpdateFeedback(admin, fb.ID, AdminUpdateFeedbackRequest{ExpectedVersion: 1, Status: model.FeedbackStatusClosed}); err == nil {
-		t.Fatal("stale update accepted")
-	}
-	archived, err := svc.AdminArchiveFeedback(admin, fb.ID, true, 2)
-	if err != nil || !archived.Archived || archived.AdminReply != reply || archived.Version != 3 {
-		t.Fatalf("archive lost reply: %v %v", archived, err)
-	}
-	if err := svc.AdminDeleteFeedback(admin, fb.ID, 2); err == nil {
-		t.Fatal("stale delete accepted")
-	}
-	if err := svc.AdminDeleteFeedback(admin, fb.ID, 3); err != nil {
+	availability.UserFeedbackEnabled = false
+	if _, err := svc.UpdateFeatureAvailability(admin, availability.FeatureAvailability); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.repo.ResourceForUser(user.ID, "owned-image"); err != nil {
-		t.Fatal("feedback deletion deleted media")
-	}
-	var count int64
-	if err := db.Model(&model.AdminAuditEvent{}).Count(&count).Error; err != nil || count != 3 {
-		t.Fatalf("audit: %d %v", count, err)
-	}
-}
-
-func TestFeedbackClosedFeatureAndInvalidInputsRejectWrites(t *testing.T) {
-	svc, _, user, db := newTestFeedbackService(t)
-	for _, mutate := range []func(*SubmitFeedbackRequest){
-		func(req *SubmitFeedbackRequest) { req.Attachments = "invalid" },
-		func(req *SubmitFeedbackRequest) { req.Environment = `{"currentUrl":"https://host/?key=secret"}` },
-		func(req *SubmitFeedbackRequest) { req.Type = "invalid" },
-		func(req *SubmitFeedbackRequest) { req.RequestID = "" },
-		func(req *SubmitFeedbackRequest) { req.Attachments = `[{"id":"owned-image"},{"id":"owned-image"}]` },
-	} {
-		req := feedbackTestRequest()
-		mutate(&req)
-		if _, err := svc.SubmitFeedback(user, req); err == nil {
-			t.Fatalf("invalid input accepted: %#v", req)
-		}
-	}
-	if err := db.Model(&model.SystemSetting{}).Where("key = ?", "feature_availability").Update("value_json", `{"userFeedbackEnabled":false}`).Error; err != nil {
-		t.Fatal(err)
-	}
-	if _, err := svc.SubmitFeedback(user, feedbackTestRequest()); err == nil {
-		t.Fatal("closed feature accepted submit")
+	if _, err := svc.SubmitFeedback(user, SubmitFeedbackRequest{Title: "Blocked", Content: "Must not be saved"}); err == nil {
+		t.Fatal("disabled feedback accepted a new submission")
 	}
 	if _, err := svc.UploadFeedbackAttachment(user, nil); err == nil {
-		t.Fatal("closed feature accepted upload")
+		t.Fatal("disabled feedback accepted an upload")
 	}
-	if list, err := svc.MyFeedbacks(user); err != nil || len(list) != 0 {
-		t.Fatalf("closed history: %v %v", list, err)
+	history, err := svc.MyFeedbacks(user)
+	if err != nil || len(history) != 1 {
+		t.Fatalf("history count = %d, error = %v", len(history), err)
 	}
 }

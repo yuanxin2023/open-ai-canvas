@@ -6,7 +6,7 @@ import (
 )
 
 func TestOfficialDolaPoolVideoProfile(t *testing.T) {
-	adapter := officialPackageAdapter(t, "dola-pool.canvas-plugin", "dola-pool")
+	adapter := officialPackageAdapter(t, "dola-pool.yingce-plugin", "dola-pool")
 	request := GenerationRequest{
 		Capability:  CapabilityVideo,
 		Model:       "seedance-2.5",
@@ -71,7 +71,7 @@ func TestOfficialDolaPoolVideoProfile(t *testing.T) {
 }
 
 func TestOfficialDolaPoolRequiresExplicitDuration(t *testing.T) {
-	adapter := officialPackageAdapter(t, "dola-pool.canvas-plugin", "dola-pool")
+	adapter := officialPackageAdapter(t, "dola-pool.yingce-plugin", "dola-pool")
 	_, err := adapter.BuildCreate(context.Background(), RequestContext{Request: GenerationRequest{
 		Model:  "seedance-2.5",
 		Prompt: "A cat chasing butterflies in a meadow",

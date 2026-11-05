@@ -31,6 +31,6 @@ describe("User Feedback Plugin", () => {
 
         await getAdminFeedbacks({ page: 2, limit: 15 });
 
-        expect(getAdminFeedbacksSpy).toHaveBeenCalledWith("/admin/feedbacks?page=2&pageSize=15", { signal: undefined });
+        expect(getAdminFeedbacksSpy).toHaveBeenCalledWith("/admin/feedbacks?page=2&pageSize=15");
     });
 });

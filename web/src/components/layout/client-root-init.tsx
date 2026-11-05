@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { useEffect, useRef } from "react";
 import { App } from "antd";
+import { useTranslation } from "react-i18next";
 
 import { createModelChannel, useConfigStore } from "@/stores/use-config-store";
 import { navigateToSettings } from "@/lib/settings-navigation";
@@ -11,6 +12,7 @@ import { useUserStore } from "@/stores/use-user-store";
 import { appQueryClient } from "@/lib/query-client";
 
 export function ClientRootInit({ children }: { children: ReactNode }) {
+    const { t } = useTranslation();
     const config = useConfigStore((state) => state.config);
     const userId = useUserStore((state) => state.user?.id || "");
     const { message } = App.useApp();
@@ -20,15 +22,19 @@ export function ClientRootInit({ children }: { children: ReactNode }) {
     const setPluginStates = usePluginStore((state) => state.setPluginStates);
     const pluginStoreHydrated = usePluginStore((state) => state.hydrated);
 
-    useEffect(() => () => {
-        usePluginStore.getState().setRuntimeStatuses({});
-        usePluginStore.getState().setPluginStates({});
-    }, []);
+    useEffect(
+        () => () => {
+            usePluginStore.getState().setRuntimeStatuses({});
+            usePluginStore.getState().setPluginStates({});
+        },
+        [],
+    );
 
     useEffect(() => {
         if (!userId || !pluginStoreHydrated) return;
         let cancelled = false;
-        void appQueryClient.fetchQuery({ queryKey: ["plugin-runtime", userId], queryFn: fetchPluginRuntimeState, staleTime: 30_000 })
+        void appQueryClient
+            .fetchQuery({ queryKey: ["plugin-runtime", userId], queryFn: fetchPluginRuntimeState, staleTime: 30_000 })
             .then(async (runtime) => {
                 if (cancelled || useUserStore.getState().user?.id !== userId) return;
                 const statuses = { ...runtime.statuses };
@@ -109,13 +115,13 @@ export function ClientRootInit({ children }: { children: ReactNode }) {
                             }
                           : channel,
                   )
-                : [createModelChannel({ id: "default", name: "默认渠道", baseUrl: baseUrl || undefined })],
+                : [createModelChannel({ id: "default", name: t("account.layout.clientInit.defaultChannel"), baseUrl: baseUrl || undefined })],
         );
         if (baseUrl) updateConfig("baseUrl", baseUrl);
         navigateToSettings({ section: "channels" });
-        if (ignoredApiKey) message.warning("出于安全考虑，链接中的 API Key 已忽略，请在配置中手动填写");
-        else message.success("已导入本地直连地址");
-    }, [config.channels, message, updateConfig]);
+        if (ignoredApiKey) message.warning(t("account.layout.clientInit.apiKeyIgnored"));
+        else message.success(t("account.layout.clientInit.baseUrlImported"));
+    }, [config.channels, message, t, updateConfig]);
 
     return <>{children}</>;
 }

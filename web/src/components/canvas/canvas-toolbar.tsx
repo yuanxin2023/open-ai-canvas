@@ -16,6 +16,7 @@ import type { CanvasAppearance } from "@/lib/canvas/canvas-appearance";
 import { canvasThemes, type CanvasBackgroundMode, type CanvasTheme } from "@/lib/canvas-theme";
 import { defaultToolbarPrefs, readToolbarPrefs, resolveToolbarEntries, type ToolContext, type ToolbarHandlers, type ToolbarPrefs } from "@/lib/canvas/tool-registry";
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
+import { useTranslation } from "react-i18next";
 import type { CanvasNodeTypeId, CanvasToolMode, CanvasWorkspaceMode } from "@/types/canvas";
 
 export function CanvasToolbar({
@@ -98,6 +99,7 @@ export function CanvasToolbar({
     /** 紧凑尺寸：短剧精修画布把视野留给节点。 */
     compact?: boolean;
 }) {
+    const { t } = useTranslation();
     const rootRef = useRef<HTMLDivElement>(null);
     const { bringToFront, zIndex } = useCanvasOverlayLayer("main-toolbar", "var(--z-toolbar)");
     const dockRef = useRef<HTMLDivElement>(null);
@@ -160,21 +162,68 @@ export function CanvasToolbar({
         onOpenPrevis,
         onUpload,
         onOpenWorkspace,
-    onOpenMyAssets,
+        onOpenMyAssets,
         onOpenProjectCharacters,
         onBackgroundModeChange,
         onShowImageInfoChange,
-        onToggleAddPanel: (event: ReactMouseEvent<HTMLElement>) => { placePanel(event); setAppearanceOpen(false); setSettingsOpen(false); setAddOpen((value) => !value); },
-        onToggleAppearancePanel: (event: ReactMouseEvent<HTMLElement>) => { placePanel(event); setAddOpen(false); setSettingsOpen(false); setAppearanceOpen((value) => !value); },
-        onToggleSettingsPanel: () => { setAddOpen(false); setAppearanceOpen(false); setSettingsOpen((value) => !value); },
+        onToggleAddPanel: (event: ReactMouseEvent<HTMLElement>) => {
+            placePanel(event);
+            setAppearanceOpen(false);
+            setSettingsOpen(false);
+            setAddOpen((value) => !value);
+        },
+        onToggleAppearancePanel: (event: ReactMouseEvent<HTMLElement>) => {
+            placePanel(event);
+            setAddOpen(false);
+            setSettingsOpen(false);
+            setAppearanceOpen((value) => !value);
+        },
+        onToggleSettingsPanel: () => {
+            setAddOpen(false);
+            setAppearanceOpen(false);
+            setSettingsOpen((value) => !value);
+        },
         onDeleteSelected: onDelete,
         // 以下为多选/节点悬停工具栏回调，主工具栏不使用，用 no-op 占位
-        onAlign: () => {}, onArrange: () => {}, onCreateStoryboard: () => {}, onCreateReferenceGroup: () => {}, onBatchConnect: () => {}, onMergeVideos: () => {}, onSendSelectionToAgent: () => {},
-        onNodeInfo: () => {}, onNodeDelete: () => {}, onNodeRetry: () => {}, onNodeEditText: () => {}, onNodeDecreaseFont: () => {}, onNodeIncreaseFont: () => {},
-        onNodeToggleDialog: () => {}, onNodeAnnotate: () => {}, onNodeGenerateImage: () => {}, onNodeUpload: () => {}, onNodeDownload: () => {}, onNodeSaveAsset: () => {},
-        onNodeRegionEdit: () => {}, onNodeImageEdit: () => {}, onNodeRemoveBackground: () => {}, onNodeEmotion: () => {}, onNodePortraitTexture: () => {}, onNodeCrop: () => {}, onNodeSplit: () => {}, onNodeUpscale: () => {},
-        onNodeSuperResolve: () => {}, onNodeAngle: () => {}, onNodeViewImage: () => {}, onNodeExtractVideoFrames: () => {}, onNodeExtractAudioFromVideo: () => {}, onNodeTrimVideoSegments: () => {}, onNodeSubtitles: () => {}, onNodeTimeline: () => {}, onNodeReversePrompt: () => {},
-        onNodeToggleFreeResize: () => {}, onNodeToggleLocked: () => {}, onNodeCopyPrompt: () => {},
+        onAlign: () => {},
+        onArrange: () => {},
+        onCreateStoryboard: () => {},
+        onCreateReferenceGroup: () => {},
+        onBatchConnect: () => {},
+        onMergeVideos: () => {},
+        onSendSelectionToAgent: () => {},
+        onNodeInfo: () => {},
+        onNodeDelete: () => {},
+        onNodeRetry: () => {},
+        onNodeEditText: () => {},
+        onNodeDecreaseFont: () => {},
+        onNodeIncreaseFont: () => {},
+        onNodeToggleDialog: () => {},
+        onNodeAnnotate: () => {},
+        onNodeGenerateImage: () => {},
+        onNodeUpload: () => {},
+        onNodeDownload: () => {},
+        onNodeSaveAsset: () => {},
+        onNodeRegionEdit: () => {},
+        onNodeImageEdit: () => {},
+        onNodeRemoveBackground: () => {},
+        onNodeEmotion: () => {},
+        onNodePortraitTexture: () => {},
+        onNodeCrop: () => {},
+        onNodeSplit: () => {},
+        onNodeUpscale: () => {},
+        onNodeSuperResolve: () => {},
+        onNodeAngle: () => {},
+        onNodeViewImage: () => {},
+        onNodeExtractVideoFrames: () => {},
+        onNodeExtractAudioFromVideo: () => {},
+        onNodeTrimVideoSegments: () => {},
+        onNodeSubtitles: () => {},
+        onNodeTimeline: () => {},
+        onNodeReversePrompt: () => {},
+        onNodeToggleFreeResize: () => {},
+        onNodeToggleLocked: () => {},
+        onNodeCopyPrompt: () => {},
     } as ToolbarHandlers;
 
     const ctx: ToolContext = {
@@ -202,33 +251,70 @@ export function CanvasToolbar({
     const createCommands = useCanvasCreateCommands(ctx, runAddAction);
 
     return (
-        <div ref={rootRef} data-canvas-no-zoom className="pointer-events-none absolute inset-x-[var(--canvas-inset-x)] bottom-[var(--canvas-inset-y)] flex justify-center" style={{ zIndex }} onPointerDownCapture={bringToFront} onFocusCapture={bringToFront}>
-            <AnimatePresence>
-                {addOpen ? (
-                    <AddNodeMenu
-                        x={panelX}
-                        theme={theme}
-                        commands={createCommands}
-                    />
-                ) : null}
-            </AnimatePresence>
+        <div
+            ref={rootRef}
+            data-canvas-no-zoom
+            className="pointer-events-none absolute inset-x-[var(--canvas-inset-x)] bottom-[var(--canvas-inset-y)] flex justify-center"
+            style={{ zIndex }}
+            onPointerDownCapture={bringToFront}
+            onFocusCapture={bringToFront}
+        >
+            <AnimatePresence>{addOpen ? <AddNodeMenu x={panelX} theme={theme} commands={createCommands} /> : null}</AnimatePresence>
 
             <FloatingDock ref={dockRef} items={items} size={compact ? "compact" : "default"} className="canvas-floating-dock pointer-events-auto max-w-full" style={canvasDockStyle(theme)} />
 
             <AnimatePresence>
                 {appearanceOpen ? (
-                    <motion.div initial={{ opacity: 0, scaleY: 0.9, y: 8 }} animate={{ opacity: 1, scaleY: 1, y: 0 }} exit={{ opacity: 0, scaleY: 0.92, y: 6 }} transition={{ duration: aceternityMotion.duration.panel, ease: aceternityMotion.easing.enter }} className="pointer-events-auto absolute bottom-[var(--canvas-dock-popover-offset)] z-[var(--dock-z-popover)] w-[296px] max-w-[calc(100vw-24px)]" style={{ left: panelX || "50%", transformOrigin: "bottom center", x: "-50%" }}>
-                        <SpotlightSurface role="region" aria-label="画布外观" spotlightColor={theme.toolbar.itemHover} initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.97, transition: { duration: 0 } }} transition={{ duration: aceternityMotion.duration.instant, ease: aceternityMotion.easing.enter }} className="aceternity-floating-panel flex flex-col overflow-hidden rounded-[var(--panel-radius)] border p-2 backdrop-blur-2xl" contentClassName="relative z-[1] min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain thin-scrollbar" data-canvas-wheel-scroll style={{ maxHeight: "calc(100dvh - var(--canvas-inset-y) - var(--canvas-dock-popover-offset) - 12px)", background: theme.spatial.elevated, borderColor: theme.toolbar.border, color: theme.toolbar.item }} onWheel={(event) => event.stopPropagation()}>
-                            <PanelHeading icon={<Palette className="size-4" />} title="画布外观" subtitle="配色与网格" theme={theme} />
-                            <CanvasAppearanceControls appearance={appearance} backgroundMode={backgroundMode} colorTheme={colorTheme} theme={theme} onAppearanceChange={onAppearanceChange} onSaveAppearanceDefault={onSaveAppearanceDefault} onBackgroundModeChange={onBackgroundModeChange} />
+                    <motion.div
+                        initial={{ opacity: 0, scaleY: 0.9, y: 8 }}
+                        animate={{ opacity: 1, scaleY: 1, y: 0 }}
+                        exit={{ opacity: 0, scaleY: 0.92, y: 6 }}
+                        transition={{ duration: aceternityMotion.duration.panel, ease: aceternityMotion.easing.enter }}
+                        className="pointer-events-auto absolute bottom-[var(--canvas-dock-popover-offset)] z-[var(--dock-z-popover)] w-[296px] max-w-[calc(100vw-24px)]"
+                        style={{ left: panelX || "50%", transformOrigin: "bottom center", x: "-50%" }}
+                    >
+                        <SpotlightSurface
+                            role="region"
+                            aria-label={t("canvasC.toolbar.appearance")}
+                            spotlightColor={theme.toolbar.itemHover}
+                            initial={{ opacity: 0, scale: 0.97 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.97, transition: { duration: 0 } }}
+                            transition={{ duration: aceternityMotion.duration.instant, ease: aceternityMotion.easing.enter }}
+                            className="aceternity-floating-panel flex flex-col overflow-hidden rounded-[var(--panel-radius)] border p-2 backdrop-blur-2xl"
+                            contentClassName="relative z-[1] min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain thin-scrollbar"
+                            data-canvas-wheel-scroll
+                            style={{ maxHeight: "calc(100dvh - var(--canvas-inset-y) - var(--canvas-dock-popover-offset) - 12px)", background: theme.spatial.elevated, borderColor: theme.toolbar.border, color: theme.toolbar.item }}
+                            onWheel={(event) => event.stopPropagation()}
+                        >
+                            <PanelHeading icon={<Palette className="size-4" />} title={t("canvasC.toolbar.appearance")} subtitle={t("canvasC.toolbar.appearanceSubtitle")} theme={theme} />
+                            <CanvasAppearanceControls
+                                appearance={appearance}
+                                backgroundMode={backgroundMode}
+                                colorTheme={colorTheme}
+                                theme={theme}
+                                onAppearanceChange={onAppearanceChange}
+                                onSaveAppearanceDefault={onSaveAppearanceDefault}
+                                onBackgroundModeChange={onBackgroundModeChange}
+                            />
                             <div className="mt-2 flex items-center justify-between gap-2 rounded-[var(--dock-item-radius-labeled)] border px-2 py-2" style={{ background: theme.spatial.surface, borderColor: theme.toolbar.border }}>
-                                <span className="inline-flex min-w-0 items-center gap-2 text-[var(--fs-caption)] font-semibold"><Info className="size-3" />媒体信息</span>
+                                <span className="inline-flex min-w-0 items-center gap-2 text-[var(--fs-caption)] font-semibold">
+                                    <Info className="size-3" />
+                                    {t("canvasC.toolbar.mediaInfo")}
+                                </span>
                                 <Switch size="sm" checked={showImageInfo} onChange={onShowImageInfoChange} />
                             </div>
-                            {onPresenceHintsChange && <div className="mt-2.5 flex items-center justify-between gap-2 rounded-[var(--dock-item-radius-labeled)] border px-2.5 py-2" style={{ background: theme.spatial.surface, borderColor: theme.toolbar.border }}>
-                                <div className="min-w-0"><span className="text-[var(--fs-caption)] font-semibold">实时协作提示</span><p className="mt-1 text-[var(--fs-tiny)]" style={{ color: theme.node.muted }}>显示同账号其他窗口的光标与拖拽轮廓</p></div>
-                                <Switch size="sm" aria-label="实时协作提示" checked={showPresenceHints} onChange={onPresenceHintsChange} />
-                            </div>}
+                            {onPresenceHintsChange && (
+                                <div className="mt-2.5 flex items-center justify-between gap-2 rounded-[var(--dock-item-radius-labeled)] border px-2.5 py-2" style={{ background: theme.spatial.surface, borderColor: theme.toolbar.border }}>
+                                    <div className="min-w-0">
+                                        <span className="text-[var(--fs-caption)] font-semibold">实时协作提示</span>
+                                        <p className="mt-1 text-[var(--fs-tiny)]" style={{ color: theme.node.muted }}>
+                                            显示同账号其他窗口的光标与拖拽轮廓
+                                        </p>
+                                    </div>
+                                    <Switch size="sm" aria-label="实时协作提示" checked={showPresenceHints} onChange={onPresenceHintsChange} />
+                                </div>
+                            )}
                         </SpotlightSurface>
                     </motion.div>
                 ) : null}
@@ -239,14 +325,28 @@ export function CanvasToolbar({
     );
 }
 
-function AddNodeMenu({ x, theme, commands }: {
-    x: number;
-    theme: CanvasTheme;
-    commands: CanvasCreateCommand[];
-}) {
+function AddNodeMenu({ x, theme, commands }: { x: number; theme: CanvasTheme; commands: CanvasCreateCommand[] }) {
     return (
-        <motion.div initial={{ opacity: 0, scaleY: 0.9, y: 8 }} animate={{ opacity: 1, scaleY: 1, y: 0 }} exit={{ opacity: 0, scaleY: 0.92, y: 6 }} transition={{ duration: aceternityMotion.duration.panel, ease: aceternityMotion.easing.enter }} className="pointer-events-auto absolute bottom-[var(--canvas-dock-popover-offset)] z-[var(--dock-z-popover)] w-[420px] max-w-[calc(100vw-24px)]" style={{ left: x || "50%", transformOrigin: "bottom center", x: "-50%" }}>
-            <SpotlightSurface spotlightColor={theme.toolbar.itemHover} initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.97, transition: { duration: 0 } }} transition={{ duration: aceternityMotion.duration.instant, ease: aceternityMotion.easing.enter }} className="aceternity-floating-panel flex flex-col overflow-hidden rounded-[var(--panel-radius)] border p-2 backdrop-blur-2xl" contentClassName="relative z-[1] min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain thin-scrollbar" data-canvas-wheel-scroll style={{ maxHeight: "calc(100dvh - var(--canvas-inset-y) - var(--canvas-dock-popover-offset) - 12px)", background: theme.spatial.elevated, borderColor: theme.toolbar.border, color: theme.node.text }} onWheel={(event) => event.stopPropagation()}>
+        <motion.div
+            initial={{ opacity: 0, scaleY: 0.9, y: 8 }}
+            animate={{ opacity: 1, scaleY: 1, y: 0 }}
+            exit={{ opacity: 0, scaleY: 0.92, y: 6 }}
+            transition={{ duration: aceternityMotion.duration.panel, ease: aceternityMotion.easing.enter }}
+            className="pointer-events-auto absolute bottom-[var(--canvas-dock-popover-offset)] z-[var(--dock-z-popover)] w-[420px] max-w-[calc(100vw-24px)]"
+            style={{ left: x || "50%", transformOrigin: "bottom center", x: "-50%" }}
+        >
+            <SpotlightSurface
+                spotlightColor={theme.toolbar.itemHover}
+                initial={{ opacity: 0, scale: 0.97 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.97, transition: { duration: 0 } }}
+                transition={{ duration: aceternityMotion.duration.instant, ease: aceternityMotion.easing.enter }}
+                className="aceternity-floating-panel flex flex-col overflow-hidden rounded-[var(--panel-radius)] border p-2 backdrop-blur-2xl"
+                contentClassName="relative z-[1] min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain thin-scrollbar"
+                data-canvas-wheel-scroll
+                style={{ maxHeight: "calc(100dvh - var(--canvas-inset-y) - var(--canvas-dock-popover-offset) - 12px)", background: theme.spatial.elevated, borderColor: theme.toolbar.border, color: theme.node.text }}
+                onWheel={(event) => event.stopPropagation()}
+            >
                 <CanvasCreateMenu commands={commands} />
             </SpotlightSurface>
         </motion.div>
@@ -256,8 +356,15 @@ function AddNodeMenu({ x, theme, commands }: {
 function PanelHeading({ icon, title, subtitle, theme }: { icon: ReactNode; title: string; subtitle: string; theme: CanvasTheme }) {
     return (
         <div className="flex items-center gap-2">
-            <span className="grid size-8 shrink-0 place-items-center rounded-[var(--dock-item-radius)] border opacity-75 [&_svg]:size-3.5" style={{ background: theme.spatial.surface, borderColor: theme.toolbar.border }}>{icon}</span>
-            <span className="min-w-0"><span className="block text-xs font-semibold">{title}</span><span className="mt-0.5 block text-[var(--fs-micro)]" style={{ color: theme.node.muted }}>{subtitle}</span></span>
+            <span className="grid size-8 shrink-0 place-items-center rounded-[var(--dock-item-radius)] border opacity-75 [&_svg]:size-3.5" style={{ background: theme.spatial.surface, borderColor: theme.toolbar.border }}>
+                {icon}
+            </span>
+            <span className="min-w-0">
+                <span className="block text-xs font-semibold">{title}</span>
+                <span className="mt-0.5 block text-[var(--fs-micro)]" style={{ color: theme.node.muted }}>
+                    {subtitle}
+                </span>
+            </span>
         </div>
     );
 }

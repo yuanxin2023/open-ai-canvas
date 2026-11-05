@@ -968,7 +968,7 @@ func pluginManifestView(raw []byte, metadata protocol.Metadata, source string) P
 		manifest.Metadata = metadata
 	}
 	return PluginManifestView{
-		ID: metadata.ID, Name: metadata.Name, Version: metadata.Version, APIVersion: "open-ai-canvas.plugin/v1", Entry: manifest.Entry, Surfaces: manifest.Surfaces,
+		ID: metadata.ID, Name: metadata.Name, Version: metadata.Version, APIVersion: "yingce.plugin/v1", Entry: manifest.Entry, Surfaces: manifest.Surfaces,
 		Description: metadata.Description, Documentation: metadata.Documentation, Author: metadata.Vendor,
 		Permissions: manifest.Permissions, Trusted: isBuiltInPluginSource(source), Runtime: manifest.Runtime,
 		Configuration: manifest.Configuration, Contributes: manifest.Contributes,

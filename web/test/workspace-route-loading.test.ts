@@ -22,14 +22,37 @@ describe("workspace route loading", () => {
         const navigation = source("../src/components/layout/workspace-sidebar-nav.tsx");
 
         for (const route of ["projects", "canvas", "assets", "create"]) {
-            expect(modules).toContain(`${route}: () => import`);
+            expect(modules).toContain(`${route}: preloadableLazy(() => import`);
         }
-        expect(modules).toContain('projectDetail: () => import("@/pages/projects/detail")');
+        expect(modules).toContain('projectDetail: preloadableLazy(() => import("@/pages/projects/detail"))');
         expect(modules).toContain('slug === "projects" && segments.length > 1');
         expect(navigation).toContain("onPointerEnter={() => preloadWorkspaceRoute(linkTo)}");
         expect(navigation).toContain("onPointerDown={() => preloadWorkspaceRoute(linkTo)}");
         expect(navigation).toContain("onFocus={() => preloadWorkspaceRoute(linkTo)}");
         expect(modules).toContain("pathnameOrSlug.split(/[?#]/, 1)[0]");
+    });
+
+    test("renders preloaded workspace pages without suspending the layout", async () => {
+        const router = source("../src/router.tsx");
+        const layout = source("../src/layouts/user-layout.tsx");
+        const html = source("../index.html");
+
+        // 功能守卫在页面 Suspense 之外，懒加载会把整个工作区换成全屏加载页。
+        expect(router).toContain('import { RequireFeature } from "@/components/auth/require-feature";');
+        expect(router).not.toContain("const RequireFeature = lazy(");
+        expect(router).not.toMatch(/const \w+Page = lazy\(load\w+Page\)/);
+        expect(layout).toContain("preloadWorkspaceNavigationPages()");
+        expect(html).not.toContain('style="background:#ffffff"');
+        expect(html).toContain("html.dark body");
+
+        const { preloadableLazy } = await import("../src/lib/preloadable-lazy");
+        function Loaded() {
+            return null;
+        }
+        const Page = preloadableLazy(async () => ({ default: Loaded }));
+        expect((Page({}) as { type: unknown }).type).not.toBe(Loaded);
+        await Page.preload();
+        expect((Page({}) as { type: unknown }).type).toBe(Loaded);
     });
 
     test("keeps the creation page at root and preserves the create compatibility route", () => {
@@ -44,12 +67,12 @@ describe("workspace route loading", () => {
         expect(router).toMatch(/path: "\/canvas\/:id",\s+element: \(\s+<RequireAuth>\s+<CanvasProjectPage \/>\s+<\/RequireAuth>\s+\),/);
         expect(router).not.toContain('path: "/home"');
         expect(router).not.toContain("HomePage");
-        expect(navigation).toContain('{ ...toolItem("create", "/?home=1"), id: "home", title: "创作" }');
+        expect(navigation).toContain('toolItem("create", "/?home=1")');
         expect(navigation).not.toContain('to: "/create"');
         expect(navigation).not.toContain('to: "/home"');
-        expect(topBar).toContain('home: "创作"');
-        expect(topBar).toContain('PAGE_TITLES[slug || "home"] || "工作台"');
-        expect(topBar).toContain('prompts: "提示词"');
+        expect(topBar).toContain('home: "nav.sidebar.home"');
+        expect(topBar).toContain('PAGE_TITLES[slug || "home"] || "shell.workbench"');
+        expect(topBar).toContain('prompts: "local.nav.prompts"');
         expect(topBar).not.toContain("<Link");
         expect(topBar).not.toContain('aria-hidden="true">/</span>');
     });
@@ -60,9 +83,9 @@ describe("workspace route loading", () => {
         const palette = source("../src/components/layout/workspace-command-palette.tsx");
         const featureGuard = source("../src/components/auth/require-feature.tsx");
 
-        expect(navigation).toContain('...(features.shortDramaEnabled ? [{ ...toolItem("projects", "/projects"), title: "短剧 Agent" }] : [])');
-        expect(palette).toContain('...(features.shortDramaEnabled ? [{ ...toolEntry("projects", "/projects"), title: "短剧 Agent" }] : [])');
-        expect(navigation).toContain('...(features.pluginCenterEnabled ? [{ ...toolItem("plugins", "/plugins"), title: "插件" }] : [])');
+        expect(navigation).toMatch(/features.shortDramaEnabled\s*\?\s*\[\{\s*\.\.\.toolItem\("projects", "\/projects"\)/);
+        expect(palette).toMatch(/features.shortDramaEnabled\s*\?\s*\[\{\s*\.\.\.toolEntry\("projects", "\/projects"\)/);
+        expect(navigation).toMatch(/features.pluginCenterEnabled\s*\?\s*\[\{\s*\.\.\.toolItem\("plugins", "\/plugins"\)/);
         expect(navigation).not.toContain("features.pluginCenterEnabled || isAdmin");
         expect(featureGuard).not.toContain("adminBypass");
         expect(router).toContain('<RequireFeature feature="shortDramaEnabled">{deferred(<ProjectsPage />)}</RequireFeature>');
@@ -76,8 +99,9 @@ describe("workspace route loading", () => {
         const canvasLibrary = source("../src/pages/canvas/index.tsx");
         const canvasCard = source("../src/components/canvas/canvas-folder-card.tsx");
 
-        expect(modules).toContain('loadCanvasProjectPage = () => import("@/pages/canvas/project")');
-        expect(router).toContain("lazy(loadCanvasProjectPage)");
+        expect(modules).toContain('canvasProject: preloadableLazy(() => import("@/pages/canvas/project"))');
+        expect(modules).toContain("loadCanvasProjectPage = workspaceRoutePages.canvasProject.preload");
+        expect(router).toContain("const CanvasProjectPage = workspaceRoutePages.canvasProject;");
         expect(canvasLibrary).toContain("setOpeningProjectId(id)");
         expect(canvasLibrary).toContain("window.requestAnimationFrame(() => navigate(");
         expect(canvasCard).toContain("onPointerEnter={onPrefetch}");
@@ -94,7 +118,7 @@ describe("workspace route loading", () => {
         expect(detail).not.toContain("AppDrawer");
         expect(layout).not.toContain("useCanvasUiStore");
         expect(layout).not.toContain("CanvasDeleteProjectsDialog");
-        expect(canvas).toContain("deleteDialogOpen ? <Suspense");
+        expect(canvas).toMatch(/deleteDialogOpen \?\s*\(?\s*<Suspense/);
     });
 
     test("does not poll wallet balance from permanent workspace chrome", () => {

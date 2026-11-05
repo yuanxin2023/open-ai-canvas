@@ -11,6 +11,9 @@ const { act } = React;
 const { createRoot } = await import("react-dom/client");
 const { MemoryRouter, Route, Routes, useLocation } = await import("react-router");
 const { useUserStore } = await import("@/stores/use-user-store");
+const { useAuthSettingsStore } = await import("@/stores/use-auth-settings-store");
+const { useAuthDialogStore } = await import("@/stores/use-auth-dialog-store");
+useAuthSettingsStore.setState({ settings: { loginMode: "page" } as any, status: "ready", loadedAt: Date.now() });
 let canvasHydrated = false;
 let creates = 0;
 let loginRequests = 0;
@@ -103,6 +106,17 @@ test("unresolved sessions cannot briefly expose workspace content", async () => 
     expect(host.textContent).not.toContain("workspace");
     await act(async () => useUserStore.setState({ hydrated: true }));
     expect(host.textContent).toContain("workspace");
+});
+
+test("modal login guards return home and remember the private destination", async () => {
+    useAuthSettingsStore.setState({ settings: { loginMode: "modal" } as any });
+    useUserStore.setState({ hydrated: true, user: null });
+    await renderRoute("/canvas/private?agent=2");
+    expect(host.querySelector("output")!.textContent).toBe("/");
+    expect(useAuthDialogStore.getState().open).toBe(true);
+    expect(useAuthDialogStore.getState().next).toBe("/canvas/private?agent=2");
+    useAuthDialogStore.getState().closeDialog();
+    useAuthSettingsStore.setState({ settings: { loginMode: "page" } as any });
 });
 
 test("guest Agent activation requests login before creating a canvas or task", async () => {

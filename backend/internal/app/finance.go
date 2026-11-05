@@ -847,10 +847,10 @@ func (s *Service) newLogicalModelBillingOrder(userID string, task *model.Task, i
 		if channelModel.Capability != capability || !supportsTokenBilling(capability, channelModel.Protocol) {
 			return nil, BadAuthRequest("当前供应线路不支持前台模型的 Token 计费方式")
 		}
-		if capability == "video" && (logicalModel.InputPriceMicrocredits != 0 || logicalModel.CachedPriceMicrocredits != 0) {
+		if capability == "video" && (logicalModel.InputPriceMicrocredits != 0 || logicalModel.CachedPriceMicrocredits != 0 || logicalModel.CacheWritePriceMicrocredits != 0) {
 			return nil, BadAuthRequest("视频 Token 仅按视频用量定价，请将输入与缓存价格设为 0")
 		}
-		tokenPricing := &model.ChannelModel{InputTokenPriceMicrocredits: logicalModel.InputPriceMicrocredits, OutputTokenPriceMicrocredits: logicalModel.OutputPriceMicrocredits, CachedTokenPriceMicrocredits: logicalModel.CachedPriceMicrocredits}
+		tokenPricing := &model.ChannelModel{InputTokenPriceMicrocredits: logicalModel.InputPriceMicrocredits, OutputTokenPriceMicrocredits: logicalModel.OutputPriceMicrocredits, CachedTokenPriceMicrocredits: logicalModel.CachedPriceMicrocredits, CacheWriteTokenPriceMicrocredits: logicalModel.CacheWritePriceMicrocredits}
 		amount, err = tokenEstimateAmount(tokenPricing, tokenEstimate, 10_000)
 		quantity = tokenEstimate.InputTokens + tokenEstimate.OutputTokens
 	default:
@@ -878,8 +878,9 @@ func (s *Service) newLogicalModelBillingOrder(userID string, task *model.Task, i
 		UserGroup:                  access.groupCode(),
 		ReservedAmountMicrocredits: amount, InputTokenPriceMicrocredits: logicalModel.InputPriceMicrocredits,
 		OutputTokenPriceMicrocredits: logicalModel.OutputPriceMicrocredits, CachedTokenPriceMicrocredits: logicalModel.CachedPriceMicrocredits,
-		VideoFormulaTokens: videoFormulaTokens,
-		Status:             model.BillingStatusReserved,
+		CacheWriteTokenPriceMicrocredits: logicalModel.CacheWritePriceMicrocredits,
+		VideoFormulaTokens:               videoFormulaTokens,
+		Status:                           model.BillingStatusReserved,
 	}
 	intent := ModelRequestIntentFromTaskInput(input, task.Type, task.Operation)
 	priceTierID, _ := config["priceTierId"].(string)
@@ -964,7 +965,7 @@ func (s *Service) newBillingOrderWithPriceTier(userID string, taskID string, ide
 		if capability == "video" && tokenEstimate.OutputTokens <= 0 {
 			return nil, BadAuthRequest("无法计算视频 Token 用量，请检查时长与尺寸")
 		}
-		if capability == "video" && (tier.InputTokenPriceMicrocredits != 0 || tier.CachedTokenPriceMicrocredits != 0) {
+		if capability == "video" && (tier.InputTokenPriceMicrocredits != 0 || tier.CachedTokenPriceMicrocredits != 0 || tier.CacheWriteTokenPriceMicrocredits != 0) {
 			return nil, BadAuthRequest("视频 Token 仅按视频用量定价，请将输入与缓存价格设为 0")
 		}
 		quantity = tokenEstimate.InputTokens + tokenEstimate.OutputTokens
@@ -987,7 +988,7 @@ func (s *Service) newBillingOrderWithPriceTier(userID string, taskID string, ide
 		multiplierBPS = configured
 	}
 	if tier.BillingMode == "token" {
-		amount, err = tokenEstimateAmount(&model.ChannelModel{InputTokenPriceMicrocredits: tier.InputTokenPriceMicrocredits, OutputTokenPriceMicrocredits: tier.OutputTokenPriceMicrocredits, CachedTokenPriceMicrocredits: tier.CachedTokenPriceMicrocredits}, tokenEstimate, multiplierBPS)
+		amount, err = tokenEstimateAmount(&model.ChannelModel{InputTokenPriceMicrocredits: tier.InputTokenPriceMicrocredits, OutputTokenPriceMicrocredits: tier.OutputTokenPriceMicrocredits, CachedTokenPriceMicrocredits: tier.CachedTokenPriceMicrocredits, CacheWriteTokenPriceMicrocredits: tier.CacheWriteTokenPriceMicrocredits}, tokenEstimate, multiplierBPS)
 	} else {
 		amount, err = creditAmount(tier.UnitPriceMicrocredits, quantity, multiplierBPS)
 	}
@@ -1005,9 +1006,10 @@ func (s *Service) newBillingOrderWithPriceTier(userID string, taskID string, ide
 		UnitPriceMicrocredits: tier.UnitPriceMicrocredits, MultiplierBasisPoints: multiplierBPS, Quantity: quantity, AmountMicrocredits: amount,
 		ReservedAmountMicrocredits: amount, InputTokenPriceMicrocredits: tier.InputTokenPriceMicrocredits,
 		OutputTokenPriceMicrocredits: tier.OutputTokenPriceMicrocredits, CachedTokenPriceMicrocredits: tier.CachedTokenPriceMicrocredits,
-		VideoFormulaTokens: videoFormulaTokens,
-		UserGroup:          access.groupCode(),
-		Status:             model.BillingStatusReserved,
+		CacheWriteTokenPriceMicrocredits: tier.CacheWriteTokenPriceMicrocredits,
+		VideoFormulaTokens:               videoFormulaTokens,
+		UserGroup:                        access.groupCode(),
+		Status:                           model.BillingStatusReserved,
 	}
 	snapshotCreditCost(order, tier, requestedQuantity, tokenEstimate)
 	operation := ""
@@ -1107,7 +1109,8 @@ func maxOutputTokens(payload map[string]any) int64 {
 	return 4096
 }
 
-// Token 单价按每百万 Token 配置；预授权使用输入价估算缓存 Token，真实结算再按 usage 拆分。
+// Token 单价按每百万 Token 配置；预授权按输入价与缓存写入价中较高者估算全部输入 Token，
+// 缓存写入通常贵于普通输入，避免写入缓存后实际费用超出预留。真实结算再按 usage 拆分。
 func tokenEstimateAmount(item *model.ChannelModel, estimate tokenBillingEstimate, multiplierBPS int64) (int64, error) {
 	if estimate.Err != nil {
 		return 0, estimate.Err
@@ -1116,7 +1119,7 @@ func tokenEstimateAmount(item *model.ChannelModel, estimate tokenBillingEstimate
 		return 0, errors.New("Token 计费参数无效")
 	}
 	amount, err := kernel.TokenBillingAmount(multiplierBPS,
-		kernel.TokenBillingTerm{Tokens: estimate.InputTokens, PriceMicrocredits: item.InputTokenPriceMicrocredits},
+		kernel.TokenBillingTerm{Tokens: estimate.InputTokens, PriceMicrocredits: max(item.InputTokenPriceMicrocredits, item.CacheWriteTokenPriceMicrocredits)},
 		kernel.TokenBillingTerm{Tokens: estimate.OutputTokens, PriceMicrocredits: item.OutputTokenPriceMicrocredits},
 	)
 	if errors.Is(err, kernel.ErrTokenBillingOverflow) {

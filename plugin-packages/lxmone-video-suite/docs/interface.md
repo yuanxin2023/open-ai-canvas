@@ -104,7 +104,7 @@ HTTP 失败、业务错误码或状态进入 `failed` 时，任务以失败结�
 
 ```json
 {
-  "apiVersion": "open-ai-canvas.plugin/v2",
+  "apiVersion": "yingce.plugin/v2",
   "id": "lxmone-video-suite",
   "name": "万有引力视频套件",
   "version": "1.0.1",

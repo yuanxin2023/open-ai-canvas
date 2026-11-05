@@ -1,6 +1,6 @@
 package payment
 
-// RPCProvider is the host side of the open-ai-canvas.payment/v1 process ABI. The
+// RPCProvider is the host side of the yingce.payment/v1 process ABI. The
 // process is shipped inside a validated plugin package and receives exactly
 // one JSON request on stdin, returning one JSON response on stdout. The host
 // still owns the order, credential storage, network policy and crediting
@@ -32,7 +32,7 @@ import (
 )
 
 const (
-	pluginRPCVersion   = "open-ai-canvas.payment/v1"
+	pluginRPCVersion   = "yingce.payment/v1"
 	pluginRPCMaxOutput = 2 << 20
 	pluginRPCTimeout   = 30 * time.Second
 )

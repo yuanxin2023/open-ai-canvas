@@ -50,7 +50,7 @@ V7 不支持 --v、--niji、--fast、--hd，且不发送 speed、quality、resol
 
 ```json
 {
-  "apiVersion": "open-ai-canvas.plugin/v2",
+  "apiVersion": "yingce.plugin/v2",
   "enabled": false,
   "id": "cangyuan-midjourney",
   "name": "沧元 Midjourney",

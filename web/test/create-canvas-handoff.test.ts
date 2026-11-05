@@ -8,7 +8,7 @@ import { moduleGroupSource } from "./helpers/module-group-source";
 
 test("Create exposes one accessible copy action beside each displayed user prompt", async () => {
     const source = await Promise.resolve(moduleGroupSource("pages/create/creation-workspace.tsx"));
-    expect(source).toContain('aria-label="复制提示词"');
+    expect(source).toContain('aria-label={translate("canvasA.artCritique.copyPrompt")}');
     expect(source).toContain('copyText(visiblePrompt, "提示词已复制")');
 });
 

@@ -8,7 +8,7 @@
 - 默认 Base URL：`https://asiasouth.up.railway.app`
 - 鉴权方式：`google-api-key`
 - 生命周期：同步响应
-- 安装包：`subrouter-gemini-image.canvas-plugin`
+- 安装包：`subrouter-gemini-image.yingce-plugin`
 - 官方 API 文档：https://subrouter.ai/docs?tab=channels&source=self&model=gemini-3.1-flash-image&provider=4k-image
 - 文档核对日期：2026-09-29
 

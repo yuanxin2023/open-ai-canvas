@@ -1,21 +1,22 @@
+import { translate } from "@/i18n";
 import { lazy, Suspense, type ReactNode } from "react";
 import { createBrowserRouter, Navigate, Outlet, useLocation } from "react-router";
 import { lazyAdminPage } from "@/pages/admin/admin-page-loader";
 
 import { RequireAuth } from "@/components/auth/require-auth";
+import { RequireFeature } from "@/components/auth/require-feature";
 import { WorkspaceAuthProvider } from "@/components/auth/workspace-auth-provider";
 import { AdminLanding, RequireAdminPermission, RequireFullAdmin } from "@/components/auth/require-admin-permission";
 import type { AdminPermission } from "@/lib/admin-permissions";
 import { CustomerServiceWidget } from "@/components/customer-service/customer-service-widget";
 import { FullScreenLoader, WorkspaceRouteLoader } from "@/components/ui/aceternity/full-screen-loader";
-import { loadAssetsPage, loadCanvasPage, loadCanvasProjectPage, loadCreatePage, loadProjectCreatePage, loadProjectDetailPage, loadProjectsPage, loadSkillWorkbenchPage } from "@/lib/workspace-route-modules";
+import { workspaceRoutePages } from "@/lib/workspace-route-modules";
 import { CanvasRefreshShell } from "@/pages/canvas/canvas-refresh-shell";
 import { AuthScene } from "@/pages/auth/auth-scene";
 import RouteErrorPage from "@/pages/route-error";
 import { isGuestWorkspacePath } from "@/lib/guest-workspace";
 
 const AdminPage = lazy(() => import("@/pages/admin"));
-const EcommercePage = lazy(() => import("@/pages/ecommerce"));
 const EcommerceManagementPage = lazyAdminPage(() => import("@/pages/admin/ecommerce-management-page"));
 const EcommerceAgentConfigPage = lazyAdminPage(() => import("@/pages/admin/ecommerce-agent-config-page"));
 const UserGroupsPage = lazyAdminPage(() => import("@/pages/admin/user-groups/user-groups-page"));
@@ -56,39 +57,39 @@ const StoryboardPromptsPage = lazyAdminPage(() => import("@/pages/admin/storyboa
 const AdminFeedbacksPage = lazyAdminPage(() => import("@/pages/admin/feedbacks/feedbacks-page"));
 const UsersPage = lazyAdminPage(() => import("@/pages/admin/users/users-page"));
 const AdministratorsPage = lazyAdminPage(() => import("@/pages/admin/users/administrators-page"));
-const AssetsPage = lazy(loadAssetsPage);
-const PromptsPage = lazy(() => import("@/pages/prompts"));
+const AssetsPage = workspaceRoutePages.assets;
+const PromptsPage = workspaceRoutePages.prompts;
 const LoginPage = lazy(() => import("@/pages/auth/login"));
 const RegisterPage = lazy(() => import("@/pages/auth/register"));
 const ForgotPasswordPage = lazy(() => import("@/pages/auth/forgot-password"));
-const CanvasPage = lazy(loadCanvasPage);
-const CanvasProjectPage = lazy(loadCanvasProjectPage);
+const CanvasPage = workspaceRoutePages.canvas;
+const CanvasProjectPage = workspaceRoutePages.canvasProject;
 const SharedCanvasPage = lazy(() => import("@/pages/canvas/shared"));
-const CreatePage = lazy(loadCreatePage);
-const ImageWorkbenchPage = lazy(() => import("@/pages/workbench/image-workbench-route"));
-const VideoWorkbenchPage = lazy(() => import("@/pages/workbench/video-workbench-page"));
+const CreatePage = workspaceRoutePages.create;
+const EcommercePage = workspaceRoutePages.ecommerce;
+const ImageWorkbenchPage = workspaceRoutePages.imageWorkbench;
+const VideoWorkbenchPage = workspaceRoutePages.videoWorkbench;
 const NotFound = lazy(() => import("@/pages/not-found"));
-const SkillsPage = lazy(() => import("@/pages/skills"));
-const SkillWorkbenchPage = lazy(loadSkillWorkbenchPage);
-const PluginsPage = lazy(() => import("@/pages/plugins"));
-const EagleLibraryPage = lazy(() => import("@/pages/plugins/eagle"));
-const TasksPage = lazy(() => import("@/pages/tasks"));
-const ProjectsPage = lazy(loadProjectsPage);
-const ProjectDetailPage = lazy(loadProjectDetailPage);
-const ProjectCreatePage = lazy(loadProjectCreatePage);
-const SettingsPage = lazy(() => import("@/pages/settings"));
+const SkillsPage = workspaceRoutePages.skills;
+const SkillWorkbenchPage = workspaceRoutePages.skillWorkbench;
+const PluginsPage = workspaceRoutePages.plugins;
+const EagleLibraryPage = workspaceRoutePages.eagleLibrary;
+const TasksPage = workspaceRoutePages.tasks;
+const ProjectsPage = workspaceRoutePages.projects;
+const ProjectDetailPage = workspaceRoutePages.projectDetail;
+const ProjectCreatePage = workspaceRoutePages.projectCreate;
+const SettingsPage = workspaceRoutePages.settings;
 const ReferralsPage = lazy(() => import("@/pages/referrals"));
 const ProfilePage = lazy(() => import("@/pages/profile"));
 const TestVoiceRecording = lazy(() => import("@/pages/test-voice-recording"));
 const UserLayout = lazy(() => import("@/layouts/user-layout"));
-const RequireFeature = lazy(() => import("@/components/auth/require-feature").then((module) => ({ default: module.RequireFeature })));
 
 function deferred(element: ReactNode) {
     return <Suspense fallback={<WorkspaceRouteLoader />}>{element}</Suspense>;
 }
 
 function fullScreenDeferred(element: ReactNode) {
-    return <Suspense fallback={<FullScreenLoader label="正在打开创作空间" detail="准备当前页面" />}>{element}</Suspense>;
+    return <Suspense fallback={<FullScreenLoader label={translate("local.ui.openingWorkspace")} detail={translate("local.ui.preparePage")} />}>{element}</Suspense>;
 }
 
 function adminRoute(permission: AdminPermission, element: ReactNode) {
@@ -98,7 +99,7 @@ function adminRoute(permission: AdminPermission, element: ReactNode) {
 function AuthenticatedWorkspaceLayout() {
     const { pathname } = useLocation();
     const isCanvasProjectRoute = pathname.startsWith("/canvas/");
-    const fallback = isCanvasProjectRoute ? <CanvasRefreshShell /> : <FullScreenLoader label="正在打开创作空间" detail="准备当前页面" />;
+    const fallback = isCanvasProjectRoute ? <CanvasRefreshShell /> : <FullScreenLoader label={translate("local.ui.openingWorkspace")} detail={translate("local.ui.preparePage")} />;
     return (
         <WorkspaceAuthProvider>
             <RequireAuth allowAnonymous={isGuestWorkspacePath(pathname)}>
@@ -184,7 +185,14 @@ export const router = createBrowserRouter([
                     </RequireAuth>
                 ),
             },
-            { path: "/skills/:skillId/edit", element: <RequireAuth><RequireFeature feature="skillLibraryEnabled">{deferred(<SkillWorkbenchPage />)}</RequireFeature></RequireAuth> },
+            {
+                path: "/skills/:skillId/edit",
+                element: (
+                    <RequireAuth>
+                        <RequireFeature feature="skillLibraryEnabled">{deferred(<SkillWorkbenchPage />)}</RequireFeature>
+                    </RequireAuth>
+                ),
+            },
             {
                 path: "/plugins",
                 element: (
@@ -206,7 +214,14 @@ export const router = createBrowserRouter([
                 element: <RequireAuth>{null}</RequireAuth>,
             },
             { path: "/settings", element: <RequireAuth>{deferred(<SettingsPage />)}</RequireAuth> },
-            { path: "/referrals", element: <RequireAuth><RequireFeature feature="creditsEnabled">{deferred(<ReferralsPage />)}</RequireFeature></RequireAuth> },
+            {
+                path: "/referrals",
+                element: (
+                    <RequireAuth>
+                        <RequireFeature feature="creditsEnabled">{deferred(<ReferralsPage />)}</RequireFeature>
+                    </RequireAuth>
+                ),
+            },
             { path: "/profile", element: <RequireAuth>{deferred(<ProfilePage />)}</RequireAuth> },
             { path: "/test-voice-recording", element: <RequireAuth>{deferred(<TestVoiceRecording />)}</RequireAuth> },
             {
@@ -266,9 +281,24 @@ export const router = createBrowserRouter([
                     { path: "ecommerce/library/categories", element: adminRoute("admin.ecommerce.knowledge", <EcommerceManagementPage />) },
                     { path: "login-logs", element: adminRoute("admin.users.accounts", <LoginLogsPage />) },
                     { path: "feedbacks", element: adminRoute("admin.users.feedbacks", <AdminFeedbacksPage />) },
-                    { path: "administrators", element: <RequireFullAdmin><AdministratorsPage /></RequireFullAdmin> },
+                    {
+                        path: "administrators",
+                        element: (
+                            <RequireFullAdmin>
+                                <AdministratorsPage />
+                            </RequireFullAdmin>
+                        ),
+                    },
                     { path: "channels", element: adminRoute("admin.platform.channels", <ChannelsPage />) },
-                    { path: "models", element: adminRoute("admin.platform.logical_models", <RequireFeature feature="frontendModelsEnabled"><LogicalModelsPage /></RequireFeature>) },
+                    {
+                        path: "models",
+                        element: adminRoute(
+                            "admin.platform.logical_models",
+                            <RequireFeature feature="frontendModelsEnabled">
+                                <LogicalModelsPage />
+                            </RequireFeature>,
+                        ),
+                    },
                     { path: "plugins", element: adminRoute("admin.platform.plugins", <AdminPluginsPage />) },
                     { path: "skills", element: adminRoute("admin.platform.skills", <AdminSkillsPage />) },
                     { path: "payments", element: adminRoute("admin.finance.payment_providers", <AdminPaymentsPage view="providers" />) },

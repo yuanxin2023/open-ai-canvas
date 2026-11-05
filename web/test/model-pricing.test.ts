@@ -3,7 +3,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ModelPicker } from "../src/components/model-picker";
 
-import { modelQuoteRequest, normalizeTierResolution, priceTierSummaryLabel, priceTiersForCurrentSelection, requestCreditCost } from "../src/lib/model-pricing";
+import { modelQuoteRequest, systemModelQuoteRequest, normalizeTierResolution, priceTierSummaryLabel, priceTiersForCurrentSelection, requestCreditCost } from "../src/lib/model-pricing";
 import type { ModelRequirements } from "../src/lib/model-selection";
 import { createModelChannel, defaultConfig, normalizeConfigSnapshot, resolveModelChannel, type AiConfig } from "../src/stores/use-config-store";
 import { buildNodeConfig } from "../src/components/canvas/canvas-node-prompt-panel";
@@ -14,7 +14,11 @@ import { projectImageParameters } from "../src/lib/image-parameters";
 import { prepareBackendGenerationTask } from "../src/services/api/generation-task";
 import { CanvasNodeType, type CanvasNodeData } from "../src/types/canvas";
 
-function systemConfig(input: { capability?: "image" | "video"; logicalModelId?: string; tiers: Array<{ selector: Record<string, string>; billingMode: "fixed_request" | "per_second" | "token"; unitPriceMicrocredits: number; outputTokenPriceMicrocredits?: number }> }) {
+function systemConfig(input: {
+    capability?: "image" | "video";
+    logicalModelId?: string;
+    tiers: Array<{ selector: Record<string, string>; billingMode: "fixed_request" | "per_second" | "token"; unitPriceMicrocredits: number; outputTokenPriceMicrocredits?: number }>;
+}) {
     const capability = input.capability || "video";
     const model = capability === "video" ? "agnes-video-2.5" : "image-model";
     const channel = createModelChannel({
@@ -68,6 +72,14 @@ const textVideoRequirements: ModelRequirements = {
 };
 
 describe("model request pricing", () => {
+    test("explicit ecommerce quotes support direct system images while ordinary image pricing stays local", () => {
+        const config = systemConfig({ capability: "image", tiers: [{ selector: {}, billingMode: "fixed_request", unitPriceMicrocredits: 1_000_000 }] });
+        const image = projectImageParameters(defaultImageCapabilityConfig(), [{ name: "size", label: "尺寸", type: "string", values: ["1024x1024"], required: true, pricing: true, default: "1024x1024" }]);
+        config.channels[0].modelCosts![0].capabilityConfig = { version: 1, image };
+        config.size = "1024x1024";
+        expect(modelQuoteRequest(config, config.model, "image")).toBeUndefined();
+        expect(systemModelQuoteRequest(config, config.model, "image")).toMatchObject({ channelId: "system-channel", modelKey: "image-model", intent: { capability: "image", options: { size: "1024x1024" } } });
+    });
     test("incomplete image settings do not crash pricing or bypass generation validation", async () => {
         for (const missing of [false, true]) {
             const config = systemConfig({ capability: "image", logicalModelId: "image-logical", tiers: [{ selector: {}, billingMode: "fixed_request", unitPriceMicrocredits: 1_000_000 }] });
@@ -115,8 +127,22 @@ describe("model request pricing", () => {
                 { selector: { quality: "4k" }, billingMode: "fixed_request", unitPriceMicrocredits: 5_000_000 },
             ],
         });
-        for (const [size, price] of [["1024x1024", 2], ["2048x2048", 3], ["2880x2880", 5]] as const) {
-            expect(requestCreditCost({ channelMode: "remote", modelCosts: resolveModelChannel(config, config.model).modelCosts, model: "image-model", capability: "image", config: { ...config, quality: "auto", size }, requirements: { capability: "image", options: { quality: "auto", size } }, count: 1 })).toBe(price);
+        for (const [size, price] of [
+            ["1024x1024", 2],
+            ["2048x2048", 3],
+            ["2880x2880", 5],
+        ] as const) {
+            expect(
+                requestCreditCost({
+                    channelMode: "remote",
+                    modelCosts: resolveModelChannel(config, config.model).modelCosts,
+                    model: "image-model",
+                    capability: "image",
+                    config: { ...config, quality: "auto", size },
+                    requirements: { capability: "image", options: { quality: "auto", size } },
+                    count: 1,
+                }),
+            ).toBe(price);
         }
     });
 
@@ -156,10 +182,13 @@ describe("model request pricing", () => {
     });
 
     test("prefers a matching image specification over the uniform fallback", () => {
-        const config = systemConfig({ capability: "image", tiers: [
-            { selector: {}, billingMode: "fixed_request", unitPriceMicrocredits: 1_000_000 },
-            { selector: { operation: "text_to_image", quality: "2k" }, billingMode: "fixed_request", unitPriceMicrocredits: 2_000_000 },
-        ] });
+        const config = systemConfig({
+            capability: "image",
+            tiers: [
+                { selector: {}, billingMode: "fixed_request", unitPriceMicrocredits: 1_000_000 },
+                { selector: { operation: "text_to_image", quality: "2k" }, billingMode: "fixed_request", unitPriceMicrocredits: 2_000_000 },
+            ],
+        });
         const tiers = resolveModelChannel(config, config.model).modelCosts![0]!.logicalPriceTiers!;
         expect(priceTiersForCurrentSelection(tiers, "image", { ...config, quality: "2k" })[0]?.unitPriceMicrocredits).toBe(2_000_000);
         expect(priceTiersForCurrentSelection(tiers, "image", { ...config, quality: "4k" })[0]?.unitPriceMicrocredits).toBe(1_000_000);
@@ -274,11 +303,13 @@ describe("model request pricing", () => {
     });
 
     test("matches video audio, resolution and duration from actual request overrides", () => {
-        const config = systemConfig({ tiers: [
-            { selector: {}, billingMode: "token", unitPriceMicrocredits: 0, outputTokenPriceMicrocredits: 1_000_000 },
-            { selector: { vquality: "1080p", videoSeconds: "10", videoGenerateAudio: "false" }, billingMode: "token", unitPriceMicrocredits: 0, outputTokenPriceMicrocredits: 2_000_000 },
-            { selector: { vquality: "1080p", videoSeconds: "10", videoGenerateAudio: "true" }, billingMode: "token", unitPriceMicrocredits: 0, outputTokenPriceMicrocredits: 3_000_000 },
-        ] });
+        const config = systemConfig({
+            tiers: [
+                { selector: {}, billingMode: "token", unitPriceMicrocredits: 0, outputTokenPriceMicrocredits: 1_000_000 },
+                { selector: { vquality: "1080p", videoSeconds: "10", videoGenerateAudio: "false" }, billingMode: "token", unitPriceMicrocredits: 0, outputTokenPriceMicrocredits: 2_000_000 },
+                { selector: { vquality: "1080p", videoSeconds: "10", videoGenerateAudio: "true" }, billingMode: "token", unitPriceMicrocredits: 0, outputTokenPriceMicrocredits: 3_000_000 },
+            ],
+        });
         const tiers = resolveModelChannel(config, config.model).modelCosts![0]!.logicalPriceTiers!;
         for (const videoGenerateAudio of [false, "false", true, "true"]) {
             const requirements = { ...textVideoRequirements, videoSeconds: "10", options: { vquality: "1080P", videoSeconds: 5, videoGenerateAudio } };
@@ -290,10 +321,12 @@ describe("model request pricing", () => {
     });
 
     test("shows the configured video Token rate including free and the minimum non-zero rate", () => {
-        const config = systemConfig({ tiers: [
-            { selector: { videoGenerateAudio: "false" }, billingMode: "token", unitPriceMicrocredits: 0, outputTokenPriceMicrocredits: 0 },
-            { selector: { videoGenerateAudio: "true" }, billingMode: "token", unitPriceMicrocredits: 0, outputTokenPriceMicrocredits: 10_000 },
-        ] });
+        const config = systemConfig({
+            tiers: [
+                { selector: { videoGenerateAudio: "false" }, billingMode: "token", unitPriceMicrocredits: 0, outputTokenPriceMicrocredits: 0 },
+                { selector: { videoGenerateAudio: "true" }, billingMode: "token", unitPriceMicrocredits: 0, outputTokenPriceMicrocredits: 10_000 },
+            ],
+        });
         const tiers = resolveModelChannel(config, config.model).modelCosts![0]!.logicalPriceTiers!;
         expect(priceTierSummaryLabel(tiers, "video")).toBe("0-0.01 积分/百万视频 Token");
         expect(priceTierSummaryLabel(tiers.slice(0, 1), "video")).toBe("0 积分/百万视频 Token");

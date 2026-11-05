@@ -101,7 +101,7 @@ export function CreditOperationsPage() {
 
 export function AccessSettingsPage() {
     return (
-        <AdminPageFrame title="登录与注册" description="先控制账号创建，再配置第三方登录入口与服务协议" scroll>
+        <AdminPageFrame title="登录与注册" description="先控制账号创建，再配置第三方登录入口、服务协议与登录打开方式" scroll>
             <AccessSettingsPanel />
         </AdminPageFrame>
     );
@@ -117,7 +117,7 @@ export function EmailSettingsPage() {
 
 export function FeatureAvailabilityPage() {
     return (
-        <AdminPageFrame title="功能开放" description="按用户使用路径控制工作台、插件与模型能力" scroll>
+        <AdminPageFrame title="功能开放" description="决定前台用户能看到和使用哪些功能" scroll>
             <FeatureAvailabilityPanel />
         </AdminPageFrame>
     );

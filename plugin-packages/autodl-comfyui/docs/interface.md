@@ -60,7 +60,7 @@
 
 ```json
 {
-  "apiVersion": "open-ai-canvas.plugin/v2",
+  "apiVersion": "yingce.plugin/v2",
   "id": "autodl-comfyui",
   "name": "AutoDL ComfyUI 视频与音频",
   "version": "2.4.0",

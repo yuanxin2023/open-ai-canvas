@@ -201,7 +201,16 @@ export function PriceTierFields({
                                         <Form.Item className="admin-price-tier-unit-price mb-0" name={[index, "outputTokenPrice"]} label="输出 / 百万 Token" rules={[{ required: true, message: "请输入输出 Token 价格" }]}>
                                             <InputNumber className="w-full" min={0} max={1_000_000} precision={2} step={0.01} />
                                         </Form.Item>
-                                        <Form.Item className="admin-price-tier-unit-price mb-0" name={[index, "cachedTokenPrice"]} label="缓存 / 百万 Token" rules={[{ required: true, message: "请输入缓存 Token 价格" }]}>
+                                        <Form.Item className="admin-price-tier-unit-price mb-0" name={[index, "cachedTokenPrice"]} label={`缓存命中 积分 / 百万 Token`} rules={[{ required: true, message: "请输入缓存命中价格" }]}>
+                                            <InputNumber className="w-full" min={0} max={1_000_000} precision={2} step={0.01} />
+                                        </Form.Item>
+                                        <Form.Item
+                                            className="admin-price-tier-unit-price mb-0"
+                                            name={[index, "cacheWriteTokenPrice"]}
+                                            label={`缓存写入 积分 / 百万 Token`}
+                                            tooltip="创建提示词缓存的输入 Token（如 Claude cache_creation）。0 表示不单独收费；预授权按输入价与缓存写入价中较高者估算。"
+                                            rules={[{ required: true, message: "请输入缓存写入价格" }]}
+                                        >
                                             <InputNumber className="w-full" min={0} max={1_000_000} precision={2} step={0.01} />
                                         </Form.Item>
                                     </div>

@@ -97,7 +97,7 @@
 
 ```json
 {
-  "apiVersion": "open-ai-canvas.plugin/v2",
+  "apiVersion": "yingce.plugin/v2",
   "id": "subrouter-gemini-image",
   "name": "SubRouter Gemini Image",
   "version": "2.2.0",

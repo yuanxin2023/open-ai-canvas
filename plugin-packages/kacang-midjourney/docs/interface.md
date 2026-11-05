@@ -58,7 +58,7 @@
 
 ```json
 {
-  "apiVersion": "open-ai-canvas.plugin/v2",
+  "apiVersion": "yingce.plugin/v2",
   "enabled": false,
   "id": "kacang-midjourney",
   "name": "卡藏 Midjourney",

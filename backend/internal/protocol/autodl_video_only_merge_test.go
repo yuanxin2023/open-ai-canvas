@@ -7,7 +7,7 @@ import (
 )
 
 func TestAutoDLCanonicalPackageStopsLegacyAudioWithoutChangingVideoIdentity(t *testing.T) {
-	data, err := os.ReadFile(filepath.Join("..", "..", "..", "plugin-packages", "autodl-comfyui.canvas-plugin"))
+	data, err := os.ReadFile(filepath.Join("..", "..", "..", "plugin-packages", "autodl-comfyui.yingce-plugin"))
 	if err != nil {
 		t.Fatal(err)
 	}

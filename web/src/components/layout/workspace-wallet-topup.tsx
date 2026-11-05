@@ -1,3 +1,4 @@
+import { translate } from "@/i18n";
 import { Button, Skeleton } from "antd";
 import { Check, CircleAlert, Coins, CreditCard, FolderOpen, HardDrive } from "lucide-react";
 import { useEffect, useRef, type ReactNode } from "react";
@@ -17,8 +18,8 @@ import "./workspace-wallet-topup.css";
 export type TopupCategory = "all" | TopupProductKind;
 
 const KIND_META: Record<TopupProductKind, { label: string; description: string; icon: typeof Coins }> = {
-    credits: { label: "积分", description: "用于模型生成、Agent 与工具调用，按实际用量扣减。", icon: Coins },
-    storage: { label: "存储空间", description: "扩充素材文件与 Agent 会话附件的总容量，支付后立即生效。", icon: HardDrive },
+    credits: { label: translate("account.layout.checkin.offerAfter"), description: translate("account.wallet.topup.kinds.credits.description"), icon: Coins },
+    storage: { label: translate("account.wallet.storage"), description: translate("account.wallet.topup.kinds.storage.description"), icon: HardDrive },
 };
 
 function productAvailability(product: TopupProduct) {
@@ -80,7 +81,10 @@ function TopupGroup({ kind, products, selectedProductId, onSelectProduct, aside,
                     <Icon />
                 </span>
                 <div>
-                    <h3 id={`wallet-topup-group-${kind}`}>{meta.label}套餐</h3>
+                    <h3 id={`wallet-topup-group-${kind}`}>
+                        {meta.label}
+                        {translate("local.ui.tier")}
+                    </h3>
                     <p title={meta.description}>{meta.description}</p>
                 </div>
                 {aside}
@@ -94,7 +98,7 @@ function TopupGroup({ kind, products, selectedProductId, onSelectProduct, aside,
                                 key={product.id}
                                 product={product}
                                 maxCreditsMicrocredits={Math.max(...products.map((item) => item.creditsMicrocredits))}
-                                actionLabel={selectedProductId === product.id ? "已选择" : "选择套餐"}
+                                actionLabel={selectedProductId === product.id ? translate("local.ui.selected") : translate("local.ui.selectTier")}
                                 availabilityLabel={productAvailability(product)}
                                 actionDisabled={!product.canPurchase}
                                 onAction={() => onSelectProduct(product.id)}
@@ -105,7 +109,11 @@ function TopupGroup({ kind, products, selectedProductId, onSelectProduct, aside,
                     )}
                 </div>
             ) : (
-                <div className="wallet-topup-group-empty">暂未上架{meta.label}套餐</div>
+                <div className="wallet-topup-group-empty">
+                    {translate("local.ui.noProducts")}
+                    {meta.label}
+                    {translate("local.ui.tier")}
+                </div>
             )}
         </section>
     );
@@ -119,13 +127,21 @@ function StorageSummary({ usage, grants, onCleanAssets }: { usage?: AccountFileS
         <div className="wallet-topup-storage">
             <div className="wallet-topup-storage-usage">
                 <span>
-                    已用 <b>{usage ? meter.usedLabel : "--"}</b> / {usage ? meter.totalLabel : "--"}
+                    {translate("local.ui.used")}
+                    <b>{usage ? meter.usedLabel : "--"}</b> / {usage ? meter.totalLabel : "--"}
                 </span>
-                <span className={cn("wallet-topup-storage-track", meter.tone !== "ok" && `is-${meter.tone}`)} role="progressbar" aria-label="账号文件容量使用进度" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(meter.percent)}>
+                <span
+                    className={cn("wallet-topup-storage-track", meter.tone !== "ok" && `is-${meter.tone}`)}
+                    role="progressbar"
+                    aria-label={translate("account.layout.storage.progress")}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={Math.round(meter.percent)}
+                >
                     <span style={{ width: `${meter.percent}%` }} />
                 </span>
                 <span className="wallet-topup-storage-split">
-                    基础 {meter.baseLabel}
+                    {translate("local.ui.basic")} {meter.baseLabel}
                     {meter.purchasedLabel ? ` + 已购 ${meter.purchasedLabel}` : ""}
                 </span>
             </div>
@@ -134,18 +150,24 @@ function StorageSummary({ usage, grants, onCleanAssets }: { usage?: AccountFileS
                     <CircleAlert aria-hidden="true" />
                     <span>{stateMessage}</span>
                     <Button size="small" icon={<FolderOpen />} onClick={onCleanAssets}>
-                        清理素材
+                        {translate("account.layout.storageNotice.cleanUp")}
                     </Button>
                 </div>
             ) : null}
             {activeGrants.length ? (
-                <ul className="wallet-topup-grants" aria-label="生效中的扩容">
+                <ul className="wallet-topup-grants" aria-label={translate("account.wallet.topup.activeGrants")}>
                     {activeGrants.slice(0, 4).map((grant) => (
-                        <li key={grant.id} title={grant.productName || (grant.source === "admin" ? "管理员赠送" : "存储扩容")}>
-                            +{formatStorageCapacity(grant.bytes)} · {grant.expiresAt ? `${formatStorageDate(grant.expiresAt)} 到期` : "永久"}
+                        <li key={grant.id} title={grant.productName || (grant.source === "admin" ? translate("account.wallet.topup.grantAdmin") : translate("account.wallet.topup.grantDefault"))}>
+                            +{formatStorageCapacity(grant.bytes)} · {grant.expiresAt ? `${formatStorageDate(grant.expiresAt)} 到期` : translate("account.wallet.topup.permanent")}
                         </li>
                     ))}
-                    {activeGrants.length > 4 ? <li>另有 {activeGrants.length - 4} 份</li> : null}
+                    {activeGrants.length > 4 ? (
+                        <li>
+                            {translate("local.ui.more")}
+                            {activeGrants.length - 4}
+                            {translate("local.ui.countUnit")}
+                        </li>
+                    ) : null}
                 </ul>
             ) : null}
         </div>
@@ -238,18 +260,20 @@ export function WalletTopupPanel({
                                     <strong>{selectedProduct.name}</strong>
                                     <small>
                                         {topupProductValue(selectedProduct)}
-                                        {selectedProduct.kind === "credits" && newcomerPolicy ? ` · 邀请新人首充预计另赠 ${formatCredits(Math.min(referralCredits(selectedProduct.creditsMicrocredits, newcomerPolicy.newcomerRateBps), newcomerPolicy.newcomerCapMicrocredits || Number.MAX_SAFE_INTEGER))} 积分` : ""}
+                                        {selectedProduct.kind === "credits" && newcomerPolicy
+                                            ? ` · 邀请新人首充预计另赠 ${formatCredits(Math.min(referralCredits(selectedProduct.creditsMicrocredits, newcomerPolicy.newcomerRateBps), newcomerPolicy.newcomerCapMicrocredits || Number.MAX_SAFE_INTEGER))} 积分`
+                                            : ""}
                                         {selectedProduct.kind === "storage" ? ` · ${formatStorageDuration(selectedProduct.storageDurationDays)}` : ""}
                                     </small>
                                 </span>
                                 <b>¥ {(selectedProduct.amountFen / 100).toFixed(2)}</b>
                             </>
                         ) : (
-                            <span className="wallet-topup-checkout-hint">选择一个套餐</span>
+                            <span className="wallet-topup-checkout-hint">{translate("account.wallet.topup.selectPlan")}</span>
                         )}
                     </div>
                     {providers.length ? (
-                        <div className="workspace-wallet-providers" role="radiogroup" aria-label="支付方式">
+                        <div className="workspace-wallet-providers" role="radiogroup" aria-label={translate("account.wallet.topup.paymentMethod")}>
                             {providers.map((provider) => (
                                 <button key={provider.id} type="button" role="radio" aria-checked={selectedProviderId === provider.id} className={selectedProviderId === provider.id ? "is-selected" : ""} onClick={() => onSelectProvider(provider.id)}>
                                     <CreditCard />
@@ -258,18 +282,18 @@ export function WalletTopupPanel({
                             ))}
                         </div>
                     ) : (
-                        <span className="wallet-topup-checkout-hint">暂无可用支付渠道，请联系管理员</span>
+                        <span className="wallet-topup-checkout-hint">{translate("account.wallet.topup.noProvider")}</span>
                     )}
                     <Button type="primary" size="large" loading={creating} disabled={!selectedProduct || !selectedProduct.canPurchase || !providers.length || !selectedProviderId} onClick={onPay}>
-                        立即支付
+                        {translate("account.wallet.topup.payNow")}
                     </Button>
                 </footer>
             ) : (
                 <div className="workspace-wallet-inline-state">
                     <CircleAlert />
                     <div>
-                        <strong>在线充值暂不可用</strong>
-                        <span>当前没有已上架的套餐，请使用兑换码或联系管理员。</span>
+                        <strong>{translate("account.wallet.topup.unavailableTitle")}</strong>
+                        <span>{translate("account.wallet.topup.unavailableDescription")}</span>
                     </div>
                 </div>
             )}

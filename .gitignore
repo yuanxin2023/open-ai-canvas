@@ -33,6 +33,7 @@ docs/content/docs/backend/*
 !docs/content/docs/backend/self-hosted-deployment.mdx
 !docs/content/docs/backend/credit-rewards.mdx
 !docs/content/docs/backend/creative-agent-runtime.mdx
+!docs/content/docs/backend/upstream-v1737-integration.mdx
 # Keep the creative Agent design versioned without unignoring generated docs.
 !docs/content/docs/overview/
 docs/content/docs/overview/*

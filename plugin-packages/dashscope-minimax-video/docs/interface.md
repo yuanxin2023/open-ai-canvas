@@ -91,7 +91,7 @@
 
 ```json
 {
-  "apiVersion": "open-ai-canvas.plugin/v2",
+  "apiVersion": "yingce.plugin/v2",
   "enabled": false,
   "id": "dashscope-minimax-video",
   "name": "百炼 MiniMax H3 Video",

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { inspirationCoverUrl, type Inspiration } from "../src/services/api/inspirations";
+import { moduleGroupSource } from "./helpers/module-group-source";
 
 describe("curated creation inspirations", () => {
     test("keeps built-in and HTTPS cover URLs untouched", () => {
@@ -15,12 +16,13 @@ describe("curated creation inspirations", () => {
     });
     test("personal inspirations expose the shared create-prompt dialog", async () => {
         const [workspace, editor, editorStyles, promptsPage] = await Promise.all([
-            Bun.file(new URL("../src/pages/create/creation-workspace.tsx", import.meta.url)).text(),
+            Promise.resolve(moduleGroupSource("pages/create/creation-workspace.tsx")),
             Bun.file(new URL("../src/components/user-prompt-editor-modal.tsx", import.meta.url)).text(),
             Bun.file(new URL("../src/components/user-prompt-editor-modal.css", import.meta.url)).text(),
             Bun.file(new URL("../src/pages/prompts/index.tsx", import.meta.url)).text(),
         ]);
-        expect(workspace).toContain('source === "personal" && userId ? <button type="button" className="creation-inspiration-add"');
+        expect(workspace).toMatch(/source === "personal" && userId \?\s*\(?\s*<Button type="text"/);
+        expect(workspace).toMatch(/aria-label="新增个人提示词"\s+onClick=\{\(\) => setPromptEditorOpen\(true\)\}/);
         expect(workspace).toContain("<UserPromptEditorModal");
         expect(workspace).toContain("setInspirations((current) => [created, ...current.filter");
         expect(editor).toContain("await createUserPrompt(input)");

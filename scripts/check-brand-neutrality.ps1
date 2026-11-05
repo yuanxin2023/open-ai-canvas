@@ -66,14 +66,14 @@ try {
     $expectedArtifactIds = @($sourcePluginIds + $artifactOnlyPluginIds | Sort-Object -Unique)
     $actualArtifactIds = @(
         Get-ChildItem -LiteralPath $pluginRoot -File |
-            Where-Object { $_.Name -like "*.canvas-plugin" -or $_.Name -like "*.lovwow-plugin" -or $_.Name -like "*.yingce-plugin" } |
+            Where-Object { $_.Name -like "*.yingce-plugin" -or $_.Name -like "*.lovwow-plugin" -or $_.Name -like "*.yingce-plugin" } |
             ForEach-Object { $_.BaseName } |
             Sort-Object -Unique
     )
     $artifactComparison = @(Compare-Object -ReferenceObject $expectedArtifactIds -DifferenceObject $actualArtifactIds)
     foreach ($difference in $artifactComparison) {
         if ($difference.SideIndicator -eq "<=") {
-            $violations.Add("缺少插件包: plugin-packages/$($difference.InputObject).canvas-plugin 或兼容格式")
+            $violations.Add("缺少插件包: plugin-packages/$($difference.InputObject).yingce-plugin 或兼容格式")
         } elseif ($difference.SideIndicator -eq ">=") {
             $violations.Add("多余插件包: plugin-packages/$($difference.InputObject)")
         }
@@ -91,7 +91,7 @@ try {
         if (Test-ForbiddenContent $bytes) {
             $violations.Add("文件内容: $relativePath")
         }
-        if ($relativePath.EndsWith(".canvas-plugin", [System.StringComparison]::OrdinalIgnoreCase) -or $relativePath.EndsWith(".lovwow-plugin", [System.StringComparison]::OrdinalIgnoreCase) -or $relativePath.EndsWith(".yingce-plugin", [System.StringComparison]::OrdinalIgnoreCase)) {
+        if ($relativePath.EndsWith(".yingce-plugin", [System.StringComparison]::OrdinalIgnoreCase) -or $relativePath.EndsWith(".lovwow-plugin", [System.StringComparison]::OrdinalIgnoreCase) -or $relativePath.EndsWith(".yingce-plugin", [System.StringComparison]::OrdinalIgnoreCase)) {
             Test-PackageEntries $fullPath $relativePath
         }
     }

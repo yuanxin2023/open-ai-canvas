@@ -1,6 +1,8 @@
+import { translate } from "@/i18n";
 import { lazy, Suspense, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { AppDrawer } from "@/components/ui/product/app-drawer";
 import { useLocation, useNavigate } from "react-router";
+import { useTranslation } from "react-i18next";
 
 import { BannerAnnouncementsSlider } from "@/components/layout/banner-announcements-slider";
 import { ModelSetupGuide } from "@/components/layout/model-setup-guide";
@@ -25,6 +27,7 @@ const sidebarMobileSnapshot = () => window.matchMedia(sidebarMobileQuery).matche
 const sidebarServerSnapshot = () => false;
 
 export function AppWorkspaceShell({ children }: { children: ReactNode }) {
+    const { t } = useTranslation();
     const { pathname } = useLocation();
     const navigate = useNavigate();
     const [mobileSidebarExpanded, setMobileSidebarExpanded] = useState(false);
@@ -94,7 +97,9 @@ export function AppWorkspaceShell({ children }: { children: ReactNode }) {
     }, [navigate]);
 
     useEffect(() => subscribeWorkspaceSidebarCollapsed(setDesktopSidebarCollapsed), []);
-    useEffect(() => { setMobileSidebarExpanded(false); }, [mobile, pathname]);
+    useEffect(() => {
+        setMobileSidebarExpanded(false);
+    }, [mobile, pathname]);
 
     return (
         <>
@@ -104,19 +109,8 @@ export function AppWorkspaceShell({ children }: { children: ReactNode }) {
 
                     <div className="app-workspace-main-row flex min-h-0 min-w-0 flex-1 overflow-hidden">
                         {!hideChrome && !mobile ? (
-                            <aside
-                                className={cn(
-                                    "app-workspace-sidebar flex h-full shrink-0 flex-col overflow-hidden",
-                                    desktopSidebarCollapsed && "is-collapsed",
-                                )}
-                            >
-                                <WorkspaceSidebarNav
-                                    collapsed={desktopSidebarCollapsed}
-                                    onNavigate={handleNavClick}
-                                    onOpenSearch={() => setPaletteOpen(true)}
-                                    onExpand={expandDesktopSidebar}
-                                    onCollapse={collapseDesktopSidebar}
-                                />
+                            <aside className={cn("app-workspace-sidebar flex h-full shrink-0 flex-col overflow-hidden", desktopSidebarCollapsed && "is-collapsed")}>
+                                <WorkspaceSidebarNav collapsed={desktopSidebarCollapsed} onNavigate={handleNavClick} onOpenSearch={() => setPaletteOpen(true)} onExpand={expandDesktopSidebar} onCollapse={collapseDesktopSidebar} />
                             </aside>
                         ) : null}
 
@@ -126,13 +120,39 @@ export function AppWorkspaceShell({ children }: { children: ReactNode }) {
                         </div>
                     </div>
 
-                    {paletteOpen ? <Suspense fallback={null}><WorkspaceCommandPalette open onClose={() => setPaletteOpen(false)} /></Suspense> : null}
+                    {paletteOpen ? (
+                        <Suspense fallback={null}>
+                            <WorkspaceCommandPalette open onClose={() => setPaletteOpen(false)} />
+                        </Suspense>
+                    ) : null}
                 </div>
-                {!hideChrome && mobile ? <AppDrawer flush title={null} closable={false} placement="left" size="min(280px, calc(100vw - 32px))" open={mobileSidebarExpanded} onClose={closeMobileSidebar} focusable={{ focusTriggerAfterClose: false }} rootClassName="workspace-navigation-drawer app-user-overlays" aria-label="工作台导航">
-                    <div className="app-user-workspace app-product-workspace workspace-navigation-drawer-content">
-                        <WorkspaceSidebarNav collapsed={false} onNavigate={closeMobileSidebar} onOpenSearch={() => { setMobileSidebarExpanded(false); setPaletteOpen(true); }} onExpand={() => setMobileSidebarExpanded(true)} onCollapse={closeMobileSidebar} />
-                    </div>
-                </AppDrawer> : null}
+                {!hideChrome && mobile ? (
+                    <AppDrawer
+                        flush
+                        title={null}
+                        closable={false}
+                        placement="left"
+                        size="min(280px, calc(100vw - 32px))"
+                        open={mobileSidebarExpanded}
+                        onClose={closeMobileSidebar}
+                        focusable={{ focusTriggerAfterClose: false }}
+                        rootClassName="workspace-navigation-drawer app-user-overlays"
+                        aria-label={translate("local.ui.workspaceNav")}
+                    >
+                        <div className="app-user-workspace app-product-workspace workspace-navigation-drawer-content">
+                            <WorkspaceSidebarNav
+                                collapsed={false}
+                                onNavigate={closeMobileSidebar}
+                                onOpenSearch={() => {
+                                    setMobileSidebarExpanded(false);
+                                    setPaletteOpen(true);
+                                }}
+                                onExpand={() => setMobileSidebarExpanded(true)}
+                                onCollapse={closeMobileSidebar}
+                            />
+                        </div>
+                    </AppDrawer>
+                ) : null}
             </WorkspaceTopBarExtensionProvider>
             <WorkspaceWalletHost />
             <ImageCreditShortfallHost />

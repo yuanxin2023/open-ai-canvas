@@ -16,8 +16,6 @@ type (
 	ReferralPolicy                         = app.ReferralPolicy
 	ReferralDashboard                      = app.ReferralDashboard
 	ReferralRewardPage                     = app.ReferralRewardPage
-	YoruSettings                           = app.YoruSettings
-	YoruChatRequest                        = app.YoruChatRequest
 	SaveEcommerceProjectRequest            = app.SaveEcommerceProjectRequest
 	EcommerceCreativeDirectionsRequest     = app.EcommerceCreativeDirectionsRequest
 	EcommerceStyleChoice                   = app.EcommerceStyleChoice

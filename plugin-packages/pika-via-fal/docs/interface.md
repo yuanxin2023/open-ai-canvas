@@ -91,7 +91,7 @@
 
 ```json
 {
-  "apiVersion": "open-ai-canvas.plugin/v2",
+  "apiVersion": "yingce.plugin/v2",
   "id": "pika-via-fal",
   "name": "Pika via fal.ai",
   "version": "2.0.0",

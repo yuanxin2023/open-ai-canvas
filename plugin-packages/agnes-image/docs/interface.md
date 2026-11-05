@@ -77,7 +77,7 @@ Agnes 官方图像端点，同步返回。文生图与图生图共用 /v1/images
 
 ```json
 {
-  "apiVersion": "open-ai-canvas.plugin/v2",
+  "apiVersion": "yingce.plugin/v2",
   "id": "agnes-image",
   "name": "Agnes Image",
   "version": "2.1.0",

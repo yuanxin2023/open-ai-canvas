@@ -6,7 +6,7 @@ import (
 )
 
 func TestKemeiSeedreamRequestDefaultsAndReferences(t *testing.T) {
-	adapter := officialPackageAdapter(t, "km-kemei-seedream.canvas-plugin", "km-kemei-seedream")
+	adapter := officialPackageAdapter(t, "km-kemei-seedream.yingce-plugin", "km-kemei-seedream")
 	for _, name := range []string{"doubao-seedream-5-0-pro-260628", "doubao-seedream-5-0-flash-260915"} {
 		request := GenerationRequest{Model: name, Prompt: "暖色书房中的橘猫", ImageCount: 1, Quality: "high"}
 		spec, err := adapter.BuildCreate(context.Background(), RequestContext{Request: request})
@@ -43,7 +43,7 @@ func TestKemeiSeedreamRequestDefaultsAndReferences(t *testing.T) {
 }
 
 func TestKemeiSeedreamRejectsUnsupportedAndOutOfRangeRequests(t *testing.T) {
-	adapter := officialPackageAdapter(t, "km-kemei-seedream.canvas-plugin", "km-kemei-seedream")
+	adapter := officialPackageAdapter(t, "km-kemei-seedream.yingce-plugin", "km-kemei-seedream")
 	base := GenerationRequest{Model: "doubao-seedream-5-0-pro-260628", Prompt: "橘猫", ImageCount: 1, AspectRatio: "2048x2048"}
 	for _, tc := range []struct {
 		name   string
@@ -88,7 +88,7 @@ func TestKemeiSeedreamRejectsUnsupportedAndOutOfRangeRequests(t *testing.T) {
 }
 
 func TestKemeiSeedreamLayerResultsAndErrors(t *testing.T) {
-	adapter := officialPackageAdapter(t, "km-kemei-seedream.canvas-plugin", "km-kemei-seedream")
+	adapter := officialPackageAdapter(t, "km-kemei-seedream.yingce-plugin", "km-kemei-seedream")
 	request := GenerationRequest{Model: "doubao-seedream-5-0-flash-260915", AspectRatio: "auto", Images: []MediaReference{{URL: "https://example.com/source.png"}}, ProviderOptions: map[string]map[string]any{"km-kemei-seedream": {"layer_decomposition": true, "output_format": "png"}}}
 	spec, err := adapter.BuildCreate(context.Background(), RequestContext{Request: request})
 	if err != nil || manifestTestBody(t, spec)["size"] != "auto" {

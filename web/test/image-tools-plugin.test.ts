@@ -4,7 +4,7 @@ import { unzipSync, strFromU8 } from "fflate";
 
 test("发布的拆层协议包与源码一致且请求 PNG，不丢失多图输出列表", () => {
     const source = JSON.parse(readFileSync(new URL("../../plugin-packages/image-tools/manifest.json", import.meta.url), "utf8"));
-    const archive = unzipSync(readFileSync(new URL("../../plugin-packages/image-tools.canvas-plugin", import.meta.url)));
+    const archive = unzipSync(readFileSync(new URL("../../plugin-packages/image-tools.yingce-plugin", import.meta.url)));
     const packaged = JSON.parse(strFromU8(archive["manifest.json"]));
     expect(packaged).toEqual(source);
     const provider = packaged.contributes.providers.find((item: { id: string }) => item.id === "image-tools-layer-decomposition");

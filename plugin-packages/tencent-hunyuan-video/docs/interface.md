@@ -85,7 +85,7 @@
 
 ```json
 {
-  "apiVersion": "open-ai-canvas.plugin/v2",
+  "apiVersion": "yingce.plugin/v2",
   "id": "tencent-hunyuan-video",
   "name": "腾讯混元视频",
   "version": "2.0.0",

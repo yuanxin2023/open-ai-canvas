@@ -1,8 +1,10 @@
 import { afterAll, expect, mock, test } from "bun:test";
 import { Window } from "happy-dom";
+
 const dom = new Window({ url: "http://localhost/canvas/private-id?token=secret#private" });
-for (const [key, value] of Object.entries({ window: dom, document: dom.document, navigator: dom.navigator, HTMLElement: dom.HTMLElement, Element: dom.Element, Node: dom.Node, Event: dom.Event, IS_REACT_ACT_ENVIRONMENT: true }))
+for (const [key, value] of Object.entries({ window: dom, document: dom.document, navigator: dom.navigator, HTMLElement: dom.HTMLElement, Element: dom.Element, Node: dom.Node, Event: dom.Event, IS_REACT_ACT_ENVIRONMENT: true })) {
     Object.defineProperty(globalThis, key, { configurable: true, writable: true, value });
+}
 const React = await import("react");
 const { act } = React;
 const { createRoot } = await import("react-dom/client");
@@ -11,15 +13,19 @@ const notices: string[] = [];
 const fields = new Map<string, any>();
 let checkbox: any;
 const Box = ({ children }: any) => <div>{children}</div>;
+const Overlay = ({ open, children }: any) => (open ? <div role="dialog">{children}</div> : null);
 const Input = (props: any) => {
     fields.set(props.placeholder || "reply", props);
     return <input value={props.value || ""} onChange={props.onChange} placeholder={props.placeholder} />;
 };
 Input.TextArea = Input;
+const appApi = { message: { success: (text: string) => notices.push(text), error: (text: string) => notices.push(text), warning: (text: string) => notices.push(text) } };
 mock.module("antd", () => ({
-    App: { useApp: () => ({ message: { success: (text: string) => notices.push(text), error: (text: string) => notices.push(text), warning: (text: string) => notices.push(text) } }) },
+    App: { useApp: () => appApi },
     Input,
-    Radio: Box,
+    Modal: Overlay,
+    Drawer: Overlay,
+    Radio: Object.assign(Box, { Group: Box, Button: Box }),
     Tag: Box,
     Tooltip: Box,
     Image: (props: any) => <img src={props.src} alt={props.alt} />,
@@ -53,24 +59,22 @@ mock.module("antd", () => ({
         </div>
     ),
 }));
-mock.module("@/components/ui/product/app-modal", () => ({ AppModal: ({ open, children }: any) => (open ? <div role="dialog">{children}</div> : null) }));
-mock.module("@/components/ui/product/app-drawer", () => ({ AppDrawer: ({ open, children }: any) => (open ? <div role="dialog">{children}</div> : null) }));
+mock.module("@/components/ui/product/app-modal", () => ({ AppModal: Overlay }));
 mock.module("@/pages/admin/components/admin-shell", () => ({ AdminPageFrame: Box }));
-mock.module("@/services/api/resources", () => ({ resourceFileUrl: (id: string) => `/api/resources/${id}/file` }));
+mock.module("@/services/api/admin-storage", () => ({ adminResourceFileUrl: (id: string) => `/api/admin/resources/${id}/file` }));
 let submissions: any[] = [];
 let adminWrites: any[] = [];
-let submitImpl: () => Promise<any> = async () => ({ id: "created" });
+let submitImpl = async () => ({ id: "created" });
 let mineImpl: () => Promise<any[]> = async () => [];
 let adminImpl: () => Promise<any>;
 let updateImpl: () => Promise<any>;
 mock.module("@/services/api/feedback", () => ({
-    submitFeedback: async (payload: any, actorId: string) => {
-        submissions.push({ payload, actorId });
+    submitFeedback: async (payload: any) => {
+        submissions.push(payload);
         return submitImpl();
     },
     getMyFeedbacks: () => mineImpl(),
-    uploadFeedbackAttachment: async () => ({ id: "owned" }),
-    feedbackAttachmentURL: (id: string, resource: string) => `/api/feedbacks/${id}/attachments/${resource}`,
+    uploadFeedbackAttachment: async () => ({ id: "owned", url: "/api/resources/owned/file", type: "image", name: "shot.png" }),
     getAdminFeedbacks: () => adminImpl(),
     updateAdminFeedback: async (...args: any[]) => {
         adminWrites.push(args);
@@ -95,23 +99,14 @@ async function render(value: React.ReactNode) {
 async function click(label: string) {
     const target = [...host.querySelectorAll("button")].find((button) => button.textContent?.trim() === label);
     if (!target) throw new Error(`missing ${label}`);
-    await act(async () => {
-        target.click();
-    });
+    await act(async () => target.click());
 }
-function deferred<T>() {
-    let resolve!: (value: T) => void;
-    const promise = new Promise<T>((done) => {
-        resolve = done;
-    });
-    return { promise, resolve };
-}
-async function fresh(enabled = true, admin = false) {
+async function fresh(enabled = true) {
     await act(async () => {
         root.unmount();
         root = createRoot(host);
     });
-    useUserStore.setState({ user: { id: "a", role: admin ? "admin" : "user", adminAccess: admin ? { level: "full", permissions: [] } : undefined } as any, features: { ...defaultFeatureAvailability, userFeedbackEnabled: enabled } });
+    useUserStore.setState({ user: { id: "a", username: "fixture", role: "user" } as any, features: { ...defaultFeatureAvailability, userFeedbackEnabled: enabled } });
     fields.clear();
     notices.length = 0;
     submissions = [];
@@ -125,149 +120,66 @@ async function fill() {
         [...fields.entries()].find(([name]) => name.startsWith("请尽可能"))![1].onChange({ target: { value: "Keep body" } });
     });
 }
+const feedback = { id: "fb", title: "Feedback", content: "body", userName: "User", status: "pending", type: "bug", createdAt: "2026-10-26" };
 afterAll(async () => {
     await act(async () => root.unmount());
     dom.happyDOM.abort();
 });
 
-test("closed feedback hides form and inbox without reading history", async () => {
-    await fresh(false);
-    let reads = 0;
-    mineImpl = async () => {
-        reads++;
-        return [];
-    };
-    await render(
-        <>
-            <FeedbackModal open onClose={() => {}} />
-            <FeedbackInboxPane />
-        </>,
-    );
-    expect(host.textContent).toBe("");
-    expect(reads).toBe(0);
-});
-test("diagnostics default to off and only explicit opt-in collects a masked route", async () => {
+test("official diagnostics omit route secrets and can be excluded explicitly", async () => {
     await fresh();
-    await render(<FeedbackModal open onClose={() => {}} />);
-    expect(checkbox.checked).toBe(false);
-    expect(host.querySelector("pre")).toBeNull();
-    await act(async () => {
-        checkbox.onChange({ target: { checked: true } });
-    });
-    const env = JSON.parse(host.querySelector("pre")!.textContent!);
-    expect(env.pathname).toBe("/canvas/:id");
-    expect(env.currentUrl).toBeUndefined();
-    expect(JSON.stringify(env)).not.toContain("secret");
-    expect(JSON.stringify(env)).not.toContain("private-id");
-});
-test("failure retains draft and retry reuses the account-scoped request", async () => {
-    await fresh();
-    submitImpl = async () => {
-        throw new Error("unknown receipt");
-    };
     await render(<FeedbackModal open onClose={() => {}} />);
     await fill();
+    submitImpl = async () => {
+        throw new Error("retry later");
+    };
     await click("提交反馈");
+    const environment = JSON.parse(submissions[0].environment);
+    expect(environment.pathname).toBe("/canvas/:id");
+    expect(environment.currentUrl).toBeUndefined();
+    expect(JSON.stringify(environment)).not.toContain("secret");
+    expect(JSON.stringify(environment)).not.toContain("private-id");
+    await act(async () => checkbox.onChange({ target: { checked: false } }));
     await click("提交反馈");
-    expect(submissions).toHaveLength(2);
-    expect(submissions[0].actorId).toBe("a");
-    expect(submissions[0].payload.requestId).toBe(submissions[1].payload.requestId);
-    expect(submissions[0].payload.environment).toBe("{}");
+    expect(submissions[1].environment).toBe("{}");
+    expect(submissions[1]).not.toHaveProperty("requestId");
     expect([...fields.values()].some((props) => props.value === "Keep body")).toBe(true);
-    expect(notices).toContain("unknown receipt");
+    expect(notices).toContain("retry later");
 });
-test("rapid submit callbacks issue one write until acknowledgement", async () => {
+
+test("official submission clears the form after acknowledgement and opens history", async () => {
     await fresh();
-    const pending = deferred<any>();
-    submitImpl = () => pending.promise;
-    await render(<FeedbackModal open onClose={() => {}} />);
-    await fill();
-    const button = host.querySelector<HTMLButtonElement>("#feedback-submit-btn")!;
-    await act(async () => {
-        button.click();
-        button.click();
-    });
-    expect(submissions).toHaveLength(1);
-    pending.resolve({ id: "created" });
-    await act(async () => {
-        await pending.promise;
-    });
-    expect(notices).toContain("反馈已提交");
-});
-test("changed draft requires explicit confirmation after an unknown receipt", async () => {
-    await fresh();
-    submitImpl = async () => {
-        throw new Error("unknown receipt");
-    };
+    mineImpl = async () => [{ ...feedback, title: "Submitted title" }];
     await render(<FeedbackModal open onClose={() => {}} />);
     await fill();
     await click("提交反馈");
-    await act(async () => {
-        [...fields.entries()].find(([name]) => name.startsWith("请尽可能"))![1].onChange({ target: { value: "changed body" } });
-    });
-    await click("提交反馈");
-    expect(submissions).toHaveLength(1);
-    await click("已核对，作为新反馈");
-    await click("提交反馈");
-    expect(submissions).toHaveLength(2);
-    expect(submissions[0].payload.requestId).not.toBe(submissions[1].payload.requestId);
-});
-test("late submission cannot clear or notify a different account", async () => {
-    await fresh();
-    const pending = deferred<any>();
-    submitImpl = () => pending.promise;
-    await render(<FeedbackModal open onClose={() => {}} />);
-    await fill();
-    await click("提交反馈");
-    await act(async () => {
-        useUserStore.setState({ user: { id: "b", role: "user" } as any });
-    });
-    pending.resolve({ id: "created" });
-    await act(async () => {
-        await pending.promise;
-    });
-    expect(notices).not.toContain("反馈已提交");
+    expect(submissions[0]).toMatchObject({ type: "bug", title: "Keep title", content: "Keep body", attachments: "[]" });
+    expect(host.textContent).toContain("Submitted title");
+    await act(async () => host.querySelector<HTMLButtonElement>("#feedback-tab-submit")!.click());
     expect([...fields.values()].some((props) => props.value === "Keep body")).toBe(false);
 });
-test("inbox reports read failure and rejects a late response for another account", async () => {
-    await fresh();
-    mineImpl = async () => {
-        throw new Error("history unavailable");
-    };
+
+test("disabled submission keeps existing feedback history readable", async () => {
+    await fresh(false);
+    mineImpl = async () => [{ ...feedback, title: "Existing history" }];
+    await render(<FeedbackModal open onClose={() => {}} />);
+    expect(host.querySelector<HTMLButtonElement>("#feedback-submit-btn")!.disabled).toBe(true);
     await render(<FeedbackInboxPane />);
-    expect(host.querySelector('[role="alert"]')?.textContent).toContain("history unavailable");
-    await fresh();
-    const pending = deferred<any[]>();
-    mineImpl = () => pending.promise;
-    await render(<FeedbackInboxPane />);
-    mineImpl = async () => [];
-    await act(async () => {
-        useUserStore.setState({ user: { id: "b", role: "user" } as any });
-    });
-    pending.resolve([{ id: "private", title: "Private feedback", content: "secret", type: "bug", status: "pending", createdAt: "2026-10-26" }]);
-    await act(async () => {
-        await pending.promise;
-    });
-    // The replacement account's read is independent; resolve only the old request.
-    expect(host.textContent).not.toContain("Private feedback");
+    expect(host.textContent).toContain("Existing history");
 });
-test("admin saves captured version and keeps draft after a conflict", async () => {
-    await fresh(true, true);
-    adminImpl = async () => ({ list: [{ id: "fb", version: 7, title: "Feedback", content: "body", userName: "User", status: "pending", type: "bug", createdAt: "2026-10-26" }], total: 1 });
+
+test("admin uses the official reply contract and preserves a failed draft", async () => {
+    await fresh();
+    adminImpl = async () => ({ list: [feedback], total: 1 });
     updateImpl = async () => {
-        throw new Error("feedback changed");
+        throw new Error("reply unavailable");
     };
     await render(<AdminFeedbacksPage />);
     const detail = [...host.querySelectorAll("button")].find((button) => button.textContent?.includes("详情"))!;
-    await act(async () => {
-        detail.click();
-    });
-    await act(async () => {
-        fields.get("输入回复内容，例如：已定位问题并将在下一版本发布修复；或者感谢提议，该需求已排入排期计划...").onChange({ target: { value: "Keep reply" } });
-    });
+    await act(async () => detail.click());
+    await act(async () => [...fields.entries()].find(([name]) => name.startsWith("输入回复内容"))![1].onChange({ target: { value: "Keep reply" } }));
     await click("保存并答复");
-    expect(adminWrites[0][2]).toBe("a");
-    expect(adminWrites[0][3]).toBe(7);
+    expect(adminWrites[0]).toEqual(["fb", { status: "pending", adminReply: "Keep reply" }]);
     expect([...fields.values()].some((props) => props.value === "Keep reply")).toBe(true);
-    expect(notices).toContain("feedback changed");
+    expect(notices).toContain("reply unavailable");
 });

@@ -1,4 +1,4 @@
-## open-ai-canvas.payment/v1
+## yingce.payment/v1
 
 支持 `validate_config`、`create_order`、`query_order` 和 `verify_notification`。ZPAY 没有可用的主动关单与日账单下载接口，因此插件不声明对应权限；订单到期和晚到账补查由宿主处理。
 
@@ -11,7 +11,7 @@
 
 ```json
 {
-  "apiVersion": "open-ai-canvas.plugin/v1",
+  "apiVersion": "yingce.plugin/v1",
   "id": "official-payment-zpay",
   "name": "ZPAY 聚合支付",
   "version": "1.0.0",

@@ -2,6 +2,8 @@
 
 面向 AI 的短索引。详细文档维护规则见 [AGENTS.md](../AGENTS.md) 第 9 节「文档与交付」。
 
+- [v1.7.3.7 本地整合](content/docs/backend/upstream-v1737-integration.mdx)：本轮功能取舍、官方插件格式、缓存写入及追加迁移。
+
 ## 部署与更新入口
 
 本地定制版本使用自有匹配构建和独立 Agent，生产编排以 `docker-compose.deploy.yml` 为基础，可叠加源码构建配置。在线更新仅使用自有仓库的完整正式 Release，由管理员确认，不切换到官方成品业务镜像。当前合并阶段不执行安装、启动或部署。

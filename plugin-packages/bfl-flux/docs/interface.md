@@ -77,7 +77,7 @@
 
 ```json
 {
-  "apiVersion": "open-ai-canvas.plugin/v2",
+  "apiVersion": "yingce.plugin/v2",
   "id": "bfl-flux",
   "name": "Black Forest Labs FLUX",
   "version": "2.0.0",

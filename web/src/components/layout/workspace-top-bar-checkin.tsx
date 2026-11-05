@@ -1,3 +1,4 @@
+import { translate } from "@/i18n";
 import { App } from "antd";
 import { useState } from "react";
 import { Gift, LoaderCircle } from "lucide-react";
@@ -37,7 +38,7 @@ export function WorkspaceTopBarCheckin() {
             await checkinCredits();
             window.dispatchEvent(new CustomEvent("wallet:updated"));
             await refresh();
-            message.success("签到成功，积分已到账");
+            message.success(translate("account.layout.checkin.success"));
         } catch (error) {
             const alreadyClaimed = error instanceof ApiError && error.status === 409;
             window.dispatchEvent(new CustomEvent("wallet:updated"));
@@ -54,11 +55,13 @@ export function WorkspaceTopBarCheckin() {
             <div className="app-workspace-topbar-checkin-copy">
                 <strong className="app-workspace-topbar-checkin-title">{title}</strong>
                 <span className="app-workspace-topbar-checkin-offer">
-                    今日可领<em>{amount}</em>积分
+                    {translate("local.ui.todayReward")}
+                    <em>{amount}</em>
+                    {translate("shell.credits")}
                 </span>
             </div>
             <button type="button" className={cn("app-workspace-topbar-checkin-claim", claiming && "is-loading")} disabled={claiming} aria-label={`立即领取 ${amount} 积分`} onClick={() => void claim()}>
-                {claiming ? "领取中" : "立即领取"}
+                {claiming ? translate("account.layout.checkin.claiming") : translate("account.layout.checkin.claim")}
             </button>
         </aside>
     );

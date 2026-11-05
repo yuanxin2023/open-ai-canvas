@@ -6,7 +6,7 @@ import (
 )
 
 func TestImageParametersPluginRequestPreservesValuesAndModelScope(t *testing.T) {
-	adapter := officialPackageAdapter(t, "kacang-midjourney.canvas-plugin", "kacang-midjourney")
+	adapter := officialPackageAdapter(t, "kacang-midjourney.yingce-plugin", "kacang-midjourney")
 	if len(adapter.Metadata().ImageParameters) == 0 {
 		t.Fatal("packaged plugin is missing image parameter declarations")
 	}
@@ -54,7 +54,7 @@ func TestImageParametersCannotExpandPluginConstraintsOrBindings(t *testing.T) {
 }
 
 func TestImageParametersGeminiResolutionIsIndependentFromStaleQuality(t *testing.T) {
-	adapter := officialPackageAdapter(t, "google-gemini-image.canvas-plugin", "gemini-image")
+	adapter := officialPackageAdapter(t, "google-gemini-image.yingce-plugin", "gemini-image")
 	request := GenerationRequest{Capability: CapabilityImage, Model: "image-model", Prompt: "portrait", ImageParameters: map[string]any{"imageResolution": "2k", "seed": 0}}
 	spec, err := adapter.BuildCreate(context.Background(), RequestContext{Request: request})
 	if err != nil {

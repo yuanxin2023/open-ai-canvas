@@ -34,7 +34,7 @@ func workflowPluginManifest(id, name, description string) protocol.Manifest {
 		})
 	}
 	return protocol.Manifest{
-		APIVersion: "open-ai-canvas.plugin/v1",
+		APIVersion: "yingce.plugin/v1",
 		Metadata: protocol.Metadata{
 			ID:            id,
 			Version:       "1.0.0",

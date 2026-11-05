@@ -1,21 +1,13 @@
 import type { Asset } from "@/stores/use-asset-store";
 
-export const PLUGIN_API_VERSION = "open-ai-canvas.plugin/v1" as const;
-export const PLUGIN_API_VERSION_V2 = "open-ai-canvas.plugin/v2" as const;
+export const PLUGIN_API_VERSION = "yingce.plugin/v1" as const;
+export const PLUGIN_API_VERSION_V2 = "yingce.plugin/v2" as const;
 export const LOVWOW_PLUGIN_API_VERSION = "lovwow.plugin/v1" as const;
 export const LOVWOW_PLUGIN_API_VERSION_V2 = "lovwow.plugin/v2" as const;
 export const COMPAT_PLUGIN_API_VERSION = "yingce.plugin/v1" as const;
 export const COMPAT_PLUGIN_API_VERSION_V2 = "yingce.plugin/v2" as const;
 
-export type EditorSlotKind =
-    | "timeline-panel"
-    | "preview-renderer"
-    | "inspector"
-    | "asset-ingest"
-    | "subtitle-tool"
-    | "transcription-provider"
-    | "export-renderer"
-    | "ai-assistant";
+export type EditorSlotKind = "timeline-panel" | "preview-renderer" | "inspector" | "asset-ingest" | "subtitle-tool" | "transcription-provider" | "export-renderer" | "ai-assistant";
 
 export type EditorSlotContribution = {
     slot: EditorSlotKind;

@@ -7,7 +7,7 @@ import (
 
 func kacangAdapter(t *testing.T, provider string) Adapter {
 	t.Helper()
-	return officialPackageAdapter(t, "kacang-midjourney.canvas-plugin", provider)
+	return officialPackageAdapter(t, "kacang-midjourney.yingce-plugin", provider)
 }
 
 func TestKacangMidjourneyRouteDefaultsAndReferenceOrder(t *testing.T) {

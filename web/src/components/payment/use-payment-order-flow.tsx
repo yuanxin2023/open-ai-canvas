@@ -1,3 +1,4 @@
+import { translate } from "@/i18n";
 import { App, Button } from "antd";
 import { CreditCard } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -116,7 +117,7 @@ export function usePaymentOrderFlow({ onGranted }: { onGranted: (order: PaymentO
                 await settle(result.order);
                 if (!silent) message.success(grantedText(result.order));
             } else if (!silent && result.order.status === "closed") message.warning(notGrantedText(result.order));
-            else if (!silent) message.info("渠道尚未确认支付，请稍后再试");
+            else if (!silent) message.info(translate("account.payment.notConfirmed"));
         } catch (error) {
             if (!silent) message.error(error instanceof Error ? error.message : "查询支付结果失败");
         } finally {
@@ -132,7 +133,7 @@ export function usePaymentOrderFlow({ onGranted }: { onGranted: (order: PaymentO
             if (!current()) return;
             setOrder(result.order);
             if (result.order.status === "credited") await settle(result.order);
-            else message.success("未支付订单已关闭");
+            else message.success(translate("account.payment.orderClosed"));
         } catch (error) {
             if (current()) message.error(error instanceof Error ? error.message : "关闭订单失败");
         } finally {
@@ -160,7 +161,15 @@ export function usePaymentOrderFlow({ onGranted }: { onGranted: (order: PaymentO
     const dialog = (
         <AppModal
             open={open}
-            title={order?.status === "credited" ? (order.productKind === "storage" ? "扩容完成" : "充值完成") : order?.checkout.mode === "qr_code" ? "扫码支付" : "确认支付结果"}
+            title={
+                order?.status === "credited"
+                    ? order.productKind === "storage"
+                        ? translate("account.payment.storageDone")
+                        : translate("account.payment.topupDone")
+                    : order?.checkout.mode === "qr_code"
+                      ? translate("account.payment.scanTitle")
+                      : translate("account.payment.confirmTitle")
+            }
             centered
             width={430}
             onCancel={close}
@@ -178,7 +187,7 @@ export function usePaymentOrderFlow({ onGranted }: { onGranted: (order: PaymentO
                     {order.status === "pending" && order.checkout.mode === "qr_code" && order.checkout.value ? (
                         <>
                             <PaymentCheckoutCode value={order.checkout.value} />
-                            <span>请使用支付应用扫码完成支付</span>
+                            <span>{translate("account.payment.scanHint")}</span>
                         </>
                     ) : null}
                     <PaymentStatus order={order} now={clock} />
@@ -193,14 +202,16 @@ export function usePaymentOrderFlow({ onGranted }: { onGranted: (order: PaymentO
 function PaymentStatus({ order, now }: { order: PaymentOrder; now: number }) {
     if (order.status === "credited") return <div className="workspace-wallet-payment-status is-success">{grantedText(order)}</div>;
     if (order.status === "closed") return <div className="workspace-wallet-payment-status">{notGrantedText(order)}</div>;
-    if (order.status === "create_failed") return <div className="workspace-wallet-payment-status is-error">支付入口创建失败，请重新生成支付入口。</div>;
+    if (order.status === "create_failed") return <div className="workspace-wallet-payment-status is-error">{translate("account.payment.createCheckoutFailed")}</div>;
     const remaining = Math.max(0, Math.floor((new Date(order.expiresAt).getTime() - now) / 1000));
     const hours = Math.floor(remaining / 3600);
     const minutes = Math.floor((remaining % 3600) / 60);
     const seconds = remaining % 60;
     return (
         <div className="workspace-wallet-payment-status">
-            订单剩余 {String(hours).padStart(2, "0")}:{String(minutes).padStart(2, "0")}:{String(seconds).padStart(2, "0")}，将自动确认支付结果
+            {translate("local.ui.orderTimeLeft")}
+            {String(hours).padStart(2, "0")}:{String(minutes).padStart(2, "0")}:{String(seconds).padStart(2, "0")}
+            {translate("local.ui.autoConfirm")}
         </div>
     );
 }
@@ -209,24 +220,24 @@ function paymentFooter(order: PaymentOrder | null, loading: boolean, close: () =
     if (order?.status === "pending")
         return [
             <Button key="cancel" danger disabled={loading} onClick={() => void cancel()}>
-                关闭订单
+                {translate("account.payment.closeOrder")}
             </Button>,
             <Button key="query" type="primary" loading={loading} onClick={() => void query()}>
-                我已完成支付
+                {translate("account.payment.paid")}
             </Button>,
         ];
     if (order?.status === "create_failed")
         return [
             <Button key="close" onClick={close}>
-                稍后处理
+                {translate("account.payment.later")}
             </Button>,
             <Button key="retry" type="primary" loading={loading} onClick={() => void retry()}>
-                重新生成支付入口
+                {translate("account.payment.regenerate")}
             </Button>,
         ];
     return [
         <Button key="done" type="primary" onClick={close}>
-            完成
+            {translate("library.assets.batch.done")}
         </Button>,
     ];
 }

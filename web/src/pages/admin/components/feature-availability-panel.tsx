@@ -10,9 +10,8 @@ import { AdminStatusBadge } from "./admin-ui";
 import "./feature-availability-panel.css";
 
 type FeatureKey =
-	| "ecommerceEnabled"
-	| "ecommerceVideoEnabled"
-	| "siteAssistantEnabled"
+    | "ecommerceEnabled"
+    | "ecommerceVideoEnabled"
     | "shortDramaEnabled"
     | "taskCenterEnabled"
     | "creditsEnabled"
@@ -49,7 +48,6 @@ type FeatureRow = {
 const editableFeatureKeys: FeatureKey[] = [
     "ecommerceEnabled",
     "ecommerceVideoEnabled",
-    "siteAssistantEnabled",
     "shortDramaEnabled",
     "taskCenterEnabled",
     "creditsEnabled",
@@ -61,8 +59,6 @@ const editableFeatureKeys: FeatureKey[] = [
     "inspirationSourcesVisible",
     "imageWorkbenchEnabled",
     "videoWorkbenchEnabled",
-    // Legacy persisted fields remain round-tripped for compatibility, but the
-    // duplicate static hall and gallery no longer have separate UI switches.
     "inspirationHallEnabled",
     "inspirationGalleryEnabled",
     "userFeedbackEnabled",
@@ -90,17 +86,6 @@ const allFeatureRows: FeatureRow[] = [
         changeCopy: {
             enabled: { title: "确认开启商品视频？", operation: "开放电商商品图片生成视频。", userImpact: "用户可创建商品视频任务，仍需电商创作及相关视频能力开放，并按现有规则计费。", okText: "确认开启" },
             disabled: { title: "确认关闭商品视频？", operation: "停止新建商品视频任务。", userImpact: "历史商品视频保留，不改变电商图片创作的开放状态。", okText: "确认关闭" },
-        },
-    },
-    {
-        key: "siteAssistantEnabled",
-        section: "entrances",
-        title: "创作助手问答",
-        description: "允许向工作台创作助手提问；模型与知识在电商 Agent 配置中设置。",
-        icon: <BookOpenCheck className="size-4" aria-hidden="true" />,
-        changeCopy: {
-            enabled: { title: "确认开启创作助手问答？", operation: "开放工作台创作助手问答入口。", userImpact: "助手仍按已配置的开放对象和模型工作，模型调用遵守现有积分规则。", okText: "确认开启" },
-            disabled: { title: "确认关闭创作助手问答？", operation: "关闭创作助手问答准入。", userImpact: "助手的模型与知识配置保留，自由画布 Agent 和电商创作的开关状态不变。", okText: "确认关闭" },
         },
     },
     {
@@ -209,13 +194,35 @@ const allFeatureRows: FeatureRow[] = [
         },
     },
     {
+        key: "inspirationHallEnabled",
+        section: "entrances",
+        title: "灵感大厅",
+        description: "开放创作首页的灵感大厅，保留个人提示词入口。",
+        icon: <Sparkles className="size-4" aria-hidden="true" />,
+        changeCopy: {
+            enabled: { title: "确认开启灵感大厅？", operation: "开放灵感大厅入口。", userImpact: "用户可以浏览和使用灵感大厅内容。", okText: "确认开启" },
+            disabled: { title: "确认关闭灵感大厅？", operation: "关闭灵感大厅入口。", userImpact: "已有个人提示词与创作记录保留。", okText: "确认关闭" },
+        },
+    },
+    {
+        key: "inspirationGalleryEnabled",
+        section: "entrances",
+        title: "灵感画廊",
+        description: "开放创作首页的灵感画廊，不影响已有创作。",
+        icon: <Sparkles className="size-4" aria-hidden="true" />,
+        changeCopy: {
+            enabled: { title: "确认开启灵感画廊？", operation: "开放灵感画廊入口。", userImpact: "用户可以浏览灵感画廊作品。", okText: "确认开启" },
+            disabled: { title: "确认关闭灵感画廊？", operation: "关闭灵感画廊入口。", userImpact: "已有素材和作品保留。", okText: "确认关闭" },
+        },
+    },
+    {
         key: "userFeedbackEnabled",
         section: "entrances",
         title: "用户反馈",
-        description: "在设置中开放我的反馈，保留现有客服入口，诊断信息须用户主动选择。",
+        description: "在设置中开放我的反馈，保留现有客服入口，提交前可选择是否附带诊断。",
         icon: <BookOpenCheck className="size-4" aria-hidden="true" />,
         changeCopy: {
-            enabled: { title: "确认开启用户反馈？", operation: "开放文字、图片和视频反馈及本人历史。", userImpact: "诊断默认不附带；管理员须具备独立反馈权限才能处理。", okText: "确认开启" },
+            enabled: { title: "确认开启用户反馈？", operation: "开放文字、图片和视频反馈及本人历史。", userImpact: "诊断不含地址查询参数和画布标识；管理员须具备独立反馈权限才能处理。", okText: "确认开启" },
             disabled: { title: "确认关闭用户反馈？", operation: "隐藏设置入口并停止新提交和附件上传。", userImpact: "已有反馈、附件和站内答复保留，后台仍可处理。", okText: "确认关闭" },
         },
     },
@@ -462,9 +469,7 @@ export default function FeatureAvailabilityPanel() {
     const enabledCreationFeatures = creationFeatureRows.filter((row) => effectiveFeatureValue(draftFeatures, row.key)).length;
     const enabledEntranceFeatures = entranceFeatureRows.filter((row) => effectiveFeatureValue(draftFeatures, row.key)).length;
     const enabledPluginFeatures = pluginFeatureRows.filter((row) => effectiveFeatureValue(draftFeatures, row.key)).length;
-    const renderFeatureRows = (rows: FeatureRow[]) => rows
-        .filter((row) => !row.dependsOn || draftFeatures[row.dependsOn])
-        .map((row) => <FeatureSettingRow key={row.key} row={row} saved={savedFeatures} draft={draftFeatures} saving={saving} onChange={requestFeatureChange} />);
+    const renderFeatureRows = (rows: FeatureRow[]) => rows.map((row) => <FeatureSettingRow key={row.key} row={row} saved={savedFeatures} draft={draftFeatures} saving={saving} onChange={requestFeatureChange} />);
 
     return (
         <div className="admin-settings-stack admin-feature-availability is-compact-layout">
@@ -528,12 +533,7 @@ export default function FeatureAvailabilityPanel() {
                         <FeatureSourceRow saved={savedFeatures} draft={draftFeatures} saving={saving} onChange={requestFeatureChange} />
                         {renderFeatureRows(allFeatureRows.filter((row) => row.key === "customChannelsEnabled"))}
                     </FeatureDomainPanel>
-                    <FeatureDomainPanel
-                        title="积分计费"
-                        description="积分中心与新任务计费规则"
-                        icon={<Coins className="size-4" aria-hidden="true" />}
-                        status={<AdminStatusBadge label="涉及计费" tone="warning" />}
-                    >
+                    <FeatureDomainPanel title="积分计费" description="积分中心与新任务计费规则" icon={<Coins className="size-4" aria-hidden="true" />} status={<AdminStatusBadge label="涉及计费" tone="warning" />}>
                         {renderFeatureRows(allFeatureRows.filter((row) => row.section === "billing"))}
                     </FeatureDomainPanel>
                 </div>
@@ -561,6 +561,7 @@ function FeatureDomainPanel({ className, title, description, icon, status, child
 function FeatureSettingRow({ row, saved, draft, saving, onChange }: { row: FeatureRow; saved: FeatureAvailability; draft: FeatureAvailability; saving: boolean; onChange: (key: FeatureKey, enabled: boolean) => void }) {
     const changed = saved[row.key] !== draft[row.key];
     const dependencyDisabled = Boolean(row.dependsOn && !draft[row.dependsOn]);
+    const dependencyTitle = row.dependsOn ? featureByKey.get(row.dependsOn)?.title : undefined;
     const enabled = effectiveFeatureValue(draft, row.key);
 
     return (
@@ -569,6 +570,12 @@ function FeatureSettingRow({ row, saved, draft, saving, onChange }: { row: Featu
                 <span className="admin-feature-board-row-name">
                     <strong>{row.title}</strong>
                     <span title={row.description}>{row.description}</span>
+                    {dependencyTitle ? (
+                        <span>
+                            依赖：{dependencyTitle}
+                            {dependencyDisabled ? "（未开启）" : ""}
+                        </span>
+                    ) : null}
                 </span>
                 {changed ? <span className="admin-feature-board-row-dirty">待保存</span> : null}
             </div>
@@ -623,7 +630,6 @@ function toEditablePayload(features: FeatureAvailability) {
         videoWorkbenchEnabled: features.videoWorkbenchEnabled,
         ecommerceEnabled: features.ecommerceEnabled,
         ecommerceVideoEnabled: features.ecommerceVideoEnabled,
-        siteAssistantEnabled: features.siteAssistantEnabled,
         frontendModelsEnabled: features.frontendModelsEnabled,
         skillLibraryEnabled: features.skillLibraryEnabled,
         pluginCenterEnabled: features.pluginCenterEnabled,
@@ -655,7 +661,6 @@ function parseFeatureAvailability(value: unknown): FeatureAvailability {
         videoWorkbenchEnabled: record.videoWorkbenchEnabled as boolean,
         ecommerceEnabled: record.ecommerceEnabled as boolean,
         ecommerceVideoEnabled: record.ecommerceVideoEnabled as boolean,
-        siteAssistantEnabled: record.siteAssistantEnabled as boolean,
         frontendModelsEnabled: record.frontendModelsEnabled as boolean,
         skillLibraryEnabled: record.skillLibraryEnabled as boolean,
         pluginCenterEnabled: record.pluginCenterEnabled as boolean,

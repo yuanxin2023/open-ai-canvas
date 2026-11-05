@@ -15,10 +15,7 @@ function sourceSection(source: string, startMarker: string, endMarker: string) {
 }
 
 test("admin sidebar keeps its edge collapse control available in both states", async () => {
-    const [shellSource, chromeCss] = await Promise.all([
-        Bun.file(new URL("../src/pages/admin/components/admin-shell.tsx", import.meta.url)).text(),
-        Bun.file(new URL("../src/pages/admin/theme/admin-chrome.css", import.meta.url)).text(),
-    ]);
+    const [shellSource, chromeCss] = await Promise.all([Bun.file(new URL("../src/pages/admin/components/admin-shell.tsx", import.meta.url)).text(), Bun.file(new URL("../src/pages/admin/theme/admin-chrome.css", import.meta.url)).text()]);
     const toggleCss = sourceSection(chromeCss, "[data-admin-root] .admin-sidebar-edge-toggle {", "[data-admin-root] .admin-page-root,");
 
     expect(shellSource).toContain('className={cn("admin-sidebar-edge-toggle hidden lg:grid", collapsed && "is-collapsed")}');
@@ -162,7 +159,7 @@ test("storage settings keep generic S3 controls and connection validation", asyn
     for (const field of ["s3Preset", "sessionToken", "pathStyle", "allowUserS3"]) {
         expect(compacted).toContain(`name="${field}"`);
     }
-    expect(compacted).toContain('["aliyun", "tencent", "qiniu", "s3"].includes(setting.provider || "")');
+    expect(compacted).toContain('["aliyun", "tencent", "qiniu", "volcengine", "s3"].includes(setting.provider || "")');
 });
 
 test("customer service settings keep comfortable card padding", async () => {
@@ -282,7 +279,7 @@ test("ordinary users and administrators use separate guarded management flows", 
     ]);
 
     expect(router).toContain('path: "administrators"');
-    expect(router).toContain("<RequireFullAdmin><AdministratorsPage /></RequireFullAdmin>");
+    expect(router).toMatch(/<RequireFullAdmin>\s*<AdministratorsPage \/>\s*<\/RequireFullAdmin>/);
     expect(guard).toContain('user.adminAccess?.level === "full"');
     expect(api).toContain('http.get<{ users: AdminUser[]; total: number; page: number; pageSize: number }>("/admin/administrators"');
     expect(api).toContain('http.post<{ user: AdminManagedUser }>("/admin/administrators/promote"');
@@ -423,6 +420,8 @@ test("task-first settings reveal dependent configuration only after the primary 
     expect(arkSource).toContain('title="2. 是否启用可信素材同步"');
     expect(arkSource).toContain("{prerequisitesReady || draftEnabled ? (");
     expect(arkSource).toContain('aria-label="启用可信素材同步，保存修改后生效"');
+    expect(arkSource).toContain('title="3. 是否开放真人素材库"');
+    expect(arkSource).toContain('aria-label="开放真人素材库，保存修改后生效"');
 
     expect(interceptionSource).toContain('title="1. 是否替换用户可见的上游错误"');
     expect(interceptionSource).toContain('title="2. 配置替换规则与优先级"');

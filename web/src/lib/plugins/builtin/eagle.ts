@@ -96,7 +96,7 @@ export const eagleAssetPlugin: RegisteredPlugin = {
         version: "0.3.0",
         publishedAt: "2026-08-21",
         updatedAt: "2026-08-22",
-        apiVersion: "open-ai-canvas.plugin/v1",
+        apiVersion: "yingce.plugin/v1",
         description: "把 Eagle 作为站点的外部素材来源，直接浏览原始文件夹并读写 Eagle 文件。",
         documentation: eaglePluginDocumentation,
         author: "开源社区",
@@ -164,25 +164,57 @@ async function importEagleAsset(item: ExternalAssetItem, baseUrl: string, signal
     if (kind === "image") {
         const uploaded = await uploadImage(blob);
         return {
-            id: nanoid(), kind, title: item.title, coverUrl: uploaded.url, tags: item.tags || [], source: "Eagle 素材库", createdAt: now, updatedAt: now, metadata,
+            id: nanoid(),
+            kind,
+            title: item.title,
+            coverUrl: uploaded.url,
+            tags: item.tags || [],
+            source: "Eagle 素材库",
+            createdAt: now,
+            updatedAt: now,
+            metadata,
             data: { dataUrl: uploaded.url, storageKey: uploaded.storageKey, width: item.width || uploaded.width, height: item.height || uploaded.height, bytes: uploaded.bytes, mimeType: uploaded.mimeType },
         };
     }
     const uploaded = await uploadMediaFile(blob, `eagle-${kind}`);
     if (kind === "video") {
         return {
-            id: nanoid(), kind, title: item.title, coverUrl: "", tags: item.tags || [], source: "Eagle 素材库", createdAt: now, updatedAt: now, metadata,
+            id: nanoid(),
+            kind,
+            title: item.title,
+            coverUrl: "",
+            tags: item.tags || [],
+            source: "Eagle 素材库",
+            createdAt: now,
+            updatedAt: now,
+            metadata,
             data: { url: uploaded.url, storageKey: uploaded.storageKey, width: item.width || uploaded.width || 1280, height: item.height || uploaded.height || 720, bytes: uploaded.bytes, mimeType: uploaded.mimeType },
         };
     }
     if (kind === "audio") {
         return {
-            id: nanoid(), kind, title: item.title, coverUrl: "", tags: item.tags || [], source: "Eagle 素材库", createdAt: now, updatedAt: now, metadata,
+            id: nanoid(),
+            kind,
+            title: item.title,
+            coverUrl: "",
+            tags: item.tags || [],
+            source: "Eagle 素材库",
+            createdAt: now,
+            updatedAt: now,
+            metadata,
             data: { url: uploaded.url, storageKey: uploaded.storageKey, durationMs: uploaded.durationMs, bytes: uploaded.bytes, mimeType: uploaded.mimeType },
         };
     }
     return {
-        id: nanoid(), kind: "model", title: item.title, coverUrl: "", tags: item.tags || [], source: "Eagle 素材库", createdAt: now, updatedAt: now, metadata,
+        id: nanoid(),
+        kind: "model",
+        title: item.title,
+        coverUrl: "",
+        tags: item.tags || [],
+        source: "Eagle 素材库",
+        createdAt: now,
+        updatedAt: now,
+        metadata,
         data: { url: uploaded.url, storageKey: uploaded.storageKey, bytes: uploaded.bytes, mimeType: uploaded.mimeType, fileName: item.title },
     };
 }
@@ -366,6 +398,5 @@ function mimeTypeFromExtension(extension: string) {
     if (value === "glb") return "model/gltf-binary";
     return "application/octet-stream";
 }
-
 
 registerPlugin(eagleAssetPlugin);

@@ -89,7 +89,7 @@
 
 ```json
 {
-  "apiVersion": "open-ai-canvas.plugin/v2",
+  "apiVersion": "yingce.plugin/v2",
   "id": "dashscope-qwen-image",
   "name": "DashScope Qwen / Wan Image",
   "version": "2.0.0",

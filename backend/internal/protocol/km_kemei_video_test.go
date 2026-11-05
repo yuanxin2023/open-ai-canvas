@@ -6,7 +6,7 @@ import (
 )
 
 func TestKemeiVideoCreatePollAndCancel(t *testing.T) {
-	adapter := officialPackageAdapter(t, "km-kemei-video.canvas-plugin", "km-kemei-video")
+	adapter := officialPackageAdapter(t, "km-kemei-video.yingce-plugin", "km-kemei-video")
 	create, err := adapter.BuildCreate(context.Background(), RequestContext{Request: GenerationRequest{
 		Model: "kling-v3-omni", Prompt: "推开欧式古典大门，展现奇幻云海城堡", Duration: 5,
 		AspectRatio: "16:9", Resolution: "1080p", GenerateAudio: true, Watermark: false,

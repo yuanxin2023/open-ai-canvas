@@ -21,7 +21,7 @@ describe("create page sidebar theme", () => {
         expect(styles).toContain("--user-context-panel-bg: #202024;");
         expect(styles).toContain("border-right: 1px solid var(--user-panel-divider) !important;");
         expect(styles).toContain("--workspace-sidebar: var(--user-sidebar-bg);");
-        expect(styles).toContain(".app-user-workspace .app-workspace-sidebar-nav { background: var(--user-sidebar-bg) !important; }");
+        expect(styles).toMatch(/\.app-user-workspace \.app-workspace-sidebar-nav\s*\{\s*background: var\(--user-sidebar-bg\) !important;\s*\}/);
     });
 
     test("keeps the workspace brand link free of a filled click state", () => {
@@ -39,7 +39,7 @@ describe("create page sidebar theme", () => {
         const productStyles = readFileSync(resolve(import.meta.dir, "../src/styles/workspace-product.css"), "utf8").replace(/\r\n/g, "\n");
         const navigation = readFileSync(resolve(import.meta.dir, "../src/components/layout/workspace-sidebar-nav.tsx"), "utf8").replace(/\r\n/g, "\n");
 
-        expect(styles).toContain(".app-user-workspace .app-workspace-nav-link.is-active { color: var(--user-ink) !important;");
+        expect(styles).toMatch(/\.app-user-workspace \.app-workspace-nav-link.is-active\s*\{\s*color: var\(--user-ink\) !important;/);
         expect(productStyles).toContain(".app-user-workspace .app-workspace-nav-active-pill {");
         expect(productStyles).toContain("background: var(--workspace-nav-active-bg);");
         expect(productStyles).toContain(".app-user-workspace .app-workspace-nav-link.is-active:hover .app-workspace-nav-active-pill");

@@ -54,7 +54,7 @@ describe("MediaResult 不因地址变化重建或闪空态", () => {
 
     test("实际创作页使用续签实现，同时保留积分购买和预设头像", () => {
         const workspace = readFileSync(new URL("../src/pages/create/creation-workspace.tsx", import.meta.url), "utf8");
-        expect(workspace).toContain('import { MediaResult } from "./creation-workspace-messages"');
+        expect(workspace).toMatch(/import \{[^}]*\bMediaResult\b[^}]*\} from "\.\/creation-workspace-messages"/);
         expect(workspace).not.toContain("function MediaResult(");
         expect(workspace).toContain('<UserAvatar user={user} className="creation-user-avatar"');
         expect(media).toContain('item.generationErrorReason === "insufficient_credits"');

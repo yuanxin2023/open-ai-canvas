@@ -1,8 +1,11 @@
+import { translate } from "@/i18n";
 import { App, Button, InputNumber } from "antd";
 import { SettingsRow } from "@/components/ui/product/settings-row";
 import { ArrowLeft, Boxes, Brain, Bug, CircleDollarSign, Cloud, Inbox, LockKeyhole, MessageSquareText, RadioTower, ReceiptText, SlidersHorizontal, UserRound, Workflow } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useNavigate, useSearchParams } from "react-router";
+import { useTranslation } from "react-i18next";
+import { LanguageOptionGrid } from "@/components/layout/language-menu";
 
 import { UserOSSSettingsForm } from "@/components/layout/user-oss-settings-form";
 import { refreshSystemChannels } from "@/lib/user-session";
@@ -26,19 +29,19 @@ import { AccountSecurityPanel } from "./account-security-panel";
 type ConfigSectionKey = "profile" | "security" | "orders" | "wallet" | "channels" | "models" | "runninghub" | "preferences" | "prompts" | "agent-memory" | "storage" | "diagnostics" | "feedbacks";
 
 const configSections: Array<{ key: ConfigSectionKey; label: string; icon: ReactNode }> = [
-    { key: "profile", label: "个人资料", icon: <UserRound className="size-4" /> },
-    { key: "security", label: "账号安全", icon: <LockKeyhole className="size-4" /> },
-    { key: "orders", label: "我的订单", icon: <ReceiptText className="size-4" /> },
-    { key: "wallet", label: "积分流水", icon: <CircleDollarSign className="size-4" /> },
-    { key: "channels", label: "个人渠道", icon: <RadioTower className="size-4" /> },
-    { key: "runninghub", label: "RunningHub 工作流", icon: <Workflow className="size-4" /> },
-    { key: "models", label: "模型选择", icon: <Boxes className="size-4" /> },
-    { key: "preferences", label: "生成偏好", icon: <SlidersHorizontal className="size-4" /> },
-    { key: "prompts", label: "提示词偏好", icon: <MessageSquareText className="size-4" /> },
-    { key: "agent-memory", label: "Agent 记忆", icon: <Brain className="size-4" /> },
-    { key: "storage", label: "我的对象存储", icon: <Cloud className="size-4" /> },
-    { key: "diagnostics", label: "问题诊断", icon: <Bug className="size-4" /> },
-    { key: "feedbacks", label: "我的反馈", icon: <Inbox className="size-4" /> },
+    { key: "profile", label: translate("local.ui.profile"), icon: <UserRound className="size-4" /> },
+    { key: "security", label: translate("local.ui.security"), icon: <LockKeyhole className="size-4" /> },
+    { key: "orders", label: translate("local.ui.orders"), icon: <ReceiptText className="size-4" /> },
+    { key: "wallet", label: translate("local.ui.creditLedger"), icon: <CircleDollarSign className="size-4" /> },
+    { key: "channels", label: translate("settings.sections.channels.label"), icon: <RadioTower className="size-4" /> },
+    { key: "runninghub", label: translate("settings.sections.runninghub.label"), icon: <Workflow className="size-4" /> },
+    { key: "models", label: translate("settings.sections.models.label"), icon: <Boxes className="size-4" /> },
+    { key: "preferences", label: translate("local.ui.generationPrefs"), icon: <SlidersHorizontal className="size-4" /> },
+    { key: "prompts", label: translate("settings.sections.prompts.label"), icon: <MessageSquareText className="size-4" /> },
+    { key: "agent-memory", label: translate("settings.sections.agent-memory.label"), icon: <Brain className="size-4" /> },
+    { key: "storage", label: translate("settings.sections.storage.label"), icon: <Cloud className="size-4" /> },
+    { key: "diagnostics", label: translate("settings.sections.diagnostics.label"), icon: <Bug className="size-4" /> },
+    { key: "feedbacks", label: translate("settings.sections.feedbacks.label"), icon: <Inbox className="size-4" /> },
 ];
 
 export function isConfigSection(value: string | null): value is ConfigSectionKey {
@@ -47,6 +50,7 @@ export function isConfigSection(value: string | null): value is ConfigSectionKey
 
 export default function SettingsPage() {
     const { message } = App.useApp();
+    const { t } = useTranslation();
     const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
     const requestedSection = searchParams.get("section");
@@ -55,10 +59,14 @@ export default function SettingsPage() {
     const feedbackEnabled = useUserStore((state) => state.features.userFeedbackEnabled);
     const runtimeStatuses = usePluginStore((state) => state.runtimeStatuses);
     const runningHubPluginEnabled = runtimeStatuses[RUNNINGHUB_PLUGIN_ID] === "enabled";
-    const visibleConfigSections = useMemo(() => (customChannelsEnabled ? configSections : configSections.filter((section) => section.key !== "channels"))
-        .filter((section) => section.key !== "runninghub" || runningHubPluginEnabled)
-        .filter((section) => section.key !== "feedbacks" || feedbackEnabled)
-        .filter((section) => !["wallet", "orders"].includes(section.key) || creditsEnabled), [creditsEnabled, customChannelsEnabled, runningHubPluginEnabled, feedbackEnabled]);
+    const visibleConfigSections = useMemo(
+        () =>
+            (customChannelsEnabled ? configSections : configSections.filter((section) => section.key !== "channels"))
+                .filter((section) => section.key !== "runninghub" || runningHubPluginEnabled)
+                .filter((section) => section.key !== "feedbacks" || feedbackEnabled)
+                .filter((section) => !["wallet", "orders"].includes(section.key) || creditsEnabled),
+        [creditsEnabled, customChannelsEnabled, runningHubPluginEnabled, feedbackEnabled],
+    );
     const isVisibleConfigSection = (value: string | null): value is ConfigSectionKey => isConfigSection(value) && visibleConfigSections.some((section) => section.key === value);
     const firstVisibleSection = visibleConfigSections[0]?.key || "models";
     const [activeTab, setActiveTab] = useState<ConfigSectionKey>(isVisibleConfigSection(requestedSection) ? requestedSection : firstVisibleSection);
@@ -82,12 +90,12 @@ export default function SettingsPage() {
         if (!userId) return;
         let cancelled = false;
         void refreshSystemChannels().catch((error) => {
-            if (!cancelled) message.warning(error instanceof Error ? `系统模型刷新失败：${error.message}` : "系统模型刷新失败，继续使用本地缓存");
+            if (!cancelled) message.warning(error instanceof Error ? t("account.settings.systemRefreshFailedWith", { error: error.message }) : t("account.settings.systemRefreshFailed"));
         });
         return () => {
             cancelled = true;
         };
-    }, [message, userId]);
+    }, [message, t, userId]);
 
     const selectSection = (section: ConfigSectionKey) => {
         if (accountBusy) return;
@@ -102,28 +110,32 @@ export default function SettingsPage() {
         const invalidChannel = customChannelsEnabled ? userChannels.find((channel) => channelValidationError(channel)) : undefined;
         if (invalidChannel) {
             selectSection("channels");
-            message.warning(`${invalidChannel.name || "未命名渠道"}：${channelValidationError(invalidChannel)}`);
+            message.warning(t("account.settings.channelError", { name: invalidChannel.name || t("account.settings.channels.unnamed"), error: channelValidationError(invalidChannel) }));
             focusInvalidChannelField(invalidChannel);
             return;
         }
         const workflowReady = Boolean(runningHubPluginEnabled && config.runningHub.enabled && config.runningHub.workflowId.trim() && config.runningHub.baseUrl.trim() && config.runningHub.apiKey.trim());
         if (!effectiveConfig.channels.some(isChannelReady) && !workflowReady) {
             selectSection(customChannelsEnabled ? "channels" : "models");
-            message.error(customChannelsEnabled ? (shouldPromptContinue ? "请先完成至少一个渠道的 Base URL、API Key 和模型配置" : "当前没有可用渠道，请先完成连接信息和模型配置") : "当前没有可用的系统模型，请联系管理员配置系统渠道");
+            message.error(customChannelsEnabled ? (shouldPromptContinue ? t("account.settings.needChannel") : t("account.settings.noChannel")) : t("account.settings.noSystemModel"));
             return;
         }
-        message.success("配置已保存，正在返回创作页面");
+        message.success(t("account.settings.saved"));
         navigate(-1);
     };
 
     const panes: Record<ConfigSectionKey, ReactNode> = {
-        profile: <SettingsPane><ProfileSettingsPane key={userId} onBusyChange={setAccountBusy} /></SettingsPane>,
+        profile: (
+            <SettingsPane>
+                <ProfileSettingsPane key={userId} onBusyChange={setAccountBusy} />
+            </SettingsPane>
+        ),
         security: (
             <SettingsPane>
                 <div className="settings-pane-header">
                     <div className="min-w-0">
-                        <h2>账号安全</h2>
-                        <p>验证当前身份，管理登录密码和绑定的联系方式。</p>
+                        <h2>{translate("local.ui.security")}</h2>
+                        <p>{translate("local.ui.verifyIdentity")}</p>
                     </div>
                 </div>
                 <div className="settings-section">
@@ -131,15 +143,27 @@ export default function SettingsPage() {
                 </div>
             </SettingsPane>
         ),
-        orders: <SettingsPane><PaymentOrdersPane onOpenWallet={() => openWorkspaceWallet()} /></SettingsPane>,
-        wallet: <SettingsPane><CreditLedgerPane /></SettingsPane>,
-        channels: <SettingsPane><ChannelSettingsPane onOpenModels={() => selectSection("models")} onOpenRunningHub={runningHubPluginEnabled ? () => selectSection("runninghub") : undefined} /></SettingsPane>,
+        orders: (
+            <SettingsPane>
+                <PaymentOrdersPane onOpenWallet={() => openWorkspaceWallet()} />
+            </SettingsPane>
+        ),
+        wallet: (
+            <SettingsPane>
+                <CreditLedgerPane />
+            </SettingsPane>
+        ),
+        channels: (
+            <SettingsPane>
+                <ChannelSettingsPane onOpenModels={() => selectSection("models")} onOpenRunningHub={runningHubPluginEnabled ? () => selectSection("runninghub") : undefined} />
+            </SettingsPane>
+        ),
         models: (
             <SettingsPane>
                 <div className="settings-pane-header">
                     <div className="min-w-0">
-                        <h2>模型选择</h2>
-                        <p>按领域选择默认模型；模型能力与请求协议在渠道“模型与能力”中配置。</p>
+                        <h2>{t("settings.sections.models.label")}</h2>
+                        <p>{t("account.settings.modelsDescription")}</p>
                     </div>
                 </div>
                 <div className="settings-section">
@@ -147,23 +171,35 @@ export default function SettingsPage() {
                 </div>
             </SettingsPane>
         ),
-        runninghub: <SettingsPane><RunningHubSettingsPane /></SettingsPane>,
+        runninghub: (
+            <SettingsPane>
+                <RunningHubSettingsPane />
+            </SettingsPane>
+        ),
         preferences: (
             <SettingsPane>
                 <div className="settings-pane-header">
                     <div className="min-w-0">
-                        <h2>生成偏好</h2>
-                        <p>设置新建生成任务时使用的初始值，节点内仍可单独覆盖。</p>
+                        <h2>{t("settings.preferences.title")}</h2>
+                        <p>{t("settings.preferences.description")}</p>
                     </div>
                 </div>
                 <div className="settings-section">
                     <section className="settings-preference-block">
                         <div className="settings-preference-heading">
-                            <h3>画布生成</h3>
-                            <p>用于新建图片生成任务，节点内仍可单独覆盖。</p>
+                            <h3>{t("settings.preferences.interface")}</h3>
+                            <p>{t("settings.preferences.interfaceDescription")}</p>
+                        </div>
+                        <SettingsRow label={t("language.label")} description={t("language.description")} align="top" control={null} />
+                        <LanguageOptionGrid />
+                    </section>
+                    <section className="settings-preference-block">
+                        <div className="settings-preference-heading">
+                            <h3>{t("settings.preferences.canvas")}</h3>
+                            <p>{t("settings.preferences.canvasDescription")}</p>
                         </div>
                         <SettingsRow
-                            label="默认生图张数"
+                            label={t("settings.preferences.imageCount")}
                             control={
                                 <InputNumber
                                     min={1}
@@ -180,13 +216,17 @@ export default function SettingsPage() {
                 </div>
             </SettingsPane>
         ),
-        prompts: <SettingsPane fill><PromptPreferencesPane /></SettingsPane>,
+        prompts: (
+            <SettingsPane fill>
+                <PromptPreferencesPane />
+            </SettingsPane>
+        ),
         "agent-memory": (
             <SettingsPane>
                 <div className="settings-pane-header">
                     <div className="min-w-0">
-                        <h2>Agent 记忆</h2>
-                        <p>只属于你。Agent 记下的先待批准；手动添加立刻生效。可导入导出，也可用文本模型压缩相近条目。</p>
+                        <h2>{t("settings.sections.agent-memory.label")}</h2>
+                        <p>{t("account.settings.agentMemoryDescription")}</p>
                     </div>
                 </div>
                 <div className="settings-section">
@@ -194,7 +234,11 @@ export default function SettingsPage() {
                 </div>
             </SettingsPane>
         ),
-        diagnostics: <SettingsPane><DiagnosticsPanel taskId={searchParams.get("taskId") || undefined} projectId={searchParams.get("projectId") || undefined} /></SettingsPane>,
+        diagnostics: (
+            <SettingsPane>
+                <DiagnosticsPanel taskId={searchParams.get("taskId") || undefined} projectId={searchParams.get("projectId") || undefined} />
+            </SettingsPane>
+        ),
         storage: (
             <SettingsPane>
                 <div className="settings-section">
@@ -202,7 +246,11 @@ export default function SettingsPage() {
                 </div>
             </SettingsPane>
         ),
-        feedbacks: <SettingsPane><FeedbackInboxPane /></SettingsPane>,
+        feedbacks: (
+            <SettingsPane>
+                <FeedbackInboxPane />
+            </SettingsPane>
+        ),
     };
 
     return (
@@ -210,14 +258,18 @@ export default function SettingsPage() {
             {shouldPromptContinue ? (
                 <div className="settings-topbar shrink-0">
                     <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
-                        <Button icon={<ArrowLeft className="size-4" />} disabled={accountBusy} onClick={() => navigate(-1)}>返回创作</Button>
-                        <Button type="primary" disabled={accountBusy} onClick={finishConfig}>保存并返回</Button>
+                        <Button icon={<ArrowLeft className="size-4" />} disabled={accountBusy} onClick={() => navigate(-1)}>
+                            {translate("settings.back")}
+                        </Button>
+                        <Button type="primary" disabled={accountBusy} onClick={finishConfig}>
+                            {translate("settings.saveAndBack")}
+                        </Button>
                     </div>
                 </div>
             ) : null}
             <div className="settings-library-frame flex min-h-0 flex-1 flex-col md:flex-row">
                 <aside className="settings-nav-panel w-full shrink-0 md:w-[200px]">
-                    <nav className="thin-scrollbar flex gap-1 overflow-x-auto p-2 md:block md:space-y-1 md:overflow-x-hidden md:p-2.5" aria-label="配置分类">
+                    <nav className="thin-scrollbar flex gap-1 overflow-x-auto p-2 md:block md:space-y-1 md:overflow-x-hidden md:p-2.5" aria-label={translate("settings.nav")}>
                         {visibleConfigSections.map((item) => {
                             const selected = item.key === activeTab;
                             return (
@@ -240,9 +292,7 @@ export default function SettingsPage() {
                 </aside>
                 <section className="settings-content flex min-h-0 min-w-0 flex-1 flex-col">
                     <div className="app-workspace-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 md:px-6 md:py-5">
-                        <div className={`settings-pane-root ${activeTab === "prompts" ? "h-full w-full" : "mx-auto w-full max-w-none"}`}>
-                            {visibleConfigSections.some((item) => item.key === activeTab) ? panes[activeTab] : panes[firstVisibleSection]}
-                        </div>
+                        <div className={`settings-pane-root ${activeTab === "prompts" ? "h-full w-full" : "mx-auto w-full max-w-none"}`}>{visibleConfigSections.some((item) => item.key === activeTab) ? panes[activeTab] : panes[firstVisibleSection]}</div>
                     </div>
                 </section>
             </div>

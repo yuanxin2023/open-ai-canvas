@@ -1,3 +1,5 @@
+import { translate } from "@/i18n";
+import { useTranslation } from "react-i18next";
 import { forwardRef, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ClipboardEvent, DragEvent, KeyboardEvent, MouseEvent, PointerEvent, TextareaHTMLAttributes } from "react";
 import { createPortal } from "react-dom";
@@ -112,12 +114,40 @@ function shouldSubmitOnEnter(event: { key: string; ctrlKey: boolean; metaKey: bo
 }
 
 export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Props>(function CanvasResourceMentionTextarea(
-    { value, references, actionsRef, onSelectReference, onChange, onSubmit, onKeyDown, className, containerClassName, style, highlightLabels = true, mentionMenuWidth = 320, sendOnEnter = true, onContentSizeChange, includeAssetLibrary = false, activeDropReferenceId, onReferenceFilesDrop, autoLinkEnabled = false, slashCommandGroups = [], slashCommandItems = [], slashCommandLoading = false, slashCommandError, slashCommandMenuWidth = 400, onSlashCommandOpen, mentionMenuLabels, ...props },
+    {
+        value,
+        references,
+        actionsRef,
+        onSelectReference,
+        onChange,
+        onSubmit,
+        onKeyDown,
+        className,
+        containerClassName,
+        style,
+        highlightLabels = true,
+        mentionMenuWidth = 320,
+        sendOnEnter = true,
+        onContentSizeChange,
+        includeAssetLibrary = false,
+        activeDropReferenceId,
+        onReferenceFilesDrop,
+        autoLinkEnabled = false,
+        slashCommandGroups = [],
+        slashCommandItems = [],
+        slashCommandLoading = false,
+        slashCommandError,
+        slashCommandMenuWidth = 400,
+        onSlashCommandOpen,
+        mentionMenuLabels,
+        ...props
+    },
     forwardedRef,
 ) {
     const rawTheme = useActiveTheme();
     const assets = useAssetStore((state) => state.assets);
     const theme = canvasThemes[rawTheme as keyof typeof canvasThemes] ?? canvasThemes.dark;
+    const { t } = useTranslation();
     const containerRef = useRef<HTMLDivElement | null>(null);
     const textareaRef = useRef<HTMLTextAreaElement | null>(null);
     const editorRef = useRef<HTMLDivElement | null>(null);
@@ -155,9 +185,7 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
         if (!query) return onSelectReference ? mentionCanvasReferences : activeMentionCanvasReferences;
         return availableReferences.filter((item) => `${item.label} ${item.title} ${item.kind} ${item.category || ""} ${item.text || ""}`.toLowerCase().includes(query));
     }, [onSelectReference, mentionCanvasReferences, activeMentionCanvasReferences, availableReferences, mention]);
-    const activeSlashCommandGroupId = slashCommandGroups.some((group) => group.id === slashCommandGroupId)
-        ? slashCommandGroupId
-        : slashCommandGroups[0]?.id || "";
+    const activeSlashCommandGroupId = slashCommandGroups.some((group) => group.id === slashCommandGroupId) ? slashCommandGroupId : slashCommandGroups[0]?.id || "";
     const slashCommandCandidates = useMemo(() => {
         if (!slashCommand || !activeSlashCommandGroupId) return [];
         const query = slashCommand.query.trim().toLowerCase();
@@ -401,9 +429,7 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
             slashCommandOpenRef.current = true;
             onSlashCommandOpen?.();
         }
-        const isSameCommand = slashCommand?.start === nextSlashCommand.start
-            && slashCommand.end === nextSlashCommand.end
-            && slashCommand.query === nextSlashCommand.query;
+        const isSameCommand = slashCommand?.start === nextSlashCommand.start && slashCommand.end === nextSlashCommand.end && slashCommand.query === nextSlashCommand.query;
         if (!isSameCommand) setSlashCommand(nextSlashCommand);
     };
 
@@ -468,11 +494,9 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
                           event.stopPropagation();
                           insertAutoLink(autoLinkMatch);
                       }}
-                      aria-label={`引用${autoLinkMatch.reference.label}`}
+                      aria-label={t("canvasB.mention.autoLinkLabel", { label: autoLinkMatch.reference.label })}
                   >
-                      <span className="truncate">
-                          引用「{autoLinkMatch.query}」→ @{autoLinkMatch.reference.label}
-                      </span>
+                      <span className="truncate">{t("canvasB.mention.autoLinkText", { query: autoLinkMatch.query, label: autoLinkMatch.reference.label })}</span>
                       <kbd className="shrink-0 rounded border border-current/20 px-1 font-mono text-[var(--fs-micro)]">Tab</kbd>
                   </button>,
                   document.body,
@@ -529,39 +553,41 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
         caretColor: style?.color || theme.node.text,
     } as CSSProperties;
     const menuAnchor = useRichEditor ? editorRef.current : textareaRef.current;
-    const menu = !readOnly && mention && availableReferences.length && menuAnchor ? (
-        <MentionMenu
-            anchor={menuAnchor}
-            connectedReferences={activeMentionCanvasReferences}
-            assetReferences={assetReferences}
-            filteredReferences={candidates}
-            query={mention.query}
-            cursorOffset={mention.end}
-            activeReferenceId={activeIndex >= 0 ? candidates[Math.min(activeIndex, candidates.length - 1)]?.id : undefined}
-            preferredWidth={mentionMenuWidth}
-            onQueryChange={(query) => setMention((current) => current ? { ...current, query } : current)}
-            onClose={closeMention}
-            onSelect={insertReference}
-            labels={mentionMenuLabels}
-        />
-    ) : null;
-    const slashMenu = slashCommand && slashCommandGroups.length && menuAnchor ? (
-        <SlashCommandMenu
-            anchor={menuAnchor}
-            groups={slashCommandGroups}
-            activeGroupId={activeSlashCommandGroupId}
-            items={slashCommandCandidates}
-            loading={slashCommandLoading}
-            error={slashCommandError}
-            query={slashCommand.query}
-            cursorOffset={slashCommand.end}
-            activeItemId={slashCommandActiveIndex >= 0 ? slashCommandCandidates[Math.min(slashCommandActiveIndex, slashCommandCandidates.length - 1)]?.id : undefined}
-            preferredWidth={slashCommandMenuWidth}
-            onGroupChange={setSlashCommandGroupId}
-            onClose={closeSlashCommand}
-            onSelect={insertSlashCommand}
-        />
-    ) : null;
+    const menu =
+        !readOnly && mention && availableReferences.length && menuAnchor ? (
+            <MentionMenu
+                anchor={menuAnchor}
+                connectedReferences={activeMentionCanvasReferences}
+                assetReferences={assetReferences}
+                filteredReferences={candidates}
+                query={mention.query}
+                cursorOffset={mention.end}
+                activeReferenceId={activeIndex >= 0 ? candidates[Math.min(activeIndex, candidates.length - 1)]?.id : undefined}
+                preferredWidth={mentionMenuWidth}
+                onQueryChange={(query) => setMention((current) => (current ? { ...current, query } : current))}
+                onClose={closeMention}
+                onSelect={insertReference}
+                labels={mentionMenuLabels}
+            />
+        ) : null;
+    const slashMenu =
+        slashCommand && slashCommandGroups.length && menuAnchor ? (
+            <SlashCommandMenu
+                anchor={menuAnchor}
+                groups={slashCommandGroups}
+                activeGroupId={activeSlashCommandGroupId}
+                items={slashCommandCandidates}
+                loading={slashCommandLoading}
+                error={slashCommandError}
+                query={slashCommand.query}
+                cursorOffset={slashCommand.end}
+                activeItemId={slashCommandActiveIndex >= 0 ? slashCommandCandidates[Math.min(slashCommandActiveIndex, slashCommandCandidates.length - 1)]?.id : undefined}
+                preferredWidth={slashCommandMenuWidth}
+                onGroupChange={setSlashCommandGroupId}
+                onClose={closeSlashCommand}
+                onSelect={insertSlashCommand}
+            />
+        ) : null;
 
     if (useRichEditor) {
         return (
@@ -673,12 +699,12 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
                         if (slashCommand) {
                             if (event.key === "ArrowDown" && slashCommandCandidates.length) {
                                 event.preventDefault();
-                                setSlashCommandActiveIndex((index) => index < 0 ? 0 : (index + 1) % slashCommandCandidates.length);
+                                setSlashCommandActiveIndex((index) => (index < 0 ? 0 : (index + 1) % slashCommandCandidates.length));
                                 return;
                             }
                             if (event.key === "ArrowUp" && slashCommandCandidates.length) {
                                 event.preventDefault();
-                                setSlashCommandActiveIndex((index) => index < 0 ? slashCommandCandidates.length - 1 : (index - 1 + slashCommandCandidates.length) % slashCommandCandidates.length);
+                                setSlashCommandActiveIndex((index) => (index < 0 ? slashCommandCandidates.length - 1 : (index - 1 + slashCommandCandidates.length) % slashCommandCandidates.length));
                                 return;
                             }
                             if (event.key === "Enter" || event.key === "Tab") {
@@ -849,22 +875,25 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
                     props.onSelect?.(event);
                 }}
                 onKeyDown={(event) => {
-                    if (readOnly) { onKeyDown?.(event); return; }
-if (event.key === "Enter" && (event.nativeEvent.isComposing || composingRef.current || event.keyCode === 229)) return;
-                        if (autoLinkMatch && event.key === "Tab" && !event.shiftKey && !event.nativeEvent.isComposing && !composingRef.current) {
-                            event.preventDefault();
-                            insertAutoLink(autoLinkMatch);
-                            return;
-                        }
+                    if (readOnly) {
+                        onKeyDown?.(event);
+                        return;
+                    }
+                    if (event.key === "Enter" && (event.nativeEvent.isComposing || composingRef.current || event.keyCode === 229)) return;
+                    if (autoLinkMatch && event.key === "Tab" && !event.shiftKey && !event.nativeEvent.isComposing && !composingRef.current) {
+                        event.preventDefault();
+                        insertAutoLink(autoLinkMatch);
+                        return;
+                    }
                     if (slashCommand) {
                         if (event.key === "ArrowDown" && slashCommandCandidates.length) {
                             event.preventDefault();
-                            setSlashCommandActiveIndex((index) => index < 0 ? 0 : (index + 1) % slashCommandCandidates.length);
+                            setSlashCommandActiveIndex((index) => (index < 0 ? 0 : (index + 1) % slashCommandCandidates.length));
                             return;
                         }
                         if (event.key === "ArrowUp" && slashCommandCandidates.length) {
                             event.preventDefault();
-                            setSlashCommandActiveIndex((index) => index < 0 ? slashCommandCandidates.length - 1 : (index - 1 + slashCommandCandidates.length) % slashCommandCandidates.length);
+                            setSlashCommandActiveIndex((index) => (index < 0 ? slashCommandCandidates.length - 1 : (index - 1 + slashCommandCandidates.length) % slashCommandCandidates.length));
                             return;
                         }
                         if (event.key === "Enter" || event.key === "Tab") {
@@ -938,7 +967,21 @@ if (event.key === "Enter" && (event.nativeEvent.isComposing || composingRef.curr
     );
 });
 
-function SlashCommandMenu({ anchor, groups, activeGroupId, items, loading, error, query, cursorOffset, activeItemId, preferredWidth, onGroupChange, onClose, onSelect }: {
+function SlashCommandMenu({
+    anchor,
+    groups,
+    activeGroupId,
+    items,
+    loading,
+    error,
+    query,
+    cursorOffset,
+    activeItemId,
+    preferredWidth,
+    onGroupChange,
+    onClose,
+    onSelect,
+}: {
     anchor: HTMLElement;
     groups: CanvasSlashCommandGroup[];
     activeGroupId: string;
@@ -1052,42 +1095,51 @@ function SlashCommandMenu({ anchor, groups, activeGroupId, items, loading, error
 
     return createPortal(
         <>
-        <div
-            ref={menuRef}
-            data-canvas-slash-command-menu="true"
-            className="canvas-slash-command-menu fixed z-[var(--z-tooltip)]"
-            data-placement={position.showAbove ? "top" : "bottom"}
-            style={{ left: position.left, top: position.top, width: position.width, maxHeight: position.maxHeight, transform: position.showAbove ? "translateY(-100%)" : undefined }}
-            onPointerDown={(event) => event.stopPropagation()}
-            onMouseDown={(event) => event.stopPropagation()}
-            onClick={(event) => event.stopPropagation()}
-            role="dialog"
-            aria-label="调用提示词"
-        >
-            <header className="canvas-slash-command-header">
-                <span><Sparkles aria-hidden="true" />提示词</span>
-                <small>输入 /关键词 搜索</small>
-            </header>
-            <div className="canvas-slash-command-tabs" role="tablist" aria-label="提示词来源">
-                {groups.map((group) => (
-                    <button
-                        key={group.id}
-                        type="button"
-                        role="tab"
-                        aria-selected={group.id === activeGroupId}
-                        className={group.id === activeGroupId ? "is-active" : undefined}
-                        onMouseDown={(event) => event.preventDefault()}
-                        onClick={() => onGroupChange(group.id)}
-                    >
-                        {group.id === "personal" ? <UserRound aria-hidden="true" /> : <Globe2 aria-hidden="true" />}
-                        {group.label}
-                    </button>
-                ))}
-            </div>
-            <div ref={scrollRef} className="canvas-slash-command-scroll thin-scrollbar" role="listbox" aria-label={activeGroup?.label || "提示词"}>
-                {loading ? <div className="canvas-slash-command-status"><span className="canvas-slash-command-spinner" aria-hidden="true" />正在加载提示词…</div>
-                    : error ? <div className="canvas-slash-command-status is-error">{error}</div>
-                        : items.length ? items.map((item) => (
+            <div
+                ref={menuRef}
+                data-canvas-slash-command-menu="true"
+                className="canvas-slash-command-menu fixed z-[var(--z-tooltip)]"
+                data-placement={position.showAbove ? "top" : "bottom"}
+                style={{ left: position.left, top: position.top, width: position.width, maxHeight: position.maxHeight, transform: position.showAbove ? "translateY(-100%)" : undefined }}
+                onPointerDown={(event) => event.stopPropagation()}
+                onMouseDown={(event) => event.stopPropagation()}
+                onClick={(event) => event.stopPropagation()}
+                role="dialog"
+                aria-label={translate("local.ui.usePrompt")}
+            >
+                <header className="canvas-slash-command-header">
+                    <span>
+                        <Sparkles aria-hidden="true" />
+                        {translate("local.nav.prompts")}
+                    </span>
+                    <small>{translate("local.ui.searchPrompts")}</small>
+                </header>
+                <div className="canvas-slash-command-tabs" role="tablist" aria-label={translate("local.ui.promptSource")}>
+                    {groups.map((group) => (
+                        <button
+                            key={group.id}
+                            type="button"
+                            role="tab"
+                            aria-selected={group.id === activeGroupId}
+                            className={group.id === activeGroupId ? "is-active" : undefined}
+                            onMouseDown={(event) => event.preventDefault()}
+                            onClick={() => onGroupChange(group.id)}
+                        >
+                            {group.id === "personal" ? <UserRound aria-hidden="true" /> : <Globe2 aria-hidden="true" />}
+                            {group.label}
+                        </button>
+                    ))}
+                </div>
+                <div ref={scrollRef} className="canvas-slash-command-scroll thin-scrollbar" role="listbox" aria-label={activeGroup?.label || translate("local.nav.prompts")}>
+                    {loading ? (
+                        <div className="canvas-slash-command-status">
+                            <span className="canvas-slash-command-spinner" aria-hidden="true" />
+                            {translate("local.ui.loadingPrompts")}
+                        </div>
+                    ) : error ? (
+                        <div className="canvas-slash-command-status is-error">{error}</div>
+                    ) : items.length ? (
+                        items.map((item) => (
                             <button
                                 key={`${item.groupId}:${item.id}`}
                                 ref={(node) => {
@@ -1099,9 +1151,9 @@ function SlashCommandMenu({ anchor, groups, activeGroupId, items, loading, error
                                 aria-selected={item.id === activeItemId}
                                 className={item.id === activeItemId ? "canvas-slash-command-item is-active" : "canvas-slash-command-item"}
                                 onMouseEnter={() => setHoveredItemId(item.id)}
-                                onMouseLeave={() => setHoveredItemId((current) => current === item.id ? null : current)}
+                                onMouseLeave={() => setHoveredItemId((current) => (current === item.id ? null : current))}
                                 onFocus={() => setHoveredItemId(item.id)}
-                                onBlur={() => setHoveredItemId((current) => current === item.id ? null : current)}
+                                onBlur={() => setHoveredItemId((current) => (current === item.id ? null : current))}
                                 onPointerDown={(event) => {
                                     event.preventDefault();
                                     event.stopPropagation();
@@ -1113,34 +1165,40 @@ function SlashCommandMenu({ anchor, groups, activeGroupId, items, loading, error
                                     selectItem(item);
                                 }}
                             >
-                                <span className="canvas-slash-command-icon"><FileText aria-hidden="true" /></span>
+                                <span className="canvas-slash-command-icon">
+                                    <FileText aria-hidden="true" />
+                                </span>
                                 <span className="canvas-slash-command-copy">
-                                    <span><strong>{item.label}</strong>{item.badge ? <em>{item.badge}</em> : null}</span>
+                                    <span>
+                                        <strong>{item.label}</strong>
+                                        {item.badge ? <em>{item.badge}</em> : null}
+                                    </span>
                                     <small>{item.description || item.value}</small>
                                 </span>
                             </button>
-                        )) : <div className="canvas-slash-command-status">{query ? `没有匹配“${query}”的提示词` : activeGroup?.emptyLabel || "暂无提示词"}</div>}
+                        ))
+                    ) : (
+                        <div className="canvas-slash-command-status">{query ? `没有匹配“${query}”的提示词` : activeGroup?.emptyLabel || translate("local.ui.noPrompts")}</div>
+                    )}
+                </div>
+                <footer className="canvas-slash-command-footer">
+                    <kbd>↑↓</kbd>
+                    {translate("local.ui.select")}
+                    <kbd>Enter</kbd>
+                    {translate("local.ui.insert")}
+                    <kbd>Esc</kbd>
+                    {translate("common.close")}
+                </footer>
             </div>
-            <footer className="canvas-slash-command-footer"><kbd>↑↓</kbd> 选择 <kbd>Enter</kbd> 插入 <kbd>Esc</kbd> 关闭</footer>
-        </div>
-        {showPreview && previewItem && previewPosition ? (
-            <aside
-                className="canvas-slash-command-preview"
-                data-side={previewPosition.side}
-                style={{ left: previewPosition.left, top: previewPosition.top }}
-                aria-hidden="true"
-            >
-                <img
-                    src={previewItem.previewUrl}
-                    alt=""
-                    loading="lazy"
-                    decoding="async"
-                    referrerPolicy="no-referrer"
-                    onError={() => setFailedPreviewId(previewItem.id)}
-                />
-                <span><strong>{previewItem.label}</strong>{previewItem.badge ? <em>{previewItem.badge}</em> : null}</span>
-            </aside>
-        ) : null}
+            {showPreview && previewItem && previewPosition ? (
+                <aside className="canvas-slash-command-preview" data-side={previewPosition.side} style={{ left: previewPosition.left, top: previewPosition.top }} aria-hidden="true">
+                    <img src={previewItem.previewUrl} alt="" loading="lazy" decoding="async" referrerPolicy="no-referrer" onError={() => setFailedPreviewId(previewItem.id)} />
+                    <span>
+                        <strong>{previewItem.label}</strong>
+                        {previewItem.badge ? <em>{previewItem.badge}</em> : null}
+                    </span>
+                </aside>
+            ) : null}
         </>,
         anchor.closest(".ant-modal") || document.body,
     );

@@ -83,7 +83,7 @@ Agent Plan 专属接入：请求路径为 /api/plan/v3/images/generations，必�
 
 ```json
 {
-  "apiVersion": "open-ai-canvas.plugin/v2",
+  "apiVersion": "yingce.plugin/v2",
   "id": "volcengine-ark-agent-plan-seedream",
   "name": "Volcengine Ark Agent Plan Seedream Images",
   "version": "2.0.0",

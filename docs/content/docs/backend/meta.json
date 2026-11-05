@@ -8,6 +8,7 @@
     "http-api",
     "code-map",
     "backend-database",
+    "upstream-v1737-integration",
     "user-resource-quotas",
     "ecommerce-agent",
     "video-token-billing",

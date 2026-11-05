@@ -1,3 +1,4 @@
+import { translate } from "@/i18n";
 import { useCallback, useRef, useState } from "react";
 import { App } from "antd";
 
@@ -35,13 +36,7 @@ function payloadToTimelineMedia(payload: InsertAssetPayload): TimelineDirectMedi
     return null;
 }
 
-export function useCanvasTimelineAssetInsert({
-    linkedProjectId,
-    refetchLinkedProject,
-    handleAssetsInsert,
-    handleProjectAssetsInsert,
-    openAssetsAtPosition,
-}: UseCanvasTimelineAssetInsertOptions) {
+export function useCanvasTimelineAssetInsert({ linkedProjectId, refetchLinkedProject, handleAssetsInsert, handleProjectAssetsInsert, openAssetsAtPosition }: UseCanvasTimelineAssetInsertOptions) {
     const { message } = App.useApp();
     // 时间线弹窗内新增素材的回填通道：素材库/上传创建节点后由弹窗通过 ref 加入草稿。
     const timelineAddNodeRef = useRef<((node: CanvasNodeData) => void) | null>(null);
@@ -59,7 +54,7 @@ export function useCanvasTimelineAssetInsert({
         async (payloads: InsertAssetPayload[]) => {
             if (assetInsertScope === "timeline") {
                 const media = payloads.map(payloadToTimelineMedia).filter((item): item is TimelineDirectMedia => Boolean(item));
-                if (media.length !== payloads.length) throw new Error("图片和文本素材暂不支持直接入轨，请先插入画布");
+                if (media.length !== payloads.length) throw new Error(translate("canvasPage.timelineInsert.unsupportedMedia"));
                 media.forEach((item) => timelineMediaAddRef.current?.(item));
                 return;
             }
@@ -80,7 +75,7 @@ export function useCanvasTimelineAssetInsert({
                         inserted += 1;
                     }
                 }
-                if (inserted < payloads.length) message.info("图片/文本/角色素材暂不支持直接入轨，仅音视频素材已加入时间线");
+                if (inserted < payloads.length) message.info(translate("canvasPage.timelineInsert.partialInserted"));
                 return;
             }
             const created = await handleProjectAssetsInsert(payloads, projectAssetInsertPosition);

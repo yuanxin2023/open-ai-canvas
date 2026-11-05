@@ -131,7 +131,7 @@ package_plugin() {
   elif grep -q '"apiVersion"[[:space:]]*:[[:space:]]*"lovwow\.plugin/' "$package_dir/manifest.json"; then
     package_extension=.lovwow-plugin
   else
-    package_extension=.canvas-plugin
+    package_extension=.yingce-plugin
   fi
   output_file="$root_dir/$package_id$package_extension"
   temporary_file="$root_dir/.$package_id$package_extension.tmp"

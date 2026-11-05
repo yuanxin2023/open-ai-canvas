@@ -45,7 +45,7 @@ func TestUpstreamV1735SchemaAndMigrationReplay(t *testing.T) {
 	if err := db.Order("version").Find(&before).Error; err != nil {
 		t.Fatal(err)
 	}
-	if len(before) != 103 || before[94].Name != "official_inspiration_catalog" || before[95].Name != "versioned_referral_policies" || before[98].Name != "user_groups_channel_access" {
+	if int64(len(before)) != CurrentSchemaVersion || before[94].Name != "official_inspiration_catalog" || before[95].Name != "versioned_referral_policies" || before[98].Name != "user_groups_channel_access" || before[102].Name != "ecommerce_agent_and_knowledge" {
 		t.Fatalf("unexpected local migration identities: %+v", before)
 	}
 	for range 2 {

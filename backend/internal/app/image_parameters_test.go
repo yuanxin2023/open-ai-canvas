@@ -15,7 +15,7 @@ import (
 
 func imageParameterTestAdapter(t *testing.T, packageID, providerID string) protocol.Adapter {
 	t.Helper()
-	data, err := os.ReadFile(filepath.Join("..", "..", "..", "plugin-packages", packageID+".canvas-plugin"))
+	data, err := os.ReadFile(filepath.Join("..", "..", "..", "plugin-packages", packageID+".yingce-plugin"))
 	if err != nil {
 		t.Fatal(err)
 	}

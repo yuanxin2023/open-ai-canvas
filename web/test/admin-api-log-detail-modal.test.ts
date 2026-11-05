@@ -6,7 +6,7 @@ describe("admin request log detail modal", () => {
 
         expect(page).toContain('<Button aria-label="刷新" title="刷新" icon={<RefreshCw className="size-4" />} loading={loading}');
         expect(page).toContain("onClick={() => setRetry((value) => value + 1)}");
-        expect(page).toContain("[keyword, status, recordType, capability, page, pageSize, retry, updateUrl]");
+        expect(page).toContain("[keyword, status, recordType, capability, fromDay, toDay, userId, modelFilter, channelId, currentUserId, page, pageSize, retry, updateUrl]");
         expect(page).toContain("const autoRefreshIntervals = [30, 60, 120] as const");
         expect(page).toContain('label: "启用自动刷新"');
         expect(page).toContain("`自动刷新：${countdown} 秒`");
@@ -19,14 +19,15 @@ describe("admin request log detail modal", () => {
 
         expect(page).toContain("const [keywordDraft, setKeywordDraft] = useState(keyword)");
         expect(page).toContain("useDebouncedValue(isKeywordComposing ? keyword : keywordDraft)");
-        expect(page).toContain("setSearchParams((current) =>");
+        expect(page).toMatch(/setSearchParams\(\s*\(current\) =>/);
         expect(page).toContain("new URLSearchParams(searchParamsRef.current || current)");
         expect(page).toContain("pendingKeywordUrlRef.current === keyword");
         expect(page).toContain("value={keywordDraft}");
         expect(page).toContain("onChange={(event) => setKeywordDraft(event.target.value)}");
         expect(page).toContain("onCompositionStart={() => setIsKeywordComposing(true)}");
         expect(page).toContain("setIsKeywordComposing(false)");
-        expect(page).toContain('listAdminApiLogs({ recordType, capability: capability === "all" ? undefined : capability, keyword: keyword || undefined');
+        expect(page).toContain("listAdminApiLogs({ ...queryFilters, page, pageSize })");
+        expect(page).toContain("keyword: keyword || undefined");
         expect(page).not.toContain("onChange={(event) => updateUrl({ filter: event.target.value");
         expect(page).not.toContain("keyword: debouncedKeyword || undefined");
     });
