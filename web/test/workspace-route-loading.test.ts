@@ -173,8 +173,8 @@ describe("workspace wallet entry", () => {
         expect(canvasTopBar).toContain("<WorkspaceCreditPopover");
         expect(canvasTopBar).not.toContain("openWorkspaceWallet()");
         expect(canvasTopBar).not.toContain('to="/wallet"');
-        expect(topBar).toContain("app-workspace-topbar-credit-pill");
-        expect(topBar).toContain("openWorkspaceWallet()");
+        expect(topBar).toContain("<WorkspaceCreditPopover");
+        expect(topBar).toContain('variant="topbar"');
         expect(css).not.toContain(".wallet-library-page");
         expect(css).not.toContain(".wallet-market-page");
     });

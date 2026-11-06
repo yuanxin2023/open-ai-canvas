@@ -1,9 +1,11 @@
 import { AlipayCircleFilled, WechatFilled } from "@ant-design/icons";
 import { App, Button, ConfigProvider, Input, Popover, QRCode, Skeleton } from "antd";
-import { Check, CircleCheck, Clock3, CreditCard, ExternalLink, Gift, Sparkles } from "lucide-react";
+import { Check, CircleCheck, Clock3, CreditCard, ExternalLink, Gift, HardDrive, History, Sparkles, TicketCheck } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 
+import { WorkspaceCreditGiftMark } from "@/components/layout/workspace-credit-gift-mark";
 import { CreditProductCard } from "@/components/payments/credit-product-card";
 import { topupSaleDescription } from "@/lib/topup-sale-policy";
 import { PaymentPromotionBanner, promotionClockOffset } from "@/components/payments/payment-promotion-banner";
@@ -11,7 +13,7 @@ import { AppModal } from "@/components/ui/product/app-modal";
 import { formatCredits } from "@/constant/credits";
 import { useWalletBalance } from "@/hooks/use-wallet-balance";
 import { getWorkspaceAntThemeConfig } from "@/lib/app-theme";
-import { WORKSPACE_CREDIT_PRODUCTS_OPEN_EVENT, rememberPaymentReturnPath } from "@/lib/workspace-wallet";
+import { WORKSPACE_CREDIT_PRODUCTS_OPEN_EVENT, openWorkspaceWallet, rememberPaymentReturnPath, type WorkspaceWalletOpenDetail } from "@/lib/workspace-wallet";
 import { closePaymentOrder, createPaymentOrder, getPaymentOrder, listPaymentProviders, listTopupProducts, queryPaymentOrder, refreshPaymentCheckout, type PaymentOrder, type PaymentProvider, type TopupProduct } from "@/services/api/payments";
 import { redeemCredits } from "@/services/api/wallet";
 
@@ -19,7 +21,9 @@ const PAYMENT_CATALOG_STALE_TIME_MS = 5 * 60_000;
 const HOVER_POINTER_QUERY = "(hover: hover) and (pointer: fine)";
 const workspaceCreditTheme = getWorkspaceAntThemeConfig();
 
-export function WorkspaceCreditPopover({ userId }: { userId: string }) {
+export function WorkspaceCreditPopover({ userId, variant }: { userId: string; variant?: "topbar" }) {
+    const { t } = useTranslation();
+    const topbar = variant === "topbar";
     const { message } = App.useApp();
     const { availableMicrocredits, policy } = useWalletBalance(userId);
     const [open, setOpen] = useState(false);
@@ -42,7 +46,12 @@ export function WorkspaceCreditPopover({ userId }: { userId: string }) {
         queryKey: ["payment-catalog", userId],
         queryFn: async () => {
             const [productsResult, providersResult] = await Promise.all([listTopupProducts(), listPaymentProviders()]);
-            return { products: productsResult.products, promotion: productsResult.promotion, serverTime: productsResult.serverTime, providers: providersResult.providers };
+            return {
+                products: productsResult.products.filter((product) => product.enabled && product.kind === "credits"),
+                promotion: productsResult.promotion,
+                serverTime: productsResult.serverTime,
+                providers: providersResult.providers.filter((provider) => provider.enabled && provider.pluginEnabled && provider.configured),
+            };
         },
         staleTime: PAYMENT_CATALOG_STALE_TIME_MS,
         refetchOnWindowFocus: false,
@@ -53,9 +62,7 @@ export function WorkspaceCreditPopover({ userId }: { userId: string }) {
     const catalogServerTime = paymentCatalogQuery.data?.serverTime || new Date().toISOString();
     const maxProductCredits = useMemo(() => products.reduce((maximum, product) => Math.max(maximum, product.creditsMicrocredits), 0), [products]);
     const productsLoading = paymentCatalogQuery.isPending;
-    const productsError = !paymentCatalogQuery.data && paymentCatalogQuery.error
-        ? paymentCatalogQuery.error instanceof Error ? paymentCatalogQuery.error.message : "读取商品套餐失败"
-        : "";
+    const productsError = !paymentCatalogQuery.data && paymentCatalogQuery.error ? (paymentCatalogQuery.error instanceof Error ? paymentCatalogQuery.error.message : "读取商品套餐失败") : "";
     const selectedProvider = useMemo(() => providers.find((provider) => provider.id === selectedProviderId), [providers, selectedProviderId]);
 
     useEffect(() => {
@@ -108,7 +115,7 @@ export function WorkspaceCreditPopover({ userId }: { userId: string }) {
     }, []);
 
     useEffect(() => {
-        setSelectedProviderId((current) => providers.some((provider) => provider.id === current) ? current : providers[0]?.id || "");
+        setSelectedProviderId((current) => (providers.some((provider) => provider.id === current) ? current : providers[0]?.id || ""));
     }, [providers]);
 
     useEffect(() => {
@@ -130,9 +137,12 @@ export function WorkspaceCreditPopover({ userId }: { userId: string }) {
     }, [selectedProduct?.id, paymentOrder?.id, paymentOrder?.status]);
 
     const openPaymentSelector = (product: TopupProduct) => {
-        if (!product.canPurchase) { message.warning("该套餐当前不可购买"); return; }
+        if (!product.canPurchase) {
+            message.warning("该套餐当前不可购买");
+            return;
+        }
         setSelectedProduct(product);
-        setSelectedProviderId((current) => providers.some((provider) => provider.id === current) ? current : providers[0]?.id || "");
+        setSelectedProviderId((current) => (providers.some((provider) => provider.id === current) ? current : providers[0]?.id || ""));
         setPaymentOrder(null);
         setClock(Date.now());
     };
@@ -144,7 +154,10 @@ export function WorkspaceCreditPopover({ userId }: { userId: string }) {
     };
 
     const startPayment = async () => {
-        if (!selectedProduct?.canPurchase) { message.warning("该套餐当前不可购买"); return; }
+        if (!selectedProduct?.canPurchase) {
+            message.warning("该套餐当前不可购买");
+            return;
+        }
         if (!selectedProduct || !selectedProvider) {
             message.error("请选择支付方式");
             return;
@@ -209,7 +222,10 @@ export function WorkspaceCreditPopover({ userId }: { userId: string }) {
             const result = await refreshPaymentCheckout(paymentOrder.id);
             setPaymentOrder(result.order);
             if (result.order.status === "credited") paymentCompleted(result.order.id);
-            else if (result.order.checkout.mode === "redirect" && result.order.checkout.url) { rememberPaymentReturnPath(); window.location.assign(result.order.checkout.url); }
+            else if (result.order.checkout.mode === "redirect" && result.order.checkout.url) {
+                rememberPaymentReturnPath();
+                window.location.assign(result.order.checkout.url);
+            }
         } catch (error) {
             message.error(error instanceof Error ? error.message : "重新生成支付信息失败");
         } finally {
@@ -242,109 +258,115 @@ export function WorkspaceCreditPopover({ userId }: { userId: string }) {
         }
     };
 
+    const openWalletSection = (detail: WorkspaceWalletOpenDetail) => {
+        setOpen(false);
+        setProductsOpen(false);
+        openWorkspaceWallet(detail);
+    };
+
     return (
         <ConfigProvider theme={workspaceCreditTheme}>
             <Popover
-            trigger={canHover ? "hover" : "click"}
-            placement={canHover ? "bottomRight" : "bottom"}
-            rootClassName="workspace-credit-popover"
-            open={open}
-            onOpenChange={setOpen}
-            content={(
-                <div className="workspace-credit-panel">
-                    <div className="workspace-credit-panel-heading">
-                        <div>
-                            <div className="workspace-credit-panel-title">我的积分</div>
-                            <div className="workspace-credit-panel-description">兑换后余额将自动刷新</div>
+                trigger={canHover ? "hover" : topbar ? [] : "click"}
+                placement={canHover ? "bottomRight" : "bottom"}
+                rootClassName="workspace-credit-popover"
+                open={open}
+                onOpenChange={setOpen}
+                content={
+                    <div className="workspace-credit-panel">
+                        <div className="workspace-credit-panel-heading">
+                            <div>
+                                <div className="workspace-credit-panel-title">我的积分</div>
+                                <div className="workspace-credit-panel-description">兑换后余额将自动刷新</div>
+                            </div>
+                            <div className="workspace-credit-balance-chip" aria-label={`当前积分余额 ${balance}`}>
+                                <Sparkles aria-hidden />
+                                <span>余额</span>
+                                <strong>{balance}</strong>
+                            </div>
                         </div>
-                        <div className="workspace-credit-balance-chip" aria-label={`当前积分余额 ${balance}`}>
-                            <Sparkles aria-hidden />
-                            <span>余额</span>
-                            <strong>{balance}</strong>
-                        </div>
-                    </div>
 
-                    <div className="workspace-credit-daily-bonus" aria-label={`每日签到赠送 ${dailyBonus} 免费积分`}>
-                        <Gift aria-hidden />
-                        <div className="workspace-credit-daily-bonus-copy">
-                            <strong>每日免费积分</strong>
-                            <span>{policy === null ? "正在读取每日签到赠送额度" : `每天签到赠送 ${dailyBonus} 免费积分`}</span>
+                        <div className="workspace-credit-daily-bonus" aria-label={`每日签到赠送 ${dailyBonus} 免费积分`}>
+                            <Gift aria-hidden />
+                            <div className="workspace-credit-daily-bonus-copy">
+                                <strong>每日免费积分</strong>
+                                <span>{policy === null ? "正在读取每日签到赠送额度" : `每天签到赠送 ${dailyBonus} 免费积分`}</span>
+                            </div>
+                            <strong className="workspace-credit-daily-bonus-amount">{dailyBonus}</strong>
                         </div>
-                        <strong className="workspace-credit-daily-bonus-amount">{dailyBonus}</strong>
-                    </div>
 
-                    <div className="workspace-credit-redeem-heading">
-                        <span><Gift aria-hidden />兑换码兑换</span>
-                        <small>32 位兑换码</small>
-                    </div>
-                    <div className="workspace-credit-actions">
-                        <div className="workspace-credit-redeem-row">
-                            <Input
-                                aria-label="兑换码"
-                                autoComplete="off"
-                                maxLength={32}
-                                placeholder="输入兑换码"
-                                value={code}
-                                disabled={redeeming}
-                                onChange={(event) => setCode(event.target.value)}
-                                onPressEnter={() => void redeem()}
-                            />
-                            <Button type="primary" loading={redeeming} disabled={normalizedCode.length !== 32} onClick={() => void redeem()}>
-                                兑换
+                        <div className="workspace-credit-redeem-heading">
+                            <span>
+                                <Gift aria-hidden />
+                                兑换码兑换
+                            </span>
+                            <small>32 位兑换码</small>
+                        </div>
+                        <div className="workspace-credit-actions">
+                            <div className="workspace-credit-redeem-row">
+                                <Input aria-label="兑换码" autoComplete="off" maxLength={32} placeholder="输入兑换码" value={code} disabled={redeeming} onChange={(event) => setCode(event.target.value)} onPressEnter={() => void redeem()} />
+                                <Button type="primary" loading={redeeming} disabled={normalizedCode.length !== 32} onClick={() => void redeem()}>
+                                    兑换
+                                </Button>
+                            </div>
+                            <Button
+                                className="workspace-credit-purchase-button"
+                                type="primary"
+                                icon={<CreditCard aria-hidden />}
+                                onClick={() => {
+                                    setOpen(false);
+                                    setProductsOpen(true);
+                                }}
+                            >
+                                购买积分与套餐
                             </Button>
                         </div>
-                        <Button
-                            className="workspace-credit-purchase-button"
-                            type="primary"
-                            icon={<CreditCard aria-hidden />}
-                            onClick={() => {
-                                setOpen(false);
-                                setProductsOpen(true);
-                            }}
-                        >
-                            购买积分与套餐
-                        </Button>
                     </div>
-                </div>
-            )}
-        >
-            <button
-                type="button"
-                className="app-workspace-credit-button"
-                aria-label={canHover ? `购买积分与套餐，当前余额 ${balance}` : `查看积分与兑换码，当前余额 ${balance}`}
-                aria-expanded={canHover ? undefined : open}
-                onClick={() => {
-                    if (!canHover) return;
-                    setOpen(false);
-                    setProductsOpen(true);
-                }}
+                }
             >
-                <Sparkles aria-hidden />
-                <span>{balance}</span>
-            </button>
+                <button
+                    type="button"
+                    className={topbar ? "app-workspace-topbar-credit-pill" : "app-workspace-credit-button"}
+                    aria-label={topbar ? t("shell.openWallet", { balance }) : canHover ? `购买积分与套餐，当前余额 ${balance}` : `查看积分与兑换码，当前余额 ${balance}`}
+                    aria-expanded={canHover || topbar ? undefined : open}
+                    onClick={() => {
+                        if (!canHover && !topbar) return;
+                        setOpen(false);
+                        setProductsOpen(true);
+                    }}
+                >
+                    {topbar ? (
+                        <>
+                            <WorkspaceCreditGiftMark />
+                            <span>{t("shell.credits")}</span>
+                            <strong>{balance}</strong>
+                        </>
+                    ) : (
+                        <>
+                            <Sparkles aria-hidden />
+                            <span>{balance}</span>
+                        </>
+                    )}
+                </button>
             </Popover>
 
-            <AppModal
-                flush
-                centered
-                open={productsOpen}
-                title={null}
-                footer={null}
-                width="min(1280px, calc(100vw - 32px))"
-                rootClassName="workspace-credit-products-modal"
-                onCancel={() => setProductsOpen(false)}
-            >
+            <AppModal flush centered open={productsOpen} title={null} footer={null} width="min(1280px, calc(100vw - 32px))" rootClassName="workspace-credit-products-modal" onCancel={() => setProductsOpen(false)}>
                 <section className="workspace-credit-products-shell">
                     {promotion ? <PaymentPromotionBanner promotion={promotion} serverTime={catalogServerTime} onBoundary={() => void paymentCatalogQuery.refetch({ cancelRefetch: false })} /> : null}
                     <header className="workspace-credit-products-header">
                         <h2>选择您的套餐</h2>
                         <p>选择适合你的积分套餐，购买成功后积分将自动到账</p>
-                        <span className="workspace-credit-products-balance"><Sparkles aria-hidden />当前余额 {balance} 积分</span>
+                        <span className="workspace-credit-products-balance">
+                            <Sparkles aria-hidden />
+                            当前余额 {balance} 积分
+                        </span>
                     </header>
 
                     {productsLoading ? (
                         <div className="workspace-credit-products-grid" aria-label="正在加载商品套餐">
-                            {Array.from({ length: 3 }, (_, index) => <Skeleton.Node key={index} active className="workspace-credit-product-skeleton" />)}
+                            {Array.from({ length: 3 }, (_, index) => (
+                                <Skeleton.Node key={index} active className="workspace-credit-product-skeleton" />
+                            ))}
                         </div>
                     ) : productsError ? (
                         <div className="workspace-credit-products-state">
@@ -367,8 +389,22 @@ export function WorkspaceCreditPopover({ userId }: { userId: string }) {
                             ))}
                         </div>
                     ) : (
-                        <div className="workspace-credit-products-state"><strong>暂无可购买套餐</strong><span>管理员尚未上架积分商品，请稍后再试。</span></div>
+                        <div className="workspace-credit-products-state">
+                            <strong>暂无可购买套餐</strong>
+                            <span>管理员尚未上架积分商品，请稍后再试。</span>
+                        </div>
                     )}
+                    <nav className="mt-6 flex flex-wrap justify-center gap-3" aria-label={t("nav.tools.wallet")}>
+                        <Button type="text" icon={<TicketCheck />} onClick={() => openWalletSection({ tab: "redeem" })}>
+                            {t("account.wallet.tabRedeem")}
+                        </Button>
+                        <Button type="text" icon={<History />} onClick={() => openWalletSection({ tab: "history" })}>
+                            {t("account.wallet.tabHistory")}
+                        </Button>
+                        <Button type="text" icon={<HardDrive />} onClick={() => openWalletSection({ tab: "topup", category: "storage" })}>
+                            {t("account.wallet.storage")}
+                        </Button>
+                    </nav>
                 </section>
             </AppModal>
 
@@ -387,8 +423,14 @@ export function WorkspaceCreditPopover({ userId }: { userId: string }) {
                     <section className={`workspace-credit-checkout-shell${paymentOrder ? " is-payment-order" : ""}`}>
                         <header className="workspace-credit-checkout-header">
                             <div>
-                                <h2>{paymentOrder ? paymentOrder.status === "credited" ? "支付成功" : paymentOrder.checkout.mode === "qr_code" ? "扫码支付" : "完成支付" : "确认订单"}</h2>
-                                <p>{paymentOrder ? paymentOrder.status !== "credited" && paymentOrder.checkout.mode === "qr_code" ? `请使用${paymentProviderLabel(providers.find((provider) => provider.id === paymentOrder.providerId))}扫描二维码完成付款` : "请按收银台提示完成付款，到账状态将自动更新。" : "确认套餐与支付方式，付款成功后积分自动到账"}</p>
+                                <h2>{paymentOrder ? (paymentOrder.status === "credited" ? "支付成功" : paymentOrder.checkout.mode === "qr_code" ? "扫码支付" : "完成支付") : "确认订单"}</h2>
+                                <p>
+                                    {paymentOrder
+                                        ? paymentOrder.status !== "credited" && paymentOrder.checkout.mode === "qr_code"
+                                            ? `请使用${paymentProviderLabel(providers.find((provider) => provider.id === paymentOrder.providerId))}扫描二维码完成付款`
+                                            : "请按收银台提示完成付款，到账状态将自动更新。"
+                                        : "确认套餐与支付方式，付款成功后积分自动到账"}
+                                </p>
                             </div>
                         </header>
 
@@ -396,11 +438,20 @@ export function WorkspaceCreditPopover({ userId }: { userId: string }) {
                             <>
                                 <div className="workspace-credit-checkout-total">
                                     <span>应付金额</span>
-                                    <strong><small>¥</small>{(selectedProduct.amountFen / 100).toFixed(2)}</strong>
+                                    <strong>
+                                        <small>¥</small>
+                                        {(selectedProduct.amountFen / 100).toFixed(2)}
+                                    </strong>
                                 </div>
                                 <div className="workspace-credit-checkout-summary">
-                                    <div><span>所选套餐</span><strong>{selectedProduct.name}</strong></div>
-                                    <div><span>到账积分</span><strong>{formatCredits(selectedProduct.creditsMicrocredits)} 积分</strong></div>
+                                    <div>
+                                        <span>所选套餐</span>
+                                        <strong>{selectedProduct.name}</strong>
+                                    </div>
+                                    <div>
+                                        <span>到账积分</span>
+                                        <strong>{formatCredits(selectedProduct.creditsMicrocredits)} 积分</strong>
+                                    </div>
                                 </div>
                                 <h3 className="workspace-credit-checkout-method-title">支付方式</h3>
                                 <div className="workspace-credit-provider-options" role="radiogroup" aria-label="支付方式">
@@ -441,39 +492,81 @@ export function WorkspaceCreditPopover({ userId }: { userId: string }) {
                             </>
                         ) : (
                             <>
-                            <div className="workspace-credit-payment-order">
-                                <div className="workspace-credit-payment-code">
-                                    <div className="workspace-credit-payment-brand">
-                                        <PaymentProviderIcon providerId={providers.find((provider) => provider.id === paymentOrder.providerId)?.paymentMethod || "online"} />
-                                        <strong>{paymentProviderLabel(providers.find((provider) => provider.id === paymentOrder.providerId))}</strong>
+                                <div className="workspace-credit-payment-order">
+                                    <div className="workspace-credit-payment-code">
+                                        <div className="workspace-credit-payment-brand">
+                                            <PaymentProviderIcon providerId={providers.find((provider) => provider.id === paymentOrder.providerId)?.paymentMethod || "online"} />
+                                            <strong>{paymentProviderLabel(providers.find((provider) => provider.id === paymentOrder.providerId))}</strong>
+                                        </div>
+                                        {paymentOrder.status === "credited" ? (
+                                            <span className="workspace-credit-payment-success">
+                                                <CircleCheck aria-hidden />
+                                            </span>
+                                        ) : paymentOrder.checkout.mode === "qr_code" && paymentOrder.checkout.value ? (
+                                            <div className="workspace-credit-payment-qr-frame">
+                                                <QRCode value={paymentOrder.checkout.value} size={220} color="#111111" bgColor="#FFFFFF" bordered={false} />
+                                            </div>
+                                        ) : null}
+                                        {paymentOrder.status === "credited" ? <strong>支付成功</strong> : paymentOrder.checkout.mode !== "qr_code" ? <strong>请在支付页面完成付款</strong> : null}
+                                        {paymentOrder.status === "pending" ? (
+                                            <span className="workspace-credit-payment-countdown">
+                                                <Clock3 aria-hidden />
+                                                支付剩余时间 <time>{formatPaymentCountdown(paymentOrder.expiresAt, clock)}</time>
+                                            </span>
+                                        ) : null}
+                                        <p className="workspace-credit-payment-note">支付完成后，到账状态将自动更新</p>
                                     </div>
-                                    {paymentOrder.status === "credited" ? (
-                                        <span className="workspace-credit-payment-success"><CircleCheck aria-hidden /></span>
-                                    ) : paymentOrder.checkout.mode === "qr_code" && paymentOrder.checkout.value ? (
-                                        <div className="workspace-credit-payment-qr-frame"><QRCode value={paymentOrder.checkout.value} size={220} color="#111111" bgColor="#FFFFFF" bordered={false} /></div>
-                                    ) : null}
-                                    {paymentOrder.status === "credited" ? <strong>支付成功</strong> : paymentOrder.checkout.mode !== "qr_code" ? <strong>请在支付页面完成付款</strong> : null}
-                                    {paymentOrder.status === "pending" ? <span className="workspace-credit-payment-countdown"><Clock3 aria-hidden />支付剩余时间 <time>{formatPaymentCountdown(paymentOrder.expiresAt, clock)}</time></span> : null}
-                                    <p className="workspace-credit-payment-note">支付完成后，到账状态将自动更新</p>
+                                    <div className="workspace-credit-payment-details">
+                                        <div className="workspace-credit-payment-total">
+                                            <span>应付金额</span>
+                                            <strong>
+                                                <small>¥</small>
+                                                {(paymentOrder.amountFen / 100).toFixed(2)}
+                                            </strong>
+                                        </div>
+                                        <dl>
+                                            <div>
+                                                <dt>所选套餐</dt>
+                                                <dd>{paymentOrder.productName}</dd>
+                                            </div>
+                                            <div>
+                                                <dt>到账积分</dt>
+                                                <dd>{formatCredits(paymentOrder.creditsMicrocredits)} 积分</dd>
+                                            </div>
+                                            <div>
+                                                <dt>支付方式</dt>
+                                                <dd>
+                                                    <PaymentProviderIcon providerId={providers.find((provider) => provider.id === paymentOrder.providerId)?.paymentMethod || "online"} />
+                                                    {paymentProviderLabel(providers.find((provider) => provider.id === paymentOrder.providerId))}
+                                                </dd>
+                                            </div>
+                                        </dl>
+                                        <div className="workspace-credit-payment-order-number">
+                                            <span>订单号</span>
+                                            <span>{paymentOrder.merchantOrderNo}</span>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div className="workspace-credit-payment-details">
-                                    <div className="workspace-credit-payment-total"><span>应付金额</span><strong><small>¥</small>{(paymentOrder.amountFen / 100).toFixed(2)}</strong></div>
-                                    <dl>
-                                        <div><dt>所选套餐</dt><dd>{paymentOrder.productName}</dd></div>
-                                        <div><dt>到账积分</dt><dd>{formatCredits(paymentOrder.creditsMicrocredits)} 积分</dd></div>
-                                        <div><dt>支付方式</dt><dd><PaymentProviderIcon providerId={providers.find((provider) => provider.id === paymentOrder.providerId)?.paymentMethod || "online"} />{paymentProviderLabel(providers.find((provider) => provider.id === paymentOrder.providerId))}</dd></div>
-                                    </dl>
-                                    <div className="workspace-credit-payment-order-number"><span>订单号</span><span>{paymentOrder.merchantOrderNo}</span></div>
-                                </div>
-                            </div>
-                            <footer className="workspace-credit-payment-footer">
-                                    {paymentOrder.status === "create_failed" ? <Button type="primary" loading={paymentQuerying} onClick={() => void retryPaymentCheckout()}>重新生成支付信息</Button> : paymentOrder.status === "pending" ? (
+                                <footer className="workspace-credit-payment-footer">
+                                    {paymentOrder.status === "create_failed" ? (
+                                        <Button type="primary" loading={paymentQuerying} onClick={() => void retryPaymentCheckout()}>
+                                            重新生成支付信息
+                                        </Button>
+                                    ) : paymentOrder.status === "pending" ? (
                                         <>
-                                            <Button disabled={paymentQuerying} onClick={() => void cancelPayment()}>关闭订单</Button>
-                                            <Button type="primary" loading={paymentQuerying} onClick={() => void confirmPayment()}>我已完成支付</Button>
+                                            <Button disabled={paymentQuerying} onClick={() => void cancelPayment()}>
+                                                关闭订单
+                                            </Button>
+                                            <Button type="primary" loading={paymentQuerying} onClick={() => void confirmPayment()}>
+                                                我已完成支付
+                                            </Button>
                                         </>
-                                    ) : <Button type="primary" onClick={closePaymentSelector}>完成</Button>}
-                            </footer>
+                                    ) : (
+                                        <Button type="primary" onClick={closePaymentSelector}>
+                                            完成
+                                        </Button>
+                                    )}
+                                </footer>
                             </>
                         )}
                     </section>
@@ -485,8 +578,18 @@ export function WorkspaceCreditPopover({ userId }: { userId: string }) {
 
 function PaymentProviderIcon({ providerId, large = false }: { providerId: string; large?: boolean }) {
     const className = large ? "workspace-credit-provider-icon is-large" : "workspace-credit-provider-icon";
-    if (isWechatProvider(providerId)) return <span className={`${className} is-wechat`} aria-hidden><WechatFilled /></span>;
-    if (isAlipayProvider(providerId)) return <span className={`${className} is-alipay`} aria-hidden><AlipayCircleFilled /></span>;
+    if (isWechatProvider(providerId))
+        return (
+            <span className={`${className} is-wechat`} aria-hidden>
+                <WechatFilled />
+            </span>
+        );
+    if (isAlipayProvider(providerId))
+        return (
+            <span className={`${className} is-alipay`} aria-hidden>
+                <AlipayCircleFilled />
+            </span>
+        );
     return <CreditCard className={className} aria-hidden />;
 }
 

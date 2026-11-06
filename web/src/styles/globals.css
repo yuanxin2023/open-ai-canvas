@@ -3040,7 +3040,7 @@
 
     .workspace-credit-product-card.is-featured .workspace-credit-product-ribbon {
         background: var(--workspace-credit-product-accent);
-        color: var(--foreground);
+        color: var(--workspace-credit-product-accent-foreground);
     }
 
     .workspace-credit-product-main {

@@ -3,18 +3,19 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 describe("workspace credit entry", () => {
-    test("top bars open the credits wallet from their balance entries", () => {
+    test("top bars share the credit purchase view and preserve the gift mark", () => {
         const topBar = readFileSync(resolve(import.meta.dir, "../src/components/layout/workspace-top-bar.tsx"), "utf8");
         const canvas = readFileSync(resolve(import.meta.dir, "../src/pages/canvas/canvas-project-top-bar.tsx"), "utf8");
         const popover = readFileSync(resolve(import.meta.dir, "../src/components/layout/workspace-credit-popover.tsx"), "utf8");
         const css = readFileSync(resolve(import.meta.dir, "../src/styles/globals.css"), "utf8");
 
-        expect(topBar).toContain("openWorkspaceWallet()");
-        expect(topBar).toContain("<WorkspaceCreditGiftMark />");
+        expect(topBar).toContain('<WorkspaceCreditPopover key={user.id} userId={user.id} variant="topbar" />');
+        expect(topBar).not.toContain("openWorkspaceWallet()");
+        expect(popover).toContain("<WorkspaceCreditGiftMark />");
         expect(topBar).not.toContain("Coins");
         expect(canvas).toContain("<WorkspaceCreditPopover userId={user.id} />");
         expect(canvas).not.toContain("Coins");
-        expect(popover).toContain('className="app-workspace-credit-button"');
+        expect(popover).toContain('"app-workspace-credit-button"');
         expect(popover).toContain("<Sparkles aria-hidden />");
         expect(css).toContain(".app-workspace-credit-button");
     });

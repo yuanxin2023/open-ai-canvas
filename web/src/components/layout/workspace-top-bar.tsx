@@ -2,20 +2,17 @@ import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import type { Ref } from "react";
 import { Link, useLocation } from "react-router";
 import { useTranslation } from "react-i18next";
-import { currentLocale } from "@/i18n";
 
 import { TopbarFeedbackButton } from "@/components/feedback/topbar-feedback-button";
 import { SystemAnnouncementCenter } from "@/components/layout/system-announcement-center";
 import { WorkspaceAccountMenu } from "@/components/layout/workspace-account-menu";
-import { WorkspaceCreditGiftMark } from "@/components/layout/workspace-credit-gift-mark";
+import { WorkspaceCreditPopover } from "@/components/layout/workspace-credit-popover";
 import { WorkspaceTopBarExtensionSlot } from "@/components/layout/workspace-top-bar-extension";
 import { AnimatedThemeToggler } from "@/components/ui/animated-theme-toggler";
 import { LanguageMenu } from "@/components/layout/language-menu";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { useUserStore } from "@/stores/use-user-store";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
-import { useWalletBalance } from "@/hooks/use-wallet-balance";
-import { openWorkspaceWallet } from "@/lib/workspace-wallet";
 import { workspacePageTitleKey } from "@/lib/workspace-page-title";
 
 export function WorkspaceTopBar({ sidebarOpen, onToggleSidebar, sidebarTriggerRef }: { sidebarOpen: boolean; onToggleSidebar: () => void; sidebarTriggerRef?: Ref<HTMLButtonElement> }) {
@@ -25,11 +22,9 @@ export function WorkspaceTopBar({ sidebarOpen, onToggleSidebar, sidebarTriggerRe
     const setTheme = useThemeStore((state) => state.setTheme);
     const user = useUserStore((state) => state.user);
     const creditsEnabled = useUserStore((state) => state.features.creditsEnabled);
-    const { availableMicrocredits } = useWalletBalance(user?.id, creditsEnabled);
     const { pathname } = useLocation();
     const sectionKey = workspacePageTitleKey(pathname);
     const pageTitle = sectionKey ? t(sectionKey) : brandName;
-    const balance = availableMicrocredits === null ? "--" : (availableMicrocredits / 1_000_000).toLocaleString(currentLocale(), { maximumFractionDigits: 2 });
 
     return (
         <header className="app-workspace-topbar">
@@ -54,13 +49,7 @@ export function WorkspaceTopBar({ sidebarOpen, onToggleSidebar, sidebarTriggerRe
             <div className="app-workspace-topbar-actions">
                 <LanguageMenu />
                 {user ? <TopbarFeedbackButton /> : null}
-                {creditsEnabled ? (
-                    <button type="button" className="app-workspace-topbar-credit-pill" aria-label={t("shell.openWallet", { balance })} onClick={() => openWorkspaceWallet()}>
-                        <WorkspaceCreditGiftMark />
-                        <span>{t("shell.credits")}</span>
-                        <strong>{balance}</strong>
-                    </button>
-                ) : null}
+                {user && creditsEnabled ? <WorkspaceCreditPopover key={user.id} userId={user.id} variant="topbar" /> : null}
                 {user ? <SystemAnnouncementCenter userId={user.id} className="app-workspace-topbar-icon-button" autoOpen /> : null}
                 <AnimatedThemeToggler className="app-workspace-topbar-icon-button" theme={theme} onThemeChange={setTheme} aria-label={t("shell.toggleTheme")} />
                 <WorkspaceAccountMenu />
