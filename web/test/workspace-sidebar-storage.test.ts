@@ -48,17 +48,16 @@ describe("account storage meter", () => {
     });
 });
 
-describe("workspace account storage meter", () => {
-    test("shows used, remaining and total in the account menu", () => {
-        const menu = readFileSync(resolve(import.meta.dir, "../src/components/layout/workspace-account-menu.tsx"), "utf8");
-        const card = readFileSync(resolve(import.meta.dir, "../src/components/layout/workspace-account-card.tsx"), "utf8");
-        const css = readFileSync(resolve(import.meta.dir, "../src/components/layout/workspace-account-card.css"), "utf8");
-
-        expect(menu).toContain("<WorkspaceAccountCard");
-        expect(card).toContain("accountStorageMeter(storageQuery.data)");
-        expect(card).toContain("storageMeter.usedLabel} / ${storageMeter.totalLabel}");
-        expect(card).toContain("storageMeter.remainingLabel");
-        expect(card).toContain('aria-label={translate("account.layout.storage.progress")}');
-        expect(css).toContain(".workspace-account-card-storage");
+describe("workspace sidebar storage meter", () => {
+    test("exposes used, remaining and total through an accessible progress bar", () => {
+        const sidebar = readFileSync(resolve(import.meta.dir, "../src/components/layout/workspace-sidebar-nav.tsx"), "utf8");
+        const meter = readFileSync(resolve(import.meta.dir, "../src/components/layout/workspace-sidebar-storage-meter.tsx"), "utf8");
+        expect(sidebar).toContain("<WorkspaceSidebarStorageMeter");
+        expect(meter).toContain("accountStorageMeter(query.data)");
+        expect(meter).toContain("meter.usedLabel");
+        expect(meter).toContain("meter.remainingLabel");
+        expect(meter).toContain("meter.totalLabel");
+        expect(meter).toContain('role="progressbar"');
+        expect(meter).toContain("aria-valuetext={summary}");
     });
 });

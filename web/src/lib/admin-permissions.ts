@@ -58,6 +58,7 @@ export const ADMIN_PERMISSION_GROUPS = [
         label: "内容与通知",
         items: [
             { permission: "admin.content.inspirations", label: "提示词运营", path: "/admin/inspirations" },
+            { permission: "admin.content.pose_library", label: "姿势库管理", path: "/admin/pose-library" },
             { permission: "admin.content.announcements", label: "系统公告", path: "/admin/announcements" },
             { permission: "admin.content.banner_announcements", label: "常驻通知", path: "/admin/banner-announcements" },
         ],

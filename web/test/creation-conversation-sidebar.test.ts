@@ -38,7 +38,7 @@ test("creation thread exposes a persistent desktop conversation sidebar", async 
     expect(pageSource).toContain('new URLSearchParams(location.search).get("home") !== "1"');
     expect(pageSource).toContain("openInspirationHome()");
     expect(pageSource).toContain('navigate("/", { replace: true })');
-    expect(sidebarSource).toContain('{ ...toolItem("create", "/?home=1"), id: "home", title: translate("nav.tools.create") }');
+    expect(sidebarSource).toContain('{ ...toolItem("create", "/?home=1", t), id: "home", title: t("nav.sidebar.home") }');
     expect(sidebarSource).toContain('to="/?home=1"');
     expect(pageSource).toContain('className="creation-thread-main"');
     expect(workspaceSource).toContain("export function CreationConversationSidebar");
@@ -63,7 +63,7 @@ test("creation thread exposes a persistent desktop conversation sidebar", async 
     expect(styles).toContain("background: var(--user-context-panel-bg, var(--user-surface))");
     expect(styles).toContain("border-right: 1px solid var(--user-panel-divider, var(--user-border))");
     expect(styles).toContain("background: var(--user-context-panel-selected, var(--user-surface-muted))");
-    expect(styles).toContain("margin: 4px -8px 0 0; padding-right: 8px;");
+    expect(styles).toMatch(/margin: 4px -8px 0 0;\s*padding-right: 8px;/);
     expect(styles).toContain(".creation-conversation-sidebar-search");
     expect(styles).toContain(".creation-conversation-sidebar-group");
     expect(styles).toContain(".creation-conversation-sidebar-more");

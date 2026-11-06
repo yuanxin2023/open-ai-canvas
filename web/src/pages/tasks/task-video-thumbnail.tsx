@@ -40,12 +40,12 @@ export function TaskVideoThumbnail({ src }: { src: string }) {
         };
     }, [src]);
     return (
-        <span ref={container} className="block h-full w-full">
+        <span ref={container} className="task-center-video-thumb">
             {poster?.source === src ? (
-                <MediaPreview src={poster.url} kind="image" className="h-full w-full object-cover" />
+                <MediaPreview src={poster.url} kind="image" />
             ) : (
-                <span className="task-video-poster-placeholder">
-                    <Video />
+                <span className="task-center-video-placeholder">
+                    <Video aria-hidden="true" />
                     <small>{t("library.tasks.row.videoPreview")}</small>
                 </span>
             )}

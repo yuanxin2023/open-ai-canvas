@@ -32,6 +32,7 @@ type ChannelModelRequest struct {
 	Enabled                          *bool                          `json:"enabled"`
 	CapabilityConfig                 *ModelCapabilityConfig         `json:"capabilityConfig"`
 	PriceTiers                       []ChannelModelPriceTierRequest `json:"priceTiers"`
+	ReferenceVideoBilling            *bool                          `json:"referenceVideoBilling"`
 }
 
 const maxAdminChannelModelBatchDeleteCount = 100
@@ -52,8 +53,14 @@ type ChannelModelPriceTierRequest struct {
 	OutputTokenPriceMicrocredits     int64             `json:"outputTokenPriceMicrocredits"`
 	CachedTokenPriceMicrocredits     int64             `json:"cachedTokenPriceMicrocredits"`
 	CacheWriteTokenPriceMicrocredits int64             `json:"cacheWriteTokenPriceMicrocredits"`
-	PriceConfigured                  bool              `json:"priceConfigured"`
-	Enabled                          *bool             `json:"enabled"`
+	// TokenPriceRules 只用于文本 Token 档：按东八区时段与真实输入 Token 区间覆盖基础单价。
+	TokenPriceRulesEnabled bool                   `json:"tokenPriceRulesEnabled"`
+	TokenPriceRules        []model.TokenPriceRule `json:"tokenPriceRules"`
+	// 带参考视频的价格，仅在模型开启参考视频计费时使用：按秒档用 Unit，Token 档用 OutputToken。
+	ReferenceVideoUnitPriceMicrocredits        int64 `json:"referenceVideoUnitPriceMicrocredits"`
+	ReferenceVideoOutputTokenPriceMicrocredits int64 `json:"referenceVideoOutputTokenPriceMicrocredits"`
+	PriceConfigured                            bool  `json:"priceConfigured"`
+	Enabled                                    *bool `json:"enabled"`
 }
 
 // AdminChannelModelFetchResult 是管理员从上游拉目录后的汇总：models 为去重后的标识，added 为本次新建条数。
@@ -243,6 +250,15 @@ func (s *Service) SaveAdminChannelModel(actor *model.User, channelID string, id 
 	if req.Enabled != nil {
 		item.Enabled = *req.Enabled
 	}
+	if req.ReferenceVideoBilling != nil {
+		item.ReferenceVideoBilling = *req.ReferenceVideoBilling
+	}
+	if capability != "video" {
+		item.ReferenceVideoBilling = false
+	}
+	if err := validateReferenceVideoTierPrices(item.ReferenceVideoBilling, tiers); err != nil {
+		return nil, err
+	}
 	if err := validateChannelModelTierCapabilities(tiers, item.CapabilityConfigJSON, capability, string(protocol)); err != nil {
 		return nil, err
 	}
@@ -290,8 +306,8 @@ func normalizeChannelModelContractWithRegistry(registry *protocol.Registry, chan
 	if expected := protocolCapabilityFromMetadata(adapter.Metadata()); expected != "" && expected != capability {
 		return "", "", "", "", BadAuthRequest("模型能力与请求协议不匹配")
 	}
-	if (protocol == model.ChannelInterfaceVolcengineJiMengImage || protocol == model.ChannelInterfaceVolcengineJiMengVideo) && (strings.TrimSpace(channel.APIKey) == "" || strings.TrimSpace(channel.SecretKey) == "") {
-		return "", "", "", "", BadAuthRequest("即梦官方协议需要先在渠道中配置 Access Key 和 Secret Key")
+	if protocolAuthUsesSecretKey(adapter.Metadata().Auth) && (strings.TrimSpace(channel.APIKey) == "" || strings.TrimSpace(channel.SecretKey) == "") {
+		return "", "", "", "", BadAuthRequest(adapter.Metadata().Name + " 协议需要先在渠道中配置 API Key 和 Secret Key")
 	}
 	return modelKey, providerModelKey, capability, protocol, nil
 }

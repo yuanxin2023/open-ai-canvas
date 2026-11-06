@@ -24,11 +24,11 @@ describe("create page sidebar theme", () => {
         expect(styles).toMatch(/\.app-user-workspace \.app-workspace-sidebar-nav\s*\{\s*background: var\(--user-sidebar-bg\) !important;\s*\}/);
     });
 
-    test("keeps the workspace brand link free of a filled click state", () => {
+    test("keeps keyboard focus visible on the official brand button", () => {
         const styles = readFileSync(resolve(import.meta.dir, "../src/styles/globals.css"), "utf8").replace(/\r\n/g, "\n");
 
         expect(styles).toContain(".app-workspace-sidebar-brand-button:active,");
-        expect(styles).toContain("-webkit-tap-highlight-color: transparent;");
+        expect(styles).toContain("background: color-mix(in srgb, var(--user-ink) 5%, transparent);");
         expect(styles).toContain("background: transparent;");
         expect(styles).toContain(".app-workspace-sidebar-brand-button:focus-visible {");
         expect(styles).toContain("outline: 2px solid var(--user-accent);");
@@ -44,7 +44,7 @@ describe("create page sidebar theme", () => {
         expect(productStyles).toContain("background: var(--workspace-nav-active-bg);");
         expect(productStyles).toContain(".app-user-workspace .app-workspace-nav-link.is-active:hover .app-workspace-nav-active-pill");
         expect(productStyles).toContain("background: var(--workspace-nav-active-hover-bg);");
-        expect(navigation).toContain('selected ? <span className="app-workspace-nav-active-pill" aria-hidden /> : null');
+        expect(navigation).toMatch(/isActive \? <motion.span[^>]*className="app-workspace-nav-active-pill"[^>]*aria-hidden/);
         expect(navigation).not.toContain('background: "var(--workspace-nav-active-bg)"');
     });
 
@@ -53,8 +53,8 @@ describe("create page sidebar theme", () => {
         const navigation = readFileSync(resolve(import.meta.dir, "../src/components/layout/workspace-sidebar-nav.tsx"), "utf8").replace(/\r\n/g, "\n");
 
         expect(navigation).not.toContain("创作工作台");
-        expect(navigation).toContain('className="flex min-w-0 items-center gap-2"');
-        expect(styles).toContain(".app-user-workspace .app-workspace-brand-wordmark {\n    font-size: 16px;");
+        expect(navigation).toContain("appearance.brandName");
+        expect(styles).toMatch(/\.app-user-workspace \.app-workspace-brand-wordmark\s*\{[^}]*font-size: 15px;/);
         expect(styles).toContain("font-weight: 600;");
         expect(styles).not.toContain(".app-workspace-brand-subtitle");
     });

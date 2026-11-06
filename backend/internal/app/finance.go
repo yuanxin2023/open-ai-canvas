@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -154,7 +155,9 @@ type tokenBillingEstimate struct {
 	InputTokens  int64
 	OutputTokens int64
 	Video        *VideoTokenEstimate
-	Err          error
+	// ReferenceVideos 与计费方式无关地描述参考视频，按秒和 Token 都据此决定是否计入参考视频。
+	ReferenceVideos referenceVideoUsage
+	Err             error
 }
 
 func (s *Service) Wallet(user *model.User, entryType string, page int, limit int) (*WalletSummary, error) {
@@ -788,7 +791,7 @@ func (s *Service) taskBillingOrder(userID string, task *model.Task, input map[st
 	scene := firstNonEmpty(strings.TrimSpace(task.Operation), task.Type)
 	intent := ModelRequestIntentFromTaskInput(input, task.Type, task.Operation)
 	priceTierID, _ := config["priceTierId"].(string)
-	return s.newBillingOrderWithPriceTier(userID, task.ID, "task:"+task.ID+":"+newID(), channelID, modelKey, capability, scene, requestedBillingQuantity(capability, config), estimateTaskBillingTokens(input, capability), strings.TrimSpace(priceTierID), intent)
+	return s.newBillingOrderWithPriceTier(userID, task.ID, "task:"+task.ID+":"+newID(), channelID, modelKey, capability, scene, requestedBillingQuantity(capability, config), s.estimateTaskBilling(userID, input, capability), strings.TrimSpace(priceTierID), intent)
 }
 
 func (s *Service) newLogicalModelBillingOrder(userID string, task *model.Task, input map[string]any) (*model.BillingOrder, error) {
@@ -812,7 +815,7 @@ func (s *Service) newLogicalModelBillingOrder(userID string, task *model.Task, i
 	if logicalModel.PricePolicy == "channel" {
 		intent := ModelRequestIntentFromTaskInput(input, task.Type, task.Operation)
 		priceTierID, _ := config["priceTierId"].(string)
-		order, priceErr := s.newBillingOrderWithPriceTier(userID, task.ID, "task:"+task.ID+":"+newID(), channelModel.ChannelID, channelModel.ModelKey, capability, firstNonEmpty(strings.TrimSpace(task.Operation), task.Type), requestedBillingQuantity(capability, config), estimateTaskBillingTokens(input, capability), strings.TrimSpace(priceTierID), intent)
+		order, priceErr := s.newBillingOrderWithPriceTier(userID, task.ID, "task:"+task.ID+":"+newID(), channelModel.ChannelID, channelModel.ModelKey, capability, firstNonEmpty(strings.TrimSpace(task.Operation), task.Type), requestedBillingQuantity(capability, config), s.estimateTaskBilling(userID, input, capability), strings.TrimSpace(priceTierID), intent)
 		if priceErr != nil {
 			return nil, priceErr
 		}
@@ -926,6 +929,12 @@ func (s *Service) newBillingOrder(userID string, taskID string, idempotencyKey s
 }
 
 func (s *Service) newBillingOrderWithPriceTier(userID string, taskID string, idempotencyKey string, channelID string, modelKey string, capability string, scene string, requestedQuantity int64, tokenEstimate tokenBillingEstimate, priceTierID string, intents ...ModelRequestIntent) (*model.BillingOrder, error) {
+	return s.newBillingOrderWithPriceTierAt(time.Now(), userID, taskID, idempotencyKey, channelID, modelKey, capability, scene, requestedQuantity, tokenEstimate, priceTierID, intents...)
+}
+
+// newBillingOrderWithPriceTierAt 用 pricedAt 判定分时 Token 规则的时段；新订单传当前时间，
+// 同一任务换供应线路时传原订单的创建时间，保证时段在任务创建时锁定。
+func (s *Service) newBillingOrderWithPriceTierAt(pricedAt time.Time, userID string, taskID string, idempotencyKey string, channelID string, modelKey string, capability string, scene string, requestedQuantity int64, tokenEstimate tokenBillingEstimate, priceTierID string, intents ...ModelRequestIntent) (*model.BillingOrder, error) {
 	item, err := s.repo.ChannelModelByKey(channelID, modelKey)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, BadAuthRequest("当前模型暂时不可用，请重新选择")
@@ -942,6 +951,19 @@ func (s *Service) newBillingOrderWithPriceTier(userID string, taskID string, ide
 	}
 	quantity := int64(1)
 	amount := int64(0)
+	// 视频 Token 的成本用量按上游公式（含参考视频）计算，不受用户侧参考视频计费开关影响；
+	// 按秒成本数量与售价数量一致（见 snapshotCreditCost）。
+	costEstimate := tokenEstimate
+	references := referenceVideoUsage{}
+	if capability == "video" && item.Capability == "video" {
+		references = tokenEstimate.ReferenceVideos
+		tokenEstimate = referenceVideoBillingEstimate(item, capability, tokenEstimate)
+	}
+	referenceBilled := references.Count > 0 && item.ReferenceVideoBilling && (tier.BillingMode == "per_second" || tier.BillingMode == "token")
+	referenceMillis := int64(0)
+	if references.RecordedKnown {
+		referenceMillis = references.RecordedMillis
+	}
 	switch tier.BillingMode {
 	case "fixed_request":
 	case "per_second":
@@ -952,6 +974,18 @@ func (s *Service) newBillingOrderWithPriceTier(userID string, taskID string, ide
 			return nil, BadAuthRequest("生成时长无效，无法按秒计费")
 		}
 		quantity = requestedQuantity
+		if referenceBilled {
+			millis, _, measureErr := references.perSecondMillis()
+			if measureErr != nil {
+				return nil, measureErr
+			}
+			referenceSeconds := (millis + 999) / 1000
+			if referenceSeconds > math.MaxInt64-quantity {
+				return nil, BadAuthRequest("参考视频总时长超出计费范围")
+			}
+			quantity += referenceSeconds
+			referenceMillis = millis
+		}
 	case "token":
 		if tokenEstimate.Err != nil {
 			return nil, tokenEstimate.Err
@@ -979,6 +1013,16 @@ func (s *Service) newBillingOrderWithPriceTier(userID string, taskID string, ide
 	if err := access.requireChannel(channelID); err != nil {
 		return nil, err
 	}
+	pricedTier := tier
+	if referenceBilled {
+		if pricedTier, err = referenceVideoPricedTier(tier); err != nil {
+			return nil, err
+		}
+		// 时长未知时公式按 15 秒上限预估；预估值不写进账单快照，流水只记参考视频个数。
+		if tier.BillingMode == "token" && tokenEstimate.Video != nil && !tokenEstimate.Video.ReferenceDurationEstimated {
+			referenceMillis = int64(math.Round(tokenEstimate.Video.ReferenceSeconds * 1000))
+		}
+	}
 	policy, err := s.creditPolicy()
 	if err != nil {
 		return nil, err
@@ -987,10 +1031,21 @@ func (s *Service) newBillingOrderWithPriceTier(userID string, taskID string, ide
 	if configured := policy.ModelMultiplierBPS[modelKey]; configured > 0 {
 		multiplierBPS = configured
 	}
+	prices := tierCreditPrices{Unit: pricedTier.UnitPriceMicrocredits, Input: pricedTier.InputTokenPriceMicrocredits, Output: pricedTier.OutputTokenPriceMicrocredits, Cached: pricedTier.CachedTokenPriceMicrocredits, CacheWrite: pricedTier.CacheWriteTokenPriceMicrocredits}
+	var tokenRules []model.BillingTokenPriceRule
 	if tier.BillingMode == "token" {
-		amount, err = tokenEstimateAmount(&model.ChannelModel{InputTokenPriceMicrocredits: tier.InputTokenPriceMicrocredits, OutputTokenPriceMicrocredits: tier.OutputTokenPriceMicrocredits, CachedTokenPriceMicrocredits: tier.CachedTokenPriceMicrocredits, CacheWriteTokenPriceMicrocredits: tier.CacheWriteTokenPriceMicrocredits}, tokenEstimate, multiplierBPS)
+		// 时段在此锁定：pricedAt 的东八区时间决定哪些规则可用，结算只再按真实输入 Token 选档。
+		tokenRules, err = tokenPriceRuleSnapshot(item.Capability, tier, pricedAt)
+		if err != nil {
+			return nil, err
+		}
+		holdPrices := prices
+		if rule, ok := model.MatchBillingTokenPriceRule(tokenRules, tokenEstimate.InputTokens); ok {
+			holdPrices = tierCreditPrices{Input: rule.Input, Output: rule.Output, Cached: rule.Cached, CacheWrite: rule.CacheWrite}
+		}
+		amount, err = tokenEstimateAmount(&model.ChannelModel{InputTokenPriceMicrocredits: holdPrices.Input, OutputTokenPriceMicrocredits: holdPrices.Output, CachedTokenPriceMicrocredits: holdPrices.Cached, CacheWriteTokenPriceMicrocredits: holdPrices.CacheWrite}, tokenEstimate, multiplierBPS)
 	} else {
-		amount, err = creditAmount(tier.UnitPriceMicrocredits, quantity, multiplierBPS)
+		amount, err = creditAmount(pricedTier.UnitPriceMicrocredits, quantity, multiplierBPS)
 	}
 	if err != nil {
 		return nil, err
@@ -1003,21 +1058,49 @@ func (s *Service) newBillingOrderWithPriceTier(userID string, taskID string, ide
 		ID: newID(), UserID: userID, IdempotencyKey: idempotencyKey, TaskID: taskID,
 		ChannelID: channelID, ChannelModelID: item.ID, PriceTierID: tier.ID, PriceTierVersion: tier.PriceVersion, PriceSelectorJSON: tier.SelectorJSON, Model: modelKey, Capability: capability,
 		Scene: truncateRunes(scene, 80), BillingMode: tier.BillingMode, PriceVersion: item.PriceVersion,
-		UnitPriceMicrocredits: tier.UnitPriceMicrocredits, MultiplierBasisPoints: multiplierBPS, Quantity: quantity, AmountMicrocredits: amount,
-		ReservedAmountMicrocredits: amount, InputTokenPriceMicrocredits: tier.InputTokenPriceMicrocredits,
-		OutputTokenPriceMicrocredits: tier.OutputTokenPriceMicrocredits, CachedTokenPriceMicrocredits: tier.CachedTokenPriceMicrocredits,
-		CacheWriteTokenPriceMicrocredits: tier.CacheWriteTokenPriceMicrocredits,
-		VideoFormulaTokens:               videoFormulaTokens,
-		UserGroup:                        access.groupCode(),
-		Status:                           model.BillingStatusReserved,
+		UnitPriceMicrocredits: prices.Unit, MultiplierBasisPoints: multiplierBPS, Quantity: quantity, AmountMicrocredits: amount,
+		ReservedAmountMicrocredits: amount, InputTokenPriceMicrocredits: prices.Input,
+		OutputTokenPriceMicrocredits: prices.Output, CachedTokenPriceMicrocredits: prices.Cached, CacheWriteTokenPriceMicrocredits: prices.CacheWrite,
+		UserGroup:            access.groupCode(),
+		VideoFormulaTokens:   videoFormulaTokens,
+		ReferenceVideoCount:  references.Count,
+		ReferenceVideoMillis: referenceMillis,
+		ReferenceVideoBilled: referenceBilled,
+		Status:               model.BillingStatusReserved,
 	}
-	snapshotCreditCost(order, tier, requestedQuantity, tokenEstimate)
+	if order.TokenPriceRulesJSON, err = model.EncodeBillingTokenPriceRules(tokenRules); err != nil {
+		return nil, err
+	}
+	snapshotCreditCost(order, tier, requestedQuantity, costEstimate)
 	operation := ""
 	if len(intents) > 0 {
 		operation = intents[0].Operation
 	}
 	authorizeMeasuredMediaOrder(order, operation)
 	return order, nil
+}
+
+// tokenPriceRuleSnapshot freezes active time windows at order creation using local credit prices.
+func tokenPriceRuleSnapshot(capability string, tier *model.ChannelModelPriceTier, at time.Time) ([]model.BillingTokenPriceRule, error) {
+	if tier == nil || capability != "text" || tier.BillingMode != "token" || !tier.TokenPriceRulesEnabled {
+		return nil, nil
+	}
+	var result []model.BillingTokenPriceRule
+	for index, rule := range tier.TokenPriceRules {
+		if !rule.Enabled || !rule.MatchesTime(at) {
+			continue
+		}
+		result = append(result, model.BillingTokenPriceRule{
+			Rule: index + 1, MinInputTokens: rule.MinInputTokens, MaxInputTokens: rule.MaxInputTokens,
+			Input: rule.InputTokenPriceMicrocredits, Output: rule.OutputTokenPriceMicrocredits,
+			Cached: rule.CachedTokenPriceMicrocredits, CacheWrite: rule.CacheWriteTokenPriceMicrocredits,
+		})
+	}
+	return result, nil
+}
+
+type tierCreditPrices struct {
+	Unit, Input, Output, Cached, CacheWrite int64
 }
 
 func (s *Service) channelModelPriceTierForBilling(channelModel model.ChannelModel, priceTierID string, capability string, intents ...ModelRequestIntent) (*model.ChannelModelPriceTier, error) {
@@ -1074,7 +1157,9 @@ func estimateTaskTokens(input map[string]any) tokenBillingEstimate {
 
 func estimateTaskBillingTokens(input map[string]any, capability string) tokenBillingEstimate {
 	if capability == "video" {
-		return estimateArkVideoTokens(input)
+		estimate := estimateArkVideoTokens(input)
+		estimate.ReferenceVideos = referenceVideoUsageFromInput(input)
+		return estimate
 	}
 	return estimateTaskTokens(input)
 }

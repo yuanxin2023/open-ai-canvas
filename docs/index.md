@@ -4,6 +4,8 @@
 
 - [v1.7.3.7 本地整合](content/docs/backend/upstream-v1737-integration.mdx)：本轮功能取舍、官方插件格式、缓存写入及追加迁移。
 
+- [官方 v1.8.1 本地整合](content/docs/backend/upstream-v181-integration.mdx)：已确认取舍、追加迁移、权限与验收边界。
+
 ## 部署与更新入口
 
 本地定制版本使用自有匹配构建和独立 Agent，生产编排以 `docker-compose.deploy.yml` 为基础，可叠加源码构建配置。在线更新仅使用自有仓库的完整正式 Release，由管理员确认，不切换到官方成品业务镜像。当前合并阶段不执行安装、启动或部署。
@@ -28,6 +30,7 @@
 - [插件平台与市场演进调研](design/plugin-platform-and-marketplace-research.md)：插件机制代码审计、对外回应、外部 SDK 与隔离运行时、独立插件验收、受控目录到公开市场的分阶段方案（调研建议，未实施）。
 
 - [站点及外观设计合同](design/site-appearance.mdx)：品牌一致性、登录页与邮件、SEO/备案、固定经典黑白样式和无闪屏启动顺序。
+- [多平台账号池最终指导方案](design/account-pool-design.mdx)：影策后端通用账号池框架、平台适配标准 `yingce.accountpool/v1`、独立适配服务、LibTV（官方 MCP）与即梦（官方 dreamina CLI）接入、页面内扫码添加账号、多档位调度、价格沿用渠道模型、部署约束、分期与 P0 验证清单（最终指导方案，未实施）。
 
 
 - [工作区外壳设计沉淀](design/workspace-shell-design.mdx)：侧栏（260px 可折叠导航 + 分组折叠）、主区卡片、顶部栏（账户/公告/主题）的设计决策与样式约束。

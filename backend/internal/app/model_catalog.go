@@ -75,6 +75,7 @@ type PublicChannelModel struct {
 	Icon             string                        `json:"icon"`
 	Capability       string                        `json:"capability"`
 	Protocol         model.ChannelInterfaceType    `json:"protocol"`
+	TextWire         string                        `json:"textWire,omitempty"`
 	CapabilityConfig map[string]any                `json:"capabilityConfig,omitempty"`
 	DefaultOptions   map[string]any                `json:"defaultOptions,omitempty"`
 	PriceTiers       []PublicChannelModelPriceTier `json:"priceTiers"`
@@ -83,6 +84,8 @@ type PublicChannelModel struct {
 	PriceLabel       string                        `json:"priceLabel"`
 	Available        bool                          `json:"available"`
 	Availability     *PublicModelAvailability      `json:"availability,omitempty"`
+	// ReferenceVideoBilling 仅视频模型可能为 true：挂参考视频的请求按带参考视频价格另计费。
+	ReferenceVideoBilling bool `json:"referenceVideoBilling"`
 }
 
 // PublicChannelModelPriceTier 公开的渠道模型价格档（脱敏）
@@ -97,6 +100,11 @@ type PublicChannelModelPriceTier struct {
 	OutputTokenPriceMicrocredits     int64             `json:"outputTokenPriceMicrocredits"`
 	CachedTokenPriceMicrocredits     int64             `json:"cachedTokenPriceMicrocredits"`
 	CacheWriteTokenPriceMicrocredits int64             `json:"cacheWriteTokenPriceMicrocredits"`
+	// TokenPriceRules 是启用中的分时与上下文规则（东八区），单价与基础价同样已换算为当前分组实扣微积分。
+	TokenPriceRules []model.TokenPriceRule `json:"tokenPriceRules,omitempty"`
+	// 带参考视频的价格只在模型开启参考视频计费时发布，否则为 0。
+	ReferenceVideoUnitPriceMicrocredits        int64 `json:"referenceVideoUnitPriceMicrocredits"`
+	ReferenceVideoOutputTokenPriceMicrocredits int64 `json:"referenceVideoOutputTokenPriceMicrocredits"`
 }
 
 // ModelCatalog 的创作端目录始终来自系统渠道模型，不反查逻辑模型或路由。
@@ -203,6 +211,7 @@ func (s *Service) sanitizeChannelModel(cm *model.ChannelModel) (PublicChannelMod
 	// 仓储层已预加载价格档；这里只发布当前启用且价格字段自洽的活动档位。
 	priceTiers := cm.PriceTiers
 
+	referenceVideoBilling := cm.Capability == "video" && cm.ReferenceVideoBilling
 	publicTiers := make([]PublicChannelModelPriceTier, 0, len(priceTiers))
 	for _, tier := range priceTiers {
 		if !tier.Enabled || !tier.PriceConfigured || !ValidatePriceTierPrice(&tier, cm.Capability, cm.Protocol) {
@@ -227,7 +236,12 @@ func (s *Service) sanitizeChannelModel(cm *model.ChannelModel) (PublicChannelMod
 			OutputTokenPriceMicrocredits:     tier.OutputTokenPriceMicrocredits,
 			CachedTokenPriceMicrocredits:     tier.CachedTokenPriceMicrocredits,
 			CacheWriteTokenPriceMicrocredits: tier.CacheWriteTokenPriceMicrocredits,
+			TokenPriceRules:                  publicTokenPriceRules(cm.Capability, tier),
 		})
+		if referenceVideoBilling {
+			publicTiers[len(publicTiers)-1].ReferenceVideoUnitPriceMicrocredits = tier.ReferenceVideoUnitPriceMicrocredits
+			publicTiers[len(publicTiers)-1].ReferenceVideoOutputTokenPriceMicrocredits = tier.ReferenceVideoOutputTokenPriceMicrocredits
+		}
 	}
 
 	// 展示价格和 Available 必须从同一批有效档位派生，不能回退旧标量价格制造“可用”假象。
@@ -253,24 +267,44 @@ func (s *Service) sanitizeChannelModel(cm *model.ChannelModel) (PublicChannelMod
 	}
 
 	return PublicChannelModel{
-		ID:               cm.ID,
-		ModelKey:         cm.ModelKey,
-		ChannelLabel:     firstNonEmpty(cm.ChannelLabel, cm.ProviderModelKey, cm.ModelKey),
-		Tags:             cm.Tags,
-		Description:      cm.Description,
-		DisplayName:      cm.DisplayName,
-		SortOrder:        cm.SortOrder,
-		Icon:             cm.Icon,
-		Capability:       cm.Capability,
-		Protocol:         cm.Protocol,
-		CapabilityConfig: capabilityConfig,
-		DefaultOptions:   defaultOptions,
-		PriceTiers:       publicTiers,
-		PricingMode:      pricingMode,
-		DisplayPrice:     displayPrice,
-		PriceLabel:       priceLabel,
-		Available:        len(publicTiers) > 0 && s.validateGenerationInterface(cm.Capability, string(cm.Protocol)) == nil,
+		ID:                    cm.ID,
+		ModelKey:              cm.ModelKey,
+		ChannelLabel:          firstNonEmpty(cm.ChannelLabel, cm.ProviderModelKey, cm.ModelKey),
+		Tags:                  cm.Tags,
+		Description:           cm.Description,
+		DisplayName:           cm.DisplayName,
+		SortOrder:             cm.SortOrder,
+		Icon:                  cm.Icon,
+		Capability:            cm.Capability,
+		Protocol:              cm.Protocol,
+		TextWire:              s.textModelWire(cm.Capability, cm.Protocol),
+		CapabilityConfig:      capabilityConfig,
+		DefaultOptions:        defaultOptions,
+		PriceTiers:            publicTiers,
+		PricingMode:           pricingMode,
+		DisplayPrice:          displayPrice,
+		PriceLabel:            priceLabel,
+		Available:             len(publicTiers) > 0 && s.validateGenerationInterface(cm.Capability, string(cm.Protocol)) == nil,
+		ReferenceVideoBilling: referenceVideoBilling,
 	}, nil
+}
+
+// publicTokenPriceRules 只发布会参与计费的规则副本，避免后续换算改写仓储快照。
+func publicTokenPriceRules(capability string, tier model.ChannelModelPriceTier) []model.TokenPriceRule {
+	if capability != "text" || tier.BillingMode != "token" || !tier.TokenPriceRulesEnabled {
+		return nil
+	}
+	rules := make([]model.TokenPriceRule, 0, len(tier.TokenPriceRules))
+	for _, rule := range tier.TokenPriceRules {
+		if rule.Enabled {
+			rule.Weekdays = append([]int(nil), rule.Weekdays...)
+			rules = append(rules, rule)
+		}
+	}
+	if len(rules) == 0 {
+		return nil
+	}
+	return rules
 }
 
 // computeChannelModelPriceDisplay 从已过滤的公开价格档生成展示信息。

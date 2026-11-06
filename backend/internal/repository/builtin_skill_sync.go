@@ -13,8 +13,8 @@ import (
 )
 
 // Called within the catalog transaction. Only the process that inserts a new
-// identity initializes its availability; existing implicit or explicit grants survive.
-func (r *Repository) EnsureBuiltinSkillRow(incoming *model.Skill, initiallyAvailable bool) (*model.Skill, bool, error) {
+// identity is created; existing status and relationships survive.
+func (r *Repository) EnsureBuiltinSkillRow(incoming *model.Skill) (*model.Skill, bool, error) {
 	if incoming == nil || incoming.ID == "" || incoming.Source != model.SkillSourcePlatform || incoming.IsPrivate {
 		return nil, false, gorm.ErrInvalidData
 	}
@@ -44,12 +44,6 @@ func (r *Repository) EnsureBuiltinSkillRow(incoming *model.Skill, initiallyAvail
 	}
 	if current.Source != model.SkillSourcePlatform || current.IsPrivate || (current.SourceType != "" && current.SourceType != "builtin") {
 		return nil, false, fmt.Errorf("内置技能 %s 与已有自定义身份冲突，请先核对，未覆盖数据", incoming.ID)
-	}
-	if created.RowsAffected == 1 && !initiallyAvailable {
-		state := model.SkillPlatformState{SkillID: incoming.ID, Available: false}
-		if err := r.db.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "skill_id"}}, DoNothing: true}).Create(&state).Error; err != nil {
-			return nil, false, err
-		}
 	}
 	return &current, created.RowsAffected == 1, nil
 }

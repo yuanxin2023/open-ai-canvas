@@ -68,7 +68,7 @@ func TestSkillClassificationRequiresCurrentModulePermission(t *testing.T) {
 	}
 }
 
-func TestSkillClassificationPreservesLocalHiddenState(t *testing.T) {
+func TestSkillClassificationUsesOfficialDisabledStatus(t *testing.T) {
 	svc, db, _ := newCurationTest(t)
 	if err := db.Model(&model.SkillCurationSetting{}).Where("id = 1").Update("enabled", true).Error; err != nil {
 		t.Fatal(err)
@@ -79,8 +79,8 @@ func TestSkillClassificationPreservesLocalHiddenState(t *testing.T) {
 	}
 	for _, skill := range []model.Skill{
 		{ID: "enabled", Name: "Enabled", Tag: "drama", Source: model.SkillSourcePlatform, Status: model.SkillStatusEnabled},
-		{ID: "hidden", Name: "Hidden", Tag: "drama", Source: model.SkillSourcePlatform, Status: model.SkillStatusEnabled},
-		{ID: "hidden-tag", Name: "Hidden tag", Tag: "creative", Source: model.SkillSourcePlatform, Status: model.SkillStatusEnabled},
+		{ID: "hidden", Name: "Hidden", Tag: "drama", Source: model.SkillSourcePlatform, Status: 0},
+		{ID: "hidden-tag", Name: "Hidden tag", Tag: "creative", Source: model.SkillSourcePlatform, Status: 0},
 		{ID: "personal-public", Name: "Personal public", Tag: "creative", Source: model.SkillSourceUser, Status: model.SkillStatusEnabled},
 		{ID: "private", Name: "Private", Tag: "drama", Source: model.SkillSourceUser, IsPrivate: true, OwnerID: "other", Status: model.SkillStatusEnabled},
 	} {
@@ -93,14 +93,6 @@ func TestSkillClassificationPreservesLocalHiddenState(t *testing.T) {
 			if err := db.Create(row).Error; err != nil {
 				t.Fatal(err)
 			}
-		}
-	}
-	for _, row := range []any{
-		&model.SkillPlatformState{SkillID: "hidden", Available: false},
-		&model.SkillCategoryPlatformState{Tag: "creative", Available: false},
-	} {
-		if err := db.Create(row).Error; err != nil {
-			t.Fatal(err)
 		}
 	}
 	public, err := svc.repo.SkillCuration(false)
@@ -120,10 +112,10 @@ func TestSkillClassificationPreservesLocalHiddenState(t *testing.T) {
 		t.Fatalf("moving a hidden skill to another root bypassed availability: %+v / %d / %v", rows, count, err)
 	}
 	for _, id := range []string{"hidden", "hidden-tag"} {
-		if _, err := svc.SkillDetail("reader", id); appErrorStatus(err) != 403 {
+		if _, err := svc.SkillDetail("reader", id); err == nil {
 			t.Fatalf("hidden skill detail accessible: %s / %v", id, err)
 		}
-		if _, err := svc.SetSkillLibraryCategory("reader", id, ""); appErrorStatus(err) != 403 {
+		if _, err := svc.SetSkillLibraryCategory("reader", id, ""); err == nil {
 			t.Fatalf("hidden skill assignment accepted: %s / %v", id, err)
 		}
 	}

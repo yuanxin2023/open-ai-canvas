@@ -18,26 +18,4 @@ describe("creation prompt slash menu", () => {
             cursor: 10,
         });
     });
-
-    test("connects the shared composer to lazy personal and public prompt data", async () => {
-        const [workspace, mentionEditor, styles] = await Promise.all([
-            Bun.file(new URL("../src/pages/create/creation-workspace.tsx", import.meta.url)).text(),
-            Bun.file(new URL("../src/components/canvas/canvas-resource-mention-textarea.tsx", import.meta.url)).text(),
-            Bun.file(new URL("../src/styles/globals.css", import.meta.url)).text(),
-        ]);
-
-        expect(workspace).toContain('{ id: "personal", label: "我的提示词"');
-        expect(workspace).toContain('{ id: "public", label: "公共提示词"');
-        expect(workspace).toContain("onSlashCommandOpen={loadPromptLibrary}");
-        expect(workspace).toContain("Promise.all([listAllUserPrompts(controller.signal), listInspirations(controller.signal)])");
-        expect(workspace).toContain("previewUrl,");
-        expect(mentionEditor).toContain("applySlashCommand(value, slashCommand, item.value)");
-        expect(mentionEditor).toContain('event.key === "Enter" || event.key === "Tab"');
-        expect(mentionEditor).toContain("onSelect(item)");
-        expect(mentionEditor).toContain("canvas-slash-command-preview");
-        expect(mentionEditor).toContain("onMouseEnter={() => setHoveredItemId(item.id)}");
-        expect(mentionEditor).toContain("previewItem?.previewUrl");
-        expect(styles).toContain(".canvas-slash-command-menu");
-        expect(styles).toContain(".canvas-slash-command-preview > img");
-    });
 });

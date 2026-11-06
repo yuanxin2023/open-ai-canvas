@@ -1,21 +1,20 @@
-import { translate } from "@/i18n";
-import { useTranslation } from "react-i18next";
 import { Popover } from "antd";
 import { Switch } from "@/components/ui/base/switch";
 import { CircleUserRound, Moon, Sun } from "lucide-react";
 import { useState } from "react";
-import { useWorkspaceAuth } from "@/components/auth/workspace-auth-context";
+import { useTranslation } from "react-i18next";
 
+import { AuthLoginLink } from "@/components/auth/auth-login-link";
+import { AppChangelogButton } from "@/components/layout/app-changelog-modal";
 import { WorkspaceAccountCard } from "./workspace-account-card";
 import { UserAvatar } from "./user-avatar";
 import { UserGroupAvatarRing } from "./user-group-badge";
-import { openWorkspaceCreditProducts } from "@/lib/workspace-wallet";
+import { openWorkspaceWallet } from "@/lib/workspace-wallet";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { useUserStore } from "@/stores/use-user-store";
 
-/** 顶部与侧栏复用同一账户卡片；顶部额外保留主题偏好。 */
+/** 顶部与侧栏复用同一账户卡片；顶部额外保留版本和主题偏好。 */
 export function WorkspaceAccountMenu() {
-    const { openAuth } = useWorkspaceAuth();
     const theme = useThemeStore((state) => state.theme);
     const setTheme = useThemeStore((state) => state.setTheme);
     const user = useUserStore((state) => state.user);
@@ -39,18 +38,25 @@ export function WorkspaceAccountMenu() {
                     <div className="workspace-topbar-account-menu">
                         <WorkspaceAccountCard
                             onNavigate={() => setMenuOpen(false)}
-                            onBuyCredits={() => {
+                            onWallet={() => {
                                 setMenuOpen(false);
-                                openWorkspaceCreditProducts();
+                                openWorkspaceWallet();
                             }}
                         />
 
                         <div className="workspace-topbar-account-section">
-                            <div className="workspace-topbar-account-theme">
-                                {theme === "dark" ? <Moon className="size-3.5 text-foreground/45" /> : <Sun className="size-3.5 text-foreground/45" />}
-                                <span className="ml-2 flex-1 text-xs text-foreground/65">{translate("shell.darkMode")}</span>
-                                <Switch size="sm" checked={theme === "dark"} onChange={(checked) => setTheme(checked ? "dark" : "light")} aria-label={translate("shell.darkMode")} />
-                            </div>
+                            <AppChangelogButton
+                                className="flex h-8 w-full items-center gap-2 rounded px-2 text-[var(--fs-label)] text-foreground/58 hover:bg-surface-hover hover:text-foreground [&_svg]:size-3.5"
+                                showLabel
+                                showVersion
+                                versionClassName="ml-auto text-[var(--fs-micro)] tabular-nums text-foreground/32"
+                            />
+                        </div>
+
+                        <div className="workspace-topbar-account-theme">
+                            {theme === "dark" ? <Moon className="size-3.5 text-foreground/45" /> : <Sun className="size-3.5 text-foreground/45" />}
+                            <span className="ml-2 flex-1 text-xs text-foreground/65">{t("shell.darkMode")}</span>
+                            <Switch size="sm" checked={theme === "dark"} onChange={(checked) => setTheme(checked ? "dark" : "light")} aria-label={t("shell.darkMode")} />
                         </div>
                     </div>
                 }
@@ -63,9 +69,9 @@ export function WorkspaceAccountMenu() {
             </Popover>
         </>
     ) : (
-        <button type="button" onClick={() => void openAuth()} className="inline-flex items-center gap-2 px-2 text-xs text-foreground/55" aria-label={translate("shell.login")} title={translate("shell.login")}>
+        <AuthLoginLink className="inline-flex items-center gap-2 px-2 text-xs text-foreground/55" aria-label={t("shell.login")} title={t("shell.login")}>
             <CircleUserRound className="size-5" />
-            <span className="hidden sm:inline">{translate("shell.guestShort")}</span>
-        </button>
+            <span className="hidden sm:inline">{t("shell.guestShort")}</span>
+        </AuthLoginLink>
     );
 }

@@ -1431,7 +1431,11 @@ func (r *dramaRun) createTaskWith(job *model.DramaJob, choice DramaModelChoice, 
 	input["config"], input["mode"], input["prompt"] = config, capability, prompt
 	req := CreateTaskRequest{ProjectID: r.project.ID, Type: "canvas_" + capability, Operation: operation, Prompt: prompt, LogicalModelID: choice.LogicalModelID, Model: choice.ModelKey, Input: input}
 	task, err := r.s.submitDramaTask(r.project.UserID, req, job)
-
+	// 准入只说“指定的模型不存在”；作品里可能选了多个模型，点名是哪一个、去哪里改。
+	var modelErr *ModelError
+	if errors.As(err, &modelErr) && modelErr.ErrorCode == ErrCodeInvalidModelSelection {
+		return nil, dramaModelUnavailable(capability, choice, "不可用（"+modelErr.Error()+"）")
+	}
 	return task, err
 }
 
@@ -1620,14 +1624,19 @@ func (r *dramaRun) submitCastImage(job *model.DramaJob) (*model.Task, bool, erro
 		baseImage = base
 		operation = "image_to_image"
 	}
-	prompt := production.CastImagePrompt(assets, cast.Kind, cast.Name, appearance, r.settings.StylePrompt, r.meta.VisualRules)
+	// 画风与画面规则写的是成片画幅，设定图有自己的画幅：带入前去掉其中的画幅与横竖构图要求，
+	// 设定和方案模板的文字不动。
+	stylePrompt := production.StripFrameDirectives(r.settings.StylePrompt)
+	visualRules := production.StripFrameDirectives(r.meta.VisualRules)
+	prompt := production.CastImagePrompt(assets, cast.Kind, cast.Name, appearance, stylePrompt, visualRules)
 	if baseImage != nil {
-		prompt = "参考图1是角色" + cast.Name + "的既有形象。保持五官、脸型、体态与参考图1完全一致，只把造型改为：" + appearance + "。" + r.settings.StylePrompt
+		prompt = "参考图1是角色" + cast.Name + "的既有形象。保持五官、脸型、体态与参考图1完全一致，只把造型改为：" + appearance + "。" + stylePrompt
 	}
 	// 资产参考图统一横版 16:9，与作品画幅无关：场景要容纳完整空间，道具要留足展示余量。
 	// 角色按参考图方案的画幅（内置方案均为 16:9，自定义方案可改）。画幅通过尺寸参数约束，
 	// 不只靠提示词；模型给不出接近的尺寸时直接失败并说明原因，不退回模型默认的方图。
 	ratio := r.castImageRatio(cast.Kind)
+	prompt = production.WithAssetRatio(prompt, ratio)
 	request := r.imageRequest(cast.Kind)
 	if request.Issue != "" {
 		return nil, false, errors.New(request.Issue)

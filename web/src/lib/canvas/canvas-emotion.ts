@@ -49,9 +49,7 @@ export type CanvasEmotionEditPlan = {
 };
 
 export function resolveEmotionEditPlan(maskSupported: boolean): CanvasEmotionEditPlan {
-    return maskSupported
-        ? { mode: "provider-mask", includeMask: true }
-        : { mode: "local-composite", includeMask: false, notice: "当前渠道不支持蒙版，使用脸部裁切与本地羽化融合" };
+    return maskSupported ? { mode: "provider-mask", includeMask: true } : { mode: "local-composite", includeMask: false, notice: "当前渠道不支持蒙版，使用脸部裁切与本地羽化融合" };
 }
 
 export function emotionProviderMask<T>(plan: CanvasEmotionEditPlan, mask: T) {
@@ -235,6 +233,22 @@ export function emotionGenerationSize(region: CanvasEmotionEditRegion) {
     if (ratio >= 1.2) return "1536x1024";
     if (ratio <= 0.83) return "1024x1536";
     return "1024x1024";
+}
+
+/** 表情编辑一次提交两张参考图（裁切的编辑区域 + 人物脸部），模型声明的参考图上限至少为 2。 */
+export function supportsEmotionEdit(references: { maxImages: number }) {
+    return references.maxImages >= 2;
+}
+
+const EMOTION_SIZE_RATIOS: Record<string, string> = { "1536x1024": "3:2", "1024x1536": "2:3", "1024x1024": "1:1" };
+
+/** 按模型声明的尺寸参数选出图尺寸：接受像素尺寸就发像素，只接受比例时发同方向的比例。 */
+export function emotionGenerationSizeFor(size: { parameter: string; values: string[]; allowCustom: boolean; default: string }, region: CanvasEmotionEditRegion) {
+    const pixel = emotionGenerationSize(region);
+    if (size.parameter === "size" && (size.allowCustom || size.values.includes(pixel))) return pixel;
+    const ratio = EMOTION_SIZE_RATIOS[pixel];
+    if (size.values.includes(ratio) || (size.parameter === "aspect_ratio" && size.allowCustom)) return ratio;
+    return size.default || pixel;
 }
 
 // 模型只负责局部重绘；最终结果始终以源图为底，仅在羽化人脸蒙版内混合生成像素。

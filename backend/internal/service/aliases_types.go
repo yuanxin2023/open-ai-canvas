@@ -64,8 +64,6 @@ type (
 	AdminChannelModelImportRequest         = app.AdminChannelModelImportRequest
 	AdminChannelModelTestResult            = app.AdminChannelModelTestResult
 	AdminChannelPage                       = app.AdminChannelPage
-	AdminSkillCatalog                      = app.AdminSkillCatalog
-	AdminSkillAvailabilityRequest          = app.AdminSkillAvailabilityRequest
 	AdminChannelReference                  = app.AdminChannelReference
 	AdminCreditAdjustmentRequest           = app.AdminCreditAdjustmentRequest
 	AdminListQuery                         = app.AdminListQuery
@@ -119,6 +117,11 @@ type (
 	AppError                               = app.AppError
 	AppearanceSetting                      = app.AppearanceSetting
 	CustomerServiceSetting                 = app.CustomerServiceSetting
+	AdminArkGroupCreateRequest             = app.AdminArkGroupCreateRequest
+	AdminArkGroupQuery                     = app.AdminArkGroupQuery
+	AdminArkGroupUpdateRequest             = app.AdminArkGroupUpdateRequest
+	ArkAssetUploadInput                    = app.ArkAssetUploadInput
+	ArkGroupInput                          = app.ArkGroupInput
 	ArkPrivateAssetSettingRequest          = app.ArkPrivateAssetSettingRequest
 	ArkPrivateAssetSyncResult              = app.ArkPrivateAssetSyncResult
 	AssetCandidateInput                    = app.AssetCandidateInput
@@ -330,6 +333,11 @@ type (
 	RuntimeResourcePolicy                  = app.RuntimeResourcePolicy
 	RuntimeTaskPolicy                      = app.RuntimeTaskPolicy
 	Service                                = app.Service
+	AdminSkillListRequest                  = app.AdminSkillListRequest
+	AdminSkillItem                         = app.AdminSkillItem
+	AdminSkillList                         = app.AdminSkillList
+	AdminSkillInfoRequest                  = app.AdminSkillInfoRequest
+	AdminSkillPackageEditResult            = app.AdminSkillPackageEditResult
 	ShotRevisionInput                      = app.ShotRevisionInput
 	SkillCategory                          = app.SkillCategory
 	AddedSkillReference                    = app.AddedSkillReference

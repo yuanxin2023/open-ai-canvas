@@ -74,7 +74,7 @@ func (s *Service) EnsureBuiltinSkills() error {
 			}
 		}
 		for _, item := range packages {
-			current, created, err := repo.EnsureBuiltinSkillRow(&item.skill, !item.defaultDisabled)
+			current, created, err := repo.EnsureBuiltinSkillRow(&item.skill)
 			if err != nil {
 				return err
 			}
@@ -100,14 +100,21 @@ func (s *Service) EnsureBuiltinSkills() error {
 					return err
 				}
 			}
-			metadataChanged := current.AuthorName != item.skill.AuthorName || current.AuthorAvatarURL != item.skill.AuthorAvatarURL ||
-				current.Name != item.skill.Name || current.Description != item.skill.Description || current.Instruction != item.skill.Instruction ||
-				current.MarkdownURL != item.skill.MarkdownURL || current.ShowcaseMediaJSON != item.skill.ShowcaseMediaJSON || current.ExtraInfo != item.skill.ExtraInfo || current.SourceType != "builtin"
-			current.AuthorName, current.AuthorAvatarURL = item.skill.AuthorName, item.skill.AuthorAvatarURL
-			current.Name, current.Description, current.Instruction = item.skill.Name, item.skill.Description, item.skill.Instruction
-			current.MarkdownURL, current.ShowcaseMediaJSON, current.ExtraInfo = item.skill.MarkdownURL, item.skill.ShowcaseMediaJSON, item.skill.ExtraInfo
-			current.UpdatedAt = item.skill.UpdatedAt
-			if current.ContentHash == item.archive.ContentHash && current.CurrentVersionID != "" {
+			contentEdited := current.AdminContentEditedAt != nil && current.CurrentVersionID != ""
+			metadataChanged := current.SourceType != "builtin"
+			if current.AdminInfoEditedAt == nil {
+				metadataChanged = metadataChanged || current.Name != item.skill.Name || current.Description != item.skill.Description ||
+					current.MarkdownURL != item.skill.MarkdownURL || current.ShowcaseMediaJSON != item.skill.ShowcaseMediaJSON || current.ExtraInfo != item.skill.ExtraInfo
+				current.Name, current.Description = item.skill.Name, item.skill.Description
+				current.MarkdownURL, current.ShowcaseMediaJSON, current.ExtraInfo = item.skill.MarkdownURL, item.skill.ShowcaseMediaJSON, item.skill.ExtraInfo
+				if !contentEdited {
+					current.UpdatedAt = item.skill.UpdatedAt
+				}
+			}
+			if !contentEdited {
+				current.Instruction = item.skill.Instruction
+			}
+			if contentEdited || current.ContentHash == item.archive.ContentHash && current.CurrentVersionID != "" {
 				if metadataChanged {
 					current.SourceType = "builtin"
 					if err := repo.SaveSkill(current); err != nil {

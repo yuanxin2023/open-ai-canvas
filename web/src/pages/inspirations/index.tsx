@@ -9,17 +9,19 @@ import { Select } from "@/components/ui/base/select";
 import { Tooltip } from "@/components/ui/base/tooltip";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { catalogIdOf, inspirationSourceOf, inspirationSources, type CreationInspiration, type InspirationSourceId } from "@/lib/inspirations/catalog";
+import { isFreshInspiration, localDayKey, orderInspirationsByLatest, orderInspirationsForToday } from "@/lib/inspirations/daily-order";
 import { isCustomInspiration, resolveInspirations } from "@/lib/inspirations/resolve";
 import { loadInspirationCatalog, type InspirationCatalog } from "@/services/inspiration-catalog";
 import { useInspirationStore } from "@/stores/use-inspiration-store";
 import { useUserStore } from "@/stores/use-user-store";
 import { InspirationCover, InspirationDetailModal } from "./inspiration-detail-modal";
 import { InspirationEditorModal, type InspirationCategoryChoice } from "./inspiration-editor-modal";
+import "./inspirations.css";
 
 type SourceFilter = "all" | InspirationSourceId;
 type ViewFilter = "all" | "favorites" | "hidden";
 type ModeFilter = "all" | CreationInspiration["mode"];
-type SortKey = "default" | "title";
+type SortKey = "daily" | "latest" | "title";
 /** 分类标签比编辑器里的选项多一个条目数，用于在标签上显示数量。 */
 type CategoryChoice = InspirationCategoryChoice & { count: number };
 
@@ -31,13 +33,27 @@ const VIEW_OPTIONS: { label: string; value: ViewFilter }[] = [
     { label: "已隐藏", value: "hidden" },
 ];
 const SORT_OPTIONS = [
-    { label: "默认顺序", value: "default" },
+    { label: "每日推荐", value: "daily" },
+    { label: "最新上架", value: "latest" },
     { label: "按标题", value: "title" },
 ];
 
+/** 标签页隔夜后回到前台时换成新的一天，推荐顺序随之轮换，不必刷新页面。 */
+function useLocalDayKey(): string {
+    const [dayKey, setDayKey] = useState(() => localDayKey());
+    useEffect(() => {
+        const refresh = () => {
+            if (document.visibilityState === "visible") setDayKey(localDayKey());
+        };
+        document.addEventListener("visibilitychange", refresh);
+        return () => document.removeEventListener("visibilitychange", refresh);
+    }, []);
+    return dayKey;
+}
+
 /** 导出文件名带上日期，重复导出不会互相覆盖。 */
 function exportFileName() {
-    return `canvas-inspirations-${new Date().toISOString().slice(0, 10)}.json`;
+    return `yingce-inspirations-${new Date().toISOString().slice(0, 10)}.json`;
 }
 
 function downloadText(text: string, fileName: string) {
@@ -52,33 +68,12 @@ function downloadText(text: string, fileName: string) {
 export function InspirationHall({ onUse }: { onUse: (item: CreationInspiration) => void }) {
     const { message, modal } = App.useApp();
     const inspirationSourcesVisible = useUserStore((state) => state.features.inspirationSourcesVisible);
-    const actorID = useUserStore((state) => state.user?.id);
-    const mounted = useRef(true);
-    const confirmation = useRef<{ destroy: () => void } | null>(null);
-    useEffect(() => {
-        mounted.current = true;
-        return () => {
-            mounted.current = false;
-            confirmation.current?.destroy();
-        };
-    }, []);
-    const stillHere = useCallback(() => mounted.current && useUserStore.getState().user?.id === actorID && useUserStore.getState().features.inspirationHallEnabled, [actorID]);
-    const reportFailure = useCallback(
-        (error: unknown, fallback: string) => {
-            if (stillHere()) message.error(error instanceof Error ? error.message : fallback);
-        },
-        [message, stillHere],
-    );
-    const [editingRevision, setEditingRevision] = useState(0);
 
     const custom = useInspirationStore((state) => state.custom);
     const overrides = useInspirationStore((state) => state.overrides);
     const hidden = useInspirationStore((state) => state.hidden);
     const favorites = useInspirationStore((state) => state.favorites);
     const hydrated = useInspirationStore((state) => state.hydrated);
-    const libraryError = useInspirationStore((state) => state.error);
-    const libraryBusy = useInspirationStore((state) => state.busy);
-    const loadLibrary = useInspirationStore((state) => state.load);
     const createEntry = useInspirationStore((state) => state.createEntry);
     const updateEntry = useInspirationStore((state) => state.updateEntry);
     const removeEntry = useInspirationStore((state) => state.removeEntry);
@@ -86,14 +81,6 @@ export function InspirationHall({ onUse }: { onUse: (item: CreationInspiration) 
     const toggleFavorite = useInspirationStore((state) => state.toggleFavorite);
     const exportPayload = useInspirationStore((state) => state.exportPayload);
     const importPayload = useInspirationStore((state) => state.importPayload);
-    useEffect(() => {
-        const refresh = () => {
-            void loadLibrary().catch(() => {});
-        };
-        refresh();
-        window.addEventListener("focus", refresh);
-        return () => window.removeEventListener("focus", refresh);
-    }, [loadLibrary]);
 
     const [catalog, setCatalog] = useState<InspirationCatalog | null>(null);
     const [shouldLoadCatalog, setShouldLoadCatalog] = useState(false);
@@ -106,7 +93,8 @@ export function InspirationHall({ onUse }: { onUse: (item: CreationInspiration) 
     const [modeFilter, setModeFilter] = useState<ModeFilter>("all");
     const [category, setCategory] = useState("all");
     const [view, setView] = useState<ViewFilter>("all");
-    const [sort, setSort] = useState<SortKey>("default");
+    const [sort, setSort] = useState<SortKey>("daily");
+    const dayKey = useLocalDayKey();
     const [search, setSearch] = useState("");
     const debouncedSearch = useDebouncedValue(search, 250);
     const [page, setPage] = useState(1);
@@ -156,10 +144,10 @@ export function InspirationHall({ onUse }: { onUse: (item: CreationInspiration) 
         if (!inspirationSourcesVisible) setSource("all");
     }, [inspirationSourcesVisible]);
 
-    // 筛选条件一变就回第一页，否则会停在一个已经不存在的位置上。
+    // 筛选条件或推荐日期一变就回第一页，否则会停在一个已经不存在的位置上。
     useEffect(() => {
         setPage(1);
-    }, [source, modeFilter, category, view, sort, debouncedSearch, pageSize]);
+    }, [source, modeFilter, category, view, sort, debouncedSearch, pageSize, dayKey]);
 
     const overlay = useMemo(() => ({ custom, overrides, hidden }), [custom, hidden, overrides]);
     const resolved = useMemo(() => (catalog ? resolveInspirations(catalog.entries, overlay) : []), [catalog, overlay]);
@@ -261,8 +249,15 @@ export function InspirationHall({ onUse }: { onUse: (item: CreationInspiration) 
             return haystack.includes(keyword);
         });
         if (sort === "title") return [...filtered].sort((left, right) => left.title.localeCompare(right.title, "zh-Hans-CN"));
-        return filtered;
-    }, [view, resolved, hiddenItems, debouncedSearch, favorites, source, modeFilter, category, sort, categoryLabel]);
+        // 自建条目固定在最前，刚建好的条目不会被打散到后面几页；内置条目按当天顺序轮换，上新排在前面。
+        const own = filtered.filter((item) => isCustomInspiration(catalogIdOf(item)));
+        const builtIn = filtered.filter((item) => !isCustomInspiration(catalogIdOf(item)));
+        return [...own, ...(sort === "latest" ? orderInspirationsByLatest(builtIn, dayKey) : orderInspirationsForToday(builtIn, dayKey, Date.now()))];
+    }, [view, resolved, hiddenItems, debouncedSearch, favorites, source, modeFilter, category, sort, categoryLabel, dayKey]);
+    const freshCount = useMemo(() => {
+        const now = Date.now();
+        return visible.filter((item) => isFreshInspiration(item, now)).length;
+    }, [visible]);
 
     const lastPage = Math.max(1, Math.ceil(visible.length / pageSize));
     const currentPage = Math.min(page, lastPage);
@@ -299,95 +294,91 @@ export function InspirationHall({ onUse }: { onUse: (item: CreationInspiration) 
 
     const handleDelete = useCallback(
         (item: CreationInspiration) => {
-            if (!stillHere()) return;
             const id = catalogIdOf(item);
             const isCustom = isCustomInspiration(id);
-            const revision = useInspirationStore.getState().revision;
-            confirmation.current?.destroy();
-            confirmation.current = modal.confirm({
+            modal.confirm({
                 className: "workspace-modal workspace-modal-compact",
                 title: isCustom ? "删除这条灵感？" : "从库中隐藏这条灵感？",
-                content: isCustom ? `「${item.title}」会从服务端个人提示词库删除，此操作不可撤销。` : `「${item.title}」只会隐藏，改写副本、收藏和个人提示词保留，可从「已隐藏」恢复。`,
+                content: isCustom ? `「${item.title}」会从本地灵感库移除，此操作不可撤销。` : `「${item.title}」来自外部目录，不能真正删除；隐藏后可用「已隐藏」视图恢复，重新导入外部目录也不会让它复现。`,
                 okText: isCustom ? "删除" : "隐藏",
                 okButtonProps: { danger: true },
                 cancelText: "保留",
                 onOk: async () => {
-                    if (!stillHere()) return;
-                    try {
-                        await removeEntry(id, revision);
-                    } catch (error) {
-                        reportFailure(error, "保存失败");
-                        throw error;
-                    }
-                    if (!stillHere()) return;
+                    await removeEntry(id);
                     if (detail && catalogIdOf(detail) === id) setDetail(null);
                     message.success(isCustom ? "已删除" : "已隐藏");
                 },
             });
         },
-        [detail, message, modal, removeEntry, stillHere, reportFailure],
+        [detail, message, modal, removeEntry],
     );
+
+    const handleToggleFavorite = async (id: string) => {
+        try {
+            await toggleFavorite(id);
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "收藏失败，请重试");
+        }
+    };
+
+    const handleRestore = async (id: string) => {
+        try {
+            await restoreEntry(id);
+            message.success("灵感已恢复显示");
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "恢复失败，请重试");
+        }
+    };
 
     const handleSubmit = useCallback(
         async (draft: Parameters<typeof createEntry>[0]) => {
-            if (!stillHere()) throw new Error("账号已变化，请重新打开编辑器");
             if (editing) {
-                await updateEntry(catalogIdOf(editing), draft, editingRevision);
-                if (!stillHere()) return;
+                await updateEntry(catalogIdOf(editing), draft);
                 message.success("已保存修改");
-                setDetail(null);
+                setDetail((current) => (current && catalogIdOf(current) === catalogIdOf(editing) ? { ...current, ...draft } : current));
                 setEditing(null);
                 return;
             }
-            await createEntry(draft, editingRevision);
-            if (!stillHere()) return;
+            await createEntry(draft);
             // 新建后把筛选整体清掉：自建条目的来源固定是「原创」、分类也常和当前筛选不符，
             // 不清的话用户刚点完"创建"却看不到自己建的东西。
             setSource("all");
             setModeFilter("all");
             setCategory("all");
             setView("all");
-            setSort("default");
+            setSort("daily");
             setSearch("");
             setPage(1);
             message.success("灵感已创建");
         },
-        [createEntry, editing, editingRevision, message, updateEntry, stillHere],
+        [createEntry, editing, message, updateEntry],
     );
 
     const handleExport = useCallback(() => {
-        try {
-            downloadText(exportPayload(), exportFileName());
-            message.success("已导出服务端个人库快照与目录状态");
-        } catch (error) {
-            message.error(error instanceof Error ? error.message : "导出失败");
-        }
+        downloadText(exportPayload(), exportFileName());
+        message.success("已导出本地改动（自建条目 / 改写 / 隐藏 / 收藏）");
     }, [exportPayload, message]);
 
     const handleImportFile = useCallback(
         async (file: File) => {
-            const revision = useInspirationStore.getState().revision;
             try {
-                const text = await file.text();
-                if (!stillHere()) return;
-                const result = await importPayload(text, revision);
-                if (!stillHere()) return;
+                const result = await importPayload(await file.text());
                 message.success(`导入完成：新增 ${result.created}，覆盖 ${result.updated}${result.skipped ? `，跳过 ${result.skipped} 条无效数据` : ""}`);
             } catch (error) {
-                reportFailure(error, "导入失败");
+                message.error(error instanceof Error ? error.message : "导入失败");
             }
         },
-        [importPayload, message, stillHere, reportFailure],
+        [importPayload, message],
     );
 
-    const advancedFilterCount = Number(source !== "all") + Number(category !== "all") + Number(view !== "all") + Number(sort !== "default");
+    const advancedFilterCount = Number(source !== "all") + Number(category !== "all") + Number(view !== "all") + Number(sort !== "daily");
     const hasFilters = Boolean(advancedFilterCount || modeFilter !== "all" || search.trim());
     const resetFilters = () => {
         setSource("all");
         setModeFilter("all");
         setCategory("all");
         setView("all");
-        setSort("default");
+        setSort("daily");
         setSearch("");
     };
 
@@ -396,14 +387,13 @@ export function InspirationHall({ onUse }: { onUse: (item: CreationInspiration) 
             <header className="inspiration-hall-header">
                 <div>
                     <h2 id="inspiration-hall-title">灵感大厅</h2>
-                    <p>点开查看完整提示词，用喜欢的创意继续创作。</p>
+                    <p>每天换一批推荐，新上架的排在前面。点开查看完整提示词，用喜欢的创意继续创作。</p>
                 </div>
                 <div className="inspiration-hall-actions">
                     <Button
-                        disabled={!hydrated || libraryBusy}
+                        disabled={!hydrated}
                         icon={<Plus className="size-4" />}
                         onClick={() => {
-                            setEditingRevision(useInspirationStore.getState().revision);
                             setEditing(null);
                             setEditorOpen(true);
                         }}
@@ -415,8 +405,8 @@ export function InspirationHall({ onUse }: { onUse: (item: CreationInspiration) 
                         placement="bottomRight"
                         menu={{
                             items: [
-                                { key: "import", label: "导入灵感", icon: <Import className="size-4" />, disabled: !hydrated || libraryBusy },
-                                { key: "export", label: "导出个人灵感", icon: <Download className="size-4" />, disabled: !hydrated || libraryBusy },
+                                { key: "import", label: "导入灵感", icon: <Import className="size-4" />, disabled: !hydrated },
+                                { key: "export", label: "导出本地灵感", icon: <Download className="size-4" />, disabled: !hydrated },
                             ],
                             onClick: ({ key }) => {
                                 if (key === "import") importRef.current?.click();
@@ -437,7 +427,7 @@ export function InspirationHall({ onUse }: { onUse: (item: CreationInspiration) 
                     <ChevronDown className={filtersOpen ? "is-open" : undefined} aria-hidden="true" />
                 </Button>
                 <span className="inspiration-hall-count" role="status">
-                    {catalog && hydrated ? `共 ${visible.length.toLocaleString("zh-CN")} 条` : ""}
+                    {catalog && hydrated ? `共 ${visible.length.toLocaleString("zh-CN")} 条${freshCount ? ` · 本周上新 ${freshCount.toLocaleString("zh-CN")} 条` : ""}` : ""}
                 </span>
             </div>
 
@@ -493,8 +483,6 @@ export function InspirationHall({ onUse }: { onUse: (item: CreationInspiration) 
             <div className="inspiration-hall-results">
                 {!shouldLoadCatalog ? (
                     <div className="inspiration-hall-deferred" aria-hidden="true" />
-                ) : libraryError ? (
-                    <WorkspaceErrorState title="个人灵感加载失败" description={libraryError} onRetry={() => void loadLibrary().catch(() => {})} />
                 ) : loadError ? (
                     <WorkspaceErrorState title="灵感目录加载失败" description={loadError} onRetry={() => setReloadKey((key) => key + 1)} />
                 ) : !catalog || !hydrated ? (
@@ -513,19 +501,9 @@ export function InspirationHall({ onUse }: { onUse: (item: CreationInspiration) 
                                         showSources={inspirationSourcesVisible}
                                         categoryLabel={categoryLabel(item)}
                                         onOpen={() => setDetail(item)}
-                                        onToggleFavorite={() => {
-                                            void toggleFavorite(id).catch((error) => reportFailure(error, "收藏失败"));
-                                        }}
-                                        onRestore={() => {
-                                            void restoreEntry(id).then(
-                                                () => {
-                                                    if (stillHere()) message.success("灵感已恢复显示");
-                                                },
-                                                (error) => reportFailure(error, "恢复失败"),
-                                            );
-                                        }}
+                                        onToggleFavorite={() => void handleToggleFavorite(id)}
+                                        onRestore={() => void handleRestore(id)}
                                         onEdit={() => {
-                                            setEditingRevision(useInspirationStore.getState().revision);
                                             setEditing(item);
                                             setEditorOpen(true);
                                         }}
@@ -565,12 +543,9 @@ export function InspirationHall({ onUse }: { onUse: (item: CreationInspiration) 
                 onClose={() => setDetail(null)}
                 onUse={handleUse}
                 onCopy={handleCopy}
-                onToggleFavorite={(item) => {
-                    void toggleFavorite(catalogIdOf(item)).catch((error) => reportFailure(error, "收藏失败"));
-                }}
+                onToggleFavorite={(item) => void handleToggleFavorite(catalogIdOf(item))}
                 onEdit={(item) => {
                     setDetail(null);
-                    setEditingRevision(useInspirationStore.getState().revision);
                     setEditing(item);
                     setEditorOpen(true);
                 }}
@@ -617,12 +592,13 @@ function InspirationCard({
     const favoriteLabel = favorite ? "取消收藏" : "收藏";
     return (
         <article className="inspiration-card">
-            <div className="inspiration-card-open">
-                <span className="inspiration-card-cover" onClick={onOpen}>
-                    <InspirationCover key={item.image} image={item.image} resourceId={item.coverResourceId} />
+            <button type="button" className="inspiration-card-open" aria-label={`查看灵感：${item.title}`} aria-haspopup="dialog" onClick={onOpen}>
+                <span className="inspiration-card-cover">
+                    <InspirationCover key={item.image} image={item.image} />
+                    {isFreshInspiration(item, Date.now()) ? <span className="inspiration-card-new">新</span> : null}
                     {showSources ? <span className="inspiration-card-source">{inspirationSourceOf(item)?.label ?? "未标注来源"}</span> : null}
                 </span>
-                <button type="button" className="inspiration-card-body" aria-label={`查看灵感：${item.title}`} aria-haspopup="dialog" onClick={onOpen}>
+                <span className="inspiration-card-body">
                     <strong className="inspiration-card-title">{item.title}</strong>
                     <span className="inspiration-card-desc">{item.description}</span>
                     <span className="inspiration-card-tags">
@@ -630,8 +606,8 @@ function InspirationCard({
                         {item.ratio ? <span className="inspiration-chip">{item.ratio}</span> : null}
                         {showSources && item.credit ? <span className="inspiration-chip">{item.credit}</span> : null}
                     </span>
-                </button>
-            </div>
+                </span>
+            </button>
             <div className={`inspiration-card-actions${favorite || menuOpen ? " is-visible" : ""}`}>
                 <Tooltip title={favoriteLabel}>
                     <button type="button" data-icon-only className="inspiration-card-action" aria-label={`${favoriteLabel}：${item.title}`} aria-pressed={favorite} onClick={onToggleFavorite}>

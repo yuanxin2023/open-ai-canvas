@@ -79,6 +79,8 @@ export type ChannelModel = {
     priceConfigured: boolean;
     enabled: boolean;
     priceVersion: number;
+    /** 仅视频模型：开启后挂参考视频的请求按价格档的带参考视频价格另计费。 */
+    referenceVideoBilling?: boolean;
     capabilityVersion?: number;
     capabilityConfig?: import("@/lib/model-capabilities").ModelCapabilityConfig;
     priceTiers: ChannelModelPriceTier[];
@@ -102,11 +104,39 @@ export type ChannelModelPriceTier = {
     outputTokenPriceMicrocredits: number;
     cachedTokenPriceMicrocredits: number;
     cacheWriteTokenPriceMicrocredits: number;
+    /** 文本 Token 档的分时与上下文价格开关；关闭时规则保留但不参与计费。 */
+    tokenPriceRulesEnabled?: boolean;
+    tokenPriceRules?: TokenPriceRule[] | null;
+    /** 带参考视频价格：按秒档使用每秒价，视频 Token 档使用 Token 价；模型未开启参考视频计费时不生效。 */
+    referenceVideoUnitPriceMicrocredits?: number;
+    referenceVideoOutputTokenPriceMicrocredits?: number;
     priceConfigured: boolean;
     enabled: boolean;
     priceVersion: number;
     createdAt: string;
     updatedAt: string;
+};
+
+/**
+ * 分时与上下文 Token 规则：时段按任务创建时的上海时间判定，上下文按上游真实输入 Token 判定；
+ * 按顺序取首条命中，全部未命中时使用价格档的基础 Token 单价。
+ */
+export type TokenPriceRule = {
+    enabled: boolean;
+    /** 1 = 周一 … 7 = 周日。 */
+    weekdays: number[];
+    /** HH:MM，含。 */
+    start: string;
+    /** HH:MM，不含；24:00 表示当天结束。 */
+    end: string;
+    /** 输入上下文下限（含）。 */
+    minInputTokens: number;
+    /** 输入上下文上限（不含），0 表示不限。 */
+    maxInputTokens: number;
+    inputTokenPriceMicrocredits: number;
+    outputTokenPriceMicrocredits: number;
+    cachedTokenPriceMicrocredits: number;
+    cacheWriteTokenPriceMicrocredits: number;
 };
 
 export type CreditCostPricing = {
@@ -116,6 +146,9 @@ export type CreditCostPricing = {
     outputTokenPriceMicrocredits: number;
     cachedTokenPriceMicrocredits: number;
     cacheWriteTokenPriceMicrocredits: number;
+    /** 带参考视频的成本价：按秒档为每秒成本，视频 Token 档为 Token 成本；模型未开启参考视频计费时不生效。 */
+    referenceVideoUnitPriceMicrocredits?: number;
+    referenceVideoOutputTokenPriceMicrocredits?: number;
 };
 
 // 系统渠道模型的写入合同。标量价格只用于兼容旧管理请求；新的后台界面只提交 priceTiers。
@@ -130,6 +163,7 @@ export type ChannelModelMutation = {
     capability: ChannelModel["capability"];
     protocol?: ChannelModel["protocol"];
     enabled?: boolean;
+    referenceVideoBilling?: boolean;
     capabilityConfig?: ChannelModel["capabilityConfig"];
     priceTiers?: Array<Omit<ChannelModelPriceTier, "id" | "channelModelId" | "selectorKey" | "priceVersion" | "createdAt" | "updatedAt">>;
     billingMode?: ChannelModel["billingMode"];

@@ -2,52 +2,32 @@ package app
 
 import (
 	"testing"
-	"time"
 
+	"infinite-canvas/backend/internal/kernel"
 	"infinite-canvas/backend/internal/model"
-	"infinite-canvas/backend/internal/repository"
-
-	"gorm.io/driver/sqlite"
-	"gorm.io/gorm"
 )
 
-func TestAdminSkillAvailabilityRequiresAdminAndWritesAudit(t *testing.T) {
-	db, err := gorm.Open(sqlite.Open("file:"+newID()+"?mode=memory&cache=shared"), &gorm.Config{})
-	if err != nil {
-		t.Fatal(err)
+func TestOfficialAdminSkillOperationsRequireModulePermission(t *testing.T) {
+	svc := &Service{}
+	actor := &model.User{ID: "other-admin", Role: model.UserRoleAdmin, AdminLevel: model.AdminLevelScoped, AdminPermissions: []model.AdminPermission{model.AdminPermissionChannels}}
+	calls := []func() error{
+		func() error { _, err := svc.AdminSkills(actor, AdminSkillListRequest{}); return err },
+		func() error { _, err := svc.AdminSkillDetail(actor, "skill"); return err },
+		func() error { _, err := svc.AdminUpdateSkillInfo(actor, "skill", AdminSkillInfoRequest{}); return err },
+		func() error { _, err := svc.AdminSetSkillEnabled(actor, "skill", false); return err },
+		func() error { return svc.AdminDeleteSkill(actor, "skill") },
+		func() error { _, err := svc.AdminSkillPackageFiles(actor, "skill"); return err },
+		func() error { _, err := svc.AdminSkillPackageFile(actor, "skill", "SKILL.md"); return err },
+		func() error { _, _, _, err := svc.AdminSkillPackageRawFile(actor, "skill", "SKILL.md"); return err },
+		func() error {
+			_, err := svc.AdminEditSkillPackageFiles(actor, "skill", SkillPackageEditRequest{})
+			return err
+		},
 	}
-	if err := db.AutoMigrate(&model.SystemSetting{}, &model.AdminAuditEvent{}, &model.User{}, &model.UserIdentity{}, &model.Skill{}, &model.UserSkillState{}, &model.SkillPlatformState{}, &model.SkillCategoryPlatformState{}); err != nil {
-		t.Fatal(err)
-	}
-	now := time.Now().UTC()
-	if err := db.Create(&model.Skill{ID: "platform-a", Name: "平台技能", Description: "测试", AuthorName: "平台", Status: model.SkillStatusEnabled, Source: 3, Tag: "drama", CreatedAt: now, UpdatedAt: now}).Error; err != nil {
-		t.Fatal(err)
-	}
-	svc := &Service{repo: repository.New(db)}
-	ordinary := &model.User{ID: "user-1", Role: model.UserRoleUser}
-	if _, err := svc.AdminInstallSkillUpload(ordinary, "markdown", nil, SkillInstallRequest{}); err == nil {
-		t.Fatal("ordinary user reached platform skill upload")
-	}
-	if _, err := svc.AdminInstallGitHubSkill(ordinary, SkillGitHubInstallRequest{URL: "https://github.com/example/example"}); err == nil {
-		t.Fatal("ordinary user reached platform GitHub install")
-	}
-	request := AdminSkillAvailabilityRequest{SkillIDs: []string{"platform-a"}, Available: false}
-	if _, err := svc.UpdateAdminSkillAvailability(ordinary, request); err == nil {
-		t.Fatal("ordinary user changed platform skill availability")
-	}
-	admin := &model.User{ID: "admin-1", Role: model.UserRoleAdmin}
-	catalog, err := svc.UpdateAdminSkillAvailability(admin, request)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(catalog.Skills) != 1 || catalog.Skills[0].EffectiveAvailable {
-		t.Fatalf("updated catalog = %#v", catalog)
-	}
-	var audit model.AdminAuditEvent
-	if err := db.First(&audit, "action = ?", "skill.availability.batch_update").Error; err != nil {
-		t.Fatal(err)
-	}
-	if audit.ActorUserID != admin.ID || audit.TargetType != "skill" {
-		t.Fatalf("audit = %#v", audit)
+	for index, call := range calls {
+		err, ok := call().(*AppError)
+		if !ok || err.Reason != kernel.ReasonAdminPermission {
+			t.Fatalf("operation %d did not deny before accessing data: %#v", index, err)
+		}
 	}
 }

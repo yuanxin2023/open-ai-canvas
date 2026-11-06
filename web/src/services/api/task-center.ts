@@ -3,6 +3,7 @@ import { notifyImageCreditsShortfall } from "@/lib/image-credit-guidance";
 import { http, apiBaseURL, type BackendEnvelope } from "@/services/api/request";
 import { consumeTaskTextStream, createTaskTextStreamParser, type TaskTextStreamEvent } from "@/services/api/task-text-stream";
 import { recordDiagnosticEvent } from "@/services/diagnostics/client-diagnostics";
+import { observeGenerationTaskStatus, observeGenerationTaskStatuses } from "@/services/generation-completion-tracker";
 import { getActiveUserScope } from "@/lib/user-scope";
 
 export type { BackendEnvelope } from "@/services/api/request";
@@ -20,12 +21,12 @@ export type GenerationTaskOutput = {
 };
 
 export type GenerationTask = {
-	logicalModelId?: string;
-	workbenchSubmission?: {
-		requestKey: string;
-		replayed: boolean;
-		quote: { billingEnabled: boolean; amountMicrocredits: number; billingMode: string; priceTierVersion: number; priceVersion: number; quantity: number; chargeLimitMicrocredits?: number };
-	};
+    logicalModelId?: string;
+    workbenchSubmission?: {
+        requestKey: string;
+        replayed: boolean;
+        quote: { billingEnabled: boolean; amountMicrocredits: number; billingMode: string; priceTierVersion: number; priceVersion: number; quantity: number; chargeLimitMicrocredits?: number };
+    };
     id: string;
     clientOperationId?: string;
     retryOf?: string;
@@ -134,10 +135,10 @@ export type TaskLog = {
 };
 
 export type CreateTaskInput = {
-	workbenchRequestKey?: string;
-	workbenchExpectedUserId?: string;
-	workbenchRetryOf?: string;
-	workbenchRetryVersion?: string;
+    workbenchRequestKey?: string;
+    workbenchExpectedUserId?: string;
+    workbenchRetryOf?: string;
+    workbenchRetryVersion?: string;
     projectId?: string;
     type?: string;
     operation?: string;
@@ -149,17 +150,21 @@ export type CreateTaskInput = {
 };
 export function createGenerationTask(input: CreateTaskInput) {
     const scope = getActiveUserScope();
-    return http.post<GenerationTask>("/tasks", input).then((task) => {
-        if (scope !== getActiveUserScope()) return task;
-        recordDiagnosticEvent({ level: "info", category: "task", message: "任务已创建", taskId: task.id, projectId: task.projectId });
-        notifyCanvasTaskCreated(task);
-        // 创建任务时积分已被预占，不能等任务结束后才刷新可用余额。
-        window.dispatchEvent(new CustomEvent("wallet:updated"));
-        return task;
-    }).catch((error) => {
-        if (scope === getActiveUserScope() && (input.type === "canvas_image" || input.type?.startsWith("image_") || input.input?.mode === "image")) notifyImageCreditsShortfall(error);
-        throw error;
-    });
+    return http
+        .post<GenerationTask>("/tasks", input)
+        .then((task) => {
+            if (scope !== getActiveUserScope()) return task;
+            recordDiagnosticEvent({ level: "info", category: "task", message: "任务已创建", taskId: task.id, projectId: task.projectId });
+            observeGenerationTaskStatus(task);
+            notifyCanvasTaskCreated(task);
+            // 创建任务时积分已被预占，不能等任务结束后才刷新可用余额。
+            window.dispatchEvent(new CustomEvent("wallet:updated"));
+            return task;
+        })
+        .catch((error) => {
+            if (scope === getActiveUserScope() && (input.type === "canvas_image" || input.type?.startsWith("image_") || input.input?.mode === "image")) notifyImageCreditsShortfall(error);
+            throw error;
+        });
 }
 
 export type GenerationTaskPageRequest = {
@@ -186,6 +191,7 @@ const defaultGenerationTaskListDependencies: GenerationTaskListDependencies = {
 };
 
 export async function listGenerationTasks(limit = 30, options?: { projectId?: string; activeOnly?: boolean }, dependencies: GenerationTaskListDependencies = defaultGenerationTaskListDependencies, signal?: AbortSignal) {
+    const scope = getActiveUserScope();
     if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
     const boundedLimit = Number.isFinite(limit) ? Math.max(1, Math.min(10_000, Math.trunc(limit))) : 30;
     const baseRequest = {
@@ -208,6 +214,7 @@ export async function listGenerationTasks(limit = 30, options?: { projectId?: st
         }));
     const backendTasks = await collectGenerationTaskPages(backendPageReader, baseRequest, boundedLimit, signal);
     if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
+    if (scope === getActiveUserScope()) observeGenerationTaskStatuses(backendTasks);
     return backendTasks
         .filter((task) => !options?.projectId || task.projectId === options.projectId)
         .filter((task) => !options?.activeOnly || task.status === "queued" || task.status === "running")
@@ -232,7 +239,14 @@ async function collectGenerationTaskPages<T>(readPage: (request: GenerationTaskP
 }
 
 export function queryGenerationTask(id: string, options?: { signal?: AbortSignal }) {
-    return http.get<GenerationTask>(`/tasks/${encodeURIComponent(id)}`, { signal: options?.signal });
+    const scope = getActiveUserScope();
+    return http.get<GenerationTask>(`/tasks/${encodeURIComponent(id)}`, { signal: options?.signal }).then((task) => observedTask(task, scope));
+}
+
+/** 所有任务读取都汇入完成跟踪，生成完成提醒不依赖某个页面是否还在轮询。 */
+function observedTask(task: GenerationTask, scope: string) {
+    if (scope === getActiveUserScope()) observeGenerationTaskStatus(task);
+    return task;
 }
 
 type GenerationTaskSubscriptionDependencies = {
@@ -356,7 +370,8 @@ export function queryTaskTextReplay(id: string, after = 0) {
 }
 
 export function retryGenerationTask(id: string) {
-    return http.post<GenerationTask>(`/tasks/${encodeURIComponent(id)}/retry`);
+    const scope = getActiveUserScope();
+    return http.post<GenerationTask>(`/tasks/${encodeURIComponent(id)}/retry`).then((task) => observedTask(task, scope));
 }
 
 export function recoverGenerationTaskMedia(id: string) {
@@ -367,6 +382,7 @@ export function cancelGenerationTask(id: string) {
     const scope = getActiveUserScope();
     return http.post<GenerationTask>(`/tasks/${encodeURIComponent(id)}/cancel`).then((task) => {
         if (scope !== getActiveUserScope()) return task;
+        observeGenerationTaskStatus(task);
         window.dispatchEvent(new CustomEvent("canvas:task-cancelled", { detail: { task } }));
         window.dispatchEvent(new CustomEvent("wallet:updated"));
         return task;
@@ -378,7 +394,7 @@ export function queryFailedVideoProviderTask(id: string) {
 }
 
 export function refreshGenerationTaskStatus(id: string, options?: { signal?: AbortSignal }) {
-    return http.get<GenerationTask>(`/tasks/${encodeURIComponent(id)}`, { signal: options?.signal });
+    return queryGenerationTask(id, options);
 }
 
 export function deleteGenerationTask(id: string) {

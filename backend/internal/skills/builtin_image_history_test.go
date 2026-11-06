@@ -130,9 +130,6 @@ func TestBuiltinSyncRetainsDeployedOfficialImageIdentities(t *testing.T) {
 			if err := db.First(&after, "id = ?", installed.ID).Error; err != nil || !reflect.DeepEqual(installed, after) {
 				t.Fatalf("installed relationship changed: %+v / %v", after, err)
 			}
-			if available, err := svc.repo.PlatformSkillAvailable(legacy[1]); err != nil || available {
-				t.Fatalf("historical hidden state changed: %v / %v", available, err)
-			}
 			if err := svc.repo.DeleteBuiltinSkill(legacy[0].ID, "administrator"); err != nil {
 				t.Fatal(err)
 			}

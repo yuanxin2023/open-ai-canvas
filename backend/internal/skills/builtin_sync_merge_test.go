@@ -57,18 +57,15 @@ func TestBuiltinSyncPreservesLegacyVersionAndExplicitAvailability(t *testing.T) 
 	if err := db.First(&current, "id = ?", id).Error; err != nil || current.Tag != "social" || current.OwnerID != "old-source-owner" {
 		t.Fatalf("catalog refresh changed the deployed tag or ownership: %+v / %v", current, err)
 	}
-	var newStates int64
-	if err := db.Model(&model.SkillPlatformState{}).Where("available = ?", false).Count(&newStates).Error; err != nil || newStates != 38 {
-		t.Fatalf("new optional skills or old hidden state lost: %d / %v", newStates, err)
-	}
-	if err := db.Model(&model.SkillPlatformState{}).Where("skill_id = ?", "16000000000073").Update("available", true).Error; err != nil {
+	if err := db.Model(&model.Skill{}).Where("id = ?", "16000000000073").UpdateColumn("status", 0).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := svc.EnsureBuiltinSkills(); err != nil {
 		t.Fatal(err)
 	}
-	if available, err := svc.repo.PlatformSkillAvailable(model.Skill{ID: "16000000000073", Source: model.SkillSourcePlatform}); err != nil || !available {
-		t.Fatalf("restart reset an explicit administrator enable: %v / %v", available, err)
+	var disabled model.Skill
+	if err := db.First(&disabled, "id = ?", "16000000000073").Error; err != nil || disabled.Status != 0 {
+		t.Fatalf("restart reset official disabled status: %+v / %v", disabled, err)
 	}
 	var versionCount int64
 	if err := db.Model(&model.SkillVersion{}).Where("skill_id = ?", id).Count(&versionCount).Error; err != nil || versionCount != 2 {

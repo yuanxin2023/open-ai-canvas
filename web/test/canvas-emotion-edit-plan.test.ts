@@ -1,9 +1,25 @@
 import { describe, expect, test } from "bun:test";
 
-import { buildEmotionPrompt, emotionProviderMask, normalizeEmotionPromptForProvider, resolveEmotionEditPlan } from "../src/lib/canvas/canvas-emotion";
+import { buildEmotionPrompt, emotionGenerationSizeFor, emotionProviderMask, normalizeEmotionPromptForProvider, resolveEmotionEditPlan, supportsEmotionEdit } from "../src/lib/canvas/canvas-emotion";
+import { defaultImageCapabilityConfig } from "../src/lib/model-capabilities";
 
 const faceBox = { id: "face-1", x: 120, y: 80, width: 160, height: 180, source: "detected" as const };
 const editRegion = { x: 40, y: 20, width: 320, height: 360 };
+const wideRegion = { x: 0, y: 0, width: 600, height: 400 };
+
+describe("emotion edit model capability", () => {
+    test("requires two reference images instead of the OpenAI Images protocol", () => {
+        expect(supportsEmotionEdit(defaultImageCapabilityConfig("openai-image").references)).toBe(true);
+        expect(supportsEmotionEdit(defaultImageCapabilityConfig("volcengine-ark-image").references)).toBe(true);
+        expect(supportsEmotionEdit(defaultImageCapabilityConfig("grok-image").references)).toBe(false);
+    });
+
+    test("sends pixel sizes only to models that accept them", () => {
+        expect(emotionGenerationSizeFor(defaultImageCapabilityConfig("openai-image").size, wideRegion)).toBe("1536x1024");
+        expect(emotionGenerationSizeFor(defaultImageCapabilityConfig("gemini-image").size, wideRegion)).toBe("3:2");
+        expect(emotionGenerationSizeFor({ parameter: "aspect_ratio", values: ["1:1", "16:9"], allowCustom: false, default: "1:1" }, wideRegion)).toBe("1:1");
+    });
+});
 
 describe("emotion edit provider plan", () => {
     test("keeps provider mask when the selected image model supports it", () => {
@@ -21,10 +37,7 @@ describe("emotion edit provider plan", () => {
     });
 
     test("does not promise a provider mask in the shared emotion prompt", () => {
-        const prompt = buildEmotionPrompt(
-            { presetId: "emotion-0-0", intimacy: 0, arousal: 0, characterName: "角色1", faceBox },
-            editRegion,
-        );
+        const prompt = buildEmotionPrompt({ presetId: "emotion-0-0", intimacy: 0, arousal: 0, characterName: "角色1", faceBox }, editRegion);
 
         expect(prompt).not.toContain("透明蒙版");
         expect(prompt).not.toContain("白色蒙版");
@@ -32,10 +45,7 @@ describe("emotion edit provider plan", () => {
     });
 
     test("removes legacy mask promises before retrying an existing emotion node", () => {
-        const legacyPrompt = [
-            "只允许修改目标框及其透明蒙版对应的这一张脸。",
-            "输入图已裁切到目标人物头部区域；透明蒙版内允许编辑，白色蒙版区域必须保持不变，蒙版外绝对不要生成或修改任何内容。",
-        ].join("\n");
+        const legacyPrompt = ["只允许修改目标框及其透明蒙版对应的这一张脸。", "输入图已裁切到目标人物头部区域；透明蒙版内允许编辑，白色蒙版区域必须保持不变，蒙版外绝对不要生成或修改任何内容。"].join("\n");
 
         const prompt = normalizeEmotionPromptForProvider(legacyPrompt);
         expect(prompt).not.toContain("透明蒙版");

@@ -1,4 +1,5 @@
 import { translate } from "@/i18n";
+import type { Transition } from "motion/react";
 import { ImageSizePicker } from "@/components/image-size-picker";
 import { ImageParameterFields } from "@/components/image-parameter-fields";
 import { imageResolutionUsesQuality, imageSizePresets } from "@/lib/image-size-presets";
@@ -59,7 +60,7 @@ import { UserAvatar } from "@/components/layout/user-avatar";
 import { CreationSyncNotice, MediaResult } from "./creation-workspace-messages";
 import { creationMessageNeedsResultSync } from "./creation-conversations";
 import { CanvasImagePreview } from "@/components/canvas/canvas-image-preview";
-import { CanvasResourceMentionTextarea, type CanvasSlashCommandGroup, type CanvasSlashCommandItem } from "@/components/canvas/canvas-resource-mention-textarea";
+import { CanvasResourceMentionTextarea } from "@/components/canvas/canvas-resource-mention-textarea";
 import { VoiceRecordingButton } from "@/components/conversation/voice-recording-button";
 import { UserPromptEditorModal } from "@/components/user-prompt-editor-modal";
 import { InspirationDetailModal } from "@/pages/inspirations/inspiration-detail-modal";
@@ -785,11 +786,6 @@ type ComposerProps = {
 
 type CreationReferenceFilter = "all" | "image" | "video" | "audio" | "file";
 
-const creationPromptSlashGroups: CanvasSlashCommandGroup[] = [
-    { id: "personal", label: "我的提示词", emptyLabel: "还没有个人提示词" },
-    { id: "public", label: "公共提示词", emptyLabel: "当前没有公共提示词" },
-];
-
 export function CreationComposer(props: ComposerProps) {
     const [previewUrl, setPreviewUrl] = useState("");
     const [previewType, setPreviewType] = useState<"image" | "video">("image");
@@ -798,8 +794,6 @@ export function CreationComposer(props: ComposerProps) {
     const [canDragReferences, setCanDragReferences] = useState(false);
     const [fileDropActive, setFileDropActive] = useState(false);
     const [dropTargetReferenceId, setDropTargetReferenceId] = useState<string | null>(null);
-    const [promptLibrary, setPromptLibrary] = useState<{ personal: UserPrompt[]; public: Inspiration[]; loading: boolean; loaded: boolean; error: string }>({ personal: [], public: [], loading: false, loaded: false, error: "" });
-    const promptLibraryRequestRef = useRef<AbortController | null>(null);
     const attachmentTrackRef = useRef<HTMLUListElement>(null);
     const cardDragRef = useRef<{ startX: number; startY: number; moved: boolean } | null>(null);
     const suppressAttachmentClickRef = useRef(false);
@@ -814,55 +808,6 @@ export function CreationComposer(props: ComposerProps) {
     const [routeQuote, setRouteQuote] = useState<LogicalModelQuote | null>(null);
     const canOptimizePrompt = Boolean(props.promptOptimizerProvider) && (props.mode === "image" || props.mode === "video");
     const optimizerReferences = props.references.filter((reference) => reference.active && reference.kind !== "skill");
-    const slashCommandItems = useMemo<CanvasSlashCommandItem[]>(() => {
-        const toItem = (item: UserPrompt | Inspiration, groupId: "personal" | "public"): CanvasSlashCommandItem => {
-            const previewUrl = "status" in item ? (item.coverUrl ? inspirationCoverUrl(item) : "") : item.coverResourceId ? resourceFileUrl(item.coverResourceId) : item.coverUrl || "";
-            return {
-                id: item.id,
-                groupId,
-                label: item.title,
-                description: item.description || item.prompt,
-                badge: modeLabels[item.mode],
-                value: item.prompt,
-                searchText: [item.title, item.description, item.prompt, item.source, modeLabels[item.mode], ...(item.tags || [])].filter(Boolean).join(" "),
-                previewUrl,
-            };
-        };
-        const prioritizeCurrentMode = <T extends UserPrompt | Inspiration>(items: T[]) => [...items].sort((left, right) => Number(right.mode === props.mode) - Number(left.mode === props.mode));
-        return [
-            ...prioritizeCurrentMode(promptLibrary.personal)
-                .filter((item) => item.prompt.trim())
-                .map((item) => toItem(item, "personal")),
-            ...prioritizeCurrentMode(promptLibrary.public)
-                .filter((item) => item.prompt.trim())
-                .map((item) => toItem(item, "public")),
-        ];
-    }, [promptLibrary.personal, promptLibrary.public, props.mode]);
-    const loadPromptLibrary = useCallback(() => {
-        if (!userId) {
-            setPromptLibrary({ personal: [], public: [], loading: false, loaded: false, error: "登录后可调用个人提示词与精选灵感" });
-            return;
-        }
-        if (promptLibrary.loading || promptLibrary.loaded) return;
-        promptLibraryRequestRef.current?.abort();
-        const controller = new AbortController();
-        promptLibraryRequestRef.current = controller;
-        setPromptLibrary((current) => ({ ...current, loading: true, error: "" }));
-        Promise.all([listAllUserPrompts(controller.signal), listInspirations(controller.signal)])
-            .then(([personal, publicResult]) => {
-                if (controller.signal.aborted) return;
-                setPromptLibrary({ personal, public: publicResult.inspirations, loading: false, loaded: true, error: "" });
-            })
-            .catch(() => {
-                if (controller.signal.aborted) return;
-                setPromptLibrary((current) => ({ ...current, loading: false, loaded: false, error: "提示词加载失败，请关闭后重新输入 / 重试" }));
-            });
-    }, [promptLibrary.loaded, promptLibrary.loading, userId]);
-    useEffect(() => {
-        promptLibraryRequestRef.current?.abort();
-        setPromptLibrary({ personal: [], public: [], loading: false, loaded: false, error: "" });
-    }, [userId]);
-    useEffect(() => () => promptLibraryRequestRef.current?.abort(), []);
     const credits = requestCreditCost({
         channelMode: priceChannel.scope === "system" ? "remote" : "local",
         modelCosts: priceChannel.modelCosts,
@@ -1071,12 +1016,6 @@ export function CreationComposer(props: ComposerProps) {
                             value={props.prompt}
                             references={props.references}
                             mentionMenuWidth={400}
-                            slashCommandMenuWidth={420}
-                            slashCommandGroups={creationPromptSlashGroups}
-                            slashCommandItems={slashCommandItems}
-                            slashCommandLoading={promptLibrary.loading}
-                            slashCommandError={promptLibrary.error}
-                            onSlashCommandOpen={loadPromptLibrary}
                             sendOnEnter
                             onFocus={props.onPromptFocus}
                             onChange={props.setPrompt}
@@ -1320,6 +1259,67 @@ export function CreationComposer(props: ComposerProps) {
                 {composer}
             </CanvasPromptOptimizerDrawer>
         </Suspense>
+    );
+}
+
+const creationModeItems: { mode: CreationMode; icon: ReactNode; label: string }[] = [
+    { mode: "video", icon: <Film />, label: "视频" },
+    { mode: "image", icon: <ImageIcon />, label: "图片" },
+    { mode: "text", icon: <MessageSquareText />, label: "文本" },
+];
+
+type CreationModeKey = CreationMode | "agent";
+
+// 首页页签的拉伸滑动：朝目标一侧的边用更硬的弹簧先到，另一侧稍后跟上，页签先拉长再收拢。
+const folderTabLeadingSpring = { type: "spring", stiffness: 540, damping: 42, mass: 0.6 } as const;
+const folderTabTrailingSpring = { type: "spring", stiffness: 280, damping: 32, mass: 0.8 } as const;
+
+/** 首页创作卡：顶部文件夹页签切换视频 / 图片 / 文本 / Agent，选中页签与下方内容面同色相连。 */
+export function CreationModeCard({ mode, agentActive, onModeChange, onAgentSelect, children }: { mode: CreationMode; agentActive: boolean; onModeChange: (mode: CreationMode) => void; onAgentSelect: () => void; children: ReactNode }) {
+    const reducedMotion = useReducedMotion();
+    const keys: CreationModeKey[] = [...creationModeItems.map((item) => item.mode), "agent"];
+    const activeKey: CreationModeKey = agentActive ? "agent" : mode;
+    const activeIndex = Math.max(0, keys.indexOf(activeKey));
+    // 记住上一次的位置来判断滑动方向；在渲染期调整状态，切换当帧就拿到新方向。
+    const [slide, setSlide] = useState({ index: activeIndex, direction: 0 });
+    if (slide.index !== activeIndex) setSlide({ index: activeIndex, direction: Math.sign(activeIndex - slide.index) });
+    const step = 100 / keys.length;
+    const tabTransition: Transition = reducedMotion
+        ? { duration: 0 }
+        : {
+              left: slide.direction < 0 ? folderTabLeadingSpring : folderTabTrailingSpring,
+              right: slide.direction > 0 ? folderTabLeadingSpring : folderTabTrailingSpring,
+          };
+    return (
+        <HoverBorderGradient as="div" duration={2.2} containerClassName="creation-mode-card" className="creation-mode-card-inner">
+            <div className="creation-mode-folder" role="group" aria-label="创作模式" data-active-mode={activeKey} style={{ "--creation-mode-count": keys.length } as CSSProperties}>
+                <motion.span className="creation-mode-folder-tab" aria-hidden initial={false} animate={{ left: `${activeIndex * step}%`, right: `${(keys.length - 1 - activeIndex) * step}%` }} transition={tabTransition}>
+                    <CreationModeFolderWing side="start" />
+                    <CreationModeFolderWing side="end" />
+                </motion.span>
+                {creationModeItems.map((item) => (
+                    <button key={item.mode} type="button" className="creation-mode-folder-button" data-mode={item.mode} aria-pressed={activeKey === item.mode} aria-label={`${item.label}生成`} onClick={() => onModeChange(item.mode)}>
+                        {item.icon}
+                        <span>{item.label}</span>
+                    </button>
+                ))}
+                <button type="button" className="creation-mode-folder-button" data-mode="agent" aria-pressed={agentActive} onClick={onAgentSelect}>
+                    <Orbit />
+                    <span>Agent</span>
+                    <i className="creation-mode-spark" aria-hidden />
+                </button>
+            </div>
+            <div className="creation-mode-panel">{children}</div>
+        </HoverBorderGradient>
+    );
+}
+
+// 选中页签两侧的 S 形翼片：顶边水平切入、底边水平落到内容面；与页签主体重叠 1px，避免亚像素接缝。
+function CreationModeFolderWing({ side }: { side: "start" | "end" }) {
+    return (
+        <svg className={`creation-mode-folder-wing is-${side}`} viewBox="0 0 30 48" preserveAspectRatio="none" aria-hidden focusable="false">
+            <path d="M30 0H28C14 0 14 48 0 48H30Z" />
+        </svg>
     );
 }
 

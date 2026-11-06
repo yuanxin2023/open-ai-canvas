@@ -2,20 +2,34 @@ import { http } from "./request";
 import type { CanvasOperation } from "@/lib/canvas/canvas-operation-contract";
 import type { CanvasProject } from "@/stores/canvas/use-canvas-store";
 import type { CreateTaskInput, GenerationTask } from "./task-center";
+import { observeGenerationTaskStatus } from "@/services/generation-completion-tracker";
 
 export type CreationStatus = "idle" | "running" | "waiting_answer" | "waiting_proposal" | "waiting_canvas" | "waiting_payment" | "waiting_task" | "paused" | "completed" | "cancelled";
 export type CreationGuard = { executionEpoch: number; owner: string };
 export type CreationRun = {
-    id: string; userId: string; canvasId?: string; revision: number;
-    executionEpoch: number; executionOwner: string; leaseExpiresAt?: string;
-    status: CreationStatus; state: Record<string, unknown>;
-    approvedProposalVersion?: number; approvedProposalHash?: string;
-    createdAt: string; updatedAt: string;
+    id: string;
+    userId: string;
+    canvasId?: string;
+    revision: number;
+    executionEpoch: number;
+    executionOwner: string;
+    leaseExpiresAt?: string;
+    status: CreationStatus;
+    state: Record<string, unknown>;
+    approvedProposalVersion?: number;
+    approvedProposalHash?: string;
+    createdAt: string;
+    updatedAt: string;
 };
 export type CreationSubmission = {
-    id: string; runId: string; itemKey: string; requestHash: string;
+    id: string;
+    runId: string;
+    itemKey: string;
+    requestHash: string;
     quote: { model: string; billingMode: string; quantity: number; amountMicrocredits: number; estimated: boolean; expiresAt: string; quoteHash: string; options?: Record<string, unknown> };
-    approvedAt?: string; revokedAt?: string; taskId?: string;
+    approvedAt?: string;
+    revokedAt?: string;
+    taskId?: string;
 };
 export type CreationRunDetail = { run: CreationRun; submissions: CreationSubmission[] };
 
@@ -34,10 +48,12 @@ export const creationRuns = {
     prepare: (id: string, input: CreationGuard & { itemKey: string; proposalVersion?: number; request: CreateTaskInput }, signal?: AbortSignal) => http.post<CreationSubmission>(`${path(id)}/submissions/prepare`, input, { signal }),
     approve: (id: string, input: CreationGuard & { submissionIds: string[] }, signal?: AbortSignal) => http.post<{ submissions: CreationSubmission[] }>(`${path(id)}/submissions/approve`, input, { signal }),
     refreshQuote: (id: string, input: CreationGuard & { submissionId: string }, signal?: AbortSignal) => http.post<CreationSubmission>(`${path(id)}/submissions/refresh`, input, { signal }),
-    execute: (id: string, input: CreationGuard & { submissionId: string }, signal?: AbortSignal) => http.post<GenerationTask>(`${path(id)}/execute`, input, { signal }).then((task) => {
-        if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("wallet:updated"));
-        return task;
-    }),
+    execute: (id: string, input: CreationGuard & { submissionId: string }, signal?: AbortSignal) =>
+        http.post<GenerationTask>(`${path(id)}/execute`, input, { signal }).then((task) => {
+            observeGenerationTaskStatus(task);
+            if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("wallet:updated"));
+            return task;
+        }),
     canvasSnapshot: (id: string, signal?: AbortSignal) => http.get<{ document: CanvasProject; snapshotHash: string }>(`${path(id)}/canvas-snapshot`, { signal }),
     commitCanvas: (id: string, input: CreationGuard & { expectedSnapshotHash: string; document: CanvasProject }, signal?: AbortSignal) => http.post<{ snapshotHash: string }>(`${path(id)}/canvas-commit`, input, { signal }),
-};;
+};

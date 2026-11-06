@@ -12,6 +12,8 @@ import { WorkspaceTopBar } from "@/components/layout/workspace-top-bar";
 import { WorkspaceTopBarExtensionProvider } from "@/components/layout/workspace-top-bar-extension";
 import { WorkspaceStorageLimitNotice } from "@/components/layout/workspace-storage-limit-notice";
 import { WorkspaceWalletHost } from "@/components/layout/workspace-wallet-modal";
+import { GenerationSuccessNotifier } from "@/components/layout/generation-success-notifier";
+import { useWorkspaceDocumentTitle } from "@/hooks/use-workspace-document-title";
 import { ImageCreditShortfallHost } from "@/components/layout/image-credit-shortfall-host";
 import { cn } from "@/lib/utils";
 import { isSpatialWorkbenchPath } from "@/lib/workspace-routes";
@@ -27,6 +29,7 @@ const sidebarMobileSnapshot = () => window.matchMedia(sidebarMobileQuery).matche
 const sidebarServerSnapshot = () => false;
 
 export function AppWorkspaceShell({ children }: { children: ReactNode }) {
+    useWorkspaceDocumentTitle();
     const { t } = useTranslation();
     const { pathname } = useLocation();
     const navigate = useNavigate();
@@ -157,6 +160,7 @@ export function AppWorkspaceShell({ children }: { children: ReactNode }) {
             <WorkspaceWalletHost />
             <ImageCreditShortfallHost />
             <WorkspaceStorageLimitNotice />
+            <GenerationSuccessNotifier />
             <ModelSetupGuide hidden={pathname === "/login" || pathname === "/register" || pathname.startsWith("/admin")} />
         </>
     );

@@ -7,6 +7,12 @@ for (const name of ["HTMLElement", "HTMLButtonElement", "HTMLInputElement", "HTM
 for (const [name, value] of Object.entries({ window: dom, document: dom.document, navigator: dom.navigator, getComputedStyle: dom.getComputedStyle.bind(dom), requestAnimationFrame: dom.requestAnimationFrame.bind(dom), IS_REACT_ACT_ENVIRONMENT: true }))
     Object.defineProperty(globalThis, name, { configurable: true, value });
 mock.module("localforage", () => ({ default: { config: () => {}, getItem: async () => null, setItem: async () => {}, createInstance: () => ({ getItem: async () => null, setItem: async () => {} }) } }));
+mock.module("@/hooks/use-workspace-document-title", () => ({ useWorkspaceDocumentTitle: () => {} }));
+mock.module("@/hooks/use-wallet-balance", () => ({ useWalletBalance: () => ({ availableMicrocredits: 123456000000 }) }));
+mock.module("@/components/layout/generation-success-notifier", () => ({ GenerationSuccessNotifier: () => null }));
+mock.module("@/components/layout/workspace-sidebar-checkin", () => ({ WorkspaceSidebarCheckin: () => null }));
+mock.module("@/components/layout/workspace-sidebar-storage-meter", () => ({ WorkspaceSidebarStorageMeter: () => null }));
+mock.module("@/components/layout/workspace-account-card", () => ({ WorkspaceAccountCard: () => null }));
 for (const [path, name] of [
     ["banner-announcements-slider", "BannerAnnouncementsSlider"],
     ["model-setup-guide", "ModelSetupGuide"],

@@ -13,6 +13,7 @@ import { createAdminChannelModel, testAdminChannelModel, updateAdminChannelModel
 import type { ModelChannel } from "@/stores/use-config-store";
 import { defaultPriceTier, normalizeUpstreamModelKey, priceTierPayloadFromForm } from "./channel-model-price-tier-form";
 import { PriceTierFields } from "./channel-model-price-tier-fields";
+import { TokenPriceRulesSection } from "./channel-model-token-rules";
 import { ChannelModelTagsEditor } from "./channel-model-tags-editor";
 import {
     changeChannelModelCapability,
@@ -68,6 +69,7 @@ export function ChannelModelEditor({
     const capabilityConfig = Form.useWatch("capabilityConfig", form);
     const capabilityMigrationError = Form.useWatch("capabilityMigrationError", form);
     const modelEnabled = Form.useWatch("enabled", form) !== false;
+    const referenceVideoBilling = Form.useWatch("referenceVideoBilling", form) === true;
     const priceTiers = Form.useWatch("priceTiers", form) || [];
     const hasDefaultPriceTier = priceTiers.some((tier) => tier.matchMode === "default");
     const tiersWithOwnUpstream = priceTiers.filter((tier) => tier.providerModelKey?.trim());
@@ -110,7 +112,11 @@ export function ChannelModelEditor({
     const validateEditor = async (names?: string[]): Promise<FormValues | undefined> => {
         busyRef.current = true;
         try {
-            if (form.getFieldValue("capabilityMigrationError")) { message.error(form.getFieldValue("capabilityMigrationError")); setActiveSection("capabilities"); return undefined; }
+            if (form.getFieldValue("capabilityMigrationError")) {
+                message.error(form.getFieldValue("capabilityMigrationError"));
+                setActiveSection("capabilities");
+                return undefined;
+            }
             await form.validateFields(names);
             return form.getFieldsValue(true);
         } catch (error) {
@@ -147,6 +153,7 @@ export function ChannelModelEditor({
                 capability: values.capability,
                 protocol: values.protocol,
                 priceTiers: values.priceTiers.map((tier) => priceTierPayloadFromForm(values.capability, tier, upstreamModel, capabilityConfig)),
+                referenceVideoBilling: values.capability === "video" && values.referenceVideoBilling === true,
                 enabled: values.enabled !== false,
                 capabilityConfig,
             };
@@ -250,16 +257,32 @@ export function ChannelModelEditor({
             }
         >
             <Form className="admin-model-editor-form" form={form} initialValues={initialValues} layout="vertical" disabled={busy} inert={busy} onValuesChange={handleFormValuesChange}>
-                <Form.Item name="capabilityMigrationError" hidden><Input /></Form.Item>
-                {capabilityMigrationError && <Alert type="error" showIcon title="旧图片配置需要核对" description={capabilityMigrationError} action={<Button onClick={() => {
-                    const next = defaultModelCapabilityConfig(modelProtocol, providerModelKey || modelKey);
-                    if (next.image) next.image = { ...next.image, parameters: [] };
-                    form.setFieldValue("capabilityConfig", next);
-                    form.setFieldValue("capabilityMigrationError", undefined);
-                    dirtyRef.current = true;
-                    setActiveSection("capabilities");
-                    setConfigurationChanged(true);
-                }}>按新合同重新配置</Button>} />}
+                <Form.Item name="capabilityMigrationError" hidden>
+                    <Input />
+                </Form.Item>
+                {capabilityMigrationError && (
+                    <Alert
+                        type="error"
+                        showIcon
+                        title="旧图片配置需要核对"
+                        description={capabilityMigrationError}
+                        action={
+                            <Button
+                                onClick={() => {
+                                    const next = defaultModelCapabilityConfig(modelProtocol, providerModelKey || modelKey);
+                                    if (next.image) next.image = { ...next.image, parameters: [] };
+                                    form.setFieldValue("capabilityConfig", next);
+                                    form.setFieldValue("capabilityMigrationError", undefined);
+                                    dirtyRef.current = true;
+                                    setActiveSection("capabilities");
+                                    setConfigurationChanged(true);
+                                }}
+                            >
+                                按新合同重新配置
+                            </Button>
+                        }
+                    />
+                )}
                 <Form.Item name="capabilityConfig" noStyle>
                     <CapabilityConfigField />
                 </Form.Item>
@@ -440,12 +463,36 @@ export function ChannelModelEditor({
                                     <section className="admin-model-editor-section">
                                         <SectionHeading title="用户积分价格" description="默认只需填写一个统一价格；需要区分生成方式、质量或尺寸时，再添加规格价格。" />
                                         <div className="admin-model-editor-section-content">
+                                            {modelCapability === "video" ? (
+                                                <Form.Item
+                                                    name="referenceVideoBilling"
+                                                    label="参考视频计费"
+                                                    valuePropName="checked"
+                                                    extra={
+                                                        referenceVideoBilling
+                                                            ? "已开启：挂参考视频的请求使用各价格档的「带参考视频」价格。按秒 =（生成秒数 + 参考视频秒数）× 带参考视频每秒价，参考视频时长由后端实测，测不出时拒绝提交；视频 Token 按含参考视频的用量 × 带参考视频 Token 价。不挂参考视频的请求仍用原价。"
+                                                            : "已关闭：参考视频不计费。按秒只计生成秒数，视频 Token 只按生成时长计算用量。用户侧会显示「参考视频不计费」。"
+                                                    }
+                                                >
+                                                    <Switch
+                                                        aria-label="参考视频计费"
+                                                        onChange={() => {
+                                                            dirtyRef.current = true;
+                                                        }}
+                                                    />
+                                                </Form.Item>
+                                            ) : null}
                                             <Form.List
                                                 name="priceTiers"
                                                 rules={[
                                                     {
                                                         validator: async (_, value) => {
-                                                            validateChannelModelPrices({ capability: form.getFieldValue("capability"), protocol: form.getFieldValue("protocol"), priceTiers: value });
+                                                            validateChannelModelPrices({
+                                                                capability: form.getFieldValue("capability"),
+                                                                protocol: form.getFieldValue("protocol"),
+                                                                priceTiers: value,
+                                                                referenceVideoBilling: form.getFieldValue("referenceVideoBilling"),
+                                                            });
                                                         },
                                                     },
                                                 ]}
@@ -481,6 +528,14 @@ export function ChannelModelEditor({
                                             </Form.List>
                                         </div>
                                     </section>
+                                    {modelCapability === "text" ? (
+                                        <TokenPriceRulesSection
+                                            form={form}
+                                            onDirty={() => {
+                                                dirtyRef.current = true;
+                                            }}
+                                        />
+                                    ) : null}
                                 </div>
                             ),
                         },

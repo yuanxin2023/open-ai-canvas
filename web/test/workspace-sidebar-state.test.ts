@@ -17,9 +17,9 @@ function memoryStorage(initial?: string) {
 
 describe("workspace sidebar state", () => {
     test("keeps visible collapse and expand controls wired to their callbacks", () => {
-        expect(sidebarSource).toContain('aria-label={translate("shell.collapseSidebar")}');
+        expect(sidebarSource).toContain('aria-label={t("shell.collapseSidebar")}');
         expect(sidebarSource).toContain("onClick={onCollapse}");
-        expect(sidebarSource).toContain('aria-label={translate("shell.expandSidebarMenu")}');
+        expect(sidebarSource).toContain('aria-label={t("shell.expandSidebarMenu")}');
         expect(sidebarSource).toContain("onClick={onExpand}");
     });
 

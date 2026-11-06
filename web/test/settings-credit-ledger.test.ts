@@ -9,9 +9,9 @@ function source(path: string) {
 describe("settings credit ledger", () => {
     test("places the feature-gated ledger directly after payment orders", () => {
         const settings = source("../src/pages/settings/index.tsx");
-        const orders = settings.indexOf('{ key: "orders", label: translate("local.ui.orders")');
-        const wallet = settings.indexOf('{ key: "wallet", label: translate("local.ui.creditLedger")');
-        const channels = settings.indexOf('{ key: "channels", label: translate("settings.sections.channels.label")');
+        const orders = settings.indexOf('{ key: "orders", group: "general", label: translate("local.ui.orders")');
+        const wallet = settings.indexOf('{ key: "wallet", group: "general", label: translate("local.ui.creditLedger")');
+        const channels = settings.indexOf('{ key: "channels", group: "integrations"');
 
         expect(orders).toBeGreaterThan(-1);
         expect(wallet).toBeGreaterThan(orders);

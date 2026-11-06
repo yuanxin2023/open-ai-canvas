@@ -33,6 +33,7 @@ const (
 	AdminPermissionCredits               AdminPermission = "admin.finance.credits"
 	AdminPermissionReferrals             AdminPermission = "admin.finance.referrals"
 	AdminPermissionInspirations          AdminPermission = "admin.content.inspirations"
+	AdminPermissionPoseLibrary           AdminPermission = "admin.content.pose_library"
 	AdminPermissionAnnouncements         AdminPermission = "admin.content.announcements"
 	AdminPermissionBannerAnnouncements   AdminPermission = "admin.content.banner_announcements"
 	AdminPermissionAppearance            AdminPermission = "admin.settings.appearance"
@@ -52,6 +53,7 @@ const (
 )
 
 var AllAdminPermissions = []AdminPermission{
+	AdminPermissionPoseLibrary,
 	AdminPermissionAnalyticsOverview, AdminPermissionControlPreview, AdminPermissionAPILogs,
 	AdminPermissionChannels, AdminPermissionLogicalModels, AdminPermissionPlugins, AdminPermissionSkills, AdminPermissionPromptTemplates, AdminPermissionWorkbenchTools,
 	AdminPermissionUsers, AdminPermissionCustomerService, AdminPermissionFeedbacks, AdminPermissionAgentLessons,

@@ -432,14 +432,28 @@ export function WorkspaceWalletModal({
 
 function WalletLedgerRow({ entry }: { entry: CreditLedgerEntry }) {
     const positive = entry.amountMicrocredits > 0;
-    const note = entry.note ? generationErrorMessage(entry.note) : "";
-    const title = entry.type === "consume" ? "模型调用" : entry.type === "refund" ? "消费退款" : entry.type === "payment_topup" ? "在线充值" : entry.type === "redeem" ? "兑换码充值" : entry.type === "referral" ? "邀请返利" : note || "积分调整";
+    // 方舟素材组费用不是模型调用：标题按场景显示，说明只展示组名或退回原因。
+    const arkGroup = entry.scene === "ark_asset_group";
+    const note = entry.note ? (arkGroup ? entry.note : generationErrorMessage(entry.note)) : "";
+    const title = arkGroup
+        ? translate("account.wallet.ledger.arkAssetGroup")
+        : entry.type === "consume"
+          ? translate("account.wallet.ledger.consume")
+          : entry.type === "refund"
+            ? translate("account.wallet.ledger.refund")
+            : entry.type === "payment_topup"
+              ? translate("account.wallet.ledger.paymentTopup")
+              : entry.type === "redeem"
+                ? translate("account.wallet.ledger.redeem")
+                : entry.type === "referral"
+                  ? translate("account.wallet.ledger.referral")
+                  : note || translate("account.wallet.ledger.adjust");
     return (
         <article className="workspace-wallet-ledger-row">
             <span className={cn("workspace-wallet-ledger-icon", positive ? "is-income" : "is-consume")}>{positive ? <Coins /> : <CreditCard />}</span>
             <div>
                 <strong>{title}</strong>
-                <span>{[entry.scene, entry.model, note].filter(Boolean).join(" · ") || translate("account.wallet.ledger.change")}</span>
+                <span>{(arkGroup ? [note] : [entry.scene, entry.model, note]).filter(Boolean).join(" · ") || translate("account.wallet.ledger.change")}</span>
             </div>
             <time>{new Date(entry.createdAt).toLocaleString("zh-CN", { hour12: false })}</time>
             <b className={positive ? "is-income" : "is-consume"}>

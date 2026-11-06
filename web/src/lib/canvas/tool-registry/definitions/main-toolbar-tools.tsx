@@ -1,4 +1,4 @@
-import { PanelsTopLeft, Eraser, FolderOpen, Hand, MousePointer2, Palette, Plus, Redo2, Settings2, Trash2, Undo2 } from "lucide-react";
+import { PanelsTopLeft, Eraser, FolderOpen, Hand, MousePointer2, Palette, PersonStanding, Plus, Redo2, Settings2, Trash2, Undo2 } from "lucide-react";
 
 import { registerToolbarTools, type ToolDefinition } from "@/lib/canvas/tool-registry";
 import type { CanvasToolMode } from "@/types/canvas";
@@ -9,7 +9,7 @@ const canvasModeOptions = [
 ];
 
 export const mainToolbarTools: ToolDefinition[] = [
-    { id: "tool-workspace", toolbar: "main", category: "navigation", label: "工作区", icon: <PanelsTopLeft />, defaultVisible: true, defaultOrder: 65, run: ctx => ctx.handlers.onOpenWorkspace?.() },
+    { id: "tool-workspace", toolbar: "main", category: "navigation", label: "工作区", icon: <PanelsTopLeft />, defaultVisible: true, defaultOrder: 65, run: (ctx) => ctx.handlers.onOpenWorkspace?.() },
     {
         id: "tool-canvas-mode",
         toolbar: "main",
@@ -71,6 +71,17 @@ export const mainToolbarTools: ToolDefinition[] = [
         run: (ctx) => ctx.handlers.onOpenMyAssets(),
     },
     {
+        id: "tool-pose-library",
+        toolbar: "main",
+        category: "resource",
+        label: "姿势库",
+        icon: <PersonStanding />,
+        defaultVisible: true,
+        defaultOrder: 62,
+        applicable: (ctx) => Boolean(ctx.handlers.onOpenPoseLibrary),
+        run: (ctx) => ctx.handlers.onOpenPoseLibrary?.(),
+    },
+    {
         id: "tool-style",
         toolbar: "main",
         category: "appearance",
@@ -98,7 +109,7 @@ export const mainToolbarTools: ToolDefinition[] = [
         id: "tool-delete",
         toolbar: "main",
         category: "danger",
-        label: (ctx) => ctx.selectedCount > 1 ? `删除 ${ctx.selectedCount} 个节点` : "删除选中节点",
+        label: (ctx) => (ctx.selectedCount > 1 ? `删除 ${ctx.selectedCount} 个节点` : "删除选中节点"),
         icon: <Trash2 />,
         defaultVisible: true,
         defaultOrder: 90,

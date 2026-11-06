@@ -68,7 +68,7 @@ func TestUpstreamV1737AppendOnlyUpgradePreservesHistory(t *testing.T) {
 		t.Fatal("upgrade changed credit account balances or version")
 	}
 	status, err := ReadSchemaStatus(db)
-	if err != nil || !status.Ready || status.Current != 105 {
+	if err != nil || !status.Ready || status.Current != CurrentSchemaVersion {
 		t.Fatalf("schema status = %+v, error = %v", status, err)
 	}
 	for _, entity := range []any{&model.ArkPortraitAsset{}, &model.ArkPortraitGroup{}, &model.ArkPortraitSession{}} {

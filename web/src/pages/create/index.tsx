@@ -11,6 +11,7 @@ import type { AssetLibraryPickerItem } from "@/components/assets/asset-library-p
 import { publishWorkspaceSidebarCollapsed } from "@/components/layout/workspace-sidebar-state";
 import { generationErrorCode, generationErrorMessage } from "@/lib/generation-error";
 import { isInsufficientCreditsError, INSUFFICIENT_CREDITS_REASON } from "@/lib/image-credit-guidance";
+import { isGenerationCostUncertainError } from "@/lib/canvas/canvas-generation-batch";
 import { imageParameterRequest, normalizeImageParameters } from "@/lib/image-parameters";
 import { creationResultAssetIds } from "@/lib/canvas/canvas-asset-handoff";
 import { getActiveUserScope } from "@/lib/user-scope";
@@ -77,8 +78,10 @@ import {
     newMessage,
     reconcileCreationTaskMessages,
 } from "./creation-conversations";
-import { CreationComposer, CreationConversationSidebar, CreationEmptySuggest, CreationFeaturedWorks, CreationMessageView, CreationModeTabs, CreationWorkspaceToolbar, creationAssetCategoryLabels } from "./creation-workspace";
+import { CreationComposer, CreationConversationSidebar, CreationEmptySuggest, CreationMessageView, CreationModeCard, CreationWorkspaceToolbar, creationAssetCategoryLabels } from "./creation-workspace";
 import { creationMessageNeedsResultSync, type PersistedCreationTask } from "./creation-conversations";
+import { declaredInspirationSources } from "@/lib/inspirations/catalog";
+import { fillablePrompt } from "@/lib/inspirations/resolve";
 import { CreationRecentCanvases } from "./creation-recent-canvases";
 import { CreationAgentEntry } from "./creation-agent-entry";
 import { createCreationSubmitGate } from "./creation-submit-gate";
@@ -89,6 +92,8 @@ import { discardCreationLoginDraft, readCreationLoginDraft, saveCreationLoginDra
 const AssetLibraryPickerModal = lazy(() => import("@/components/assets/asset-library-picker-modal").then((module) => ({ default: module.AssetLibraryPickerModal })));
 const loadCreationRuntime = () => import("./creation-runtime");
 type CreationRuntime = Awaited<ReturnType<typeof loadCreationRuntime>>;
+
+const InspirationHall = lazy(() => import("@/pages/inspirations"));
 
 const TEXT_STREAMING_PREF_KEY = "creation.composer.text-streaming";
 const TEXT_THINKING_PREF_KEY = "creation.composer.text-thinking";
@@ -1426,18 +1431,20 @@ function CreationPageContent() {
         }
     };
 
-    // 作品可能已经生成（页面只是没拿到结果，或仍在重连）时，重新生成会提交新任务并再次扣费，先确认。
+    // 作品可能已经生成（页面只是没拿到结果，或仍在重连），或上游超时后费用不确定时，重新生成会提交新任务并再次扣费，先确认。
     const regenerateMessage = (item: CreationMessage, index: number) => {
-        if (!creationMessageNeedsResultSync(item) && !(item.syncInterrupted && (item.status === "pending" || item.status === "streaming"))) {
+        const resultMayExist = creationMessageNeedsResultSync(item) || Boolean(item.syncInterrupted && (item.status === "pending" || item.status === "streaming"));
+        const costUncertain = item.status === "error" && isGenerationCostUncertainError(item.error);
+        if (!resultMayExist && !costUncertain) {
             void retryFailedMessage(item, index);
             return;
         }
         modal.confirm({
             className: "workspace-modal workspace-modal-compact",
-            title: translate("create.page.regenerateTitle"),
-            content: "页面只是没有及时拿到结果，建议先点「重新获取结果」。重新生成会提交新任务并再次扣费。",
-            okText: "仍要重新生成",
-            cancelText: "先不",
+            title: translate(resultMayExist ? "create.page.regenerateTitle" : "create.page.regenerateUncertainTitle"),
+            content: translate(resultMayExist ? "create.page.regenerateContent" : "create.page.regenerateUncertainContent"),
+            okText: translate("create.page.regenerateConfirm"),
+            cancelText: translate("create.page.regenerateCancel"),
             onOk: () => retryFailedMessage(item, index),
         });
     };
@@ -1627,7 +1634,7 @@ function CreationPageContent() {
                                 </div>
                                 <section ref={launchpadRef} className="creation-launchpad" aria-label={translate("create.page.launchpadLabel")}>
                                     <div className={cn("creation-composer-stage is-home-mode", agentMode && "is-agent-mode")}>
-                                        <CreationModeTabs
+                                        <CreationModeCard
                                             mode={mode}
                                             agentActive={agentMode}
                                             onAgentSelect={() => setAgentMode(true)}
@@ -1635,14 +1642,15 @@ function CreationPageContent() {
                                                 setAgentMode(false);
                                                 selectMode(next);
                                             }}
-                                        />
-                                        {agentMode ? (
-                                            <CreationAgentEntry onRequireLogin={() => void openAuth()} />
-                                        ) : (
-                                            <div className="creation-empty-composer">
-                                                <CreationComposer {...composerProps} variant="empty" />
-                                            </div>
-                                        )}
+                                        >
+                                            {agentMode ? (
+                                                <CreationAgentEntry onRequireLogin={() => void openAuth()} />
+                                            ) : (
+                                                <div className="creation-empty-composer">
+                                                    <CreationComposer {...composerProps} variant="empty" />
+                                                </div>
+                                            )}
+                                        </CreationModeCard>
                                     </div>
                                     <CreationEmptySuggest
                                         onStartPrompt={(nextMode, prompt) => {
@@ -1660,15 +1668,22 @@ function CreationPageContent() {
                                 </section>
                             </div>
                             <CreationRecentCanvases onRequireLogin={() => void openAuth()} />
-                            <CreationFeaturedWorks
-                                onRequireLogin={() => void openAuth()}
-                                onStartPrompt={(nextMode, prompt) => {
-                                    setAgentMode(false);
-                                    selectMode(nextMode);
-                                    setPrompt(prompt);
-                                    window.requestAnimationFrame(() => composerFocusRef.current?.focus());
-                                }}
-                            />
+                            <Suspense
+                                fallback={
+                                    <div className="creation-hall-loading" role="status">
+                                        {translate("create.page.hallLoading")}
+                                    </div>
+                                }
+                            >
+                                <InspirationHall
+                                    onUse={(item) => {
+                                        setAgentMode(false);
+                                        selectMode(item.mode);
+                                        setPrompt(fillablePrompt(item));
+                                        window.requestAnimationFrame(() => composerFocusRef.current?.focus());
+                                    }}
+                                />
+                            </Suspense>
                         </main>
                     </>
                 ) : (

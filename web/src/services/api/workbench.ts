@@ -1,6 +1,8 @@
 import { http } from "@/services/api/request";
+import { getActiveUserScope } from "@/lib/user-scope";
 import { getResourceAccess, resolveResourceAccessURL, resourceStorageKey } from "@/services/api/resources";
 import type { GenerationTask } from "@/services/api/task-center";
+import { observeGenerationTaskStatus, observeGenerationTaskStatuses } from "@/services/generation-completion-tracker";
 
 export type WorkbenchKind = "image" | "video";
 
@@ -104,11 +106,14 @@ export type CreateWorkbenchTaskInput = {
 export type WorkbenchTaskBatch = { id: string; index: number; count: number };
 
 export async function listWorkbenchTasks(kind: WorkbenchKind, limit = 100, activeOnly = false, signal?: AbortSignal) {
+    const scope = getActiveUserScope();
     const pageSize = Number.isFinite(limit) ? Math.max(1, Math.min(100, Math.trunc(limit))) : 100;
-    return http.get<GenerationTask[]>("/workbench/tasks", {
+    const tasks = await http.get<GenerationTask[]>("/workbench/tasks", {
         params: { kind, pageSize, activeOnly: activeOnly || undefined },
         signal,
     });
+    if (scope === getActiveUserScope()) observeGenerationTaskStatuses(tasks);
+    return tasks;
 }
 
 export async function listWorkbenchTools(kind: WorkbenchKind, signal?: AbortSignal, admin = false) {
@@ -227,9 +232,14 @@ export function setAdminWorkbenchToolEnabled(id: string, enabled: boolean) {
 export type WorkbenchTaskIntent = CreateWorkbenchTaskInput;
 
 export async function createWorkbenchTask(input: WorkbenchTaskIntent) {
+    const scope = getActiveUserScope();
     const result = await http.post<WorkbenchTaskReceipt | GenerationTask>("/workbench/tasks", input);
     const task = result && "task" in result ? result.task : result;
     if (!task?.id) throw new Error("任务已提交，但没有返回任务编号");
+    if (scope === getActiveUserScope()) {
+        observeGenerationTaskStatus(task);
+        if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("wallet:updated"));
+    }
     return task;
 }
 

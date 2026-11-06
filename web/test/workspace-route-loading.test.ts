@@ -67,14 +67,14 @@ describe("workspace route loading", () => {
         expect(router).toMatch(/path: "\/canvas\/:id",\s+element: \(\s+<RequireAuth>\s+<CanvasProjectPage \/>\s+<\/RequireAuth>\s+\),/);
         expect(router).not.toContain('path: "/home"');
         expect(router).not.toContain("HomePage");
-        expect(navigation).toContain('toolItem("create", "/?home=1")');
+        expect(navigation).toContain('toolItem("create", "/?home=1", t)');
         expect(navigation).not.toContain('to: "/create"');
         expect(navigation).not.toContain('to: "/home"');
-        expect(topBar).toContain('home: "nav.sidebar.home"');
-        expect(topBar).toContain('PAGE_TITLES[slug || "home"] || "shell.workbench"');
-        expect(topBar).toContain('prompts: "local.nav.prompts"');
-        expect(topBar).not.toContain("<Link");
-        expect(topBar).not.toContain('aria-hidden="true">/</span>');
+        expect(topBar).toContain("workspacePageTitleKey(pathname)");
+        expect(topBar).toContain("{pageTitle}");
+        expect(source("../src/lib/workspace-page-title.ts")).toContain('prompts: "local.nav.prompts"');
+        expect(topBar).toContain('<Link to="/"');
+        expect(topBar).toContain('aria-hidden="true">/</span>');
     });
 
     test("hides feature-gated discovery entries while keeping direct routes guarded", () => {
@@ -83,9 +83,9 @@ describe("workspace route loading", () => {
         const palette = source("../src/components/layout/workspace-command-palette.tsx");
         const featureGuard = source("../src/components/auth/require-feature.tsx");
 
-        expect(navigation).toMatch(/features.shortDramaEnabled\s*\?\s*\[\{\s*\.\.\.toolItem\("projects", "\/projects"\)/);
+        expect(navigation).toMatch(/features.shortDramaEnabled\s*\?\s*\[\{\s*\.\.\.toolItem\("projects", "\/projects", t\)/);
         expect(palette).toMatch(/features.shortDramaEnabled\s*\?\s*\[\{\s*\.\.\.toolEntry\("projects", "\/projects"\)/);
-        expect(navigation).toMatch(/features.pluginCenterEnabled\s*\?\s*\[\{\s*\.\.\.toolItem\("plugins", "\/plugins"\)/);
+        expect(navigation).toMatch(/features.pluginCenterEnabled\s*\?\s*\[\{\s*\.\.\.toolItem\("plugins", "\/plugins", t\)/);
         expect(navigation).not.toContain("features.pluginCenterEnabled || isAdmin");
         expect(featureGuard).not.toContain("adminBypass");
         expect(router).toContain('<RequireFeature feature="shortDramaEnabled">{deferred(<ProjectsPage />)}</RequireFeature>');
@@ -137,16 +137,15 @@ describe("workspace route loading", () => {
         expect(announcements).toContain('lazy(() => import("@/components/ui/aceternity/announcement-timeline-modal")');
     });
 
-    test("uses a quiet workspace skeleton for initial hydration", () => {
+    test("uses a quiet brand loader for initial hydration", () => {
         const loader = source("../src/components/ui/aceternity/full-screen-loader.tsx");
         const css = source("../src/styles/globals.css");
 
-        expect(loader).toContain("full-screen-loader-scene");
-        expect(loader).toContain("full-screen-loader-guide");
+        expect(loader).toContain("full-screen-loader-mark");
         expect(loader).toContain("LoadingSignal");
         expect(loader).not.toContain("OPEN AI CANVAS");
         expect(loader).not.toContain("loading-cue");
-        expect(css).toContain("@keyframes loading-signal-spin");
+        expect(css).toContain("@keyframes loading-signal-sweep");
         expect(css).toContain("@media (prefers-reduced-motion: reduce)");
         expect(css).not.toContain("@keyframes loading-cue-pulse");
     });
@@ -174,8 +173,8 @@ describe("workspace wallet entry", () => {
         expect(canvasTopBar).toContain("<WorkspaceCreditPopover");
         expect(canvasTopBar).not.toContain("openWorkspaceWallet()");
         expect(canvasTopBar).not.toContain('to="/wallet"');
-        expect(topBar).toContain("<WorkspaceCreditPopover");
-        expect(topBar).not.toContain("openWorkspaceWallet()");
+        expect(topBar).toContain("app-workspace-topbar-credit-pill");
+        expect(topBar).toContain("openWorkspaceWallet()");
         expect(css).not.toContain(".wallet-library-page");
         expect(css).not.toContain(".wallet-market-page");
     });

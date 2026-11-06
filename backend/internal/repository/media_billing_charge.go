@@ -33,6 +33,20 @@ func calculateMeasuredMediaCharge(order model.BillingOrder, durationMs int64, re
 	if durationMs%1000 != 0 {
 		charge.Quantity++
 	}
+	if order.Capability == "video" && order.ReferenceVideoBilled {
+		if order.ReferenceVideoMillis < 0 {
+			return charge, ErrMeasuredDurationUnavailable
+		}
+		referenceSeconds := order.ReferenceVideoMillis / 1000
+		if order.ReferenceVideoMillis%1000 != 0 {
+			referenceSeconds++
+		}
+		const maxInt64 = int64(^uint64(0) >> 1)
+		if referenceSeconds > maxInt64-charge.Quantity {
+			return charge, ErrBillingChargeLimit
+		}
+		charge.Quantity += referenceSeconds
+	}
 	amount, err := audioBillingAmount(order.UnitPriceMicrocredits, charge.Quantity, order.MultiplierBasisPoints)
 	if err != nil {
 		return charge, err

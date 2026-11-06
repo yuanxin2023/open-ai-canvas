@@ -40,10 +40,6 @@ type (
 	SkillPackageEditRequest               = skills.SkillPackageEditRequest
 	SkillPackageEditResult                = skills.SkillPackageEditResult
 	SkillPreset                           = skills.SkillPreset
-	AdminSkillCategory                    = skills.AdminSkillCategory
-	AdminSkillItem                        = skills.AdminSkillItem
-	AdminSkillCatalog                     = skills.AdminSkillCatalog
-	AdminSkillAvailabilityRequest         = skills.AdminSkillAvailabilityRequest
 	SkillRecommendationList               = skills.SkillRecommendationList
 	SkillRecommendationIndustry           = skills.SkillRecommendationIndustry
 	SkillRecommendationItem               = skills.SkillRecommendationItem
@@ -137,81 +133,6 @@ func (s *Service) SkillDetail(userID string, id string) (*SkillItem, error) {
 		return nil, err
 	}
 	return s.skillDomain().SkillDetail(userID, id)
-}
-
-func (s *Service) AdminSkills(actor *model.User) (*AdminSkillCatalog, error) {
-	if err := s.RequireAdminPermission(actor, model.AdminPermissionSkills); err != nil {
-		return nil, err
-	}
-	globalAvailable, err := s.FeatureEnabled(FeatureSkillLibrary)
-	if err != nil {
-		return nil, err
-	}
-	return s.skillDomain().AdminSkills(globalAvailable)
-}
-
-func (s *Service) AdminInstallSkillUpload(actor *model.User, sourceType string, header *multipart.FileHeader, req SkillInstallRequest) (*AdminSkillCatalog, error) {
-	if err := s.RequireAdminPermission(actor, model.AdminPermissionSkills); err != nil {
-		return nil, err
-	}
-	skill, err := s.skillDomain().InstallPlatformSkillUpload(actor.ID, sourceType, header, req)
-	if err != nil {
-		return nil, err
-	}
-	if err := s.appendAdminAudit(actor, "skill.install", "skill", skill.SkillID, "安装平台公共技能", map[string]any{
-		"skillName": skill.SkillName, "sourceType": skill.SourceType, "tag": skill.Tag,
-	}); err != nil {
-		return nil, err
-	}
-	return s.AdminSkills(actor)
-}
-
-func (s *Service) AdminInstallGitHubSkill(actor *model.User, req SkillGitHubInstallRequest) (*AdminSkillCatalog, error) {
-	if err := s.RequireAdminPermission(actor, model.AdminPermissionSkills); err != nil {
-		return nil, err
-	}
-	skill, err := s.skillDomain().InstallPlatformGitHubSkill(actor.ID, req)
-	if err != nil {
-		return nil, err
-	}
-	if err := s.appendAdminAudit(actor, "skill.install", "skill", skill.SkillID, "安装 GitHub 平台公共技能", map[string]any{
-		"skillName": skill.SkillName, "sourceType": skill.SourceType, "tag": skill.Tag,
-	}); err != nil {
-		return nil, err
-	}
-	return s.AdminSkills(actor)
-}
-
-func (s *Service) UpdateAdminSkillAvailability(actor *model.User, req AdminSkillAvailabilityRequest) (*AdminSkillCatalog, error) {
-	if err := s.RequireAdminPermission(actor, model.AdminPermissionSkills); err != nil {
-		return nil, err
-	}
-	audit, err := newAdminAuditEvent(actor, "skill.availability.batch_update", "skill", "batch", "批量更新平台公共技能可用状态", map[string]any{
-		"skillIds": req.SkillIDs, "count": len(req.SkillIDs), "available": req.Available,
-	})
-	if err != nil {
-		return nil, err
-	}
-	if err := s.skillDomain().SetPlatformSkillAvailability(req, actor.ID, audit); err != nil {
-		return nil, err
-	}
-	return s.AdminSkills(actor)
-}
-
-func (s *Service) UpdateAdminSkillCategoryAvailability(actor *model.User, tag string, available bool) (*AdminSkillCatalog, error) {
-	if err := s.RequireAdminPermission(actor, model.AdminPermissionSkills); err != nil {
-		return nil, err
-	}
-	audit, err := newAdminAuditEvent(actor, "skill.category_availability.update", "skill_category", tag, "更新平台技能分类可用状态", map[string]any{
-		"tag": tag, "available": available,
-	})
-	if err != nil {
-		return nil, err
-	}
-	if err := s.skillDomain().SetPlatformSkillCategoryAvailability(tag, available, actor.ID, audit); err != nil {
-		return nil, err
-	}
-	return s.AdminSkills(actor)
 }
 
 func (s *Service) CreateSkill(userID string, req SkillMutationRequest) (*SkillItem, error) {

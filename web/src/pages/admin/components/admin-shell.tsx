@@ -31,6 +31,7 @@ import {
     MessageSquareText,
     Moon,
     Paintbrush,
+    PersonStanding,
     PlugZap,
     RadioTower,
     RefreshCw,
@@ -48,6 +49,7 @@ import {
     UserCog,
     WandSparkles,
     UsersRound,
+    Wand2,
 } from "lucide-react";
 import { Suspense, useEffect, useState, type ReactNode } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router";
@@ -107,7 +109,7 @@ const adminNavigation: AdminNavigationGroup[] = [
             { path: "/admin/channels", label: "系统渠道", shortLabel: "系统", description: "渠道、模型与售价", icon: <RadioTower className="size-4" /> },
             { path: "/admin/models", label: "前台模型", shortLabel: "前台", description: "展示、线路与用户价格", icon: <Layers3 className="size-4" />, requireFeature: "frontendModelsEnabled" },
             { path: "/admin/plugins", label: "插件管理", shortLabel: "插件", description: "平台可用性、上传与卸载", icon: <PlugZap className="size-4" /> },
-            { path: "/admin/skills", label: "技能管理", shortLabel: "技能", description: "公共技能与分类开放", icon: <BookOpenCheck className="size-4" /> },
+            { path: "/admin/skills", label: "技能管理", shortLabel: "技能", description: "技能上架、文件编辑与管理", icon: <BookOpenCheck className="size-4" /> },
             { path: "/admin/skill-curation", label: "技能分类", shortLabel: "技能", description: "平台策展与分类维护", icon: <BookOpenCheck className="size-4" /> },
             { path: "/admin/prompt-templates", label: "提示词模板", shortLabel: "提示", description: "平台创作策略版本", icon: <MessageSquareText className="size-4" /> },
             { path: "/admin/workbench-tools", label: "工作台工具", shortLabel: "工作", description: "生图/视频工具与预设", icon: <WandSparkles className="size-4" /> },
@@ -162,6 +164,7 @@ const adminNavigation: AdminNavigationGroup[] = [
         label: "内容与通知",
         collapsible: true,
         items: [
+            { path: "/admin/pose-library", label: "姿势库", shortLabel: "姿势", description: "导入、同步与维护姿势参考图", icon: <PersonStanding className="size-4" /> },
             { path: "/admin/inspirations", label: "提示词运营", shortLabel: "提示", description: "统一维护前端灵感大厅", icon: <MessageSquareText className="size-4" /> },
             { path: "/admin/announcements", label: "系统公告", shortLabel: "系统", description: "发布、关闭与历史公告", icon: <BellRing className="size-4" /> },
             { path: "/admin/banner-announcements", label: "常驻通知", shortLabel: "常驻", description: "首页顶部常驻滚动通知", icon: <Megaphone className="size-4" /> },

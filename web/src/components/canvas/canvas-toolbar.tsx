@@ -30,7 +30,6 @@ export function CanvasToolbar({
     appearance,
     backgroundMode,
     showImageInfo,
-    showPresenceHints = false,
     onAddImage,
     onAddVideo,
     onAddAudio,
@@ -53,10 +52,10 @@ export function CanvasToolbar({
     onSaveAppearanceDefault,
     onBackgroundModeChange,
     onShowImageInfoChange,
-    onPresenceHintsChange,
     onOpenWorkspace,
     onOpenMyAssets,
     onOpenProjectCharacters,
+    onOpenPoseLibrary,
     compact = false,
 }: {
     selectedCount: number;
@@ -69,8 +68,6 @@ export function CanvasToolbar({
     appearance: CanvasAppearance;
     backgroundMode: CanvasBackgroundMode;
     showImageInfo: boolean;
-    showPresenceHints?: boolean;
-    onPresenceHintsChange?: (enabled: boolean) => void;
     onAddImage: () => void;
     onAddVideo: () => void;
     onAddAudio: () => void;
@@ -96,6 +93,7 @@ export function CanvasToolbar({
     onOpenWorkspace?: () => void;
     onOpenMyAssets: () => void;
     onOpenProjectCharacters: () => void;
+    onOpenPoseLibrary?: () => void;
     /** 紧凑尺寸：短剧精修画布把视野留给节点。 */
     compact?: boolean;
 }) {
@@ -164,6 +162,7 @@ export function CanvasToolbar({
         onOpenWorkspace,
         onOpenMyAssets,
         onOpenProjectCharacters,
+        onOpenPoseLibrary,
         onBackgroundModeChange,
         onShowImageInfoChange,
         onToggleAddPanel: (event: ReactMouseEvent<HTMLElement>) => {
@@ -254,14 +253,15 @@ export function CanvasToolbar({
         <div
             ref={rootRef}
             data-canvas-no-zoom
-            className="pointer-events-none absolute inset-x-[var(--canvas-inset-x)] bottom-[var(--canvas-inset-y)] flex justify-center"
+            className="canvas-main-toolbar pointer-events-none absolute inset-x-[var(--canvas-inset-x)] bottom-[var(--canvas-inset-y)] flex justify-center"
             style={{ zIndex }}
             onPointerDownCapture={bringToFront}
             onFocusCapture={bringToFront}
         >
             <AnimatePresence>{addOpen ? <AddNodeMenu x={panelX} theme={theme} commands={createCommands} /> : null}</AnimatePresence>
 
-            <FloatingDock ref={dockRef} items={items} size={compact ? "compact" : "default"} className="canvas-floating-dock pointer-events-auto max-w-full" style={canvasDockStyle(theme)} />
+            {/* canvas-zoom-controls 按底部同排规则（canvasBottomRowLayout）写入 --canvas-main-toolbar-shift。 */}
+            <FloatingDock ref={dockRef} items={items} size={compact ? "compact" : "default"} className="canvas-floating-dock pointer-events-auto relative left-[var(--canvas-main-toolbar-shift,0px)] max-w-full" style={canvasDockStyle(theme)} />
 
             <AnimatePresence>
                 {appearanceOpen ? (
@@ -304,17 +304,6 @@ export function CanvasToolbar({
                                 </span>
                                 <Switch size="sm" checked={showImageInfo} onChange={onShowImageInfoChange} />
                             </div>
-                            {onPresenceHintsChange && (
-                                <div className="mt-2.5 flex items-center justify-between gap-2 rounded-[var(--dock-item-radius-labeled)] border px-2.5 py-2" style={{ background: theme.spatial.surface, borderColor: theme.toolbar.border }}>
-                                    <div className="min-w-0">
-                                        <span className="text-[var(--fs-caption)] font-semibold">实时协作提示</span>
-                                        <p className="mt-1 text-[var(--fs-tiny)]" style={{ color: theme.node.muted }}>
-                                            显示同账号其他窗口的光标与拖拽轮廓
-                                        </p>
-                                    </div>
-                                    <Switch size="sm" aria-label="实时协作提示" checked={showPresenceHints} onChange={onPresenceHintsChange} />
-                                </div>
-                            )}
                         </SpotlightSurface>
                     </motion.div>
                 ) : null}

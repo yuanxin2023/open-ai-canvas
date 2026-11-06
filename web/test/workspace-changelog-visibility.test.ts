@@ -7,16 +7,13 @@ function source(path: string) {
 }
 
 describe("workspace changelog visibility", () => {
-    test("hides changelog and application version from user workspace account menus", () => {
+    test("provides the official changelog entry in the top account menu", () => {
         const topbarAccount = source("../src/components/layout/workspace-account-menu.tsx");
         const sidebarAccount = source("../src/components/layout/workspace-sidebar-footer.tsx");
 
-        for (const accountMenu of [topbarAccount, sidebarAccount]) {
-            expect(accountMenu).not.toContain("AppChangelogButton");
-            expect(accountMenu).not.toContain("APP_VERSION");
-            expect(accountMenu).not.toContain("更新日志");
-            expect(accountMenu).not.toContain("showVersion");
-        }
+        expect(topbarAccount).toContain("<AppChangelogButton");
+        expect(topbarAccount).toContain("showVersion");
+        expect(sidebarAccount).not.toContain("AppChangelogButton");
     });
 
     test("keeps version and changelog access inside the admin console", () => {

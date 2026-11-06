@@ -5,7 +5,7 @@ import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
 import type { ModelQuoteRequest, ModelRequestIntent } from "@/services/api/logical-models";
 import { modelOptionName, resolveModelChannel, type AiConfig, type ModelCapability } from "@/stores/use-config-store";
 
-export { modelQuoteDescription } from "@/lib/model-quote-description";
+export { modelQuoteDescription, referenceVideoQuoteBreakdown } from "@/lib/model-quote-description";
 
 export type ModelPriceTier = NonNullable<NonNullable<AiConfig["channels"][number]["modelCosts"]>[number]["logicalPriceTiers"]>[number];
 
@@ -64,19 +64,35 @@ export function priceTierSummaryLabel(tiers: ModelPriceTier[], capability?: Mode
             .filter((value) => Number.isFinite(value) && value >= 0);
     const fixedRequestValues = unitPrices("fixed_request");
     const perSecondValues = unitPrices("per_second");
-    const tokenValues = tiers
-        .filter((tier) => tier.billingMode === "token")
-        .map((tier) => tier.outputTokenPriceMicrocredits / 1_000_000)
+    // 分时与上下文规则也计入输出价区间，用户看到的是可能被收取的全部输出单价。
+    const tokenTiers = tiers.filter((tier) => tier.billingMode === "token");
+    const tokenValues = tokenTiers
+        .flatMap((tier) => [tier.outputTokenPriceMicrocredits, ...(tier.tokenPriceRules || []).map((rule) => rule.outputTokenPriceMicrocredits)])
+        .map((value) => value / 1_000_000)
         .filter((value) => Number.isFinite(value) && value >= 0);
+    const timeBased = tokenTiers.some((tier) => tier.tokenPriceRules?.length);
     return (
         [
             fixedRequestValues.length ? formatPriceRange(fixedRequestValues, "积分") : "",
             perSecondValues.length ? formatPriceRange(perSecondValues, "积分/秒") : "",
-            tokenValues.length ? `${capability === "video" ? "" : "输出 "}${formatPriceRange(tokenValues, capability === "video" ? "积分/百万视频 Token" : "积分/百万 Token")}` : "",
+            tokenValues.length ? `${capability === "video" ? "" : "输出 "}${formatPriceRange(tokenValues, capability === "video" ? "积分/百万视频 Token" : "积分/百万 Token")}${timeBased ? " · 分时" : ""}` : "",
         ]
             .filter(Boolean)
             .join(" · ") || "未配置"
     );
+}
+
+const WEEKDAY_LABELS = ["", "一", "二", "三", "四", "五", "六", "日"];
+
+/** 一条分时与上下文规则的用户可读说明，例如「周一至周五 00:30–08:30 · 输入 ≥ 32,000 Token：输入 1 / 输出 2 积分/百万 Token」。 */
+export function tokenPriceRuleDescription(rule: NonNullable<ModelPriceTier["tokenPriceRules"]>[number]) {
+    const days = [...(rule.weekdays || [])].sort((a, b) => a - b);
+    const contiguous = days.length > 2 && days.every((day, index) => index === 0 || day === days[index - 1] + 1);
+    const dayLabel = days.length === 7 ? "每天" : contiguous ? `周${WEEKDAY_LABELS[days[0]]}至周${WEEKDAY_LABELS[days[days.length - 1]]}` : days.map((day) => `周${WEEKDAY_LABELS[day]}`).join("、");
+    const format = (value: number) => value.toLocaleString("zh-CN");
+    const context = rule.maxInputTokens > 0 ? `输入 ${format(rule.minInputTokens)}–${format(rule.maxInputTokens)} Token` : rule.minInputTokens > 0 ? `输入 ≥ ${format(rule.minInputTokens)} Token` : "";
+    const price = (value: number) => (value / 1_000_000).toLocaleString("zh-CN", { maximumFractionDigits: 6 });
+    return `${[`${dayLabel} ${rule.start}–${rule.end}`, context].filter(Boolean).join(" · ")}：输入 ${price(rule.inputTokenPriceMicrocredits)} / 输出 ${price(rule.outputTokenPriceMicrocredits)} / 缓存读取 ${price(rule.cachedTokenPriceMicrocredits)} 积分/百万 Token`;
 }
 
 export function formatPriceRange(values: number[], suffix: string) {
@@ -125,6 +141,8 @@ export function systemModelQuoteRequest(config: AiConfig, value: string, capabil
             ...(requirements?.imageSize ? { size: requirements.imageSize } : {}),
         },
     };
+    const durations = referenceVideoQuoteDurations(input);
+    if (capability === "video" && durations) intent.referenceVideoDurationsMs = durations;
     return cost.logicalModelId ? { logicalModelID: cost.logicalModelId, intent } : { channelId: channel.id, modelKey: modelOptionName(value), intent };
 }
 
@@ -135,6 +153,25 @@ function pricingRequestOptions(config: AiConfig, capability: ModelCapability) {
     } catch {
         return undefined;
     }
+}
+
+// 只有全部参考视频时长都已知时才提交给报价接口；任一未知时交给后端按上限预估并标明。
+function referenceVideoQuoteDurations(input: ModelRequirements["input"]) {
+    const durations = input?.videoDurationsMs;
+    if (!input?.videoCount || durations?.length !== input.videoCount) return undefined;
+    return durations.every((value) => Number.isSafeInteger(value) && value > 0 && value <= 3_600_000) ? durations : undefined;
+}
+
+type ReferenceVideoBillingCost = { capability?: ModelCapability; referenceVideoBilling?: boolean; logicalPriceTiers?: ModelPriceTier[] };
+
+/**
+ * 视频模型的参考视频计费标签。开关关闭或带参考视频价格全为 0（免费）时标“参考视频不计费”，作为卖点展示。
+ * 非视频模型返回空串。
+ */
+export function referenceVideoBillingLabel(cost: ReferenceVideoBillingCost | undefined) {
+    if (!cost || cost.capability !== "video") return "";
+    const billed = cost.referenceVideoBilling === true && (cost.logicalPriceTiers || []).some((tier) => (tier.referenceVideoUnitPriceMicrocredits || 0) > 0 || (tier.referenceVideoOutputTokenPriceMicrocredits || 0) > 0);
+    return billed ? "参考视频另计费" : "参考视频不计费";
 }
 
 function creditAmount(billingMode: "fixed_request" | "per_second", unitPriceMicrocredits: number, count?: string | number, seconds?: string | number) {

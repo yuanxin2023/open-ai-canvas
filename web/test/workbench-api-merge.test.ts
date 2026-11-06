@@ -1,8 +1,9 @@
 import { afterEach, expect, test } from "bun:test";
-import { cancelGenerationTask, createGenerationTask, type GenerationTask } from "@/services/api/task-center";
+import { cancelGenerationTask, createGenerationTask, listGenerationTasks, queryGenerationTask, refreshGenerationTaskStatus, retryGenerationTask, type GenerationTask } from "@/services/api/task-center";
 import { apiClient, ApiError } from "@/services/api/request";
-import { createWorkbenchTask, getWorkbenchSubmission, getWorkbenchRetryIntent, type WorkbenchTaskIntent } from "@/services/api/workbench";
+import { createWorkbenchTask, getWorkbenchSubmission, getWorkbenchRetryIntent, listWorkbenchTasks, type WorkbenchTaskIntent } from "@/services/api/workbench";
 import { setActiveUserScope } from "@/lib/user-scope";
+import { forgetGenerationTask, staleActiveGenerationTaskIds } from "@/services/generation-completion-tracker";
 
 const original = apiClient.request;
 const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
@@ -82,6 +83,36 @@ test("generic task response after an account switch cannot publish into the new 
     expect((await createGenerationTask({ type: "canvas_image", prompt: "test", input: { mode: "image" } })).id).toBe(task.id);
     expect(events).toEqual([]);
 });
+
+test("workbench receipt after an account switch cannot notify the new account", async () => {
+    const events = accountEvents();
+    apiClient.request = (async () => {
+        setActiveUserScope("account-b");
+        return { status: 200, data: { code: 0, data: task, msg: "ok" } };
+    }) as typeof apiClient.request;
+    expect(await createWorkbenchTask(input)).toEqual(task);
+    expect(events).toEqual([]);
+});
+
+for (const [name, read, list] of [
+    ["workbench list", () => listWorkbenchTasks("image"), true],
+    ["task list", () => listGenerationTasks(), true],
+    ["task detail", () => queryGenerationTask("old-account-read"), false],
+    ["task refresh", () => refreshGenerationTaskStatus("old-account-read"), false],
+    ["task retry", () => retryGenerationTask("old-account-read"), false],
+] as const) {
+    test(`${name} cannot track an old-account response in the new account`, async () => {
+        accountEvents();
+        forgetGenerationTask("old-account-read");
+        apiClient.request = (async () => {
+            setActiveUserScope("account-b");
+            const oldTask = { ...task, id: "old-account-read" };
+            return { status: 200, data: { code: 0, data: list ? [oldTask] : oldTask, msg: "ok" } };
+        }) as typeof apiClient.request;
+        await read();
+        expect(staleActiveGenerationTaskIds(0, 60_000, 100)).not.toContain("old-account-read");
+    });
+}
 
 test("old-account credit failures still reject without notifying the new account", async () => {
     const events = accountEvents();

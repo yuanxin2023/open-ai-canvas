@@ -38,7 +38,15 @@ mock.module("antd", () => ({
         checkbox = props;
         return <input type="checkbox" checked={props.checked} onChange={props.onChange} />;
     },
-    Segmented: () => null,
+    Segmented: ({ options, onChange }: any) => (
+        <div>
+            {options.map((option: any) => (
+                <button key={option.value} onClick={() => onChange(option.value)}>
+                    {option.label}
+                </button>
+            ))}
+        </div>
+    ),
     Select: () => null,
     Space: Box,
     Popconfirm: ({ children, onConfirm }: any) => (
@@ -97,7 +105,7 @@ async function render(value: React.ReactNode) {
     });
 }
 async function click(label: string) {
-    const target = [...host.querySelectorAll("button")].find((button) => button.textContent?.trim() === label);
+    const target = [...host.querySelectorAll("button")].findLast((button) => button.textContent?.trim() === label);
     if (!target) throw new Error(`missing ${label}`);
     await act(async () => target.click());
 }
@@ -117,7 +125,7 @@ async function fresh(enabled = true) {
 async function fill() {
     await act(async () => {
         [...fields.entries()].find(([name]) => name.startsWith("例如："))![1].onChange({ target: { value: "Keep title" } });
-        [...fields.entries()].find(([name]) => name.startsWith("请尽可能"))![1].onChange({ target: { value: "Keep body" } });
+        [...fields.entries()].find(([name]) => name.startsWith("例如：在画布里"))![1].onChange({ target: { value: "Keep body" } });
     });
 }
 const feedback = { id: "fb", title: "Feedback", content: "body", userName: "User", status: "pending", type: "bug", createdAt: "2026-10-26" };
@@ -155,7 +163,9 @@ test("official submission clears the form after acknowledgement and opens histor
     await click("提交反馈");
     expect(submissions[0]).toMatchObject({ type: "bug", title: "Keep title", content: "Keep body", attachments: "[]" });
     expect(host.textContent).toContain("Submitted title");
-    await act(async () => host.querySelector<HTMLButtonElement>("#feedback-tab-submit")!.click());
+    const submitTab = host.querySelector<HTMLButtonElement>('[role="radio"]');
+    expect(submitTab).not.toBeNull();
+    await act(async () => submitTab!.click());
     expect([...fields.values()].some((props) => props.value === "Keep body")).toBe(false);
 });
 
@@ -163,7 +173,7 @@ test("disabled submission keeps existing feedback history readable", async () =>
     await fresh(false);
     mineImpl = async () => [{ ...feedback, title: "Existing history" }];
     await render(<FeedbackModal open onClose={() => {}} />);
-    expect(host.querySelector<HTMLButtonElement>("#feedback-submit-btn")!.disabled).toBe(true);
+    expect([...host.querySelectorAll<HTMLButtonElement>("button")].findLast((button) => button.textContent?.trim() === "提交反馈")!.disabled).toBe(true);
     await render(<FeedbackInboxPane />);
     expect(host.textContent).toContain("Existing history");
 });

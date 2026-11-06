@@ -19,9 +19,7 @@ export function canvasConnectionError(config: AiConfig, nodes: CanvasNodeData[],
         const source = nodes.find((node) => node.id === candidate.fromNodeId);
         const sourceKind = source ? getNodeInputKind(source.type) : undefined;
         const isMediaConversion = target.type === CanvasNodeType.MediaConversion;
-        const hasAcceptedSource = isMediaConversion
-            ? source?.type === CanvasNodeType.Image || source?.type === CanvasNodeType.Video
-            : Boolean(sourceKind && acceptedInputKinds.includes(sourceKind));
+        const hasAcceptedSource = isMediaConversion ? source?.type === CanvasNodeType.Image || source?.type === CanvasNodeType.Video : Boolean(sourceKind && acceptedInputKinds.includes(sourceKind));
         if (!sourceKind || !hasAcceptedSource) {
             const labels = acceptedInputKinds.map(acceptedInputKindLabel).join("或");
             const targetLabel = isMediaConversion ? "转换" : target.type === CanvasNodeType.BatchTable ? "批量创作表" : labels;
@@ -29,11 +27,7 @@ export function canvasConnectionError(config: AiConfig, nodes: CanvasNodeData[],
         }
         const maxInputCount = getNodeMaxInputCount(target.type);
         if (maxInputCount) {
-            const inputCount = new Set(
-                [...connections, { id: "candidate", ...candidate }]
-                    .filter((connection) => connection.toNodeId === target.id)
-                    .map((connection) => connection.fromNodeId),
-            ).size;
+            const inputCount = new Set([...connections, { id: "candidate", ...candidate }].filter((connection) => connection.toNodeId === target.id).map((connection) => connection.fromNodeId)).size;
             if (inputCount > maxInputCount) return `${isMediaConversion ? "转换" : "当前"}节点最多连接 ${maxInputCount} 个输入`;
         }
     }
@@ -93,7 +87,10 @@ export function connectionInputSummary(targetNodeId: string, nodes: CanvasNodeDa
         if (!inputKind) return;
         // 角色卡是跨类型覆盖：落在可计数类型上时改记为角色。
         if (source.metadata?.workflowKind === "character") input.characterCount += 1;
-        else if (inputKind !== "table_data") input[`${inputKind}Count`] += 1;
+        else if (inputKind !== "table_data") {
+            input[`${inputKind}Count`] += 1;
+            if (inputKind === "video") (input.videoDurationsMs ??= []).push(Math.max(0, Math.round(Number(source.metadata?.durationMs) || 0)));
+        }
     });
     return input;
 }

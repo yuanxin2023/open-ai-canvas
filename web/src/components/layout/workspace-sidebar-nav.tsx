@@ -1,24 +1,30 @@
 import { Popover } from "antd";
-import { useTranslation } from "react-i18next";
 import { translate } from "@/i18n";
-import { BookOpen, ChevronDown, ChevronRight, CircleHelp, Headphones, Image as ImageIcon, Infinity as InfinityIcon, PanelLeftClose, PanelLeftOpen, ShoppingBag, Video } from "lucide-react";
+import { ShoppingBag } from "lucide-react";
+import { ChevronDown, ChevronRight, CircleUserRound, History as HistoryIcon, Image as ImageIcon, PanelLeftClose, PanelLeftOpen, Plus, Video } from "lucide-react";
 import { LayoutGroup, motion, useReducedMotion } from "motion/react";
 import { useEffect, useMemo, useRef, useState, type ComponentType, type CSSProperties, type MouseEvent } from "react";
 import { useWorkspaceAuth } from "@/components/auth/workspace-auth-context";
 import { isGuestWorkspacePath } from "@/lib/guest-workspace";
-import { Link, useLocation, useSearchParams } from "react-router";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router";
+import { useTranslation } from "react-i18next";
 
 import { AuthLoginLink } from "@/components/auth/auth-login-link";
 import { BrandLogoFrame } from "@/components/brand/brand-logo";
+import { UserAvatar } from "@/components/layout/user-avatar";
+import { UserGroupAvatarRing, UserGroupBadge } from "@/components/layout/user-group-badge";
 import { Kbd } from "@/components/ui/base/kbd";
 import { navigationTools, type NavigationToolSlug } from "@/constant/navigation-tools";
 import { useWorkspaceLogout } from "@/hooks/use-workspace-logout";
 import { aceternityMotion } from "@/lib/aceternity-motion";
 import { cn } from "@/lib/utils";
 import { preloadWorkspaceRoute } from "@/lib/workspace-route-modules";
-import { CUSTOMER_SERVICE_OPEN_EVENT, getPublicCustomerService, type PublicCustomerService } from "@/services/api/customer-service";
 import { useUserStore, type FeatureAvailability } from "@/stores/use-user-store";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
+import { WorkspaceAccountCard } from "./workspace-account-card";
+import { WorkspaceSidebarCheckin } from "./workspace-sidebar-checkin";
+import { WorkspaceSidebarStorageMeter } from "./workspace-sidebar-storage-meter";
+import { openWorkspaceWallet } from "@/lib/workspace-wallet";
 
 export type WorkspaceNavItem = {
     id: string;
@@ -47,68 +53,121 @@ const COLLAPSED_TITLE_KEYS: Record<string, string> = {
     tasks: "nav.collapsed.tasks",
 };
 
-function toolItem(slug: NavigationToolSlug, to: string, t: typeof translate = translate): WorkspaceNavItem {
+function toolItem(slug: NavigationToolSlug, to: string, t: (key: string) => string): WorkspaceNavItem {
     const tool = navigationTools.find((item) => item.slug === slug);
     return { id: slug, title: tool ? t(tool.labelKey) : slug, icon: tool?.icon, to };
 }
 
-export function buildNav(features: FeatureAvailability, t: typeof translate = translate): { groups: WorkspaceNavGroup[]; footer: WorkspaceNavItem[] } {
+export function buildNav(features: FeatureAvailability, t: (key: string) => string = translate): { groups: WorkspaceNavGroup[]; footer: WorkspaceNavItem[] } {
     const groups: WorkspaceNavGroup[] = [
         {
             items: [
-                { ...toolItem("create", "/?home=1"), id: "home", title: translate("nav.tools.create") },
-                ...(features.shortDramaEnabled ? [{ ...toolItem("projects", "/projects"), title: translate("local.ui.dramaAgent") }] : []),
+                { ...toolItem("create", "/?home=1", t), id: "home", title: t("nav.sidebar.home") },
+                ...(features.shortDramaEnabled ? [{ ...toolItem("projects", "/projects", t), title: t("nav.sidebar.projects") }] : []),
                 ...(features.ecommerceEnabled ? [{ id: "ecommerce", title: t("nav.sidebar.ecommerce"), icon: ShoppingBag, to: "/ecommerce" }] : []),
-                { ...toolItem("canvas", "/canvas"), title: translate("nav.sidebar.canvas") },
+                { ...toolItem("canvas", "/canvas", t), title: t("nav.sidebar.canvas") },
             ],
         },
         {
             heading: t("nav.sidebar.headingTools"),
             items: [
-                { ...toolItem("assets", "/assets"), title: translate("nav.sidebar.assets") },
-                { ...toolItem("prompts", "/prompts"), title: translate("local.nav.prompts") },
-                ...(features.imageWorkbenchEnabled ? [{ id: "toolbox-image", title: translate("nav.sidebar.toolboxImage"), icon: ImageIcon, to: "/toolbox/image" }] : []),
-                ...(features.videoWorkbenchEnabled ? [{ id: "toolbox-video", title: translate("nav.sidebar.toolboxVideo"), icon: Video, to: "/toolbox/video" }] : []),
-                ...(features.skillLibraryEnabled ? [{ ...toolItem("skills", "/skills"), title: translate("nav.sidebar.skills") }] : []),
-                ...(features.pluginCenterEnabled ? [{ ...toolItem("plugins", "/plugins"), title: translate("nav.sidebar.plugins") }] : []),
+                ...(features.imageWorkbenchEnabled ? [{ id: "toolbox-image", title: t("nav.sidebar.toolboxImage"), icon: ImageIcon, to: "/toolbox/image" }] : []),
+                { ...toolItem("prompts", "/prompts", t), title: t("local.nav.prompts") },
+                ...(features.videoWorkbenchEnabled ? [{ id: "toolbox-video", title: t("nav.sidebar.toolboxVideo"), icon: Video, to: "/toolbox/video" }] : []),
+                ...(features.skillLibraryEnabled ? [{ ...toolItem("skills", "/skills", t), title: t("nav.sidebar.skills") }] : []),
+                ...(features.pluginCenterEnabled ? [{ ...toolItem("plugins", "/plugins", t), title: t("nav.sidebar.plugins") }] : []),
             ],
+        },
+        {
+            heading: t("nav.sidebar.headingAssets"),
+            items: [{ ...toolItem("assets", "/assets", t), title: t("nav.sidebar.assets") }, ...(features.taskCenterEnabled ? [{ id: "tasks", title: t("nav.sidebar.history"), icon: ImageIcon, to: "/tasks" }] : [])],
         },
     ];
 
-    const footer: WorkspaceNavItem[] = [{ id: "help", title: translate("local.ui.help"), icon: CircleHelp }];
-
-    return { groups, footer };
+    // 管理、设置和退出登录不再占据参考站式侧栏底部，而是通过用户卡片菜单进入。
+    // 路由和写操作仍保留，避免把用户端导航变成无法访问的装饰。
+    return { groups, footer: [] };
 }
 
-function WorkspaceSwitcher({ collapsed, onNavigate, onExpand, onCollapse }: { collapsed: boolean; onNavigate: () => void; onExpand: () => void; onCollapse: () => void }) {
-    const appearance = useAppearanceStore((state) => state.appearance);
+function WorkspaceSidebarProfile({ collapsed, user, onExpand, onCollapse }: { collapsed: boolean; user: NonNullable<ReturnType<typeof useUserStore.getState>["user"]> | null; onExpand: () => void; onCollapse: () => void }) {
+    const [menuOpen, setMenuOpen] = useState(false);
     const { t } = useTranslation();
-    if (collapsed) {
+    const userGroup = useUserStore((state) => state.userGroup);
+    const profileName = user?.username || t("shell.guest");
+
+    if (!user) {
         return (
-            <div className="app-workspace-sidebar-rail-header shrink-0">
-                <button type="button" className="app-workspace-sidebar-rail-button" aria-label={translate("shell.expandSidebarMenu")} title={translate("shell.expandSidebarMenu")} onClick={onExpand}>
-                    <PanelLeftOpen className="size-4" strokeWidth={1.7} />
-                </button>
-            </div>
+            <AuthLoginLink className={cn("app-workspace-sidebar-profile", collapsed && "is-collapsed")} aria-label={t("shell.login")} title={t("shell.login")}>
+                <span className="app-workspace-sidebar-profile-avatar">
+                    <CircleUserRound aria-hidden />
+                </span>
+                {!collapsed ? <span>{t("shell.guest")}</span> : null}
+            </AuthLoginLink>
         );
     }
 
+    const content = (
+        <WorkspaceAccountCard
+            onNavigate={() => setMenuOpen(false)}
+            onWallet={() => {
+                setMenuOpen(false);
+                openWorkspaceWallet();
+            }}
+        />
+    );
+
     return (
-        <div className="app-workspace-sidebar-brand-row relative shrink-0 px-3 pt-3">
-            <Link to="/?home=1" onClick={onNavigate} className="app-workspace-sidebar-brand-button group" aria-label={`${appearance.brandName}首页`}>
-                <span className="flex min-w-0 items-center gap-2">
-                    <BrandLogoFrame
-                        className="app-workspace-brand-mark grid size-8 shrink-0 place-items-center rounded-[var(--r-sm)] shadow-sm"
-                        logoClassName="size-5 object-contain"
-                        alt=""
-                        fallback={<InfinityIcon className="size-4" strokeWidth={2.2} />}
-                    />
-                    <span className="app-workspace-brand-wordmark truncate text-[var(--fs-body)] leading-none font-semibold">{appearance.brandName}</span>
-                </span>
+        <div className={cn("app-workspace-sidebar-account", collapsed && "is-collapsed")}>
+            <WorkspaceSidebarCheckin collapsed={collapsed} />
+            <WorkspaceSidebarStorageMeter collapsed={collapsed} />
+            <div className={cn("app-workspace-sidebar-profile-row", collapsed && "is-collapsed")}>
+                <Popover open={menuOpen} onOpenChange={setMenuOpen} trigger="click" placement="topLeft" arrow={false} rootClassName="workspace-account-popover" content={content}>
+                    <button type="button" className={cn("app-workspace-sidebar-profile", collapsed && "is-collapsed")} aria-label={t("shell.openAccountMenu")} title={profileName}>
+                        <UserGroupAvatarRing>
+                            <UserAvatar user={user} className="app-workspace-sidebar-profile-avatar" />
+                        </UserGroupAvatarRing>
+                        {!collapsed ? (
+                            <span className="app-workspace-sidebar-profile-copy">
+                                <strong>{profileName}</strong>
+                                {userGroup?.badgeStyle === "vip" || userGroup?.badgeStyle === "svip" ? <UserGroupBadge className="self-start" /> : <span>{t("shell.workbench")}</span>}
+                            </span>
+                        ) : null}
+                    </button>
+                </Popover>
+                {!collapsed ? (
+                    <button type="button" className="app-workspace-sidebar-collapse-toggle" aria-label={t("shell.collapseSidebar")} title={t("shell.collapseSidebar")} onClick={onCollapse}>
+                        <PanelLeftClose className="size-4" strokeWidth={1.7} />
+                    </button>
+                ) : null}
+            </div>
+            {collapsed ? (
+                <button type="button" className="app-workspace-sidebar-collapse-toggle is-collapsed" aria-label={t("shell.expandSidebarMenu")} title={t("shell.expandSidebarMenu")} onClick={onExpand}>
+                    <PanelLeftOpen className="size-4" strokeWidth={1.7} />
+                </button>
+            ) : null}
+        </div>
+    );
+}
+
+function WorkspaceSwitcher({ collapsed, onNavigate }: { collapsed: boolean; onNavigate: () => void; onExpand: () => void; onCollapse: () => void }) {
+    const appearance = useAppearanceStore((state) => state.appearance);
+    const { t } = useTranslation();
+    // 未上传自定义 Logo 时用内置取景框字形（与欢迎页、登录框、加载页同一个 /logo.svg），放在墨色实底方块里；
+    // 自定义 Logo 的配色不可预知，改用中性浅底方块承托。
+    const mark = (
+        <BrandLogoFrame
+            className={cn("app-workspace-brand-mark grid shrink-0 place-items-center", !appearance.logoConfigured && "is-builtin")}
+            logoClassName="size-5 object-contain"
+            alt=""
+            fallback={<span className="app-workspace-brand-glyph" aria-hidden />}
+        />
+    );
+    return (
+        <div className={cn("app-workspace-sidebar-brand-row relative shrink-0", collapsed && "is-collapsed")}>
+            <Link to="/?home=1" onClick={onNavigate} className="app-workspace-sidebar-brand-button group" aria-label={t("shell.brandHome", { brand: appearance.brandName })}>
+                {mark}
+                {!collapsed ? <span className="app-workspace-brand-wordmark truncate">{appearance.brandName}</span> : null}
             </Link>
-            <button type="button" className="app-workspace-sidebar-collapse-button" aria-label={translate("shell.collapseSidebar")} title={translate("shell.collapseSidebar")} onClick={onCollapse}>
-                <PanelLeftClose className="size-4" strokeWidth={1.7} />
-            </button>
         </div>
     );
 }
@@ -132,8 +191,8 @@ function NavItem({
 }) {
     const { t } = useTranslation();
     const isActive = activeId === item.id || (item.id === "settings" && activeId.startsWith("settings:"));
-    const { openAuth } = useWorkspaceAuth();
     const user = useUserStore((state) => state.user);
+    const { openAuth } = useWorkspaceAuth();
     const hasChildren = Boolean(item.children?.length);
     const [isOpen, setIsOpen] = useState(false);
     const reducedMotion = useReducedMotion();
@@ -144,28 +203,9 @@ function NavItem({
     }, [isActive, hasChildren]);
 
     const Icon = item.icon;
-    const rowStyle = {
-        ...(collapsed ? {} : { paddingLeft: `${level * 12 + 10}px` }),
-    } as CSSProperties;
+    const rowStyle = collapsed ? undefined : ({ paddingLeft: `${level * 12 + 10}px` } as CSSProperties);
 
-    const collapsedTitle =
-        item.id === "home"
-            ? "创作"
-            : item.id === "projects"
-              ? "短剧"
-              : item.id === "canvas"
-                ? "画布"
-                : item.id === "assets"
-                  ? "资产"
-                  : item.id === "prompts"
-                    ? "提示"
-                    : item.id === "skills"
-                      ? "技能"
-                      : item.id === "plugins"
-                        ? "插件"
-                        : item.id === "tasks"
-                          ? "历史"
-                          : item.title.slice(0, 2);
+    const collapsedTitle = COLLAPSED_TITLE_KEYS[item.id] ? t(COLLAPSED_TITLE_KEYS[item.id]) : item.title.slice(0, 2);
     const rowContent = (
         <>
             <span className="app-workspace-nav-main flex min-w-0 items-center gap-2">
@@ -264,101 +304,7 @@ function NavItem({
     );
 }
 
-function WorkspaceHelpMenu({ collapsed, selected, onSelect, onNavigate }: { collapsed: boolean; selected: boolean; onSelect: () => void; onNavigate: () => void }) {
-    const [open, setOpen] = useState(false);
-    const [customerService, setCustomerService] = useState<PublicCustomerService | null>(null);
-    const [mobileViewport, setMobileViewport] = useState(() => window.matchMedia("(max-width: 767px)").matches);
-
-    useEffect(() => {
-        let active = true;
-        const load = () => {
-            void getPublicCustomerService()
-                .then((setting) => {
-                    if (active) setCustomerService(setting);
-                })
-                .catch(() => {
-                    if (active) setCustomerService(null);
-                });
-        };
-        load();
-        window.addEventListener("customer-service-config-updated", load);
-        return () => {
-            active = false;
-            window.removeEventListener("customer-service-config-updated", load);
-        };
-    }, []);
-
-    useEffect(() => {
-        const media = window.matchMedia("(max-width: 767px)");
-        const update = () => setMobileViewport(media.matches);
-        update();
-        media.addEventListener("change", update);
-        return () => media.removeEventListener("change", update);
-    }, []);
-
-    const contactVisible = Boolean(customerService?.enabled && (mobileViewport ? customerService.mobileEnabled : customerService.desktopEnabled));
-    const tutorialUrl = customerService?.tutorialUrl?.trim() || "";
-    const closeMenu = () => setOpen(false);
-    const openTutorial = () => {
-        if (!tutorialUrl) return;
-        closeMenu();
-        onNavigate();
-        window.open(tutorialUrl, "_blank", "noopener,noreferrer");
-    };
-    const openCustomerService = () => {
-        closeMenu();
-        onNavigate();
-        window.dispatchEvent(new CustomEvent(CUSTOMER_SERVICE_OPEN_EVENT));
-    };
-
-    return (
-        <Popover
-            trigger="click"
-            placement={collapsed ? "rightBottom" : "topLeft"}
-            open={open}
-            onOpenChange={setOpen}
-            rootClassName="workspace-help-popover"
-            content={
-                <div className="w-44 py-0.5">
-                    {tutorialUrl ? (
-                        <button type="button" className="flex h-9 w-full items-center gap-2.5 rounded px-2 text-xs text-foreground/65 hover:bg-surface-hover hover:text-foreground" onClick={openTutorial}>
-                            <BookOpen className="size-3.5" aria-hidden />
-                            <span>{translate("local.ui.tutorial")}</span>
-                        </button>
-                    ) : null}
-                    {contactVisible ? (
-                        <button type="button" className="flex h-9 w-full items-center gap-2.5 rounded px-2 text-xs text-foreground/65 hover:bg-surface-hover hover:text-foreground" onClick={openCustomerService}>
-                            <Headphones className="size-3.5" aria-hidden />
-                            <span>{translate("local.ui.contactSupport")}</span>
-                        </button>
-                    ) : null}
-                </div>
-            }
-        >
-            <button
-                type="button"
-                className={cn(
-                    "app-workspace-nav-link group flex min-h-9 w-full items-center justify-between gap-2 rounded-[var(--r-sm)] px-2.5 py-2 text-[var(--fs-body)] text-foreground/62 transition-colors duration-200 select-none hover:bg-surface-hover hover:text-foreground",
-                    selected && "is-active font-medium",
-                    collapsed && "is-collapsed",
-                )}
-                aria-label={collapsed ? translate("local.ui.help") : undefined}
-                title={collapsed ? translate("local.ui.help") : undefined}
-                aria-haspopup="menu"
-                aria-expanded={open}
-                onClick={onSelect}
-            >
-                {selected ? <span className="app-workspace-nav-active-pill" aria-hidden /> : null}
-                <span className="app-workspace-nav-main flex min-w-0 items-center gap-2.5">
-                    <CircleHelp className="size-4 shrink-0 text-foreground/60 group-hover:text-foreground/80" strokeWidth={1.6} />
-                    <span className="app-workspace-nav-title truncate">{translate("local.ui.help")}</span>
-                </span>
-            </button>
-        </Popover>
-    );
-}
-
-function NavGroup({ group, activeId, onNavigate, onOpenSearch, onLogout, collapsed }: { group: WorkspaceNavGroup; activeId: string; onNavigate: (id: string) => void; onOpenSearch: () => void; onLogout: () => void; collapsed: boolean }) {
+function NavGroup({ group, activeId, onNavigate, onOpenSearch, onLogout, collapsed }: { group: WorkspaceNavGroup; activeId: string; onNavigate: () => void; onOpenSearch: () => void; onLogout: () => void; collapsed: boolean }) {
     const [isOpen, setIsOpen] = useState(true);
     const hasActive = group.items.some((item) => item.id === activeId || (item.id === "settings" && activeId.startsWith("settings:")));
 
@@ -404,7 +350,6 @@ export function workspaceNavActiveId(pathname: string, section?: string | null) 
     if (segments[0] === "toolbox" && segments[1]) return `toolbox-${segments[1]}`;
     const slug = segments[0] || "home";
     if (slug === "create") return "home";
-    if (slug === "settings" && section === "wallet") return "wallet";
     return slug === "settings" && section ? `settings:${section}` : slug;
 }
 
@@ -412,17 +357,12 @@ export function WorkspaceSidebarNav({ collapsed, onNavigate, onOpenSearch, onExp
     const { pathname } = useLocation();
     const [searchParams] = useSearchParams();
     const features = useUserStore((state) => state.features);
+    const user = useUserStore((state) => state.user);
     const { handleLogout } = useWorkspaceLogout();
     const { t, i18n } = useTranslation();
     const { groups, footer } = useMemo(() => buildNav(features, t), [features, t, i18n.language]);
 
     const activeId = workspaceNavActiveId(pathname, searchParams.get("section"));
-    const [selectedNavId, setSelectedNavId] = useState(activeId);
-    useEffect(() => setSelectedNavId(activeId), [activeId]);
-    const selectNavigationItem = (id: string) => {
-        setSelectedNavId(id);
-        onNavigate();
-    };
 
     const scrollRef = useRef<HTMLDivElement>(null);
     const [scrollState, setScrollState] = useState({ hasTopFade: false, hasBottomFade: false });
@@ -455,21 +395,18 @@ export function WorkspaceSidebarNav({ collapsed, onNavigate, onOpenSearch, onExp
                     )}
                 >
                     {groups.map((group, index) => (
-                        <NavGroup key={index} group={group} activeId={selectedNavId} onNavigate={selectNavigationItem} onOpenSearch={onOpenSearch} onLogout={() => void handleLogout()} collapsed={collapsed} />
+                        <NavGroup key={index} group={group} activeId={activeId} onNavigate={onNavigate} onOpenSearch={onOpenSearch} onLogout={() => void handleLogout()} collapsed={collapsed} />
                     ))}
                 </div>
             </LayoutGroup>
 
             <div className="app-workspace-sidebar-footer shrink-0 px-3 py-3">
+                <WorkspaceSidebarProfile collapsed={collapsed} user={user} onExpand={onExpand} onCollapse={onCollapse} />
                 {footer.length ? (
-                    <div className="flex flex-col gap-0.5">
-                        {footer.map((item) =>
-                            item.id === "help" ? (
-                                <WorkspaceHelpMenu key={item.id} collapsed={collapsed} selected={selectedNavId === item.id} onSelect={() => setSelectedNavId(item.id)} onNavigate={onNavigate} />
-                            ) : (
-                                <NavItem key={item.id} item={item} activeId={selectedNavId} onSelect={selectNavigationItem} onOpenSearch={onOpenSearch} onLogout={() => void handleLogout()} collapsed={collapsed} />
-                            ),
-                        )}
+                    <div className="mt-2 flex flex-col gap-0.5">
+                        {footer.map((item) => (
+                            <NavItem key={item.id} item={item} activeId={activeId} onSelect={onNavigate} onOpenSearch={onOpenSearch} onLogout={() => void handleLogout()} collapsed={collapsed} />
+                        ))}
                     </div>
                 ) : null}
             </div>

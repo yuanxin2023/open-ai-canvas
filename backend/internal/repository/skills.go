@@ -3,7 +3,6 @@ package repository
 import (
 	"errors"
 	"strings"
-	"time"
 
 	"infinite-canvas/backend/internal/model"
 
@@ -32,17 +31,6 @@ type SkillMetrics struct {
 	LikeCount  int64
 }
 
-var ErrInvalidPlatformSkillBatch = errors.New("skill batch contains a non-platform skill")
-
-func withPlatformSkillAvailability(query *gorm.DB) *gorm.DB {
-	return query.Where(`(
-		skills.source = ? OR (
-			NOT EXISTS (SELECT 1 FROM skill_platform_states skill_state WHERE skill_state.skill_id = skills.id AND skill_state.available = ?) AND
-			NOT EXISTS (SELECT 1 FROM skill_category_platform_states category_state WHERE category_state.tag = skills.tag AND category_state.available = ?)
-		)
-	)`, model.SkillSourceUser, false, false)
-}
-
 type SkillCategoryCount struct {
 	Tag   string
 	Count int64
@@ -51,7 +39,7 @@ type SkillCategoryCount struct {
 // PublicSkillCategoryCounts 返回技能广场中已启用公开技能的共享分类数量。
 func (r *Repository) PublicSkillCategoryCounts() (map[string]int64, error) {
 	var rows []SkillCategoryCount
-	err := withPlatformSkillAvailability(r.db.Model(&model.Skill{})).
+	err := r.db.Model(&model.Skill{}).
 		Select("tag, COUNT(*) AS count").
 		Where("status = ? AND is_private = ?", 1, false).
 		Group("tag").
@@ -68,7 +56,7 @@ func (r *Repository) PublicSkillCategoryCounts() (map[string]int64, error) {
 }
 
 func (r *Repository) Skills(filter SkillListFilter) ([]model.Skill, int64, error) {
-	query := withPlatformSkillAvailability(r.db.Model(&model.Skill{}).Where("skills.status = ?", model.SkillStatusEnabled))
+	query := r.db.Model(&model.Skill{}).Where("skills.status = ?", 1)
 	switch filter.Scope {
 	case "mine":
 		query = query.Joins("LEFT JOIN user_skill_states ON user_skill_states.skill_id = skills.id AND user_skill_states.user_id = ?", filter.UserID).
@@ -87,7 +75,7 @@ func (r *Repository) Skills(filter SkillListFilter) ([]model.Skill, int64, error
 	if filter.Search != "" {
 		pattern := "%" + strings.ToLower(filter.Search) + "%"
 		query = query.Joins("LEFT JOIN users skill_owners ON skill_owners.id = skills.owner_id").
-			Where("lower(skills.name) LIKE ? OR lower(skills.description) LIKE ? OR lower(skills.instruction) LIKE ? OR lower(skills.extra_info) LIKE ? OR lower(skills.author_name) LIKE ? OR lower(skill_owners.username) LIKE ?", pattern, pattern, pattern, pattern, pattern, pattern)
+			Where("lower(skills.name) LIKE ? OR lower(skills.description) LIKE ? OR lower(skills.instruction) LIKE ? OR lower(skills.extra_info) LIKE ? OR lower(skills.author_name) LIKE ? OR lower(skill_owners.display_name) LIKE ? OR lower(skill_owners.username) LIKE ?", pattern, pattern, pattern, pattern, pattern, pattern, pattern)
 	}
 	if filter.Tag != "" {
 		query = query.Where("skills.tag = ?", filter.Tag)
@@ -123,107 +111,98 @@ func (r *Repository) Skills(filter SkillListFilter) ([]model.Skill, int64, error
 	return skills, total, err
 }
 
+// 内置技能使用稳定的外部技能 ID 幂等更新，用户加入和收藏关系保留在独立状态表中。
+// columns 是冲突时覆盖的列，由调用方按管理员是否改过该技能决定；status 不应出现在其中，下架状态只由管理员修改。
+func (r *Repository) UpsertBuiltinSkills(skills []model.Skill, columns []string) error {
+	if len(skills) == 0 {
+		return errors.New("builtin skills are empty")
+	}
+	if len(columns) == 0 {
+		return r.db.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "id"}}, DoNothing: true}).Create(&skills).Error
+	}
+	return r.db.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "id"}},
+		DoUpdates: clause.AssignmentColumns(columns),
+	}).Create(&skills).Error
+}
+
 func (r *Repository) Skill(id string) (*model.Skill, error) {
 	var skill model.Skill
-	if err := r.db.First(&skill, "id = ? AND status = ?", id, model.SkillStatusEnabled).Error; err != nil {
+	if err := r.db.First(&skill, "id = ? AND status = ?", id, 1).Error; err != nil {
 		return nil, err
 	}
 	return &skill, nil
 }
 
-func (r *Repository) PlatformSkills() ([]model.Skill, error) {
+// SkillAnyStatus 读取技能而不过滤上架状态，只给管理员入口和内置技能同步使用。
+func (r *Repository) SkillAnyStatus(id string) (*model.Skill, error) {
+	var skill model.Skill
+	if err := r.db.First(&skill, "id = ?", id).Error; err != nil {
+		return nil, err
+	}
+	return &skill, nil
+}
+
+func (r *Repository) SkillsByIDsAnyStatus(ids []string) ([]model.Skill, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
 	var skills []model.Skill
-	err := r.db.Where("status = ? AND source <> ? AND is_private = ?", model.SkillStatusEnabled, model.SkillSourceUser, false).
-		Order("tag asc, sort_weight desc, updated_at desc").Find(&skills).Error
+	err := r.db.Where("id IN ?", ids).Find(&skills).Error
 	return skills, err
 }
 
-func (r *Repository) SkillPlatformStates(skillIDs []string) (map[string]model.SkillPlatformState, error) {
-	result := make(map[string]model.SkillPlatformState, len(skillIDs))
-	if len(skillIDs) == 0 {
-		return result, nil
-	}
-	var rows []model.SkillPlatformState
-	if err := r.db.Where("skill_id IN ?", skillIDs).Find(&rows).Error; err != nil {
-		return nil, err
-	}
-	for _, row := range rows {
-		result[row.SkillID] = row
-	}
-	return result, nil
+type AdminSkillListFilter struct {
+	Keyword    string
+	Status     string
+	SourceType string
+	Tag        string
+	Limit      int
+	Offset     int
 }
 
-func (r *Repository) SkillCategoryPlatformStates() (map[string]model.SkillCategoryPlatformState, error) {
-	var rows []model.SkillCategoryPlatformState
-	if err := r.db.Find(&rows).Error; err != nil {
-		return nil, err
+// AdminSkills 列出全部技能（含私有和已下架），按最近更新排序。
+func (r *Repository) AdminSkills(filter AdminSkillListFilter) ([]model.Skill, int64, error) {
+	query := r.db.Model(&model.Skill{})
+	switch filter.Status {
+	case "enabled":
+		query = query.Where("skills.status = ?", 1)
+	case "disabled":
+		query = query.Where("COALESCE(skills.status, 0) <> ?", 1)
 	}
-	result := make(map[string]model.SkillCategoryPlatformState, len(rows))
-	for _, row := range rows {
-		result[row.Tag] = row
+	switch filter.SourceType {
+	case "":
+	case "markdown":
+		query = query.Where("skills.source_type IN ?", []string{"markdown", ""})
+	default:
+		query = query.Where("skills.source_type = ?", filter.SourceType)
 	}
-	return result, nil
+	if filter.Tag != "" {
+		query = query.Where("skills.tag = ?", filter.Tag)
+	}
+	if filter.Keyword != "" {
+		pattern := "%" + strings.ToLower(filter.Keyword) + "%"
+		query = query.Joins("LEFT JOIN users skill_owners ON skill_owners.id = skills.owner_id").
+			Where("skills.id = ? OR lower(skills.name) LIKE ? OR lower(skills.description) LIKE ? OR lower(skills.author_name) LIKE ? OR lower(skill_owners.display_name) LIKE ? OR lower(skill_owners.username) LIKE ? OR lower(skills.source_url) LIKE ?",
+				filter.Keyword, pattern, pattern, pattern, pattern, pattern, pattern)
+	}
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	var skills []model.Skill
+	err := query.Select("skills.*").Order("skills.updated_at desc, skills.id asc").Limit(filter.Limit).Offset(filter.Offset).Find(&skills).Error
+	return skills, total, err
 }
 
-func (r *Repository) PlatformSkillAvailable(skill model.Skill) (bool, error) {
-	if skill.Source == model.SkillSourceUser {
-		return true, nil
-	}
-	var skillDisabled int64
-	if err := r.db.Model(&model.SkillPlatformState{}).Where("skill_id = ? AND available = ?", skill.ID, false).Count(&skillDisabled).Error; err != nil {
-		return false, err
-	}
-	var categoryDisabled int64
-	if err := r.db.Model(&model.SkillCategoryPlatformState{}).Where("tag = ? AND available = ?", skill.Tag, false).Count(&categoryDisabled).Error; err != nil {
-		return false, err
-	}
-	return skillDisabled == 0 && categoryDisabled == 0, nil
+// UpdateSkillStatus 只改上架状态，不刷新 updated_at，避免下架 / 上架改变技能广场的“最近更新”排序。
+func (r *Repository) UpdateSkillStatus(id string, status int) error {
+	return r.db.Model(&model.Skill{}).Where("id = ?", id).UpdateColumn("status", status).Error
 }
 
-func (r *Repository) SetPlatformSkillAvailability(skillIDs []string, available bool, actorID string, audit *model.AdminAuditEvent) error {
-	now := time.Now().UTC()
-	return r.db.Transaction(func(tx *gorm.DB) error {
-		var count int64
-		if err := tx.Model(&model.Skill{}).
-			Where("id IN ? AND status = ? AND source <> ? AND is_private = ?", skillIDs, model.SkillStatusEnabled, model.SkillSourceUser, false).
-			Count(&count).Error; err != nil {
-			return err
-		}
-		if count != int64(len(skillIDs)) {
-			return ErrInvalidPlatformSkillBatch
-		}
-		rows := make([]model.SkillPlatformState, 0, len(skillIDs))
-		for _, skillID := range skillIDs {
-			rows = append(rows, model.SkillPlatformState{SkillID: skillID, Available: available, UpdatedBy: actorID, CreatedAt: now, UpdatedAt: now})
-		}
-		if err := tx.Clauses(clause.OnConflict{
-			Columns:   []clause.Column{{Name: "skill_id"}},
-			DoUpdates: clause.AssignmentColumns([]string{"available", "updated_by", "updated_at"}),
-		}).Create(&rows).Error; err != nil {
-			return err
-		}
-		if audit != nil {
-			return tx.Create(audit).Error
-		}
-		return nil
-	})
-}
-
-func (r *Repository) SetSkillCategoryPlatformAvailability(tag string, available bool, actorID string, audit *model.AdminAuditEvent) error {
-	now := time.Now().UTC()
-	row := model.SkillCategoryPlatformState{Tag: tag, Available: available, UpdatedBy: actorID, CreatedAt: now, UpdatedAt: now}
-	return r.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Clauses(clause.OnConflict{
-			Columns:   []clause.Column{{Name: "tag"}},
-			DoUpdates: clause.AssignmentColumns([]string{"available", "updated_by", "updated_at"}),
-		}).Create(&row).Error; err != nil {
-			return err
-		}
-		if audit != nil {
-			return tx.Create(audit).Error
-		}
-		return nil
-	})
+// UpdateSkillFields 按列更新技能行，避免整行保存覆盖并发写入的状态或版本字段。
+func (r *Repository) UpdateSkillFields(id string, fields map[string]any) error {
+	return r.db.Model(&model.Skill{}).Where("id = ?", id).Updates(fields).Error
 }
 
 func (r *Repository) CreateSkill(skill *model.Skill, ownerState *model.UserSkillState) error {

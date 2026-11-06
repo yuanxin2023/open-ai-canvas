@@ -45,6 +45,7 @@ import { CanvasDramaAdoptModal } from "@/components/canvas/canvas-drama-adopt-mo
 import { canvasStoryboardToDramaSource } from "@/lib/canvas/drama-canvas-projection";
 import { CanvasProjectAssetModal } from "@/components/canvas/canvas-project-asset-modal";
 import { CanvasCharacterLibraryModal } from "@/components/canvas/canvas-character-library-modal";
+import { CanvasPoseLibraryModal } from "@/components/canvas/canvas-pose-library-modal";
 import { CanvasCharacterReferenceNodeContent } from "@/components/canvas/canvas-character-reference-node";
 import { CanvasCharacterReferenceModal } from "@/components/canvas/canvas-character-reference-modal";
 import { WorkspaceState } from "@/components/layout/workspace-state";
@@ -79,6 +80,8 @@ import { useCanvasCreateCommands } from "@/components/canvas/use-canvas-create-c
 import { AssetPickerModal, type InsertAssetPayload } from "@/components/canvas/asset-picker-modal";
 import { getProject, listCharacters, type ProjectAsset } from "@/services/api/projects";
 import { CanvasZoomControls } from "@/components/canvas/canvas-zoom-controls";
+import { CanvasAgentHud } from "@/components/canvas/canvas-agent-hud";
+import { persistCanvasAgentCameraFollow, readCanvasAgentCameraFollow } from "@/lib/canvas/canvas-agent-camera-follow";
 import { CanvasShareModal } from "@/components/canvas/canvas-share-modal";
 import { CanvasScriptEditor, CanvasScriptNodeContent } from "@/components/canvas/canvas-script-node";
 import { StoryboardAssetPickerModal } from "@/components/canvas/storyboard-asset-picker-modal";
@@ -284,6 +287,7 @@ function CanvasViewportPage() {
     const [showImageInfo, setShowImageInfo] = useState(false);
     const [canvasTool, setCanvasTool] = useState<CanvasToolMode>("box-select");
     const [hideNodeConnections, setHideNodeConnections] = useState(readCanvasHideNodeConnections);
+    const [agentFollowCamera, setAgentFollowCamera] = useState(readCanvasAgentCameraFollow);
     const [projectLoaded, setProjectLoaded] = useState(false);
     useLayoutEffect(() => {
         if (!projectLoaded) return;
@@ -307,6 +311,8 @@ function CanvasViewportPage() {
     const [characterLibraryPosition, setCharacterLibraryPosition] = useState<Position | undefined>();
     const [drawingNodeId, setDrawingNodeId] = useState<string | null>(null);
     const [stylePickerOpen, setStylePickerOpen] = useState(false);
+    // 姿势库：null 表示未打开，position 为右键菜单落点，缺省插到视口中心。
+    const [poseLibraryRequest, setPoseLibraryRequest] = useState<{ position?: Position } | null>(null);
     // 新建预演台镜头必须先选模板：null 表示未在选择中，undefined position 表示用画布中心。
     const [previsTemplateRequest, setPrevisTemplateRequest] = useState<{ position?: Position } | null>(null);
     const [infoNodeId, setInfoNodeId] = useState<string | null>(null);
@@ -339,6 +345,10 @@ function CanvasViewportPage() {
     useEffect(() => {
         persistCanvasHideNodeConnections(hideNodeConnections);
     }, [hideNodeConnections]);
+
+    useEffect(() => {
+        persistCanvasAgentCameraFollow(agentFollowCamera);
+    }, [agentFollowCamera]);
 
     useEffect(() => {
         didInitialCenterRef.current = false;
@@ -691,6 +701,7 @@ function CanvasViewportPage() {
         zoomToActualSize,
     } = useCanvasViewportController({
         agentFocus,
+        agentFollowCamera,
         containerRef,
         size,
         viewportRef,
@@ -825,6 +836,10 @@ function CanvasViewportPage() {
     const openCharacterLibrary = useCallback((position?: Position) => {
         setCharacterLibraryPosition(position);
         setCharacterLibraryOpen(true);
+        setContextMenu(null);
+    }, []);
+    const openPoseLibrary = useCallback((position?: Position) => {
+        setPoseLibraryRequest({ position });
         setContextMenu(null);
     }, []);
     const selectedCharacterImage = nodes.find((node) => selectedNodeIds.has(node.id) && node.type === CanvasNodeType.Image && resourceIdFromStorageKey(node.metadata?.storageKey));
@@ -2592,6 +2607,7 @@ function CanvasViewportPage() {
             onUpload: () => handleUploadRequest(),
             onOpenMyAssets: () => openCanvasAssetLibrary(),
             onOpenProjectCharacters: () => openCharacterLibrary(),
+            onOpenPoseLibrary: () => openPoseLibrary(),
         },
     });
     const emptyStateKind = resolveCanvasEmptyStateKind({
@@ -2760,6 +2776,14 @@ function CanvasViewportPage() {
         },
         [getCanvasCenter, setNodes],
     );
+    const insertAgentMarkdown = useCallback(
+        (markdown: string, title: string) => {
+            const node = { ...createCanvasNode(CanvasNodeType.Markdown, getCanvasCenter(), { content: markdown, status: "success" }), title, width: 420, height: 360 };
+            setNodes((current) => [...current, node]);
+            return node.id;
+        },
+        [getCanvasCenter, setNodes],
+    );
     const insertAgentAssets = useCallback(
         async (payloads: InsertAssetPayload[]): Promise<AgentInsertedNode[]> =>
             (await handleAssetsInsert(payloads)).map((node) => ({
@@ -2803,6 +2827,7 @@ function CanvasViewportPage() {
             onFocusNode: handleAgentFocusNode,
             insertAgentFiles,
             insertAgentText,
+            insertAgentMarkdown,
             insertAgentAssets,
             insertAgentImageAsset,
             discardAgentNodes,
@@ -2820,6 +2845,7 @@ function CanvasViewportPage() {
         publishAgentCanvas,
         insertAgentFiles,
         insertAgentText,
+        insertAgentMarkdown,
         insertAgentAssets,
         insertAgentImageAsset,
         discardAgentNodes,
@@ -3112,11 +3138,7 @@ function CanvasViewportPage() {
                                             appearance={canvasAppearance}
                                             backgroundMode={backgroundMode}
                                             showImageInfo={showImageInfo}
-                                            showPresenceHints={presenceHintsEnabled}
-                                            onPresenceHintsChange={(enabled) => {
-                                                try { setPresenceHintsEnabled(enabled); }
-                                                catch { message.error("无法保存实时协作提示设置"); }
-                                            }}
+
                                             onAddImage={() => createNode(CanvasNodeType.Image)}
                                             onAddVideo={() => createNode(CanvasNodeType.Video)}
                                             onAddAudio={() => createNode(CanvasNodeType.Audio)}
@@ -3144,6 +3166,7 @@ function CanvasViewportPage() {
                                                 openCanvasAssetLibrary();
                                             }}
                                             onOpenProjectCharacters={() => openCharacterLibrary()}
+                                            onOpenPoseLibrary={() => openPoseLibrary()}
                                             compact={dramaCanvas}
                                         />
                                     ) : null}
@@ -3366,8 +3389,8 @@ function CanvasViewportPage() {
                                         isMiniMapOpen={isMiniMapOpen}
                                         onToggleMiniMap={() => setIsMiniMapOpen((value) => !value)}
                                         onOpenShortcuts={() => setShortcutRequestNonce((value) => value + 1)}
-                                        bare={dramaCanvas}
                                     />
+                                    {!dramaCanvas ? <CanvasAgentHud nodeCount={nodes.length} connectionCount={connections.length} followAgent={agentFollowCamera} onFollowAgentChange={setAgentFollowCamera} /> : null}
                                 </CanvasOverlayLayerContainer>
                             ) : null}
 
@@ -3389,6 +3412,7 @@ function CanvasViewportPage() {
                                 onUpload={(nodeId, position) => handleUploadRequest(nodeId, position)}
                                 onOpenAssets={openCanvasAssetLibrary}
                                 onOpenProjectCharacters={(position) => openCharacterLibrary(position)}
+                                onOpenPoseLibrary={(position) => openPoseLibrary(position)}
                                 onUndo={undoCanvas}
                                 onRedo={redoCanvas}
                                 onPaste={pasteAtPosition}
@@ -3754,6 +3778,7 @@ function CanvasViewportPage() {
                             <BatchGenerationSettingsDialog open={batchGenDialogOpen} config={batchGenDialogConfig} rowCount={batchGenDialogRowCount} concurrency={batchGenDialogConcurrency} onClose={closeBatchGenDialog} onConfirm={confirmBatchGenDialog} />
 
                             <AssetPickerModal open={assetPickerOpen} multiple={assetInsertScope === "canvas"} onInsert={handleLibraryAssetsInsert} onClose={closeAssetPicker} />
+                            <CanvasPoseLibraryModal open={Boolean(poseLibraryRequest)} onClose={() => setPoseLibraryRequest(null)} onInsert={(payloads) => handleAssetsInsert(payloads, poseLibraryRequest?.position)} />
                             <CanvasCharacterLibraryModal
                                 open={characterLibraryOpen}
                                 imageResourceId={resourceIdFromStorageKey(selectedCharacterImage?.metadata?.storageKey) || undefined}

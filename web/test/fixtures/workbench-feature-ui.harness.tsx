@@ -10,6 +10,9 @@ const { act } = React;
 const { createRoot } = await import("react-dom/client");
 const { MemoryRouter } = await import("react-router");
 const { useUserStore, defaultFeatureAvailability } = await import("@/stores/use-user-store");
+mock.module("@/components/layout/workspace-sidebar-checkin", () => ({ WorkspaceSidebarCheckin: () => null }));
+mock.module("@/components/layout/workspace-sidebar-storage-meter", () => ({ WorkspaceSidebarStorageMeter: () => null }));
+mock.module("@/components/layout/workspace-account-card", () => ({ WorkspaceAccountCard: () => null }));
 let refreshError = "";
 let confirmed: { onOk: () => Promise<void> } | null = null;
 let backend: FeatureAvailability = { ...defaultFeatureAvailability };
@@ -56,6 +59,7 @@ mock.module("@/services/api/customer-service", () => ({ CUSTOMER_SERVICE_OPEN_EV
 mock.module("@/pages/admin/ui/controls", () => ({ Switch: ({ checked, disabled, onChange, ...props }: any) => <button {...props} role="switch" aria-checked={checked} disabled={disabled} onClick={() => onChange(!checked)} /> }));
 mock.module("@/pages/admin/components/admin-ui", () => ({ AdminStatusBadge: ({ label }: any) => <span>{label}</span> }));
 mock.module("@/services/api/auth", () => ({
+    getAuthSettings: async () => ({}),
     getAdminFeatureAvailability: async () => ({ features: backend }),
     updateAdminFeatureAvailability: async (input: Partial<FeatureAvailability>) => {
         writes.push(input);
@@ -86,12 +90,12 @@ test("closed entries preserve local home, canvas, prompts and skill visibility r
 });
 test("each workbench has an independent optional entry in resources and tools", () => {
     const result = buildNav({ ...defaultFeatureAvailability, imageWorkbenchEnabled: true });
-    const tools = result.groups.find((group) => group.heading === "资源与工具")!;
+    const tools = { items: result.groups.flatMap((group) => group.items) };
     expect(tools.items.find((item) => item.id === "toolbox-image")?.to).toBe("/toolbox/image");
     expect(tools.items.some((item) => item.id === "toolbox-video")).toBe(false);
     expect(workspaceNavActiveId("/toolbox/image")).toBe("toolbox-image");
     expect(workspaceNavActiveId("/toolbox/video")).toBe("toolbox-video");
-    expect(workspaceNavActiveId("/settings", "wallet")).toBe("wallet");
+    expect(workspaceNavActiveId("/settings", "wallet")).toBe("settings:wallet");
 });
 for (const role of ["user", "admin"] as const)
     test(`closed route also rejects ${role} access`, async () => {

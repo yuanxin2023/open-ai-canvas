@@ -1,15 +1,16 @@
 import { translate } from "@/i18n";
-import { App, Button, InputNumber } from "antd";
+import { App, Button } from "antd";
 import { SettingsRow } from "@/components/ui/product/settings-row";
-import { ArrowLeft, Boxes, Brain, Bug, CircleDollarSign, Cloud, Inbox, LockKeyhole, MessageSquareText, RadioTower, ReceiptText, SlidersHorizontal, UserRound, Workflow } from "lucide-react";
+import { ShieldCheck, BookMarked, ArrowLeft, Boxes, Brain, Bug, CircleDollarSign, Cloud, Inbox, LockKeyhole, MessageSquareText, RadioTower, ReceiptText, SlidersHorizontal, UserRound, Workflow } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { useTranslation } from "react-i18next";
-import { LanguageOptionGrid } from "@/components/layout/language-menu";
 
 import { UserOSSSettingsForm } from "@/components/layout/user-oss-settings-form";
+import { secretKeyProtocolIds, useUserProtocolCatalog } from "@/hooks/use-user-protocol-catalog";
 import { refreshSystemChannels } from "@/lib/user-session";
-import { defaultConfig, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
+import { useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { useUserStore } from "@/stores/use-user-store";
 import { ChannelSettingsPane, channelValidationError, focusInvalidChannelField, isChannelReady } from "./channel-settings-pane";
 import { ModelDefaultGrid } from "./model-default-grid";
@@ -25,23 +26,35 @@ import { CreditLedgerPane } from "./credit-ledger-pane";
 import { FeedbackInboxPane } from "./feedback-inbox-pane";
 import { ProfileSettingsPane } from "./profile-settings-pane";
 import { AccountSecurityPanel } from "./account-security-panel";
+import { ArkAssetsPane } from "./ark-assets-pane";
+import { PreferencesPane } from "./preferences-pane";
+import { arkPortraitOverviewQueryKey, getArkPortraitOverview } from "@/services/api/ark-portraits";
+import "./settings-page.css";
 
-type ConfigSectionKey = "profile" | "security" | "orders" | "wallet" | "channels" | "models" | "runninghub" | "preferences" | "prompts" | "agent-memory" | "storage" | "diagnostics" | "feedbacks";
+type ConfigSectionKey = "ark-assets" | "profile" | "security" | "orders" | "wallet" | "channels" | "models" | "runninghub" | "preferences" | "prompts" | "agent-memory" | "storage" | "diagnostics" | "feedbacks";
+type ConfigSectionGroup = "general" | "creation" | "integrations" | "support";
 
-const configSections: Array<{ key: ConfigSectionKey; label: string; icon: ReactNode }> = [
-    { key: "profile", label: translate("local.ui.profile"), icon: <UserRound className="size-4" /> },
-    { key: "security", label: translate("local.ui.security"), icon: <LockKeyhole className="size-4" /> },
-    { key: "orders", label: translate("local.ui.orders"), icon: <ReceiptText className="size-4" /> },
-    { key: "wallet", label: translate("local.ui.creditLedger"), icon: <CircleDollarSign className="size-4" /> },
-    { key: "channels", label: translate("settings.sections.channels.label"), icon: <RadioTower className="size-4" /> },
-    { key: "runninghub", label: translate("settings.sections.runninghub.label"), icon: <Workflow className="size-4" /> },
-    { key: "models", label: translate("settings.sections.models.label"), icon: <Boxes className="size-4" /> },
-    { key: "preferences", label: translate("local.ui.generationPrefs"), icon: <SlidersHorizontal className="size-4" /> },
-    { key: "prompts", label: translate("settings.sections.prompts.label"), icon: <MessageSquareText className="size-4" /> },
-    { key: "agent-memory", label: translate("settings.sections.agent-memory.label"), icon: <Brain className="size-4" /> },
-    { key: "storage", label: translate("settings.sections.storage.label"), icon: <Cloud className="size-4" /> },
-    { key: "diagnostics", label: translate("settings.sections.diagnostics.label"), icon: <Bug className="size-4" /> },
-    { key: "feedbacks", label: translate("settings.sections.feedbacks.label"), icon: <Inbox className="size-4" /> },
+const configSectionGroups: ConfigSectionGroup[] = ["general", "creation", "integrations", "support"];
+
+/**
+ * 分类按用途分组：账户与通用 → 创作 → 渠道与存储 → 帮助与反馈。
+ * 分组名在 settings.groups.<group>，分类名称与说明在 settings.sections.<key>。
+ */
+const configSections: Array<{ key: ConfigSectionKey; group: ConfigSectionGroup; label?: string; icon: ReactNode }> = [
+    { key: "profile", group: "general", label: translate("local.ui.profile"), icon: <UserRound className="size-4" /> },
+    { key: "security", group: "general", label: translate("local.ui.security"), icon: <LockKeyhole className="size-4" /> },
+    { key: "orders", group: "general", label: translate("local.ui.orders"), icon: <ReceiptText className="size-4" /> },
+    { key: "wallet", group: "general", label: translate("local.ui.creditLedger"), icon: <CircleDollarSign className="size-4" /> },
+    { key: "preferences", group: "general", icon: <SlidersHorizontal className="size-4" /> },
+    { key: "models", group: "creation", icon: <Boxes className="size-4" /> },
+    { key: "prompts", group: "creation", icon: <MessageSquareText className="size-4" /> },
+    { key: "agent-memory", group: "creation", icon: <BookMarked className="size-4" /> },
+    { key: "channels", group: "integrations", icon: <RadioTower className="size-4" /> },
+    { key: "runninghub", group: "integrations", icon: <Workflow className="size-4" /> },
+    { key: "storage", group: "integrations", icon: <Cloud className="size-4" /> },
+    { key: "ark-assets", group: "integrations", icon: <ShieldCheck className="size-4" /> },
+    { key: "feedbacks", group: "support", icon: <Inbox className="size-4" /> },
+    { key: "diagnostics", group: "support", icon: <Bug className="size-4" /> },
 ];
 
 export function isConfigSection(value: string | null): value is ConfigSectionKey {
@@ -59,13 +72,17 @@ export default function SettingsPage() {
     const feedbackEnabled = useUserStore((state) => state.features.userFeedbackEnabled);
     const runtimeStatuses = usePluginStore((state) => state.runtimeStatuses);
     const runningHubPluginEnabled = runtimeStatuses[RUNNINGHUB_PLUGIN_ID] === "enabled";
+    const userId = useUserStore((state) => state.user?.id);
+    const arkOverviewQuery = useQuery({ queryKey: arkPortraitOverviewQueryKey, queryFn: ({ signal }) => getArkPortraitOverview(signal), enabled: Boolean(userId), staleTime: 60_000 });
+    const arkAssetsVisible = arkOverviewQuery.data ? arkOverviewQuery.data.enabled : requestedSection === "ark-assets";
     const visibleConfigSections = useMemo(
         () =>
             (customChannelsEnabled ? configSections : configSections.filter((section) => section.key !== "channels"))
                 .filter((section) => section.key !== "runninghub" || runningHubPluginEnabled)
                 .filter((section) => section.key !== "feedbacks" || feedbackEnabled)
+                .filter((section) => section.key !== "ark-assets" || arkAssetsVisible)
                 .filter((section) => !["wallet", "orders"].includes(section.key) || creditsEnabled),
-        [creditsEnabled, customChannelsEnabled, runningHubPluginEnabled, feedbackEnabled],
+        [creditsEnabled, customChannelsEnabled, runningHubPluginEnabled, feedbackEnabled, arkAssetsVisible],
     );
     const isVisibleConfigSection = (value: string | null): value is ConfigSectionKey => isConfigSection(value) && visibleConfigSections.some((section) => section.key === value);
     const firstVisibleSection = visibleConfigSections[0]?.key || "models";
@@ -75,8 +92,9 @@ export default function SettingsPage() {
     const effectiveConfig = useEffectiveConfig();
     const updateConfig = useConfigStore((state) => state.updateConfig);
     const shouldPromptContinue = searchParams.get("continue") === "1";
-    const userId = useUserStore((state) => state.user?.id);
     const userChannels = config.channels.filter((channel) => channel.scope !== "system");
+    const protocolCatalog = useUserProtocolCatalog(customChannelsEnabled);
+    const secretKeyProtocols = useMemo(() => secretKeyProtocolIds(protocolCatalog), [protocolCatalog]);
 
     useEffect(() => {
         if (isVisibleConfigSection(requestedSection)) {
@@ -107,15 +125,15 @@ export default function SettingsPage() {
     };
 
     const finishConfig = () => {
-        const invalidChannel = customChannelsEnabled ? userChannels.find((channel) => channelValidationError(channel)) : undefined;
+        const invalidChannel = customChannelsEnabled ? userChannels.find((channel) => channelValidationError(channel, secretKeyProtocols)) : undefined;
         if (invalidChannel) {
             selectSection("channels");
-            message.warning(t("account.settings.channelError", { name: invalidChannel.name || t("account.settings.channels.unnamed"), error: channelValidationError(invalidChannel) }));
-            focusInvalidChannelField(invalidChannel);
+            message.warning(t("account.settings.channelError", { name: invalidChannel.name || t("account.settings.channels.unnamed"), error: channelValidationError(invalidChannel, secretKeyProtocols) }));
+            focusInvalidChannelField(invalidChannel, secretKeyProtocols);
             return;
         }
         const workflowReady = Boolean(runningHubPluginEnabled && config.runningHub.enabled && config.runningHub.workflowId.trim() && config.runningHub.baseUrl.trim() && config.runningHub.apiKey.trim());
-        if (!effectiveConfig.channels.some(isChannelReady) && !workflowReady) {
+        if (!effectiveConfig.channels.some((channel) => isChannelReady(channel, secretKeyProtocols)) && !workflowReady) {
             selectSection(customChannelsEnabled ? "channels" : "models");
             message.error(customChannelsEnabled ? (shouldPromptContinue ? t("account.settings.needChannel") : t("account.settings.noChannel")) : t("account.settings.noSystemModel"));
             return;
@@ -178,42 +196,7 @@ export default function SettingsPage() {
         ),
         preferences: (
             <SettingsPane>
-                <div className="settings-pane-header">
-                    <div className="min-w-0">
-                        <h2>{t("settings.preferences.title")}</h2>
-                        <p>{t("settings.preferences.description")}</p>
-                    </div>
-                </div>
-                <div className="settings-section">
-                    <section className="settings-preference-block">
-                        <div className="settings-preference-heading">
-                            <h3>{t("settings.preferences.interface")}</h3>
-                            <p>{t("settings.preferences.interfaceDescription")}</p>
-                        </div>
-                        <SettingsRow label={t("language.label")} description={t("language.description")} align="top" control={null} />
-                        <LanguageOptionGrid />
-                    </section>
-                    <section className="settings-preference-block">
-                        <div className="settings-preference-heading">
-                            <h3>{t("settings.preferences.canvas")}</h3>
-                            <p>{t("settings.preferences.canvasDescription")}</p>
-                        </div>
-                        <SettingsRow
-                            label={t("settings.preferences.imageCount")}
-                            control={
-                                <InputNumber
-                                    min={1}
-                                    max={15}
-                                    precision={0}
-                                    className="w-full"
-                                    value={Number(config.canvasImageCount)}
-                                    onChange={(value) => updateConfig("canvasImageCount", normalizeImageCount(String(value ?? defaultConfig.canvasImageCount)))}
-                                />
-                            }
-                            controlClassName="w-[200px]"
-                        />
-                    </section>
-                </div>
+                <PreferencesPane />
             </SettingsPane>
         ),
         prompts: (
@@ -246,6 +229,11 @@ export default function SettingsPage() {
                 </div>
             </SettingsPane>
         ),
+        "ark-assets": (
+            <SettingsPane>
+                <ArkAssetsPane />
+            </SettingsPane>
+        ),
         feedbacks: (
             <SettingsPane>
                 <FeedbackInboxPane />
@@ -269,23 +257,35 @@ export default function SettingsPage() {
             ) : null}
             <div className="settings-library-frame flex min-h-0 flex-1 flex-col md:flex-row">
                 <aside className="settings-nav-panel w-full shrink-0 md:w-[200px]">
-                    <nav className="thin-scrollbar flex gap-1 overflow-x-auto p-2 md:block md:space-y-1 md:overflow-x-hidden md:p-2.5" aria-label={translate("settings.nav")}>
-                        {visibleConfigSections.map((item) => {
-                            const selected = item.key === activeTab;
+                    <nav className="thin-scrollbar flex gap-1 overflow-x-auto p-2 md:block md:overflow-x-hidden md:p-2" aria-label={t("settings.nav")}>
+                        {configSectionGroups.map((group) => {
+                            const items = visibleConfigSections.filter((section) => section.group === group);
+                            if (!items.length) return null;
                             return (
-                                <button
-                                    key={item.key}
-                                    type="button"
-                                    disabled={accountBusy}
-                                    className={`settings-nav-item flex h-9 shrink-0 items-center gap-2 rounded-md px-3 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:h-auto md:w-full md:items-start md:gap-3 md:py-2 ${selected ? "is-active" : "text-foreground/58 hover:bg-muted/55 hover:text-foreground"}`}
-                                    onClick={() => selectSection(item.key)}
-                                    aria-current={selected ? "page" : undefined}
-                                >
-                                    <span className="shrink-0 md:mt-0.5">{item.icon}</span>
-                                    <span className="min-w-0">
-                                        <span className="block whitespace-nowrap text-sm font-medium">{item.label}</span>
-                                    </span>
-                                </button>
+                                <div key={group} className="settings-nav-group contents md:block md:space-y-1" role="group" aria-labelledby={`settings-nav-group-${group}`}>
+                                    <p id={`settings-nav-group-${group}`} className="settings-nav-group-label hidden md:block">
+                                        {t(`settings.groups.${group}`)}
+                                    </p>
+                                    {items.map((item) => {
+                                        const selected = item.key === activeTab;
+                                        return (
+                                            <button
+                                                key={item.key}
+                                                type="button"
+                                                disabled={accountBusy}
+                                                className={`settings-nav-item flex h-9 shrink-0 items-center gap-2 rounded-md px-3 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:h-auto md:w-full md:items-start md:gap-3 md:py-2 ${selected ? "is-active" : "text-foreground/58 hover:bg-muted/55 hover:text-foreground"}`}
+                                                onClick={() => selectSection(item.key)}
+                                                aria-current={selected ? "page" : undefined}
+                                            >
+                                                <span className={`shrink-0 md:mt-0.5 ${selected ? "text-[var(--workspace-accent)]" : ""}`}>{item.icon}</span>
+                                                <span className="min-w-0">
+                                                    <span className="block whitespace-nowrap text-sm font-medium">{item.label || t(`settings.sections.${item.key}.label`)}</span>
+                                                    {!item.label ? <span className="mt-1 hidden text-[var(--fs-label)] leading-4 text-current opacity-65 md:block">{t(`settings.sections.${item.key}.description`)}</span> : null}
+                                                </span>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
                             );
                         })}
                     </nav>
@@ -302,8 +302,4 @@ export default function SettingsPage() {
 
 function SettingsPane({ children, fill = false }: { children: ReactNode; fill?: boolean }) {
     return <div className={fill ? "settings-pane h-full" : "settings-pane"}>{children}</div>;
-}
-
-function normalizeImageCount(value: string) {
-    return String(Math.max(1, Math.min(15, Math.floor(Math.abs(Number(value)) || Number(defaultConfig.canvasImageCount)))));
 }

@@ -13,10 +13,12 @@ import (
 
 	"infinite-canvas/backend/internal/auth"
 	"infinite-canvas/backend/internal/canvas"
+	"infinite-canvas/backend/internal/inspirations"
 	"infinite-canvas/backend/internal/kernel"
 	"infinite-canvas/backend/internal/model"
 	"infinite-canvas/backend/internal/payment"
 	"infinite-canvas/backend/internal/platform"
+	"infinite-canvas/backend/internal/poselibrary"
 	"infinite-canvas/backend/internal/prompts"
 	"infinite-canvas/backend/internal/repository"
 	"infinite-canvas/backend/internal/skills"
@@ -86,6 +88,8 @@ type Service struct {
 	canvas                   *canvas.Service
 	canvasRealtime           *canvas.RealtimeHub
 	workbench                *workbench.Service
+	poseLibrary              *poselibrary.Service
+	inspirationFeed          *inspirations.Service
 	piRunnerMu               sync.Mutex
 	piRunnerWg               sync.WaitGroup
 	piRunners                map[string]context.CancelFunc
@@ -105,6 +109,10 @@ type Service struct {
 	creditPolicyMu           sync.RWMutex
 	creditPolicyCache        *CreditPolicy
 	creditPolicyAt           time.Time
+	approvalFollowUpMu       sync.Mutex
+	approvalFollowUpWg       sync.WaitGroup
+	approvalFollowUps        map[string]struct{} // 正在执行批准后收尾的审批（runID:approvalID），见 cloud_agent_approval_followup.go
+	approvalFollowUpClosed   bool
 	modelAvailabilityMu      sync.RWMutex
 	modelAvailabilityCache   map[publicModelAvailabilityKey]*PublicModelAvailability
 	modelAvailabilityAt      time.Time
@@ -182,6 +190,8 @@ func newService(repo *repository.Repository, dataDir string) *Service {
 	service.canvas = canvas.New(service.repo, canvasHost{svc: service})
 	service.canvasRealtime = canvasRealtime
 	service.workbench = workbench.New(service.repo, workbenchAdminGate{svc: service}, workbenchAdminGate{svc: service})
+	service.poseLibrary = poselibrary.New(service.repo, service.dataDir, poseLibraryAdminGate{svc: service})
+	service.inspirationFeed = inspirations.New(service.repo, inspirationFeedAdminGate{svc: service}, service.inspirationFeedLock, service.runWorkerLoop)
 	service.platform = platform.New(service.repo, coordinator, platformHost{svc: service})
 	return service
 }
@@ -208,7 +218,9 @@ func (s *Service) StartWorker() {
 	s.startPaymentWorker(ctx)
 	s.startRedeemExpirationWorker(ctx)
 	s.startBillingAutoRefundWorker()
+	s.startArkPortraitWorker()
 	s.startDramaScheduler()
+	s.startInspirationFeedWorker()
 	go s.syncAgentSessionLimit()
 	s.runWorkerLoop(func(ctx context.Context) {
 		ticker := time.NewTicker(3 * time.Second)

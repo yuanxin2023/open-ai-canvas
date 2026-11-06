@@ -11,17 +11,7 @@ export type ToolbarId = "main" | "selection" | "node-hover" | "add-node-menu";
 export type NodeToolbarGroup = "primary" | "adjust" | "camera" | "sheet" | "process" | "workspace" | "utility" | "more";
 
 /** 工具分类——用于分组渲染、危险隔离与 separator 自动插入 */
-export type ToolCategory =
-    | "navigation"
-    | "history"
-    | "create"
-    | "appearance"
-    | "selection"
-    | "layout"
-    | "arrange"
-    | "danger"
-    | "node-state"
-    | "resource";
+export type ToolCategory = "navigation" | "history" | "create" | "appearance" | "selection" | "layout" | "arrange" | "danger" | "node-state" | "resource";
 
 /** 所有工具栏回调的聚合类型。工具定义通过 ctx.handlers.onXxx 访问 */
 export type ToolbarHandlers = {
@@ -54,6 +44,8 @@ export type ToolbarHandlers = {
     onOpenWorkspace?: () => void;
     onOpenMyAssets: () => void;
     onOpenProjectCharacters: () => void;
+    /** 站点姿势库；只读分享页等不提供时入口自动隐藏。 */
+    onOpenPoseLibrary?: () => void;
     // 主工具栏——外观
     onBackgroundModeChange: (mode: CanvasBackgroundMode) => void;
     onShowImageInfoChange: (show: boolean) => void;
@@ -151,7 +143,8 @@ export type AddNodeMenuContext = {
     isProjectLinked: boolean;
     /** 内置应用插件的启用状态；未声明时视为未提供 gating 信息。 */
     enabledPluginIds?: ReadonlySet<string>;
-    handlers: Pick<ToolbarHandlers,
+    handlers: Pick<
+        ToolbarHandlers,
         | "onAddText"
         | "onAddImage"
         | "onAddVideo"
@@ -167,6 +160,7 @@ export type AddNodeMenuContext = {
         | "onUpload"
         | "onOpenMyAssets"
         | "onOpenProjectCharacters"
+        | "onOpenPoseLibrary"
     >;
 };
 

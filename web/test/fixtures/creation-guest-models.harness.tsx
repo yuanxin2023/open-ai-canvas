@@ -94,6 +94,7 @@ mock.module("@/pages/create/creation-workspace", () => ({
     CreationFeaturedWorks: () => null,
     CreationMessageView: () => null,
     CreationModeTabs: () => null,
+    CreationModeCard: ({ children }: any) => <div>{children}</div>,
     CreationWorkspaceToolbar: () => null,
     creationAssetCategoryLabels: {},
 }));
@@ -235,10 +236,8 @@ test("sidebar leaves public navigation available and resumes a protected destina
             </antd.App>,
         );
     });
-    await act(async () => {
-        host.querySelector<HTMLButtonElement>('[aria-label="收起侧栏"]')!.click();
-    });
-    expect(expanded).toBe(1);
+    expect(host.querySelector('[aria-label="收起侧栏"]')).toBeNull();
+    expect(expanded).toBe(0);
     expect(host.querySelector('[role="dialog"]')).toBeNull();
     await act(async () => {
         host.querySelector<HTMLAnchorElement>('[data-nav-id="home"]')!.click();

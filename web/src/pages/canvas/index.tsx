@@ -19,7 +19,7 @@ import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 import { flushCanvasStorePersistence, useCanvasStore } from "@/stores/canvas/use-canvas-store";
 import { useCanvasUiStore } from "@/stores/canvas/use-canvas-ui-store";
 import { exportCanvasProjects } from "@/lib/canvas/canvas-export";
-import { migrateLegacyPrevisDocument } from "@/lib/canvas/previs/previs-legacy-document";
+import { resetGenerationTaskMetadata } from "@/lib/canvas/canvas-task-state";
 import { saveCanvasDrawing, type CanvasDrawingRenderDraft } from "@/lib/canvas/canvas-drawing-storage";
 import { createCanvasProjectWithRemoteSync, hasRemoteUserDataSyncSession, loadCanvasProjectForEditing, saveRemoteUserDataNow, scheduleRemoteUserDataSync } from "@/services/user-data-sync";
 import { listRemoteCanvasProjectsPage, type CanvasLibrarySummary } from "@/services/api/user-data";
@@ -49,7 +49,6 @@ export default function CanvasPage() {
     const [openingProjectId, setOpeningProjectId] = useState("");
     const openingProjectIdRef = useRef("");
     const hydrated = useCanvasStore((state) => state.hydrated);
-    const hydrationError = useCanvasStore((state) => state.hydrationError);
     const localProjects = useCanvasStore((state) => state.projects);
     const userId = useUserStore((state) => state.user?.id);
     const sessionHydrated = useUserStore((state) => state.hydrated);
@@ -180,20 +179,23 @@ export default function CanvasPage() {
             if (!projectFile) throw new Error("缺少 projects.json 元数据文件");
             const data = JSON.parse(await projectFile.text()) as CanvasExportFile;
             if (!Array.isArray(data.projects)) throw new Error("projects.json 中缺少画布列表");
-            data.projects = data.projects.map((item) => ({ ...item, project: migrateLegacyPrevisDocument(item.project) }));
             for (const item of data.projects) {
                 if (!Array.isArray(item.files)) throw new Error(`画布「${item.project?.title || "未命名画布"}」的媒体清单无效`);
                 const missing = item.files.find((entry) => !zip.get(entry.path));
                 if (missing) throw new Error(`压缩包缺少媒体文件：${missing.path}`);
             }
-            hideLoading();
             const remoteSyncEnabled = hasRemoteUserDataSyncSession();
+            // 源画布所属项目可能属于其他账号或已被删除，项目素材关联会直接拒绝；不属于当前账号时按自由画布导入。
+            const ownedProjectIds = remoteSyncEnabled && data.projects.some((item) => item.project?.projectId) ? new Set((await listProjects()).projects.map(({ project }) => project.id)) : new Set<string>();
+            hideLoading();
             let remoteSyncWarning: unknown;
 
             for (const item of data.projects) {
                 const totalFiles = item.files.length;
+                const domainProjectId = item.project.projectId && ownedProjectIds.has(item.project.projectId) ? item.project.projectId : undefined;
                 const importedProjectId = importProject({
                     ...item.project,
+                    projectId: domainProjectId,
                     title: item.project.title || "导入画布",
                     nodes: item.project.nodes || [],
                 });
@@ -248,10 +250,18 @@ export default function CanvasPage() {
                         const nextStorageKey = mapped ? mapped.storageKey : oldKey && !isDeadBlob(oldKey) ? oldKey : undefined;
                         const content = mapped ? mapped.url : isDeadBlob(node.metadata?.content) ? "" : node.metadata?.content;
                         const previewContent = mapped ? mapped.url : isDeadBlob(node.metadata?.previewContent) ? "" : node.metadata?.previewContent;
+                        const isMedia = node.type === CanvasNodeType.Image || node.type === CanvasNodeType.Video || node.type === CanvasNodeType.Audio;
+                        // 包内媒体已重新写入当前账号，节点是导入副本：与复制节点一致，不继承源画布的任务绑定和素材 ID。
+                        // 否则素材登记会把它当作未加载的受管生成结果拒绝，或去读取当前账号无权访问的旧素材，整次导入失败。
+                        let baseMetadata = node.metadata;
+                        if (mapped && isMedia) {
+                            baseMetadata = resetGenerationTaskMetadata(node.metadata, "success");
+                            delete baseMetadata.assetId;
+                        }
                         return {
                             ...node,
                             metadata: {
-                                ...node.metadata,
+                                ...baseMetadata,
                                 ...(nextStorageKey !== undefined ? { storageKey: nextStorageKey } : {}),
                                 ...(content !== undefined ? { content } : {}),
                                 ...(previewContent !== undefined ? { previewContent } : {}),
@@ -271,7 +281,15 @@ export default function CanvasPage() {
                                   return mapped
                                       ? {
                                             ...clip,
-                                            directMedia: { ...directMedia, storageKey: mapped.storageKey, url: mapped.url, dataUrl: directMedia.dataUrl ? mapped.url : directMedia.dataUrl, content: directMedia.content ? mapped.url : directMedia.content },
+                                            // 旧素材不引用新资源，保留会被后端判为素材与资源不匹配；清空后由下方重新登记。
+                                            directMedia: {
+                                                ...directMedia,
+                                                assetId: undefined,
+                                                storageKey: mapped.storageKey,
+                                                url: mapped.url,
+                                                dataUrl: directMedia.dataUrl ? mapped.url : directMedia.dataUrl,
+                                                content: directMedia.content ? mapped.url : directMedia.content,
+                                            },
                                         }
                                       : clip;
                               }),
@@ -287,7 +305,7 @@ export default function CanvasPage() {
                         const storageKey = node.metadata.storageKey || "";
                         let assetId = storageKey ? assetIdByStorageKey.get(storageKey) : undefined;
                         if (!assetId) {
-                            const result = await ensureCanvasNodeAsset({ canvasId: importedProjectId, domainProjectId: item.project.projectId, node, source: "canvas-upload" });
+                            const result = await ensureCanvasNodeAsset({ canvasId: importedProjectId, domainProjectId, node, source: "canvas-upload" });
                             assetId = result.assetId;
                             if (storageKey) assetIdByStorageKey.set(storageKey, assetId);
                         }
@@ -314,7 +332,7 @@ export default function CanvasPage() {
                                     height: media.height || (type === CanvasNodeType.Audio ? 120 : 240),
                                     metadata: { content, storageKey: media.storageKey, naturalWidth: media.width, naturalHeight: media.height, durationMs: media.durationMs, bytes: media.bytes, mimeType: media.mimeType },
                                 };
-                                const result = await ensureCanvasNodeAsset({ canvasId: importedProjectId, domainProjectId: item.project.projectId, node, source: "canvas-upload" });
+                                const result = await ensureCanvasNodeAsset({ canvasId: importedProjectId, domainProjectId, node, source: "canvas-upload" });
                                 assetId = result.assetId;
                                 assetIdByStorageKey.set(media.storageKey, assetId);
                             }
@@ -415,12 +433,6 @@ export default function CanvasPage() {
         });
     }, [hydrated, message, mode, projects, sessionHydrated, userId, libraryQuery.isSuccess]);
 
-    if (hydrationError)
-        return (
-            <WorkspacePage>
-                <WorkspaceState icon="canvas" title="旧画布需要核对" description={hydrationError} />
-            </WorkspacePage>
-        );
     if (hydrated && !libraryQuery.isError && (mode === "new" || mode === "recent" || mode === "handoff")) return <main className="flex h-full items-center justify-center bg-background text-sm text-stone-500">正在打开画布...</main>;
 
     return (

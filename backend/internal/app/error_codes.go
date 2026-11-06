@@ -36,6 +36,12 @@ const (
 	ReasonInsufficientCredits          = kernel.ReasonInsufficientCredits
 	ReasonStorageCapacity              = kernel.ReasonStorageCapacityExceeded
 	ReasonStorageReadOnly              = kernel.ReasonStorageReadOnly
+	ReasonDramaBudget                  = kernel.ReasonDramaBudgetExhausted
+	ReasonDramaSegmentChanged          = kernel.ReasonDramaSegmentChanged
+	ReasonDramaEpisodeConfirmRequired  = kernel.ReasonDramaEpisodeConfirmRequired
+	ReasonAgentInterjectionRunFinished = kernel.ReasonAgentInterjectionRunFinished
+	ReasonAgentInterjectionDelivered   = kernel.ReasonAgentInterjectionDelivered
+	ReasonAgentRunStateBusy            = kernel.ReasonAgentRunStateBusy
 	ReasonRateLimited                  = kernel.ReasonRateLimited
 	ReasonUsernameChangeLimit          = kernel.ReasonUsernameChangeLimit
 	ReasonUnavailable                  = kernel.ReasonUnavailable
@@ -44,11 +50,6 @@ const (
 	ReasonBadGateway                   = kernel.ReasonBadGateway
 	ReasonUpstreamDNSFailed            = kernel.ReasonUpstreamDNSFailed
 	ReasonProjectNameConflict          = kernel.ReasonProjectNameConflict
-	ReasonDramaBudget                  = kernel.ReasonDramaBudgetExhausted
-	ReasonDramaSegmentChanged          = kernel.ReasonDramaSegmentChanged
-	ReasonAgentInterjectionRunFinished = kernel.ReasonAgentInterjectionRunFinished
-	ReasonAgentInterjectionDelivered   = kernel.ReasonAgentInterjectionDelivered
-	ReasonAgentRunStateBusy            = kernel.ReasonAgentRunStateBusy
 )
 
 func ReasonForStatus(status int) ErrorReason {

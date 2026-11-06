@@ -87,10 +87,10 @@ func (r *Repository) SkillLibraryCategoryCounts(userID string, scope string) (ma
 		Count      int64  `gorm:"column:count"`
 	}
 	var rows []categoryCount
-	query := withPlatformSkillAvailability(r.db.Table("skills").
+	query := r.db.Table("skills").
 		Select("COALESCE(user_skill_states.library_category_id, '') AS library_category_id, COUNT(*) AS count").
 		Joins("LEFT JOIN user_skill_states ON user_skill_states.skill_id = skills.id AND user_skill_states.user_id = ?", userID).
-		Where("skills.status = ?", 1))
+		Where("skills.status = ?", 1)
 	switch scope {
 	case "mine":
 		query = query.Where("skills.owner_id = ? OR (user_skill_states.added = ? AND skills.is_private = ?)", userID, true, false)
