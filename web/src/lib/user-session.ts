@@ -1,4 +1,4 @@
-import { getFeatureAvailability, type AuthSessionPayload } from "@/services/api/auth";
+import { getAuthSession, getFeatureAvailability, type AuthSessionPayload } from "@/services/api/auth";
 import { projectImageParameters, imageParametersForSpec } from "./image-parameters";
 import { getModelCatalog, type CapabilitySpec, type ModelCatalogResponse, type OptionConstraint, type PublicChannelCatalog, type PublicLogicalModel } from "@/services/api/logical-models";
 import { localForageStorage } from "@/lib/localforage-storage";
@@ -59,6 +59,16 @@ export async function applyUserSession(payload: AuthSessionPayload) {
     useUserStore.getState().setDrawingEngine(payload.drawingEngine);
     useUserStore.getState().setFeatures(payload.features);
     useUserStore.getState().setUserGroup(payload.userGroup);
+    if (!nextUserId && previousUserId && !payload.features) {
+        try {
+            const anonymous = await getAuthSession();
+            if (!isCurrentSession(generation, nextUserId)) return;
+            if (!anonymous.user) useUserStore.getState().setFeatures(anonymous.features);
+        } catch {
+            // Account state is already cleared; failed guest settings keep the default visibility.
+        }
+    }
+    if (!isCurrentSession(generation, nextUserId)) return;
     installRemoteUserDataAutoSync();
     try {
         // 缓存恢复和同步基线必须先于工作区开放，防止生成/编辑抢跑，或被初始化误记为已同步。

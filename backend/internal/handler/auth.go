@@ -167,9 +167,18 @@ func RegisterAuthRoutes(r *gin.RouterGroup, svc *service.Service) {
 		ok(c, gin.H{"ok": true})
 	})
 	r.GET("/auth/session", func(c *gin.Context) {
+		c.Header("Cache-Control", "no-store")
 		user, err := currentUser(c, svc)
 		if err != nil {
-			ok(c, gin.H{"user": nil})
+			features, featuresErr := svc.FeatureAvailability()
+			if featuresErr != nil {
+				failService(c, featuresErr)
+				return
+			}
+			ok(c, gin.H{"user": nil, "features": gin.H{
+				"inspirationHallEnabled":    features.InspirationHallEnabled,
+				"inspirationSourcesVisible": features.InspirationSourcesVisible,
+			}})
 			return
 		}
 		publicUser, err := svc.PublicAuthUser(user)

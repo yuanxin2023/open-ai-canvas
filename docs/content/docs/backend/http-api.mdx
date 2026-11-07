@@ -518,6 +518,8 @@ Token 报价的 `estimated` 为 `true`，`quantity` 是预留 Token 数。`inten
 
 `GET /auth/session` 的 `userGroup` 为 `{ code, name, badgeLabel, badgeStyle }`；用户对象的 `userGroup` 编码为空表示 `default`。公开徽章不包含渠道绑定。后台管理分组要求 `admin.users.groups`，全权限管理员自动具备权限；已有其他模块授权不会隐式授权分组管理。
 
+未登录时，`GET /auth/session` 返回 `{ user: null, features: { inspirationHallEnabled, inspirationSourcesVisible } }`，两个布尔值沿用后台「功能开放」的配置，供游客首页展示灵感大厅及来源信息。匿名响应不包含其余功能配置、配置修改人、用户分组、额度或登录用户的模型目录；响应使用 `Cache-Control: no-store`。退出登录后前端重新读取匿名会话，配置读取失败仍清理账号状态并恢复默认关闭。`GET /features` 与个人灵感库读写接口继续要求登录，公开浏览不授予收藏、个人管理或生成权限。
+
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
 | GET | `/api/admin/user-groups` | 返回 `{ groups }`，每组含 `isDefault`、`channelIds`、`userCount` |

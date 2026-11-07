@@ -198,7 +198,7 @@ const allFeatureRows: FeatureRow[] = [
         key: "inspirationHallEnabled",
         section: "entrances",
         title: "灵感大厅",
-        description: "开放创作首页的灵感大厅，保留个人提示词入口。",
+        description: "开放创作首页的灵感大厅，登录用户与游客均可浏览；收藏和个人管理需登录，保留个人提示词入口。",
         icon: <Sparkles className="size-4" aria-hidden="true" />,
         changeCopy: {
             enabled: { title: "确认开启灵感大厅？", operation: "开放灵感大厅入口。", userImpact: "用户可以浏览和使用灵感大厅内容。", okText: "确认开启" },

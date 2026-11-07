@@ -67,7 +67,7 @@ export type AuthSessionPayload = {
     logicalModels?: PublicLogicalModel[];
     runtimeLimits?: RuntimeLimits;
     drawingEngine?: CanvasDrawingEngineSetting;
-    features?: FeatureAvailability;
+    features?: Partial<FeatureAvailability>;
     /** 当前账号所属分组的展示信息；分组配置缺失时为空。 */
     userGroup?: PublicUserGroup | null;
 };

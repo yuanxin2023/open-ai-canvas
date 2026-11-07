@@ -2525,11 +2525,16 @@ paths:
     get:
       tags: [auth]
       summary: 当前登录会话
-      description: 登录时 data 包含 user、runtimeLimits、drawingEngine、features 和 referralAvailable（是否显示推广中心入口）。
+      description: >-
+        登录时 data 包含 user、runtimeLimits、drawingEngine、features 和 referralAvailable（是否显示推广中心入口）。
+        匿名时 user 为 null，features 仅包含 inspirationHallEnabled 和 inspirationSourcesVisible，供游客首页读取后台配置，
+        不返回其他功能开关、配置审计字段、用户分组或额度。响应使用 Cache-Control no-store；功能配置读取失败返回标准错误。
       responses:
         "200":
           $ref: "#/components/responses/Envelope"
         "401":
+          $ref: "#/components/responses/Error"
+        "500":
           $ref: "#/components/responses/Error"
   /auth/profile:
     patch:
