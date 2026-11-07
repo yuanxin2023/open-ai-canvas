@@ -405,7 +405,13 @@ export default function AppearanceSettingsPage() {
     const darkLogoSelected = Boolean(files["logo-dark"] || (!resets["logo-dark"] && setting?.darkLogoResourceId));
     const status = setting?.configured ? <AdminStatusBadge label="已自定义" tone="success" /> : <AdminStatusBadge label="使用原始外观" tone="neutral" />;
     const copyCustomized = normalizeDraftCopy(authHeroTitle) !== DEFAULT_PUBLIC_APPEARANCE.authHeroTitle || normalizeDraftCopy(authHeroDescription) !== DEFAULT_PUBLIC_APPEARANCE.authHeroDescription;
-    const composerGlowCustomized = composerGlowEnabled !== DEFAULT_PUBLIC_APPEARANCE.composerGlowEnabled || composerGlowColor !== DEFAULT_PUBLIC_APPEARANCE.composerGlowColor || composerGlowIntensity !== DEFAULT_PUBLIC_APPEARANCE.composerGlowIntensity || composerGlowSize !== DEFAULT_PUBLIC_APPEARANCE.composerGlowSize || composerGlowPositionX !== DEFAULT_PUBLIC_APPEARANCE.composerGlowPositionX || composerGlowPositionY !== DEFAULT_PUBLIC_APPEARANCE.composerGlowPositionY;
+    const composerGlowCustomized =
+        composerGlowEnabled !== DEFAULT_PUBLIC_APPEARANCE.composerGlowEnabled ||
+        composerGlowColor !== DEFAULT_PUBLIC_APPEARANCE.composerGlowColor ||
+        composerGlowIntensity !== DEFAULT_PUBLIC_APPEARANCE.composerGlowIntensity ||
+        composerGlowSize !== DEFAULT_PUBLIC_APPEARANCE.composerGlowSize ||
+        composerGlowPositionX !== DEFAULT_PUBLIC_APPEARANCE.composerGlowPositionX ||
+        composerGlowPositionY !== DEFAULT_PUBLIC_APPEARANCE.composerGlowPositionY;
     const draftBrandName = brandName.trim() || "站点名称";
     return (
         <AdminPageFrame title="站点及外观" description="统一管理品牌身份、创作首屏、登录页、画布 Agent、搜索信息与备案展示" scroll>
@@ -580,22 +586,42 @@ export default function AppearanceSettingsPage() {
                                                     <Slider disabled={!composerGlowEnabled} min={50} max={180} step={5} value={composerGlowSize} tooltip={{ formatter: (value) => `${value}%` }} onChange={setComposerGlowSize} />
                                                 </Form.Item>
                                                 <Form.Item label="水平位置" extra="调整光晕中心在整个创作首屏区域中的横向位置。">
-                                                    <Slider disabled={!composerGlowEnabled} min={10} max={90} step={1} value={composerGlowPositionX} marks={{ 10: "左", 50: "居中", 90: "右" }} tooltip={{ formatter: (value) => `${value}%` }} onChange={setComposerGlowPositionX} />
+                                                    <Slider
+                                                        disabled={!composerGlowEnabled}
+                                                        min={10}
+                                                        max={90}
+                                                        step={1}
+                                                        value={composerGlowPositionX}
+                                                        marks={{ 10: "左", 50: "居中", 90: "右" }}
+                                                        tooltip={{ formatter: (value) => `${value}%` }}
+                                                        onChange={setComposerGlowPositionX}
+                                                    />
                                                 </Form.Item>
                                                 <Form.Item label="上下位置" extra="0px 位于创作首屏区域中心；负值向上，正值向下。">
-                                                    <Slider disabled={!composerGlowEnabled} min={-100} max={100} step={4} value={composerGlowPositionY} marks={{ [-100]: "上", 0: "基准", 100: "下" }} tooltip={{ formatter: (value) => `${Number(value) > 0 ? "+" : ""}${value}px` }} onChange={setComposerGlowPositionY} />
+                                                    <Slider
+                                                        disabled={!composerGlowEnabled}
+                                                        min={-100}
+                                                        max={100}
+                                                        step={4}
+                                                        value={composerGlowPositionY}
+                                                        marks={{ [-100]: "上", 0: "基准", 100: "下" }}
+                                                        tooltip={{ formatter: (value) => `${Number(value) > 0 ? "+" : ""}${value}px` }}
+                                                        onChange={setComposerGlowPositionY}
+                                                    />
                                                 </Form.Item>
                                             </Form>
                                             <div
                                                 className="admin-appearance-composer-preview"
                                                 data-glow-enabled={composerGlowEnabled}
-                                                style={{
-                                                    "--appearance-composer-glow": composerGlowColor,
-                                                    "--appearance-composer-glow-opacity": composerGlowIntensity / 100,
-                                                    "--appearance-composer-glow-scale": composerGlowSize / 100,
-                                                    "--appearance-composer-glow-x": `${composerGlowPositionX}%`,
-                                                    "--appearance-composer-glow-y": `${composerGlowPositionY}px`,
-                                                } as CSSProperties}
+                                                style={
+                                                    {
+                                                        "--appearance-composer-glow": composerGlowColor,
+                                                        "--appearance-composer-glow-opacity": composerGlowIntensity / 100,
+                                                        "--appearance-composer-glow-scale": composerGlowSize / 100,
+                                                        "--appearance-composer-glow-x": `${composerGlowPositionX}%`,
+                                                        "--appearance-composer-glow-y": `${composerGlowPositionY}px`,
+                                                    } as CSSProperties
+                                                }
                                                 aria-label="创作首屏光晕预览"
                                             >
                                                 <div className="admin-appearance-composer-preview-stage">
@@ -605,7 +631,10 @@ export default function AppearanceSettingsPage() {
                                                         <span>从一个画面、一个角色或一句话开始。</span>
                                                     </div>
                                                     <div className="admin-appearance-composer-preview-tabs" aria-hidden="true">
-                                                        <span>视频</span><span>图片</span><span className="is-active">文本</span><span>Agent</span>
+                                                        <span>视频</span>
+                                                        <span>图片</span>
+                                                        <span className="is-active">文本</span>
+                                                        <span>Agent</span>
                                                     </div>
                                                     <div className="admin-appearance-composer-preview-field">
                                                         <Plus aria-hidden="true" />
@@ -613,7 +642,9 @@ export default function AppearanceSettingsPage() {
                                                         <strong>开始创作</strong>
                                                     </div>
                                                     <div className="admin-appearance-composer-preview-suggestions" aria-hidden="true">
-                                                        <span>生成第一个镜头</span><span>从参考图开始</span><span>续写故事</span>
+                                                        <span>生成第一个镜头</span>
+                                                        <span>从参考图开始</span>
+                                                        <span>续写故事</span>
                                                     </div>
                                                 </div>
                                             </div>
@@ -759,7 +790,7 @@ export default function AppearanceSettingsPage() {
                                         className="admin-appearance-section"
                                         icon={<Globe2 className="size-4" aria-hidden="true" />}
                                         title="首页页尾与备案"
-                                        description="配置公开登录首页底部的版权和备案信息；备案号启用后固定链接工信部备案管理系统。"
+                                        description="配置网站首页页尾及独立登录、注册、找回密码页面底部的版权和备案信息；首页滚动至页尾即可查看，备案号启用后固定链接工信部备案管理系统。"
                                         status={<AdminStatusBadge label={icpFilingEnabled ? "展示备案号" : "未展示备案号"} tone={icpFilingEnabled ? "success" : "neutral"} />}
                                     >
                                         <div className="admin-appearance-section-form admin-appearance-footer-settings">
@@ -781,7 +812,10 @@ export default function AppearanceSettingsPage() {
                                             <div className="admin-appearance-logo-frame-option">
                                                 <div className="admin-appearance-logo-frame-copy">
                                                     <strong>在首页底部显示备案号</strong>
-                                                    <p id="appearance-icp-help">启用后，备案号会显示在登录、注册和找回密码页底部，并链接至 https://beian.miit.gov.cn/ 供公众查询。</p>
+                                                    <p id="appearance-icp-help">
+                                                        启用后，备案号会显示在网站首页灵感大厅之后，滚动至页尾即可查看，对话工作区不显示；独立登录、注册、找回密码页仍在底部展示，登录弹窗模式下可在首页页尾查看，并链接至 https://beian.miit.gov.cn/
+                                                        供公众查询。已备案并公开运行的网站应保持开启，填写对应网站的真实完整备案号。
+                                                    </p>
                                                 </div>
                                                 <div className="admin-appearance-logo-frame-control">
                                                     <span>{icpFilingEnabled ? "已显示" : "未显示"}</span>

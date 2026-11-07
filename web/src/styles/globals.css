@@ -665,6 +665,31 @@
     height: 11px;
 }
 
+.site-compliance-footer.is-workspace {
+    flex-direction: column;
+    gap: var(--space-1);
+    padding-top: var(--space-2);
+    padding-bottom: calc(var(--space-2) + env(safe-area-inset-bottom, 0px));
+    padding-left: max(var(--space-4), env(safe-area-inset-left, 0px));
+    padding-right: max(var(--space-4), env(safe-area-inset-right, 0px));
+    background: transparent;
+    color: var(--user-ink-muted);
+}
+
+.site-compliance-footer.is-workspace a {
+    min-width: 0;
+    max-width: 100%;
+}
+
+.site-compliance-footer.is-workspace a span {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.site-compliance-footer.is-workspace svg {
+    flex-shrink: 0;
+}
+
 .site-compliance-footer.is-auth {
     min-height: 54px;
     border-top: var(--control-border-width) solid var(--border);

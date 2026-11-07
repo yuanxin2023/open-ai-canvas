@@ -1,8 +1,41 @@
 import { describe, expect, test } from "bun:test";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 
-import { applyAppearanceMetadata, normalizePublicAppearance } from "../src/stores/use-appearance-store";
+import { SiteComplianceFooter } from "../src/components/layout/site-compliance-footer";
+import { applyAppearanceMetadata, normalizePublicAppearance, useAppearanceStore } from "../src/stores/use-appearance-store";
 
 describe("site appearance", () => {
+    test.each([
+        { enabled: true, number: "蜀ICP备2026000000号-1", visible: true },
+        { enabled: false, number: "蜀ICP备2026000000号-1", visible: false },
+        { enabled: true, number: "", visible: false },
+    ])("workspace footer renders copyright and conditional filing: %j", ({ enabled, number, visible }) => {
+        // Server rendering reads Zustand's initial snapshot rather than its live state.
+        const snapshot = useAppearanceStore.getInitialState();
+        const previousAppearance = snapshot.appearance;
+        snapshot.appearance = normalizePublicAppearance({
+            footerCopyright: "© 2026 HIMA Studio. All rights reserved.",
+            icpFilingEnabled: enabled,
+            icpFilingNumber: number,
+        });
+        try {
+            const markup = renderToStaticMarkup(createElement(SiteComplianceFooter, { variant: "workspace" }));
+            expect(markup).toContain("© 2026 HIMA Studio. All rights reserved.");
+            expect(markup).toContain("site-compliance-footer is-workspace");
+            if (visible) {
+                expect(markup).toContain(number);
+                expect(markup).toContain('href="https://beian.miit.gov.cn/"');
+                expect(markup).toContain('target="_blank"');
+                expect(markup).toContain('rel="noopener noreferrer"');
+            } else {
+                expect(markup).not.toContain("<a ");
+            }
+        } finally {
+            snapshot.appearance = previousAppearance;
+        }
+    });
+
     test("custom site metadata, footer, and filing survive normalization", () => {
         const appearance = normalizePublicAppearance({
             brandName: "HIMA Studio",
@@ -32,8 +65,20 @@ describe("site appearance", () => {
     test("composer glow color is normalized and unsafe values fall back", () => {
         expect(normalizePublicAppearance({ composerGlowColor: "#c7c4ff" }).composerGlowColor).toBe("#C7C4FF");
         expect(normalizePublicAppearance({ composerGlowColor: "red; background: url(javascript:alert(1))" }).composerGlowColor).toBe("#B9DEFF");
-        expect(normalizePublicAppearance({ composerGlowEnabled: false, composerGlowIntensity: 65, composerGlowSize: 150, composerGlowPositionX: 72, composerGlowPositionY: -32 })).toMatchObject({ composerGlowEnabled: false, composerGlowIntensity: 65, composerGlowSize: 150, composerGlowPositionX: 72, composerGlowPositionY: -32 });
-        expect(normalizePublicAppearance({ composerGlowIntensity: 999, composerGlowSize: 999, composerGlowPositionX: -1, composerGlowPositionY: 999 })).toMatchObject({ composerGlowEnabled: true, composerGlowIntensity: 100, composerGlowSize: 100, composerGlowPositionX: 50, composerGlowPositionY: 0 });
+        expect(normalizePublicAppearance({ composerGlowEnabled: false, composerGlowIntensity: 65, composerGlowSize: 150, composerGlowPositionX: 72, composerGlowPositionY: -32 })).toMatchObject({
+            composerGlowEnabled: false,
+            composerGlowIntensity: 65,
+            composerGlowSize: 150,
+            composerGlowPositionX: 72,
+            composerGlowPositionY: -32,
+        });
+        expect(normalizePublicAppearance({ composerGlowIntensity: 999, composerGlowSize: 999, composerGlowPositionX: -1, composerGlowPositionY: 999 })).toMatchObject({
+            composerGlowEnabled: true,
+            composerGlowIntensity: 100,
+            composerGlowSize: 100,
+            composerGlowPositionX: 50,
+            composerGlowPositionY: 0,
+        });
     });
 
     test("metadata uses fixed classic colors for light and dark mode", () => {
@@ -49,8 +94,12 @@ describe("site appearance", () => {
                 return {
                     rel: "",
                     href: "",
-                    setAttribute: (_attribute: string, value: string) => { key = value; },
-                    set content(value: string) { meta.set(key, value); },
+                    setAttribute: (_attribute: string, value: string) => {
+                        key = value;
+                    },
+                    set content(value: string) {
+                        meta.set(key, value);
+                    },
                     remove: () => meta.delete(key),
                 };
             },
@@ -58,7 +107,12 @@ describe("site appearance", () => {
                 if (selector === 'link[rel~="icon"]') return icon;
                 const match = selector.match(/meta\[(?:name|property)="([^"]+)"\]/);
                 if (!match) return null;
-                return { set content(value: string) { meta.set(match[1], value); }, remove: () => meta.delete(match[1]) };
+                return {
+                    set content(value: string) {
+                        meta.set(match[1], value);
+                    },
+                    remove: () => meta.delete(match[1]),
+                };
             },
         } as unknown as Document;
 

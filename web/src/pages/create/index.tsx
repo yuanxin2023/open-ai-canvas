@@ -8,6 +8,7 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useLocation, useNavigate } from "react-router";
 
 import type { AssetLibraryPickerItem } from "@/components/assets/asset-library-picker-modal";
+import { SiteComplianceFooter } from "@/components/layout/site-compliance-footer";
 import { publishWorkspaceSidebarCollapsed } from "@/components/layout/workspace-sidebar-state";
 import { generationErrorCode, generationErrorMessage } from "@/lib/generation-error";
 import { isInsufficientCreditsError, INSUFFICIENT_CREDITS_REASON } from "@/lib/image-credit-guidance";
@@ -1684,6 +1685,7 @@ function CreationPageContent() {
                                     }}
                                 />
                             </Suspense>
+                            <SiteComplianceFooter variant="workspace" />
                         </main>
                     </>
                 ) : (
