@@ -34,18 +34,18 @@ describe("workspace sidebar checkin card", () => {
         expect(rule).toContain("padding: 0;");
         expect(rule).toContain("box-shadow: none;");
     });
-    test("sits above account storage and uses the claim card colors without a light-blue stage", () => {
+    test("home checkin is mounted in the topbar instead of the sidebar", () => {
         const sidebar = readFileSync(resolve(import.meta.dir, "../src/components/layout/workspace-sidebar-nav.tsx"), "utf8");
+        const topbar = readFileSync(resolve(import.meta.dir, "../src/components/layout/workspace-top-bar.tsx"), "utf8");
         const card = readFileSync(resolve(import.meta.dir, "../src/components/layout/workspace-sidebar-checkin.tsx"), "utf8");
         const css = readFileSync(resolve(import.meta.dir, "../src/styles/globals.css"), "utf8");
-        const checkinIndex = sidebar.indexOf("<WorkspaceSidebarCheckin collapsed={collapsed} />");
-        const storageIndex = sidebar.indexOf("<WorkspaceSidebarStorageMeter collapsed={collapsed} />");
         const start = css.indexOf(".app-user-workspace .app-workspace-sidebar-checkin {");
         const end = css.indexOf(".app-user-workspace .app-workspace-sidebar-storage {", start);
         const block = css.slice(start, end);
 
-        expect(checkinIndex).toBeGreaterThan(-1);
-        expect(storageIndex).toBeGreaterThan(checkinIndex);
+        expect(sidebar).not.toContain("<WorkspaceSidebarCheckin");
+        expect(sidebar).not.toContain("<WorkspaceSidebarStorageMeter");
+        expect(topbar).toContain("<WorkspaceTopBarCheckin />");
         expect(card).toContain('t("account.layout.checkin.claim")');
         expect(accountZh.layout.checkin.claim).toBe("立即领取");
         expect(card).toContain('{t("account.layout.checkin.offerBefore")}\n                    <em>{amount}</em>\n                    {t("account.layout.checkin.offerAfter")}');

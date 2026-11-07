@@ -1,8 +1,11 @@
 import { Button } from "antd";
-import { ArrowUpRight, Coins, Gift, LogOut, RefreshCw, Settings, ShieldCheck } from "lucide-react";
+import { ArrowUpRight, ChevronDown, Coins, Gift, HardDrive, LogOut, RefreshCw, Settings, ShieldCheck } from "lucide-react";
 import { Link } from "react-router";
 import { useTranslation } from "react-i18next";
 import { currentLocale } from "@/i18n";
+import { useAccountFileStorageUsage } from "@/hooks/use-account-file-storage-usage";
+import { accountStorageMeter } from "@/lib/account-storage-usage";
+import { progressFillStyle } from "@/lib/progress-fill";
 import { useWalletBalance } from "@/hooks/use-wallet-balance";
 import { useWorkspaceLogout } from "@/hooks/use-workspace-logout";
 import { useUserStore } from "@/stores/use-user-store";
@@ -10,11 +13,13 @@ import { UserAvatar } from "./user-avatar";
 import { UserGroupAvatarRing, UserGroupBadge } from "./user-group-badge";
 import "./workspace-account-card.css";
 
-/** 同一账户卡片用于顶部和侧栏；余额与退出均复用真实服务。 */
+/** 顶部账户卡片集中展示余额、文件容量和账户操作。 */
 export function WorkspaceAccountCard({ onWallet, onNavigate }: { onWallet: () => void; onNavigate: () => void }) {
     const user = useUserStore((state) => state.user);
     const creditsEnabled = useUserStore((state) => state.features.creditsEnabled);
     const { availableMicrocredits, refreshing, refresh } = useWalletBalance(user?.id, creditsEnabled);
+    const storageQuery = useAccountFileStorageUsage(Boolean(user));
+    const meter = accountStorageMeter(storageQuery.data);
     const { handleLogout, loggingOut } = useWorkspaceLogout();
     const { t } = useTranslation();
     if (!user) return null;
@@ -54,6 +59,51 @@ export function WorkspaceAccountCard({ onWallet, onNavigate }: { onWallet: () =>
                     )}
                 </div>
             ) : null}
+            <details className={`workspace-account-card-storage is-${meter.tone}`}>
+                <summary>
+                    <HardDrive aria-hidden />
+                    <span>{t("local.ui.storageUsage")}</span>
+                    <small>{storageQuery.data ? `${meter.usedLabel} / ${meter.totalLabel}` : storageQuery.isError ? t("local.ui.unavailable") : t("account.layout.storage.counting")}</small>
+                    <ChevronDown className="workspace-account-card-storage-chevron" aria-hidden />
+                </summary>
+                <div className="workspace-account-card-storage-detail">
+                    {storageQuery.data ? (
+                        <>
+                            <div className="workspace-account-card-storage-heading">
+                                <span>{t("local.ui.storageUsage")}</span>
+                                <strong>{meter.percentLabel}</strong>
+                            </div>
+                            <span
+                                className="workspace-account-card-storage-track"
+                                role="progressbar"
+                                aria-label={t("account.layout.storage.progress")}
+                                aria-valuemin={0}
+                                aria-valuemax={storageQuery.data.totalBytes}
+                                aria-valuenow={Math.min(storageQuery.data.usedBytes, storageQuery.data.totalBytes)}
+                                aria-valuetext={t("account.layout.storage.summary", {
+                                    used: t("account.layout.storage.used", { size: meter.usedLabel }),
+                                    remaining: t("account.layout.storage.remaining", { size: meter.remainingLabel }),
+                                    total: t("account.layout.storage.total", { size: meter.totalLabel }),
+                                })}
+                            >
+                                <span style={progressFillStyle(meter.percent)} />
+                            </span>
+                            <div className="workspace-account-card-storage-meta">
+                                <span>{t("account.layout.storage.used", { size: meter.usedLabel })}</span>
+                                <span>{t("account.layout.storage.remaining", { size: meter.remainingLabel })}</span>
+                            </div>
+                            {meter.state !== "ok" || meter.full ? <p role="status">{t(meter.state === "read_only" ? "account.layout.storage.readOnly" : meter.state === "grace" ? "account.layout.storage.over" : "account.layout.storage.full")}</p> : null}
+                        </>
+                    ) : (
+                        <span>{storageQuery.isError ? t("local.ui.storageUnavailable") : t("account.layout.storage.counting")}</span>
+                    )}
+                    {storageQuery.isError ? (
+                        <button type="button" className="workspace-account-card-storage-retry" disabled={storageQuery.isFetching} onClick={() => void storageQuery.refetch()}>
+                            {t("common.retry")}
+                        </button>
+                    ) : null}
+                </div>
+            </details>
             <nav className="workspace-account-card-actions" aria-label={t("shell.account.actions")}>
                 <Link to="/settings?section=profile" onClick={onNavigate}>
                     <Settings />

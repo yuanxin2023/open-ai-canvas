@@ -8,6 +8,7 @@ import { SystemAnnouncementCenter } from "@/components/layout/system-announcemen
 import { WorkspaceAccountMenu } from "@/components/layout/workspace-account-menu";
 import { WorkspaceCreditPopover } from "@/components/layout/workspace-credit-popover";
 import { WorkspaceTopBarExtensionSlot } from "@/components/layout/workspace-top-bar-extension";
+import { WorkspaceTopBarCheckin } from "@/components/layout/workspace-top-bar-checkin";
 import { AnimatedThemeToggler } from "@/components/ui/animated-theme-toggler";
 import { LanguageMenu } from "@/components/layout/language-menu";
 import { useThemeStore } from "@/stores/use-theme-store";
@@ -54,6 +55,7 @@ export function WorkspaceTopBar({ sidebarOpen, onToggleSidebar, sidebarTriggerRe
                 <AnimatedThemeToggler className="app-workspace-topbar-icon-button" theme={theme} onThemeChange={setTheme} aria-label={t("shell.toggleTheme")} />
                 <WorkspaceAccountMenu />
             </div>
+            {pathname === "/" || pathname === "/create" ? <WorkspaceTopBarCheckin /> : null}
         </header>
     );
 }

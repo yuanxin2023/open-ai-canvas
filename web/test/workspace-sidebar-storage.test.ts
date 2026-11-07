@@ -49,15 +49,15 @@ describe("account storage meter", () => {
 });
 
 describe("workspace sidebar storage meter", () => {
-    test("exposes used, remaining and total through an accessible progress bar", () => {
+    test("account menu retains used, remaining and total after removing the sidebar meter", () => {
         const sidebar = readFileSync(resolve(import.meta.dir, "../src/components/layout/workspace-sidebar-nav.tsx"), "utf8");
-        const meter = readFileSync(resolve(import.meta.dir, "../src/components/layout/workspace-sidebar-storage-meter.tsx"), "utf8");
-        expect(sidebar).toContain("<WorkspaceSidebarStorageMeter");
-        expect(meter).toContain("accountStorageMeter(query.data)");
+        const meter = readFileSync(resolve(import.meta.dir, "../src/components/layout/workspace-account-card.tsx"), "utf8");
+        expect(sidebar).not.toContain("<WorkspaceSidebarStorageMeter");
+        expect(meter).toContain("accountStorageMeter(storageQuery.data)");
         expect(meter).toContain("meter.usedLabel");
         expect(meter).toContain("meter.remainingLabel");
         expect(meter).toContain("meter.totalLabel");
         expect(meter).toContain('role="progressbar"');
-        expect(meter).toContain("aria-valuetext={summary}");
+        expect(meter).toContain("aria-valuetext=");
     });
 });

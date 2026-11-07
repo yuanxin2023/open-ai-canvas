@@ -1,5 +1,5 @@
-import { translate } from "@/i18n";
 import { App } from "antd";
+import { useTranslation } from "react-i18next";
 import { useState } from "react";
 import { Gift, LoaderCircle } from "lucide-react";
 
@@ -11,8 +11,10 @@ import { ApiError } from "@/services/api/request";
 import { checkinCredits } from "@/services/api/wallet";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
 import { useUserStore } from "@/stores/use-user-store";
+import "./workspace-top-bar-checkin.css";
 
 export function WorkspaceTopBarCheckin() {
+    const { t } = useTranslation();
     const user = useUserStore((state) => state.user);
     const creditsEnabled = useUserStore((state) => state.features.creditsEnabled);
     const brandName = useAppearanceStore((state) => state.appearance.brandName);
@@ -29,7 +31,7 @@ export function WorkspaceTopBarCheckin() {
 
     const amount = formatCredits(policy.checkinBonusMicrocredits, 2);
     const title = workspaceCheckinTitle(brandName);
-    const summary = `${title}，今日可领 ${amount} 积分`;
+    const summary = t("account.layout.checkin.summary", { title, amount });
 
     const claim = async () => {
         if (claiming) return;
@@ -38,13 +40,13 @@ export function WorkspaceTopBarCheckin() {
             await checkinCredits();
             window.dispatchEvent(new CustomEvent("wallet:updated"));
             await refresh();
-            message.success(translate("account.layout.checkin.success"));
+            message.success(t("account.layout.checkin.success"));
         } catch (error) {
             const alreadyClaimed = error instanceof ApiError && error.status === 409;
             window.dispatchEvent(new CustomEvent("wallet:updated"));
             await refresh();
             if (alreadyClaimed) return;
-            message.error(error instanceof Error ? error.message : "领取失败");
+            message.error(error instanceof Error ? error.message : t("account.layout.checkin.failed"));
         } finally {
             setClaiming(false);
         }
@@ -55,13 +57,13 @@ export function WorkspaceTopBarCheckin() {
             <div className="app-workspace-topbar-checkin-copy">
                 <strong className="app-workspace-topbar-checkin-title">{title}</strong>
                 <span className="app-workspace-topbar-checkin-offer">
-                    {translate("local.ui.todayReward")}
+                    {t("account.layout.checkin.offerBefore")}
                     <em>{amount}</em>
-                    {translate("shell.credits")}
+                    {t("account.layout.checkin.offerAfter")}
                 </span>
             </div>
-            <button type="button" className={cn("app-workspace-topbar-checkin-claim", claiming && "is-loading")} disabled={claiming} aria-label={`立即领取 ${amount} 积分`} onClick={() => void claim()}>
-                {claiming ? translate("account.layout.checkin.claiming") : translate("account.layout.checkin.claim")}
+            <button type="button" className={cn("app-workspace-topbar-checkin-claim", claiming && "is-loading")} disabled={claiming} aria-label={t("account.layout.checkin.claimAmount", { amount })} onClick={() => void claim()}>
+                {claiming ? t("account.layout.checkin.claiming") : t("account.layout.checkin.claim")}
             </button>
         </aside>
     );

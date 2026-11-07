@@ -109,6 +109,84 @@
     width: 100%;
     height: 100%;
 }
+.workspace-account-card-storage {
+    margin-bottom: var(--space-1);
+    font-size: var(--fs-ui);
+}
+.workspace-account-card-storage > summary {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2);
+    border-radius: var(--user-radius-control);
+    cursor: pointer;
+    list-style: none;
+}
+.workspace-account-card-storage > summary::-webkit-details-marker {
+    display: none;
+}
+.workspace-account-card-storage > summary:hover {
+    background: var(--user-surface-muted);
+}
+.workspace-account-card-storage > summary > span {
+    flex: 1;
+    min-width: 0;
+}
+.workspace-account-card-storage > summary > small {
+    overflow: hidden;
+    color: var(--user-ink-soft);
+    font-size: var(--fs-micro);
+    font-variant-numeric: tabular-nums;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.workspace-account-card-storage-chevron {
+    color: var(--user-ink-soft);
+    transition: transform var(--user-motion);
+}
+.workspace-account-card-storage[open] .workspace-account-card-storage-chevron {
+    transform: rotate(180deg);
+}
+.workspace-account-card-storage-detail {
+    margin: 0 var(--space-2) var(--space-2);
+    padding: var(--space-3);
+    border-radius: var(--user-radius-control);
+    background: var(--user-surface-muted);
+    color: var(--user-ink-muted);
+}
+.workspace-account-card-storage-heading,
+.workspace-account-card-storage-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    font-size: var(--fs-label);
+    font-variant-numeric: tabular-nums;
+}
+.workspace-account-card-storage-track {
+    display: block;
+    height: var(--space-1);
+    overflow: hidden;
+    margin-block: var(--space-2);
+    border-radius: var(--r-full);
+    background: var(--user-border);
+}
+.workspace-account-card-storage-track > span {
+    display: block;
+    height: 100%;
+    background: var(--user-accent);
+    transition: transform var(--user-motion);
+}
+.workspace-account-card-storage.is-warn .workspace-account-card-storage-track > span {
+    background: var(--status-warning);
+}
+.workspace-account-card-storage.is-critical .workspace-account-card-storage-track > span {
+    background: var(--status-error);
+}
+.workspace-account-card-storage-retry {
+    margin-top: var(--space-2);
+    color: var(--user-accent);
+}
 .workspace-account-card-actions {
     display: grid;
     gap: 4px;
@@ -148,11 +226,17 @@
     transform: scale(0.97);
 }
 .workspace-account-card-actions > a:focus-visible,
-.workspace-account-card-wallet > button:focus-visible {
+.workspace-account-card-wallet > button:focus-visible,
+.workspace-account-card-storage > summary:focus-visible,
+.workspace-account-card-storage-retry:focus-visible {
     outline: 2px solid var(--user-accent);
     outline-offset: 2px;
 }
 @media (prefers-reduced-motion: reduce) {
+    .workspace-account-card-storage-track > span,
+    .workspace-account-card-storage-chevron {
+        transition: none;
+    }
     .workspace-account-card-actions > a:active {
         transform: none;
     }

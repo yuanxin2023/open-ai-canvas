@@ -236,8 +236,12 @@ test("sidebar leaves public navigation available and resumes a protected destina
             </antd.App>,
         );
     });
-    expect(host.querySelector('[aria-label="收起侧栏"]')).toBeNull();
-    expect(expanded).toBe(0);
+    const collapseButton = host.querySelector<HTMLButtonElement>('.app-workspace-sidebar-brand-row [aria-label="收起侧栏"]');
+    expect(Boolean(collapseButton)).toBe(true);
+    await act(async () => collapseButton!.click());
+    expect(expanded).toBe(1);
+    expect(Boolean(host.querySelector('.app-workspace-sidebar-footer [data-nav-id="help"]'))).toBe(true);
+    expect(Boolean(host.querySelector(".app-workspace-sidebar-footer .app-workspace-sidebar-profile"))).toBe(false);
     expect(host.querySelector('[role="dialog"]')).toBeNull();
     await act(async () => {
         host.querySelector<HTMLAnchorElement>('[data-nav-id="home"]')!.click();

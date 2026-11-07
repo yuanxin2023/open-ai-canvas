@@ -1,0 +1,76 @@
+.app-user-workspace .app-workspace-topbar-checkin {
+    position: absolute;
+    z-index: var(--z-toolbar);
+    top: calc(100% + var(--space-6));
+    right: var(--space-3);
+    display: flex;
+    width: max-content;
+    max-width: calc(100vw - var(--space-6));
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
+    border: 1px solid var(--user-border);
+    border-radius: var(--user-radius-card);
+    background: var(--user-surface);
+    color: var(--user-ink);
+    box-shadow: var(--user-shadow-card);
+}
+.app-user-workspace .app-workspace-topbar-checkin-copy {
+    min-width: 0;
+    max-width: 11rem;
+}
+.app-user-workspace .app-workspace-topbar-checkin-title,
+.app-user-workspace .app-workspace-topbar-checkin-offer {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.app-user-workspace .app-workspace-topbar-checkin-title {
+    font-size: var(--fs-ui);
+    font-weight: 600;
+}
+.app-user-workspace .app-workspace-topbar-checkin-offer {
+    color: var(--user-ink-muted);
+    font-size: var(--fs-label);
+}
+.app-user-workspace .app-workspace-topbar-checkin-offer em {
+    margin-inline: var(--space-1);
+    color: var(--status-success);
+    font-style: normal;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+.app-user-workspace .app-workspace-topbar-checkin-claim {
+    flex: none;
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--r-full);
+    background: var(--user-ink);
+    color: var(--user-surface);
+    font-size: var(--fs-label);
+    white-space: nowrap;
+    transition: opacity var(--user-motion);
+}
+.app-user-workspace .app-workspace-topbar-checkin-claim:hover {
+    opacity: 0.85;
+}
+.app-user-workspace .app-workspace-topbar-checkin-claim:focus-visible {
+    outline: 2px solid var(--user-accent);
+    outline-offset: 2px;
+}
+.app-user-workspace .app-workspace-topbar-checkin-claim:disabled {
+    opacity: 0.6;
+}
+@media (max-width: 767px) {
+    .app-user-workspace .app-workspace-topbar-checkin {
+        position: static;
+        grid-column: 1 / -1;
+        grid-row: 3;
+        justify-self: end;
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .app-user-workspace .app-workspace-topbar-checkin-claim {
+        transition: none;
+    }
+}

@@ -13,7 +13,7 @@ import { openWorkspaceWallet } from "@/lib/workspace-wallet";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { useUserStore } from "@/stores/use-user-store";
 
-/** 顶部与侧栏复用同一账户卡片；顶部额外保留版本和主题偏好。 */
+/** 顶部集中提供账户、版本和主题偏好入口。 */
 export function WorkspaceAccountMenu() {
     const theme = useThemeStore((state) => state.theme);
     const setTheme = useThemeStore((state) => state.setTheme);
