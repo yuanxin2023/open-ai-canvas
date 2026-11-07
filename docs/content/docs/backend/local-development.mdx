@@ -27,6 +27,14 @@ docker compose -f docker-compose.deploy.yml logs --since=15m -f backend
 
 ## 一键启动（Windows PowerShell）
 
+Windows 下可双击仓库根目录的 `一键启动.bat` 和 `一键结束.bat`。启动时默认打开浏览器；自动化检查可传入 `--no-browser`，结束时传入 `--no-pause` 可跳过成功后的暂停。
+
+如果 `.local/` 中存在唯一的 `preview-*.compose.yml`，两个按钮会管理该 Compose 预览，而不是宿主机开发进程。环境变量文件使用同目录同前缀的 `.env`（例如 `preview-v181.compose.yml` 配套 `preview-v181.env`）；项目名默认遵循 Compose 配置，访问地址从 web 服务的端口映射读取。结束只停止该 Compose 项目的服务，保留容器与数据卷。
+
+有多份预览配置时必须通过 `CANVAS_PREVIEW_COMPOSE_FILE` 选择；需要覆盖项目名时同时设置 `CANVAS_PREVIEW_PROJECT_NAME`。启动与结束应使用相同配置。显式指定的文件或配套环境文件不存在时会报错，不会回退启动或关闭其他服务。已有缓存目录的 `preview-compose.yml` 仍按原有规则识别。
+
+以下命令直接启动宿主机开发服务，不使用 Compose 预览：
+
 在仓库根目录执行：
 
 ```powershell

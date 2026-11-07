@@ -5,7 +5,6 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { AuthLoginLink } from "@/components/auth/auth-login-link";
-import { AppChangelogButton } from "@/components/layout/app-changelog-modal";
 import { WorkspaceAccountCard } from "./workspace-account-card";
 import { UserAvatar } from "./user-avatar";
 import { UserGroupAvatarRing } from "./user-group-badge";
@@ -13,7 +12,7 @@ import { openWorkspaceWallet } from "@/lib/workspace-wallet";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { useUserStore } from "@/stores/use-user-store";
 
-/** 顶部集中提供账户、版本和主题偏好入口。 */
+/** 顶部集中提供账户和主题偏好入口。 */
 export function WorkspaceAccountMenu() {
     const theme = useThemeStore((state) => state.theme);
     const setTheme = useThemeStore((state) => state.setTheme);
@@ -43,15 +42,6 @@ export function WorkspaceAccountMenu() {
                                 openWorkspaceWallet();
                             }}
                         />
-
-                        <div className="workspace-topbar-account-section">
-                            <AppChangelogButton
-                                className="flex h-8 w-full items-center gap-2 rounded px-2 text-[var(--fs-label)] text-foreground/58 hover:bg-surface-hover hover:text-foreground [&_svg]:size-3.5"
-                                showLabel
-                                showVersion
-                                versionClassName="ml-auto text-[var(--fs-micro)] tabular-nums text-foreground/32"
-                            />
-                        </div>
 
                         <div className="workspace-topbar-account-theme">
                             {theme === "dark" ? <Moon className="size-3.5 text-foreground/45" /> : <Sun className="size-3.5 text-foreground/45" />}

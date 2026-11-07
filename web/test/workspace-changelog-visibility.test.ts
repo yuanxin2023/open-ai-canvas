@@ -7,12 +7,12 @@ function source(path: string) {
 }
 
 describe("workspace changelog visibility", () => {
-    test("provides the official changelog entry in the top account menu", () => {
+    test("hides changelog and version entries in workspace account menus", () => {
         const topbarAccount = source("../src/components/layout/workspace-account-menu.tsx");
         const sidebarAccount = source("../src/components/layout/workspace-sidebar-footer.tsx");
 
-        expect(topbarAccount).toContain("<AppChangelogButton");
-        expect(topbarAccount).toContain("showVersion");
+        expect(topbarAccount).not.toContain("AppChangelogButton");
+        expect(topbarAccount).not.toContain("showVersion");
         expect(sidebarAccount).not.toContain("AppChangelogButton");
     });
 

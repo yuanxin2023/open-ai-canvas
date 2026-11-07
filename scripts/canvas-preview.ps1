@@ -9,6 +9,17 @@ function Get-CanvasPreviewContext {
     )
 
     if ([string]::IsNullOrWhiteSpace($ComposeFile)) {
+        $localDirectory = Join-Path $RepoRoot ".local"
+        $localPreviews = @(Get-ChildItem -LiteralPath $localDirectory -Filter "preview-*.compose.yml" -File -ErrorAction SilentlyContinue)
+        if ($localPreviews.Count -gt 1) {
+            throw "Multiple local preview configurations were found. Set CANVAS_PREVIEW_COMPOSE_FILE to select one explicitly."
+        }
+        if ($localPreviews.Count -eq 1) {
+            $ComposeFile = $localPreviews[0].FullName
+        }
+    }
+
+    if ([string]::IsNullOrWhiteSpace($ComposeFile)) {
         $preferredComposeFile = Join-Path $RepoRoot ".local\cache\upstream-v171-preview\preview-compose.yml"
         if (Test-Path -LiteralPath $preferredComposeFile) {
             $ComposeFile = $preferredComposeFile
@@ -20,17 +31,25 @@ function Get-CanvasPreviewContext {
         }
     }
 
-    if ([string]::IsNullOrWhiteSpace($ComposeFile) -or -not (Test-Path -LiteralPath $ComposeFile)) {
+    if ([string]::IsNullOrWhiteSpace($ComposeFile)) {
         return $null
+    }
+    if (-not (Test-Path -LiteralPath $ComposeFile -PathType Leaf)) {
+        throw "Preview Compose file was not found: $ComposeFile"
     }
 
     $ComposeFile = (Resolve-Path -LiteralPath $ComposeFile).Path
-    $environmentFile = Join-Path (Split-Path -Parent $ComposeFile) "preview.env"
+    $environmentName = if ([IO.Path]::GetFileName($ComposeFile) -like "preview-*.compose.yml") {
+        [IO.Path]::GetFileName($ComposeFile) -replace '\.compose\.yml$', '.env'
+    } else {
+        "preview.env"
+    }
+    $environmentFile = Join-Path (Split-Path -Parent $ComposeFile) $environmentName
     if (-not (Test-Path -LiteralPath $environmentFile)) {
         throw "Preview environment file was not found: $environmentFile"
     }
 
-    if ([string]::IsNullOrWhiteSpace($ProjectName)) {
+    if ([string]::IsNullOrWhiteSpace($ProjectName) -and [IO.Path]::GetFileName($ComposeFile) -eq "preview-compose.yml") {
         $ProjectName = "codex-canvas-v171-preview"
     }
 
@@ -66,9 +85,12 @@ function Invoke-CanvasPreviewCompose {
     $dockerArguments = @(
         "compose",
         "--env-file", $Context.EnvironmentFile,
-        "--project-name", $Context.ProjectName,
         "--file", $Context.ComposeFile
-    ) + $Arguments
+    )
+    if (-not [string]::IsNullOrWhiteSpace($Context.ProjectName)) {
+        $dockerArguments += @("--project-name", $Context.ProjectName)
+    }
+    $dockerArguments += $Arguments
 
     if ($CaptureOutput) {
         $output = & docker @dockerArguments
