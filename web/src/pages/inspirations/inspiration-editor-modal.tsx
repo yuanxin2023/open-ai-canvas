@@ -40,12 +40,14 @@ export function InspirationEditorModal({
     categoryOptions,
     onClose,
     onSubmit,
+    disabled = false,
 }: {
     open: boolean;
     item: CreationInspiration | null;
     categoryOptions: InspirationCategoryChoice[];
     onClose: () => void;
     onSubmit: (draft: InspirationDraft) => Promise<void>;
+    disabled?: boolean;
 }) {
     const [form] = Form.useForm<FormValues>();
     const { message } = App.useApp();
@@ -60,7 +62,7 @@ export function InspirationEditorModal({
     }, []);
 
     const handleOk = async () => {
-        if (inFlight.current) return;
+        if (inFlight.current || disabled) return;
         inFlight.current = true;
         setSaving(true);
         try {
@@ -122,7 +124,7 @@ export function InspirationEditorModal({
                     >
                         取消
                     </Button>
-                    <Button type="primary" loading={saving} onClick={() => void handleOk()}>
+                    <Button type="primary" disabled={disabled} loading={saving} onClick={() => void handleOk()}>
                         {item?.promptZhNeedsReview ? "确认中文版本并保存" : item ? "保存" : "创建"}
                     </Button>
                 </div>

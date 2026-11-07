@@ -111,6 +111,7 @@ export const useInspirationStore = create<InspirationStore>((set, get) => {
             version = generation,
             before = get();
         if (!before.hydrated || before.scope !== scope) throw new Error("请先刷新个人灵感后再保存");
+        if (before.loading) throw new Error("正在刷新个人灵感，请稍候");
         if (before.busy) throw new Error("正在保存，请稍候");
         set({ busy: true });
         try {

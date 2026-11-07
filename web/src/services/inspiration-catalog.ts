@@ -37,9 +37,18 @@ const CATALOG_SOURCES: { key: InspirationSourceId; file: string }[] = [
 let pending: Promise<InspirationCatalog> | null = null;
 
 async function fetchJson<T>(url: string): Promise<T> {
-    const response = await fetch(url, { headers: { Accept: "application/json" } });
-    if (!response.ok) throw new Error(`加载灵感目录失败：${url} 返回 HTTP ${response.status}`);
-    return (await response.json()) as T;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15_000);
+    try {
+        const response = await fetch(url, { headers: { Accept: "application/json" }, signal: controller.signal });
+        if (!response.ok) throw new Error(`加载灵感目录失败：${url} 返回 HTTP ${response.status}`);
+        return (await response.json()) as T;
+    } catch (error) {
+        if (controller.signal.aborted) throw new Error("灵感目录加载超时，请重试");
+        throw error;
+    } finally {
+        clearTimeout(timeout);
+    }
 }
 
 /** 目录文件是构建期生成的，但仍然是外部数据：形状不对就抛错，不能当成空目录糊过去。 */

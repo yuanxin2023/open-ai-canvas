@@ -49,7 +49,7 @@ export type AdminInspirationFeedStatus = {
 
 /** 公开接口，匿名访客也能读取。 */
 export function getPublicInspirationFeed(signal?: AbortSignal) {
-    return http.get<InspirationFeed>("/public/inspirations/feed", { signal });
+    return http.get<InspirationFeed>("/public/inspirations/feed", { signal, timeout: 5_000 });
 }
 
 export async function getAdminInspirationFeed(signal?: AbortSignal) {

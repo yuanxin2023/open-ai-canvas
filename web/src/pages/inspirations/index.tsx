@@ -66,14 +66,32 @@ function downloadText(text: string, fileName: string) {
 }
 
 export function InspirationHall({ onUse }: { onUse: (item: CreationInspiration) => void }) {
+    const enabled = useUserStore((state) => state.features.inspirationHallEnabled);
+    const actorID = useUserStore((state) => state.user?.id);
+    return enabled ? <InspirationHallContent key={actorID ?? "guest"} onUse={onUse} /> : null;
+}
+
+function InspirationHallContent({ onUse }: { onUse: (item: CreationInspiration) => void }) {
     const { message, modal } = App.useApp();
     const inspirationSourcesVisible = useUserStore((state) => state.features.inspirationSourcesVisible);
+    const actorID = useUserStore((state) => state.user?.id);
 
     const custom = useInspirationStore((state) => state.custom);
     const overrides = useInspirationStore((state) => state.overrides);
     const hidden = useInspirationStore((state) => state.hidden);
     const favorites = useInspirationStore((state) => state.favorites);
     const hydrated = useInspirationStore((state) => state.hydrated);
+    const scope = useInspirationStore((state) => state.scope);
+    const libraryLoading = useInspirationStore((state) => state.loading);
+    const libraryBusy = useInspirationStore((state) => state.busy);
+    const libraryError = useInspirationStore((state) => state.error);
+    const loadLibrary = useInspirationStore((state) => state.load);
+    const libraryReady = Boolean(actorID && scope === actorID && hydrated);
+    const canManage = libraryReady && !libraryLoading && !libraryBusy;
+    const manageHint = !actorID ? "登录后管理个人灵感" : "请等待个人灵感加载完成";
+    const confirmation = useRef<{ destroy: () => void } | null>(null);
+
+    useEffect(() => () => confirmation.current?.destroy(), []);
     const createEntry = useInspirationStore((state) => state.createEntry);
     const updateEntry = useInspirationStore((state) => state.updateEntry);
     const removeEntry = useInspirationStore((state) => state.removeEntry);
@@ -139,6 +157,17 @@ export function InspirationHall({ onUse }: { onUse: (item: CreationInspiration) 
             cancelled = true;
         };
     }, [shouldLoadCatalog, reloadKey]);
+
+    useEffect(() => {
+        if (!shouldLoadCatalog || !actorID) return;
+        const refresh = () => {
+            const state = useInspirationStore.getState();
+            if (!state.loading && !state.busy) void loadLibrary().catch(() => {});
+        };
+        refresh();
+        window.addEventListener("focus", refresh);
+        return () => window.removeEventListener("focus", refresh);
+    }, [shouldLoadCatalog, actorID, loadLibrary]);
 
     useEffect(() => {
         if (!inspirationSourcesVisible) setSource("all");
@@ -296,7 +325,7 @@ export function InspirationHall({ onUse }: { onUse: (item: CreationInspiration) 
         (item: CreationInspiration) => {
             const id = catalogIdOf(item);
             const isCustom = isCustomInspiration(id);
-            modal.confirm({
+            confirmation.current = modal.confirm({
                 className: "workspace-modal workspace-modal-compact",
                 title: isCustom ? "删除这条灵感？" : "从库中隐藏这条灵感？",
                 content: isCustom ? `「${item.title}」会从本地灵感库移除，此操作不可撤销。` : `「${item.title}」来自外部目录，不能真正删除；隐藏后可用「已隐藏」视图恢复，重新导入外部目录也不会让它复现。`,
@@ -304,13 +333,14 @@ export function InspirationHall({ onUse }: { onUse: (item: CreationInspiration) 
                 okButtonProps: { danger: true },
                 cancelText: "保留",
                 onOk: async () => {
+                    if (useUserStore.getState().user?.id !== actorID) return;
                     await removeEntry(id);
                     if (detail && catalogIdOf(detail) === id) setDetail(null);
                     message.success(isCustom ? "已删除" : "已隐藏");
                 },
             });
         },
-        [detail, message, modal, removeEntry],
+        [actorID, detail, message, modal, removeEntry],
     );
 
     const handleToggleFavorite = async (id: string) => {
@@ -362,13 +392,15 @@ export function InspirationHall({ onUse }: { onUse: (item: CreationInspiration) 
     const handleImportFile = useCallback(
         async (file: File) => {
             try {
-                const result = await importPayload(await file.text());
+                const text = await file.text();
+                if (useUserStore.getState().user?.id !== actorID || !useUserStore.getState().features.inspirationHallEnabled) return;
+                const result = await importPayload(text);
                 message.success(`导入完成：新增 ${result.created}，覆盖 ${result.updated}${result.skipped ? `，跳过 ${result.skipped} 条无效数据` : ""}`);
             } catch (error) {
                 message.error(error instanceof Error ? error.message : "导入失败");
             }
         },
-        [importPayload, message],
+        [actorID, importPayload, message],
     );
 
     const advancedFilterCount = Number(source !== "all") + Number(category !== "all") + Number(view !== "all") + Number(sort !== "daily");
@@ -391,7 +423,8 @@ export function InspirationHall({ onUse }: { onUse: (item: CreationInspiration) 
                 </div>
                 <div className="inspiration-hall-actions">
                     <Button
-                        disabled={!hydrated}
+                        disabled={!canManage}
+                        title={!canManage ? manageHint : undefined}
                         icon={<Plus className="size-4" />}
                         onClick={() => {
                             setEditing(null);
@@ -405,8 +438,8 @@ export function InspirationHall({ onUse }: { onUse: (item: CreationInspiration) 
                         placement="bottomRight"
                         menu={{
                             items: [
-                                { key: "import", label: "导入灵感", icon: <Import className="size-4" />, disabled: !hydrated },
-                                { key: "export", label: "导出本地灵感", icon: <Download className="size-4" />, disabled: !hydrated },
+                                { key: "import", label: "导入灵感", icon: <Import className="size-4" />, disabled: !canManage },
+                                { key: "export", label: "导出本地灵感", icon: <Download className="size-4" />, disabled: !canManage },
                             ],
                             onClick: ({ key }) => {
                                 if (key === "import") importRef.current?.click();
@@ -414,7 +447,7 @@ export function InspirationHall({ onUse }: { onUse: (item: CreationInspiration) 
                             },
                         }}
                     >
-                        <Button type="text" icon={<MoreHorizontal className="size-4" />} aria-label="更多灵感管理操作" title="更多操作" />
+                        <Button disabled={!canManage} type="text" icon={<MoreHorizontal className="size-4" />} aria-label="更多灵感管理操作" title={canManage ? "更多操作" : manageHint} />
                     </Dropdown>
                 </div>
             </header>
@@ -427,7 +460,7 @@ export function InspirationHall({ onUse }: { onUse: (item: CreationInspiration) 
                     <ChevronDown className={filtersOpen ? "is-open" : undefined} aria-hidden="true" />
                 </Button>
                 <span className="inspiration-hall-count" role="status">
-                    {catalog && hydrated ? `共 ${visible.length.toLocaleString("zh-CN")} 条${freshCount ? ` · 本周上新 ${freshCount.toLocaleString("zh-CN")} 条` : ""}` : ""}
+                    {catalog && (!actorID || libraryReady) ? `共 ${visible.length.toLocaleString("zh-CN")} 条${freshCount ? ` · 本周上新 ${freshCount.toLocaleString("zh-CN")} 条` : ""}` : ""}
                 </span>
             </div>
 
@@ -435,7 +468,7 @@ export function InspirationHall({ onUse }: { onUse: (item: CreationInspiration) 
                 <div id="inspiration-hall-filters" className="inspiration-hall-filters" role="group" aria-label="灵感进阶筛选">
                     <div className="inspiration-hall-field">
                         <span>浏览范围</span>
-                        <Select options={VIEW_OPTIONS} value={view} onChange={(value) => setView(value as ViewFilter)} ariaLabel="按全部、收藏或隐藏状态筛选灵感" />
+                        <Select options={actorID ? VIEW_OPTIONS : VIEW_OPTIONS.slice(0, 1)} value={view} onChange={(value) => setView(value as ViewFilter)} ariaLabel="按全部、收藏或隐藏状态筛选灵感" />
                     </div>
                     {inspirationSourcesVisible ? (
                         <div className="inspiration-hall-field">
@@ -485,7 +518,9 @@ export function InspirationHall({ onUse }: { onUse: (item: CreationInspiration) 
                     <div className="inspiration-hall-deferred" aria-hidden="true" />
                 ) : loadError ? (
                     <WorkspaceErrorState title="灵感目录加载失败" description={loadError} onRetry={() => setReloadKey((key) => key + 1)} />
-                ) : !catalog || !hydrated ? (
+                ) : actorID && libraryError ? (
+                    <WorkspaceErrorState title="个人灵感加载失败" description={libraryError} onRetry={() => void loadLibrary().catch(() => {})} />
+                ) : !catalog || (actorID && !libraryReady) ? (
                     <WorkspaceLoadingState label="正在准备灵感" rows={3} />
                 ) : paged.length ? (
                     <>
@@ -496,6 +531,8 @@ export function InspirationHall({ onUse }: { onUse: (item: CreationInspiration) 
                                     <InspirationCard
                                         key={id}
                                         item={item}
+                                        canManage={canManage}
+                                        manageHint={manageHint}
                                         favorite={favorites.includes(id)}
                                         hidden={view === "hidden"}
                                         showSources={inspirationSourcesVisible}
@@ -543,16 +580,21 @@ export function InspirationHall({ onUse }: { onUse: (item: CreationInspiration) 
                 onClose={() => setDetail(null)}
                 onUse={handleUse}
                 onCopy={handleCopy}
-                onToggleFavorite={(item) => void handleToggleFavorite(catalogIdOf(item))}
-                onEdit={(item) => {
-                    setDetail(null);
-                    setEditing(item);
-                    setEditorOpen(true);
-                }}
-                onDelete={handleDelete}
+                onToggleFavorite={canManage ? (item) => void handleToggleFavorite(catalogIdOf(item)) : undefined}
+                onEdit={
+                    canManage
+                        ? (item) => {
+                              setDetail(null);
+                              setEditing(item);
+                              setEditorOpen(true);
+                          }
+                        : undefined
+                }
+                onDelete={canManage ? handleDelete : undefined}
             />
             <InspirationEditorModal
                 open={editorOpen}
+                disabled={!canManage}
                 item={editing}
                 categoryOptions={categoryChoices}
                 onClose={() => {
@@ -567,6 +609,8 @@ export function InspirationHall({ onUse }: { onUse: (item: CreationInspiration) 
 
 function InspirationCard({
     item,
+    canManage,
+    manageHint,
     favorite,
     hidden,
     showSources,
@@ -578,6 +622,8 @@ function InspirationCard({
     onDelete,
 }: {
     item: CreationInspiration;
+    canManage: boolean;
+    manageHint: string;
     favorite: boolean;
     hidden: boolean;
     showSources: boolean;
@@ -609,8 +655,17 @@ function InspirationCard({
                 </span>
             </button>
             <div className={`inspiration-card-actions${favorite || menuOpen ? " is-visible" : ""}`}>
-                <Tooltip title={favoriteLabel}>
-                    <button type="button" data-icon-only className="inspiration-card-action" aria-label={`${favoriteLabel}：${item.title}`} aria-pressed={favorite} onClick={onToggleFavorite}>
+                <Tooltip title={canManage ? favoriteLabel : manageHint}>
+                    <button
+                        disabled={!canManage}
+                        title={!canManage ? manageHint : undefined}
+                        type="button"
+                        data-icon-only
+                        className="inspiration-card-action"
+                        aria-label={`${favoriteLabel}：${item.title}`}
+                        aria-pressed={favorite}
+                        onClick={onToggleFavorite}
+                    >
                         <span aria-hidden="true">
                             <Heart className="size-3.5" fill={favorite ? "currentColor" : "none"} />
                         </span>
@@ -618,7 +673,7 @@ function InspirationCard({
                 </Tooltip>
                 {hidden ? (
                     <Tooltip title="恢复显示">
-                        <button type="button" data-icon-only className="inspiration-card-action" aria-label={`恢复显示：${item.title}`} onClick={onRestore}>
+                        <button disabled={!canManage} type="button" data-icon-only className="inspiration-card-action" aria-label={`恢复显示：${item.title}`} onClick={onRestore}>
                             <span aria-hidden="true">
                                 <RotateCcw className="size-3.5" />
                             </span>
@@ -632,12 +687,12 @@ function InspirationCard({
                         onOpenChange={setMenuOpen}
                         menu={{
                             items: [
-                                { key: "edit", icon: <Pencil className="size-3.5" />, label: "编辑", onClick: onEdit },
-                                { key: "delete", icon: <Trash2 className="size-3.5" />, label: isCustomInspiration(catalogIdOf(item)) ? "删除" : "隐藏", danger: true, onClick: onDelete },
+                                { key: "edit", icon: <Pencil className="size-3.5" />, label: "编辑", disabled: !canManage, onClick: onEdit },
+                                { key: "delete", icon: <Trash2 className="size-3.5" />, label: isCustomInspiration(catalogIdOf(item)) ? "删除" : "隐藏", disabled: !canManage, danger: true, onClick: onDelete },
                             ],
                         }}
                     >
-                        <button type="button" data-icon-only className="inspiration-card-action" aria-label={`更多灵感操作：${item.title}`} aria-haspopup="menu" aria-expanded={menuOpen}>
+                        <button disabled={!canManage} title={!canManage ? manageHint : undefined} type="button" data-icon-only className="inspiration-card-action" aria-label={`更多灵感操作：${item.title}`} aria-haspopup="menu" aria-expanded={menuOpen}>
                             <span aria-hidden="true">
                                 <MoreHorizontal className="size-3.5" />
                             </span>

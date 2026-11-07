@@ -46,7 +46,7 @@ export type InspirationLibraryCommand = {
     payload?: InspirationPayload;
 };
 export function getInspirationLibrary(signal?: AbortSignal) {
-    return http.get<InspirationLibraryView>("/inspiration-library", { signal });
+    return http.get<InspirationLibraryView>("/inspiration-library", { signal, timeout: 15_000 });
 }
 export function applyInspirationLibrary(command: InspirationLibraryCommand) {
     return http.post<InspirationLibraryView>("/inspiration-library/commands", command);

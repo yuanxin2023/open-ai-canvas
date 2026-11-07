@@ -140,10 +140,13 @@ test("late reads cannot roll a newer snapshot back", async () => {
     setup();
     await library().load();
     const pending = deferred<InspirationLibraryView>();
+    const receipt = deferred<InspirationLibraryView>();
+    write = () => receipt.promise;
+    const saving = library().toggleFavorite("seedance:scene");
     read = () => pending.promise;
     const loading = library().load();
-    write = async () => ({ ...initial(), revision: 8, state: { ...initial().state, favorites: ["seedance:scene"] } });
-    await library().toggleFavorite("seedance:scene");
+    receipt.resolve({ ...initial(), revision: 8, state: { ...initial().state, favorites: ["seedance:scene"] } });
+    await saving;
     pending.resolve(initial());
     await loading;
     expect(library().revision).toBe(8);
