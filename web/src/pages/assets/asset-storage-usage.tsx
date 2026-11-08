@@ -3,7 +3,6 @@ import { useTranslation } from "react-i18next";
 
 import { useAccountFileStorageUsage } from "@/hooks/use-account-file-storage-usage";
 import { accountFileStorageUsageQueryKey, accountStorageMeter, accountStorageStateMessage, formatStorageBytes } from "@/lib/account-storage-usage";
-import { openStoragePurchase } from "@/lib/workspace-storage";
 import { progressFillStyle } from "@/lib/progress-fill";
 
 export const assetStorageUsageQueryKey = accountFileStorageUsageQueryKey;
@@ -14,11 +13,10 @@ export function AssetStorageUsage() {
     const usage = query.data;
     const meter = accountStorageMeter(usage);
     const stateMessage = accountStorageStateMessage(meter);
-    const showUpsell = meter.state !== "ok" || meter.tone !== "ok";
 
     return (
         <section
-            className={`assets-storage-usage${meter.full || meter.state !== "ok" ? " is-full" : ""}${usage?.usedBytes ? " has-usage" : ""}`}
+            className={`assets-storage-usage${meter.full ? " is-full" : ""}${usage?.usedBytes ? " has-usage" : ""}`}
             aria-label={t("library.assets.storage.label")}
             aria-busy={query.isPending}
             title={stateMessage ? t("library.assets.storage.hintWithState", { state: stateMessage }) : t("library.assets.storage.hint")}
@@ -26,7 +24,7 @@ export function AssetStorageUsage() {
             <span className="assets-storage-usage-icon" aria-hidden="true">
                 <HardDrive />
             </span>
-            <span className="assets-storage-usage-title">{meter.state === "read_only" ? t("library.assets.storage.readOnly") : meter.state === "grace" ? t("library.assets.storage.overQuota") : t("library.assets.storage.title")}</span>
+            <span className="assets-storage-usage-title">{t("library.assets.storage.title")}</span>
             {usage ? (
                 <>
                     <span className="assets-storage-usage-value">
@@ -44,9 +42,6 @@ export function AssetStorageUsage() {
                         <span style={progressFillStyle(meter.percent)} />
                     </span>
                     <span className="assets-storage-usage-percent">{meter.percentLabel}</span>
-                    <button type="button" className="assets-storage-usage-action" onClick={() => openStoragePurchase()}>
-                        {showUpsell ? t("library.assets.storage.expand") : t("library.assets.storage.buy")}
-                    </button>
                 </>
             ) : query.isError ? (
                 <span className="assets-storage-usage-status">

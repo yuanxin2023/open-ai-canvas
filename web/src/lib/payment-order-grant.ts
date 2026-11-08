@@ -1,9 +1,7 @@
 import { formatCredits } from "@/constant/credits";
-import { formatStorageCapacity, formatStorageDuration } from "@/lib/account-storage-usage";
 import type { PaymentOrder } from "@/services/api/payments";
 
-/** 订单发放的权益描述：积分数量或扩容容量与有效期。 */
-export function paymentOrderGrantLabel(order: Pick<PaymentOrder, "productKind" | "creditsMicrocredits" | "storageBytes" | "storageDurationDays" | "newcomerBonusMicrocredits">) {
-    if (order.productKind === "storage") return `${formatStorageCapacity(order.storageBytes || 0)} 存储空间 · ${formatStorageDuration(order.storageDurationDays || 0)}`;
+/** 订单发放的积分与新人赠送描述。 */
+export function paymentOrderGrantLabel(order: Pick<PaymentOrder, "creditsMicrocredits" | "newcomerBonusMicrocredits">) {
     return `${formatCredits(order.creditsMicrocredits, 6)} 积分${order.newcomerBonusMicrocredits ? ` + 新人赠送 ${formatCredits(order.newcomerBonusMicrocredits)} 积分` : ""}`;
 }

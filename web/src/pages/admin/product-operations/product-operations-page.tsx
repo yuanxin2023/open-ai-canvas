@@ -6,7 +6,6 @@ import { useEffect, useMemo, useState } from "react";
 
 import { CreditProductCard, type CreditProductCardData } from "@/components/payments/credit-product-card";
 import { formatCredits } from "@/constant/credits";
-import { formatStorageCapacity, formatStorageDuration } from "@/lib/account-storage-usage";
 import { topupSaleDescription } from "@/lib/topup-sale-policy";
 import { Select } from "@/components/ui/base/select";
 import { AdminPageFrame } from "@/pages/admin/components/admin-shell";
@@ -19,9 +18,6 @@ import "./product-operations-page.css";
 import { PaymentPromotionPanel } from "./payment-promotion-panel";
 
 type ProductFormValues = {
-    kind: TopupProduct["kind"];
-    storageGB?: number;
-    storageDurationDays?: number;
     name: string;
     description?: string;
     benefits?: string;
@@ -104,9 +100,6 @@ export default function ProductOperationsPage() {
             product
                 ? {
                       name: product.name,
-                      kind: product.kind || "credits",
-                      storageGB: product.storageBytes / 1024 ** 3,
-                      storageDurationDays: product.storageDurationDays,
                       description: product.description,
                       benefits: product.benefits,
                       ribbonText: product.ribbonText,
@@ -130,9 +123,6 @@ export default function ProductOperationsPage() {
                       saleEndAt: product.saleEndAt ? dayjs(product.saleEndAt) : undefined,
                   }
                 : {
-                      kind: "credits",
-                      storageGB: 50,
-                      storageDurationDays: 0,
                       enabled: true,
                       featured: false,
                       accentColor: "#D8FF4F",
@@ -151,9 +141,6 @@ export default function ProductOperationsPage() {
         if (productDrawer === undefined) return;
         const values = await productForm.validateFields();
         const input = {
-            kind: values.kind,
-            storageBytes: values.kind === "storage" ? (values.storageGB || 0) * 1024 ** 3 : 0,
-            storageDurationDays: values.kind === "storage" ? values.storageDurationDays || 0 : 0,
             name: values.name.trim(),
             description: values.description?.trim(),
             benefits: values.benefits?.trim(),
@@ -167,7 +154,7 @@ export default function ProductOperationsPage() {
             accentColor: values.accentColor.toUpperCase(),
             featured: values.featured || false,
             amountFen: Math.round(values.amountYuan * 100),
-            creditsMicrocredits: values.kind === "storage" ? 0 : Math.round(values.credits * 1_000_000),
+            creditsMicrocredits: Math.round(values.credits * 1_000_000),
             enabled: values.enabled,
             sortOrder: values.sortOrder || 0,
             saleStrategy: values.saleStrategy || "unlimited",
@@ -219,7 +206,7 @@ export default function ProductOperationsPage() {
             dataIndex: "creditsMicrocredits",
             width: 180,
             align: "right",
-            render: (value, product) => <span className="tabular-nums">{product.kind === "storage" ? `${formatStorageCapacity(product.storageBytes)} · ${formatStorageDuration(product.storageDurationDays)}` : `${formatCredits(value)} 积分`}</span>,
+            render: (value) => <span className="tabular-nums">{formatCredits(value)} 积分</span>,
         },
         { title: "排序", dataIndex: "sortOrder", width: 90, align: "center" },
         { title: "售卖策略", key: "sale", width: 190, render: (_, product) => (product.saleStrategy === "inventory" ? `库存 ${product.stockRemaining ?? 0} / ${product.stockTotal ?? 0}` : topupSaleDescription(product)) },
@@ -312,25 +299,6 @@ export default function ProductOperationsPage() {
                             <Form.Item name="description" label="商品说明" rules={[{ max: 500 }]}>
                                 <Input.TextArea rows={3} />
                             </Form.Item>
-                            <Form.Item name="kind" label="商品类型" rules={[{ required: true }]} extra="类型创建后不可修改；存储扩容不发放积分。">
-                                <Select
-                                    disabled={Boolean(productDrawer)}
-                                    options={[
-                                        { value: "credits", label: "积分充值" },
-                                        { value: "storage", label: "存储空间扩容" },
-                                    ]}
-                                />
-                            </Form.Item>
-                            {watchedProduct?.kind === "storage" ? (
-                                <div className="grid grid-cols-2 gap-3">
-                                    <Form.Item name="storageGB" label="扩容容量（GB）" rules={[{ required: true }, { type: "integer", min: 1, max: 100000 }]}>
-                                        <InputNumber min={1} max={100000} precision={0} className="w-full" />
-                                    </Form.Item>
-                                    <Form.Item name="storageDurationDays" label="有效天数（0 为永久）" rules={[{ required: true }, { type: "integer", min: 0, max: 3650 }]}>
-                                        <InputNumber min={0} max={3650} precision={0} className="w-full" />
-                                    </Form.Item>
-                                </div>
-                            ) : null}
                             <div className="grid grid-cols-2 gap-3">
                                 <Form.Item name="ribbonText" label="顶部横幅" rules={[{ max: 120 }]}>
                                     <Input placeholder="例如：限时加赠" />
@@ -367,26 +335,24 @@ export default function ProductOperationsPage() {
                                 <Form.Item name="amountYuan" label="售价 / 活动价（元）" extra="未配置划线对比价时始终按此价格成交。" rules={[{ required: true }, { type: "number", min: 0.01, max: 1_000_000 }]}>
                                     <InputNumber min={0.01} max={1_000_000} precision={2} className="w-full" />
                                 </Form.Item>
-                                {watchedProduct?.kind !== "storage" ? (
-                                    <Form.Item
-                                        name="credits"
-                                        label="到账积分"
-                                        rules={[
-                                            { required: true },
-                                            {
-                                                validator: (_, value) => {
-                                                    const credits = Number(value);
-                                                    const microcredits = Math.round(credits * 1_000_000);
-                                                    return Number.isFinite(credits) && credits >= 0.01 && credits <= 1_000_000_000 && Number.isSafeInteger(microcredits)
-                                                        ? Promise.resolve()
-                                                        : Promise.reject(new Error("请输入 0.01 至 10 亿之间且可安全处理的积分"));
-                                                },
+                                <Form.Item
+                                    name="credits"
+                                    label="到账积分"
+                                    rules={[
+                                        { required: true },
+                                        {
+                                            validator: (_, value) => {
+                                                const credits = Number(value);
+                                                const microcredits = Math.round(credits * 1_000_000);
+                                                return Number.isFinite(credits) && credits >= 0.01 && credits <= 1_000_000_000 && Number.isSafeInteger(microcredits)
+                                                    ? Promise.resolve()
+                                                    : Promise.reject(new Error("请输入 0.01 至 10 亿之间且可安全处理的积分"));
                                             },
-                                        ]}
-                                    >
-                                        <InputNumber min={0.01} max={1_000_000_000} precision={2} className="w-full" />
-                                    </Form.Item>
-                                ) : null}
+                                        },
+                                    ]}
+                                >
+                                    <InputNumber min={0.01} max={1_000_000_000} precision={2} className="w-full" />
+                                </Form.Item>
                             </div>
                             <div className="grid grid-cols-2 gap-3">
                                 <Form.Item name="quotaCaption" label="积分区标题" rules={[{ max: 120 }]}>
@@ -450,17 +416,7 @@ export default function ProductOperationsPage() {
                                 <span className="admin-payment-product-preview-status">{watchedProduct?.enabled === false ? "未上架" : "上架后展示"}</span>
                             </header>
                             <div className="admin-payment-product-preview-card">
-                                {watchedProduct?.kind === "storage" ? (
-                                    <div className="space-y-3">
-                                        <strong>{watchedProduct.name || "存储空间套餐"}</strong>
-                                        <p>
-                                            +{formatStorageCapacity((watchedProduct.storageGB || 0) * 1024 ** 3)} · {formatStorageDuration(watchedProduct.storageDurationDays || 0)}
-                                        </p>
-                                        <p>¥ {finiteNumber(watchedProduct.amountYuan, 0).toFixed(2)}</p>
-                                    </div>
-                                ) : (
-                                    <CreditProductCard product={productPreview} maxCreditsMicrocredits={productPreviewMaxCredits} preview />
-                                )}
+                                <CreditProductCard product={productPreview} maxCreditsMicrocredits={productPreviewMaxCredits} preview />
                             </div>
                             <p>横幅、角标和权益可留空；配置对比价后，它将作为非活动期实际成交价。</p>
                         </aside>

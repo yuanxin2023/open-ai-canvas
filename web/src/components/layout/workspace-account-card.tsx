@@ -92,7 +92,7 @@ export function WorkspaceAccountCard({ onWallet, onNavigate }: { onWallet: () =>
                                 <span>{t("account.layout.storage.used", { size: meter.usedLabel })}</span>
                                 <span>{t("account.layout.storage.remaining", { size: meter.remainingLabel })}</span>
                             </div>
-                            {meter.state !== "ok" || meter.full ? <p role="status">{t(meter.state === "read_only" ? "account.layout.storage.readOnly" : meter.state === "grace" ? "account.layout.storage.over" : "account.layout.storage.full")}</p> : null}
+                            {meter.full ? <p role="status">{t("account.layout.storage.full")}</p> : null}
                         </>
                     ) : (
                         <span>{storageQuery.isError ? t("local.ui.storageUnavailable") : t("account.layout.storage.counting")}</span>

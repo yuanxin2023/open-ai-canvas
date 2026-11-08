@@ -9,8 +9,7 @@ const (
 	UserStorageGrantSourceAdmin   UserStorageGrantSource = "admin"
 )
 
-// UserStorageGrant 是一笔独立的账号文件容量扩容。有效容量 = 全局基础容量 + 未撤销且未过期记录之和；
-// 到期不需要后台任务，查询时按 expires_at 过滤。
+// UserStorageGrant 仅保留历史记录与迁移结构，不再参与运行时容量计算。
 type UserStorageGrant struct {
 	ID             string                 `json:"id" gorm:"primaryKey;size:36"`
 	UserID         string                 `json:"userId" gorm:"size:36;not null;index:idx_user_storage_grant_active,priority:1"`
@@ -33,8 +32,7 @@ type UserStorageGrant struct {
 	CreatedAt    time.Time `json:"createdAt" gorm:"index"`
 }
 
-// UserStorageState 记录账号首次被观察到超出文件容量的时间，用于计算 7 天宽限期。
-// 用量回落到容量以内时清空。
+// UserStorageState 仅为保留历史表结构，不再用于账号只读限制。
 type UserStorageState struct {
 	UserID         string     `json:"userId" gorm:"primaryKey;size:36"`
 	OverLimitSince *time.Time `json:"overLimitSince,omitempty" gorm:"index"`

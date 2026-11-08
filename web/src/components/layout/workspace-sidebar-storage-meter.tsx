@@ -21,15 +21,7 @@ export function WorkspaceSidebarStorageMeter({ collapsed }: { collapsed: boolean
     const query = useAccountFileStorageUsage();
     const meter = accountStorageMeter(query.data);
     const usedText = query.data ? t("account.layout.storage.used", { size: meter.usedLabel }) : query.isError ? t("account.layout.storage.unavailable") : t("account.layout.storage.counting");
-    const remainingText = query.data
-        ? meter.state === "read_only"
-            ? t("account.layout.storage.readOnly")
-            : meter.state === "grace"
-              ? t("account.layout.storage.over")
-              : meter.full
-                ? t("account.layout.storage.full")
-                : t("account.layout.storage.remaining", { size: meter.remainingLabel })
-        : "";
+    const remainingText = query.data ? (meter.full ? t("account.layout.storage.full") : t("account.layout.storage.remaining", { size: meter.remainingLabel })) : "";
     const totalText = query.data ? t("account.layout.storage.total", { size: meter.totalLabel }) : "";
     const summary = query.data ? t("account.layout.storage.summary", { used: usedText, remaining: remainingText, total: totalText }) : usedText;
     const stateMessage = accountStorageStateMessage(meter);
@@ -75,7 +67,7 @@ export function WorkspaceSidebarStorageMeter({ collapsed }: { collapsed: boolean
                 "app-workspace-sidebar-storage",
                 collapsed && "is-collapsed",
                 meter.tone === "warn" && "is-warn",
-                (meter.tone === "critical" || meter.state !== "ok") && "is-critical",
+                meter.tone === "critical" && "is-critical",
                 query.data?.usedBytes ? "has-usage" : null,
                 query.isPending && !query.data && "is-pending",
             )}

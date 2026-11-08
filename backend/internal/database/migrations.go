@@ -16,7 +16,7 @@ import (
 	"gorm.io/gorm"
 )
 
-const CurrentSchemaVersion int64 = 112
+const CurrentSchemaVersion int64 = 113
 
 //go:embed seed/inspirations.json
 var inspirationSeedJSON []byte
@@ -163,7 +163,8 @@ func buildSchemaMigrationPlan() []migration {
 	plan = append(plan, migration{version: 95, name: "official_inspiration_catalog", checksum: "sha256:official-inspiration-catalog-v95-20261028", apply: migrateInspirationCatalog}, migration{version: 96, name: "versioned_referral_policies", checksum: "sha256:versioned-referral-policies-v96", apply: migrateReferralPolicies})
 	plan = append(plan, upstreamV1735Migrations()...)
 	plan = append(plan, upstreamV1737Migrations()...)
-	return append(plan, upstreamV181Migrations()...)
+	plan = append(plan, upstreamV181Migrations()...)
+	return append(plan, migration{version: 113, name: "storage_grants_to_user_quota", checksum: "sha256:storage-grants-to-user-quota-v113", apply: migrateStorageGrantsToQuota})
 }
 
 func migrateSixCharacterReferralCodes(tx *gorm.DB) error {

@@ -36,7 +36,7 @@ type PaymentEvidence struct {
 
 func (r *Repository) TopupProducts(includeDisabled bool) ([]model.TopupProduct, error) {
 	var products []model.TopupProduct
-	query := r.db.Order("sort_order asc, amount_fen asc, created_at asc")
+	query := r.db.Where("kind = ? OR kind = ?", model.TopupProductKindCredits, "").Order("sort_order asc, amount_fen asc, created_at asc")
 	if !includeDisabled {
 		query = query.Where("enabled = ?", true)
 	}
@@ -194,7 +194,7 @@ func (r *Repository) CreatePaymentOrderWithProductReservation(order *model.Payme
 			order.StorageDurationDays = product.StorageDurationDays
 			order.AmountFen = quoteAmount[0](*product, now)
 		}
-		if order.AmountFen <= 0 || (order.ProductKind == model.TopupProductKindStorage && order.StorageBytes <= 0) || (order.ProductKind != model.TopupProductKindStorage && order.CreditsMicrocredits <= 0) {
+		if order.AmountFen <= 0 || (order.ProductKind != "" && order.ProductKind != model.TopupProductKindCredits) || order.StorageBytes != 0 || order.StorageDurationDays != 0 || order.CreditsMicrocredits <= 0 {
 			return ErrTopupUnavailable
 		}
 		if strategy == model.TopupSaleStrategyInventory {
@@ -388,8 +388,7 @@ func (r *Repository) completePaymentOrder(providerID, merchantOrderNo string, ev
 		if order.AmountFen != evidence.AmountFen || order.Currency != evidence.Currency || strings.TrimSpace(evidence.ProviderTradeNo) == "" {
 			return ErrPaymentEvidenceMismatch
 		}
-		storageOrder := order.ProductKind == model.TopupProductKindStorage
-		if order.AmountFen <= 0 || (storageOrder && order.StorageBytes <= 0) || (!storageOrder && order.CreditsMicrocredits <= 0) {
+		if order.AmountFen <= 0 || (order.ProductKind != "" && order.ProductKind != model.TopupProductKindCredits) || order.StorageBytes != 0 || order.StorageDurationDays != 0 || order.CreditsMicrocredits <= 0 {
 			return ErrPaymentOrderStateConflict
 		}
 		if order.Status == model.PaymentOrderCredited {
@@ -431,7 +430,7 @@ func (r *Repository) completePaymentOrder(providerID, merchantOrderNo string, ev
 		referenceKey := "payment:" + providerID + ":" + merchantOrderNo
 		// Lock the invitation owner before granting credits to keep lock ordering
 		// identical across simultaneous recharges from the same invitee.
-		if !storageOrder && evaluate != nil {
+		if evaluate != nil {
 			var profile model.ReferralProfile
 			err := tx.First(&profile, "user_id = ?", order.UserID).Error
 			if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
@@ -445,11 +444,7 @@ func (r *Repository) completePaymentOrder(providerID, merchantOrderNo string, ev
 			}
 		}
 		now := time.Now()
-		if storageOrder {
-			if err := grantPaymentStorage(tx, &order, referenceKey, now); err != nil {
-				return err
-			}
-		} else if err := creditPaymentTopup(tx, &order, referenceKey, now); err != nil {
+		if err := creditPaymentTopup(tx, &order, referenceKey, now); err != nil {
 			return err
 		}
 		paidAt := evidence.PaidAt
@@ -468,7 +463,7 @@ func (r *Repository) completePaymentOrder(providerID, merchantOrderNo string, ev
 		if updated.RowsAffected != 1 {
 			return ErrPaymentOrderStateConflict
 		}
-		if !storageOrder && evaluate != nil && order.Currency == "CNY" {
+		if evaluate != nil && order.Currency == "CNY" {
 			if err := settleVersionedReferralTx(tx, &order, now, evaluate); err != nil {
 				return err
 			}
@@ -482,29 +477,6 @@ func (r *Repository) completePaymentOrder(providerID, merchantOrderNo string, ev
 		}
 	}
 	return &order, granted, err
-}
-
-// grantPaymentStorage 按订单快照写一笔扩容记录；有效期从发放时刻起算。
-func grantPaymentStorage(tx *gorm.DB, order *model.PaymentOrder, referenceKey string, now time.Time) error {
-	grant := model.UserStorageGrant{
-		ID: newRepositoryID(), UserID: order.UserID, Source: model.UserStorageGrantSourcePayment,
-		PaymentOrderID: order.ID, ProductID: order.ProductID, ProductName: order.ProductName,
-		Bytes: order.StorageBytes, DurationDays: order.StorageDurationDays, StartsAt: now,
-		ReferenceKey: &referenceKey, Note: order.ProductName + " · 在线购买存储空间", CreatedAt: now,
-	}
-	if order.StorageDurationDays > 0 {
-		expires := now.Add(time.Duration(order.StorageDurationDays) * 24 * time.Hour)
-		grant.ExpiresAt = &expires
-	}
-	created := tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "reference_key"}}, DoNothing: true}).Create(&grant)
-	if created.Error != nil {
-		return created.Error
-	}
-	if created.RowsAffected == 0 {
-		// 与积分分支一致：订单未到终态却已有发放记录，说明状态不一致，不能当作成功。
-		return ErrPaymentOrderStateConflict
-	}
-	return nil
 }
 
 // creditPaymentTopup 写积分流水并入账；唯一 reference_key 是回调与查单并发时的最终防线。

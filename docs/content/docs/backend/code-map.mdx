@@ -268,7 +268,7 @@ HTTP 请求 -> handler -> service（稳定导入面 / 别名）-> app（组合�
 | 管理后台存储资源 | `handler/admin_storage.go` | `internal/app/admin_storage.go`、`repository/admin_storage.go` |
 | 资源与请求策略 | `handler/auth.go`、`handler/security.go` | `internal/platform`、`internal/app/upload_quota.go`、`storage_quota.go`、`coordination.go` |
 | 用户分组与多币种计价 | `handler/admin_user_group_routes.go`、`handler/payment.go`（`/payments/settings`） | `internal/app/user_groups.go`（分组快照、`userGroupAccess` 渠道可见性与价格因子、管理端增删改）、`finance.go`（`groupTierPrices` 换算并写入账单快照）、`model_catalog.go` / `logical_models_catalog.go`（按分组过滤并展示实际单价）、`payment_settings.go`（默认充值货币）、`repository/repository_user_groups.go` |
-| 存储空间套餐与只读 | `handler/storage_guard.go`、`handler/storage_grants.go` | `internal/app/storage_capacity.go`（有效容量、宽限期与只读、扩容赠送/撤销）、`payment_products.go`（商品类型）、`repository/storage_grants.go`、`repository/payment.go`（`grantPaymentStorage`） |
+| 文件容量与历史赠送转换 | `handler/user_data.go` | `app/storage_capacity.go`（全局与个人配额用量）、`database/migration_storage_quota.go`（Schema 113，赠送转个人覆盖与审计）；独立扩容接口和只读守卫已移除 |
 | 推广中心 | `handler/referral.go` | `internal/app/referral.go`（`referral` 设置、`referralEligible`、注册绑定 `bindReferral`、入账后 `grantReferralCommission`）、`repository/referral.go`（`GrantReferralCommission` 同事务写返佣、流水与余额） |
 | 模型响应拦截 | `handler/response_interception.go`、`handler/custom_proxy.go` | `internal/app/response_interception.go`、`repository/repository.go` |
 | 模型协议插件 | `handler/plugin.go`、`handler/auth.go` | `internal/protocol`、`internal/generation`、根目录 `plugin-packages/`；SubRouter Gemini 图片兼容包为 `plugin-packages/subrouter-gemini-image/` |

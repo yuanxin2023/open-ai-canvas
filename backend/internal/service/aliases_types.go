@@ -53,8 +53,6 @@ type (
 	AccountFileStorageUsage                = app.AccountFileStorageUsage
 	AdminAppearanceSetting                 = app.AdminAppearanceSetting
 	AdminCustomerServiceSetting            = app.AdminCustomerServiceSetting
-	AdminStorageGrantRequest               = app.AdminStorageGrantRequest
-	AdminUserStorage                       = app.AdminUserStorage
 	AdminAuditPage                         = app.AdminAuditPage
 	AdminCacheClearGroupResult             = app.AdminCacheClearGroupResult
 	AdminCacheClearRequest                 = app.AdminCacheClearRequest
@@ -392,7 +390,6 @@ type (
 	TextReplayResult                       = app.TextReplayResult
 	TimelineRenderCreateRequest            = app.TimelineRenderCreateRequest
 	TimelineTranscriptionCreateRequest     = app.TimelineTranscriptionCreateRequest
-	RevokeStorageGrantRequest              = app.RevokeStorageGrantRequest
 	TopupProductRequest                    = app.TopupProductRequest
 	PaymentPromotionSetting                = app.PaymentPromotionSetting
 	PublicPaymentPromotion                 = app.PublicPaymentPromotion

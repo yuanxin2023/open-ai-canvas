@@ -4454,71 +4454,11 @@ paths:
         "401": {$ref: "#/components/responses/Error"}
         "403": {$ref: "#/components/responses/Error"}
         "404": {$ref: "#/components/responses/Error"}
-  /resources/storage-grants:
-    get:
-      tags: [resources]
-      summary: 账号存储空间 GET /resources/storage-grants
-      description: 本人容量与扩容记录需要登录；管理操作需要用户管理权限，管理员目标需要全权限。
-      responses:
-        "200": {$ref: "#/components/responses/Envelope"}
-        "400": {$ref: "#/components/responses/Error"}
-        "401": {$ref: "#/components/responses/Error"}
-        "403": {$ref: "#/components/responses/Error"}
-        "404": {$ref: "#/components/responses/Error"}
   /resources/storage-usage:
     get:
       tags: [resources]
       summary: 账号存储空间 GET /resources/storage-usage
-      description: 本人容量与扩容记录需要登录；管理操作需要用户管理权限，管理员目标需要全权限。
-      responses:
-        "200": {$ref: "#/components/responses/Envelope"}
-        "400": {$ref: "#/components/responses/Error"}
-        "401": {$ref: "#/components/responses/Error"}
-        "403": {$ref: "#/components/responses/Error"}
-        "404": {$ref: "#/components/responses/Error"}
-  /admin/users/{id}/storage:
-    parameters:
-      - {in: path, name: id, required: true, schema: {type: string}}
-    get:
-      tags: [resources]
-      summary: 账号存储空间 GET /admin/users/{id}/storage
-      description: 本人容量与扩容记录需要登录；管理操作需要用户管理权限，管理员目标需要全权限。
-      responses:
-        "200": {$ref: "#/components/responses/Envelope"}
-        "400": {$ref: "#/components/responses/Error"}
-        "401": {$ref: "#/components/responses/Error"}
-        "403": {$ref: "#/components/responses/Error"}
-        "404": {$ref: "#/components/responses/Error"}
-  /admin/users/{id}/storage-grants:
-    parameters:
-      - {in: path, name: id, required: true, schema: {type: string}}
-    post:
-      tags: [resources]
-      summary: 账号存储空间 POST /admin/users/{id}/storage-grants
-      description: 本人容量与扩容记录需要登录；管理操作需要用户管理权限，管理员目标需要全权限。
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: {type: object}
-      responses:
-        "200": {$ref: "#/components/responses/Envelope"}
-        "400": {$ref: "#/components/responses/Error"}
-        "401": {$ref: "#/components/responses/Error"}
-        "403": {$ref: "#/components/responses/Error"}
-        "404": {$ref: "#/components/responses/Error"}
-  /admin/storage-grants/{id}/revoke:
-    parameters:
-      - {in: path, name: id, required: true, schema: {type: string}}
-    post:
-      tags: [resources]
-      summary: 账号存储空间 POST /admin/storage-grants/{id}/revoke
-      description: 本人容量与扩容记录需要登录；管理操作需要用户管理权限，管理员目标需要全权限。
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: {type: object}
+      description: 登录后读取本人已用量、个人生效总容量与是否超额（usedBytes、totalBytes、overLimit）；不含扩容、到期或只读字段。
       responses:
         "200": {$ref: "#/components/responses/Envelope"}
         "400": {$ref: "#/components/responses/Error"}
@@ -6006,7 +5946,6 @@ components:
                   503,
                   504,
                   40301,
-                  40302,
                   40901,
                   42901,
                 ]
@@ -6025,7 +5964,6 @@ components:
                 - failed_precondition
                 - quota_exceeded
                 - storage_capacity_exceeded
-                - storage_read_only
                 - rate_limited
                 - unavailable
                 - timeout

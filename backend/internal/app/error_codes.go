@@ -17,7 +17,6 @@ const (
 	CodeTimeout             = kernel.CodeTimeout
 	CodeQuotaExceeded       = kernel.CodeQuotaExceeded
 	CodeInsufficientCredits = kernel.CodeInsufficientCredits
-	CodeStorageReadOnly     = kernel.CodeStorageReadOnly
 	CodeIdempotencyConflict = kernel.CodeIdempotencyConflict
 	CodeRateLimited         = kernel.CodeRateLimited
 	CodeUsernameChangeLimit = kernel.CodeUsernameChangeLimit
@@ -35,7 +34,6 @@ const (
 	ReasonQuotaExceeded                = kernel.ReasonQuotaExceeded
 	ReasonInsufficientCredits          = kernel.ReasonInsufficientCredits
 	ReasonStorageCapacity              = kernel.ReasonStorageCapacityExceeded
-	ReasonStorageReadOnly              = kernel.ReasonStorageReadOnly
 	ReasonDramaBudget                  = kernel.ReasonDramaBudgetExhausted
 	ReasonDramaSegmentChanged          = kernel.ReasonDramaSegmentChanged
 	ReasonDramaEpisodeConfirmRequired  = kernel.ReasonDramaEpisodeConfirmRequired

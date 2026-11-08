@@ -18,8 +18,8 @@ export type PaymentProvider = {
 
 export type TopupSaleStrategy = "unlimited" | "periodic" | "inventory" | "timed";
 
-/** credits 发放积分；storage 扩容账号文件容量，storageDurationDays 为 0 表示永久。 */
-export type TopupProductKind = "credits" | "storage";
+/** 商品仅支持积分充值。 */
+export type TopupProductKind = "credits";
 
 export type TopupProduct = {
     id: string;
@@ -38,8 +38,6 @@ export type TopupProduct = {
     kind: TopupProductKind;
     amountFen: number;
     creditsMicrocredits: number;
-    storageBytes: number;
-    storageDurationDays: number;
     enabled: boolean;
     sortOrder: number;
     saleStrategy: TopupSaleStrategy;
@@ -114,8 +112,6 @@ export type PaymentOrder = {
     amountFen: number;
     currency: "CNY" | string;
     creditsMicrocredits: number;
-    storageBytes?: number;
-    storageDurationDays?: number;
     status: PaymentOrderStatus;
     closurePending?: boolean;
     providerStatus?: string;
@@ -210,23 +206,7 @@ export function listAdminTopupProducts() {
 
 export type TopupProductInput = Pick<
     TopupProduct,
-    | "kind"
-    | "storageBytes"
-    | "storageDurationDays"
-    | "name"
-    | "amountFen"
-    | "creditsMicrocredits"
-    | "enabled"
-    | "sortOrder"
-    | "ribbonText"
-    | "badgeText"
-    | "compareAmountFen"
-    | "priceCaption"
-    | "quotaCaption"
-    | "quotaDetail"
-    | "actionText"
-    | "accentColor"
-    | "featured"
+    "name" | "amountFen" | "creditsMicrocredits" | "enabled" | "sortOrder" | "ribbonText" | "badgeText" | "compareAmountFen" | "priceCaption" | "quotaCaption" | "quotaDetail" | "actionText" | "accentColor" | "featured"
 > & {
     description?: string;
     benefits?: string;

@@ -7,13 +7,38 @@ import type { Dayjs } from "dayjs";
 import { formatCredits } from "@/constant/credits";
 import { IconButton } from "@/pages/admin/ui/controls";
 import { AdminDataTable, AdminEmpty, AdminStatusBadge, AdminTableEmpty, PaginationBar, type AdminStatusTone } from "./admin-ui";
-import { AdminUserStoragePanel } from "./admin-user-storage-panel";
-import { getAdminUserDetail, listAdminUserAuditEvents, listAdminUserLedger, listAdminUserLoginEvents, listAdminUserTasks, type AdminAuditEvent, type AdminUserDetail, type AdminUserLedgerFilter, type AdminUserLoginEvent, type AdminUserLoginEventQuery, type AdminUserTask } from "@/services/api/auth";
+import {
+    getAdminUserDetail,
+    listAdminUserAuditEvents,
+    listAdminUserLedger,
+    listAdminUserLoginEvents,
+    listAdminUserTasks,
+    type AdminAuditEvent,
+    type AdminUserDetail,
+    type AdminUserLedgerFilter,
+    type AdminUserLoginEvent,
+    type AdminUserLoginEventQuery,
+    type AdminUserTask,
+} from "@/services/api/auth";
 import type { CreditLedgerEntry } from "@/services/api/wallet";
 
 type LoginEventFilters = Pick<AdminUserLoginEventQuery, "startAt" | "endAt" | "loginMethod" | "ip">;
 
-export function AdminUserDetailModal({ userId, onClose, previousUserId, nextUserId, onNavigate, accountKind = "user" }: { userId: string | null; onClose: () => void; previousUserId?: string; nextUserId?: string; onNavigate?: (userId: string) => void; accountKind?: "user" | "administrator" }) {
+export function AdminUserDetailModal({
+    userId,
+    onClose,
+    previousUserId,
+    nextUserId,
+    onNavigate,
+    accountKind = "user",
+}: {
+    userId: string | null;
+    onClose: () => void;
+    previousUserId?: string;
+    nextUserId?: string;
+    onNavigate?: (userId: string) => void;
+    accountKind?: "user" | "administrator";
+}) {
     const { message } = App.useApp();
     const [detail, setDetail] = useState<AdminUserDetail | null>(null);
     const [ledger, setLedger] = useState<CreditLedgerEntry[]>([]);
@@ -162,9 +187,9 @@ export function AdminUserDetailModal({ userId, onClose, previousUserId, nextUser
 
     return (
         <AdminModal
-            title={(
+            title={
                 <div className="flex items-center justify-between gap-4">
-                    <span className="min-w-0 truncate">{detail ? `${detail.user.username} · ${accountKind === "administrator" ? "管理员详情" : "用户详情"}` : (accountKind === "administrator" ? "管理员详情" : "用户详情")}</span>
+                    <span className="min-w-0 truncate">{detail ? `${detail.user.username} · ${accountKind === "administrator" ? "管理员详情" : "用户详情"}` : accountKind === "administrator" ? "管理员详情" : "用户详情"}</span>
                     {onNavigate ? (
                         <div className="flex shrink-0 items-center gap-1">
                             <IconButton size="sm" variant="ghost" aria-label={`上一条${accountKind === "administrator" ? "管理员" : "用户"}`} disabled={!previousUserId} icon={ChevronLeft} onClick={() => previousUserId && onNavigate(previousUserId)} />
@@ -172,7 +197,7 @@ export function AdminUserDetailModal({ userId, onClose, previousUserId, nextUser
                         </div>
                     ) : null}
                 </div>
-            )}
+            }
             open={Boolean(userId)}
             centered
             width="min(920px, calc(100vw - 32px))"
@@ -211,12 +236,14 @@ export function AdminUserDetailModal({ userId, onClose, previousUserId, nextUser
                                         ]}
                                     />
                                     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                                        {Object.entries({ 积分流水: detail.counts.ledgerEntries, 生成任务: detail.counts.tasks, 上游请求: detail.counts.apiCalls, 登录记录: detail.counts.loginEvents, 管理操作: detail.counts.auditEvents }).map(([label, value]) => (
-                                            <div key={label} className="rounded-md border border-border p-3">
-                                                <div className="text-xs text-foreground/50">{label}</div>
-                                                <div className="mt-1 text-xl font-semibold tabular-nums">{value}</div>
-                                            </div>
-                                        ))}
+                                        {Object.entries({ 积分流水: detail.counts.ledgerEntries, 生成任务: detail.counts.tasks, 上游请求: detail.counts.apiCalls, 登录记录: detail.counts.loginEvents, 管理操作: detail.counts.auditEvents }).map(
+                                            ([label, value]) => (
+                                                <div key={label} className="rounded-md border border-border p-3">
+                                                    <div className="text-xs text-foreground/50">{label}</div>
+                                                    <div className="mt-1 text-xl font-semibold tabular-nums">{value}</div>
+                                                </div>
+                                            ),
+                                        )}
                                     </div>
                                     <div>
                                         <div className="mb-3 text-sm font-medium">资源与配额占用</div>
@@ -227,7 +254,7 @@ export function AdminUserDetailModal({ userId, onClose, previousUserId, nextUser
                                                         <span className="text-foreground/60">{item.label}</span>
                                                         <span className="shrink-0 tabular-nums text-foreground/75">{item.display}</span>
                                                     </div>
-                                                    <Progress percent={Math.min(100, item.limit > 0 ? Math.round(item.value / item.limit * 100) : 0)} size="small" showInfo={false} status={item.value >= item.limit ? "exception" : "normal"} />
+                                                    <Progress percent={Math.min(100, item.limit > 0 ? Math.round((item.value / item.limit) * 100) : 0)} size="small" showInfo={false} status={item.value >= item.limit ? "exception" : "normal"} />
                                                 </div>
                                             ))}
                                         </div>
@@ -236,16 +263,11 @@ export function AdminUserDetailModal({ userId, onClose, previousUserId, nextUser
                             ),
                         },
                         {
-                            key: "storage",
-                            label: "存储空间",
-                            children: <AdminUserStoragePanel userId={detail.user.id} />,
-                        },
-                        {
                             key: "ledger",
                             label: `积分流水 ${detail.counts.ledgerEntries}`,
                             children: (
                                 <AdminDataTable
-                                    toolbar={(
+                                    toolbar={
                                         <Select<AdminUserLedgerFilter>
                                             aria-label="筛选积分流水"
                                             className="w-40"
@@ -261,7 +283,7 @@ export function AdminUserDetailModal({ userId, onClose, previousUserId, nextUser
                                                 setLedgerPage(1);
                                             }}
                                         />
-                                    )}
+                                    }
                                     table={{
                                         rowKey: "id",
                                         size: "small",
@@ -269,10 +291,10 @@ export function AdminUserDetailModal({ userId, onClose, previousUserId, nextUser
                                         dataSource: ledger,
                                         pagination: false,
                                         columns: [
-                                        { title: "时间", dataIndex: "createdAt", width: 170, render: formatTime },
-                                        { title: "类型", dataIndex: "type", width: 130 },
-                                        { title: "变化", dataIndex: "amountMicrocredits", width: 120, align: "right", render: (value) => formatCredits(value) },
-                                        { title: "说明", dataIndex: "note", ellipsis: true },
+                                            { title: "时间", dataIndex: "createdAt", width: 170, render: formatTime },
+                                            { title: "类型", dataIndex: "type", width: 130 },
+                                            { title: "变化", dataIndex: "amountMicrocredits", width: 120, align: "right", render: (value) => formatCredits(value) },
+                                            { title: "说明", dataIndex: "note", ellipsis: true },
                                         ],
                                         scroll: { x: 720 },
                                     }}
@@ -292,11 +314,11 @@ export function AdminUserDetailModal({ userId, onClose, previousUserId, nextUser
                                         dataSource: tasks,
                                         pagination: false,
                                         columns: [
-                                        { title: "时间", dataIndex: "createdAt", width: 170, render: formatTime },
-                                        { title: "类型", dataIndex: "type", width: 180 },
-                                        { title: "模型", dataIndex: "model", width: 180, ellipsis: true },
-                                        { title: "状态", dataIndex: "status", width: 100, render: (value) => <AdminStatusBadge label={value || "未知"} tone={taskStatusTone(value)} /> },
-                                        { title: "阶段", dataIndex: "stage", ellipsis: true },
+                                            { title: "时间", dataIndex: "createdAt", width: 170, render: formatTime },
+                                            { title: "类型", dataIndex: "type", width: 180 },
+                                            { title: "模型", dataIndex: "model", width: 180, ellipsis: true },
+                                            { title: "状态", dataIndex: "status", width: 100, render: (value) => <AdminStatusBadge label={value || "未知"} tone={taskStatusTone(value)} /> },
+                                            { title: "阶段", dataIndex: "stage", ellipsis: true },
                                         ],
                                         scroll: { x: 820 },
                                     }}
@@ -310,7 +332,7 @@ export function AdminUserDetailModal({ userId, onClose, previousUserId, nextUser
                             label: `登录环境 ${detail.counts.loginEvents}`,
                             children: (
                                 <AdminDataTable
-                                    toolbar={(
+                                    toolbar={
                                         <Input
                                             allowClear
                                             className="app-list-search"
@@ -320,9 +342,9 @@ export function AdminUserDetailModal({ userId, onClose, previousUserId, nextUser
                                             onChange={(event) => setLoginIP(event.target.value)}
                                             onPressEnter={applyLoginFilters}
                                         />
-                                    )}
+                                    }
                                     toolbarActive={loginFiltersActive}
-                                    toolbarFilters={(
+                                    toolbarFilters={
                                         <>
                                             <Select
                                                 aria-label="登录方式"
@@ -336,22 +358,20 @@ export function AdminUserDetailModal({ userId, onClose, previousUserId, nextUser
                                                 ]}
                                                 onChange={setLoginMethod}
                                             />
-                                            <DatePicker.RangePicker
-                                                showTime
-                                                value={loginDateRange}
-                                                format="YYYY-MM-DD HH:mm:ss"
-                                                placeholder={["开始时间", "结束时间"]}
-                                                onChange={setLoginDateRange}
-                                            />
+                                            <DatePicker.RangePicker showTime value={loginDateRange} format="YYYY-MM-DD HH:mm:ss" placeholder={["开始时间", "结束时间"]} onChange={setLoginDateRange} />
                                         </>
-                                    )}
-                                    trailing={(
+                                    }
+                                    trailing={
                                         <div className="flex items-center gap-2">
                                             {loginFiltersDirty ? <span className="text-xs text-foreground/45">请先查询以应用筛选条件</span> : null}
-                                            <Button type="text" disabled={!loginFiltersActive && !loginFiltersDirty} onClick={resetLoginFilters}>重置</Button>
-                                            <Button loading={loginLoading} onClick={applyLoginFilters}>查询</Button>
+                                            <Button type="text" disabled={!loginFiltersActive && !loginFiltersDirty} onClick={resetLoginFilters}>
+                                                重置
+                                            </Button>
+                                            <Button loading={loginLoading} onClick={applyLoginFilters}>
+                                                查询
+                                            </Button>
                                         </div>
-                                    )}
+                                    }
                                     table={{
                                         rowKey: "id",
                                         size: "small",
@@ -361,10 +381,20 @@ export function AdminUserDetailModal({ userId, onClose, previousUserId, nextUser
                                         tableLayout: "fixed",
                                         columns: [
                                             { title: "事件时间", dataIndex: "createdAt", width: 170, render: formatTime },
-                                            { title: "事件", width: 100, render: (_, event) => event.event === "logout" ? "主动退出" : event.source === "registration" ? "注册登录" : "登录" },
+                                            { title: "事件", width: 100, render: (_, event) => (event.event === "logout" ? "主动退出" : event.source === "registration" ? "注册登录" : "登录") },
                                             { title: "结果", width: 85, render: (_, event) => <AdminStatusBadge tone={event.result === "failed" ? "error" : "success"} label={event.result === "failed" ? "失败" : "成功"} /> },
                                             { title: "登录方式", dataIndex: "loginMethod", width: 105, render: loginMethodLabel },
-                                            { title: "IP 地址", dataIndex: "ipAddress", width: 145, ellipsis: true, render: (value) => <span className="font-mono text-xs" title={fallbackText(value)}>{fallbackText(value)}</span> },
+                                            {
+                                                title: "IP 地址",
+                                                dataIndex: "ipAddress",
+                                                width: 145,
+                                                ellipsis: true,
+                                                render: (value) => (
+                                                    <span className="font-mono text-xs" title={fallbackText(value)}>
+                                                        {fallbackText(value)}
+                                                    </span>
+                                                ),
+                                            },
                                             { title: "设备", dataIndex: "deviceType", width: 85, render: fallbackText },
                                             { title: "操作系统", width: 145, ellipsis: true, render: (_, event) => environmentName(event.os, event.osVersion) },
                                             { title: "浏览器", width: 150, ellipsis: true, render: (_, event) => environmentName(event.browser, event.browserVersion) },
@@ -373,7 +403,7 @@ export function AdminUserDetailModal({ userId, onClose, previousUserId, nextUser
                                                 width: 100,
                                                 fixed: "right",
                                                 render: (_, event) => (
-                                                    <Button type="link" size="small" onClick={() => setExpandedLoginEventId((current) => current === event.id ? "" : event.id)}>
+                                                    <Button type="link" size="small" onClick={() => setExpandedLoginEventId((current) => (current === event.id ? "" : event.id))}>
                                                         {expandedLoginEventId === event.id ? "收起" : "查看详情"}
                                                     </Button>
                                                 ),
@@ -388,7 +418,7 @@ export function AdminUserDetailModal({ userId, onClose, previousUserId, nextUser
                                         scroll: { x: 1085 },
                                     }}
                                     empty={<AdminTableEmpty filtered={loginFiltersActive} title="没有登录环境记录" />}
-                                    footer={(
+                                    footer={
                                         <PaginationBar
                                             alwaysShow
                                             current={loginPage}
@@ -400,7 +430,7 @@ export function AdminUserDetailModal({ userId, onClose, previousUserId, nextUser
                                                 setExpandedLoginEventId("");
                                             }}
                                         />
-                                    )}
+                                    }
                                 />
                             ),
                         },
@@ -415,10 +445,10 @@ export function AdminUserDetailModal({ userId, onClose, previousUserId, nextUser
                                         dataSource: events,
                                         pagination: false,
                                         columns: [
-                                        { title: "时间", dataIndex: "createdAt", width: 170, render: formatTime },
-                                        { title: "管理员", dataIndex: "actorUserId", width: 160, ellipsis: true },
-                                        { title: "动作", dataIndex: "action", width: 160 },
-                                        { title: "摘要", dataIndex: "summary", ellipsis: true },
+                                            { title: "时间", dataIndex: "createdAt", width: 170, render: formatTime },
+                                            { title: "管理员", dataIndex: "actorUserId", width: 160, ellipsis: true },
+                                            { title: "动作", dataIndex: "action", width: 160 },
+                                            { title: "摘要", dataIndex: "summary", ellipsis: true },
                                         ],
                                         scroll: { x: 720 },
                                     }}
@@ -500,12 +530,12 @@ function taskStatusTone(value?: string): AdminStatusTone {
 
 function quotaUsageItems(detail: AdminUserDetail) {
     const structuredBytes = detail.storageUsage.assetBytes + detail.storageUsage.canvasBytes;
-    const bytes = (value: number) => value >= 1024 ** 3 ? `${(value / 1024 ** 3).toFixed(2)} GB` : `${(value / 1024 ** 2).toFixed(1)} MB`;
+    const bytes = (value: number) => (value >= 1024 ** 3 ? `${(value / 1024 ** 3).toFixed(2)} GB` : `${(value / 1024 ** 2).toFixed(1)} MB`);
     const number = (value: number) => new Intl.NumberFormat("zh-CN").format(value);
     return [
-        // 有效容量包含已购扩容；旧响应缺少 storageCapacity 时退回全局基础容量。
+        // 文件容量采用全局默认与用户逐项覆盖。
         {
-            label: detail.storageCapacity?.readOnly ? "资源与附件（只读）" : detail.storageCapacity?.overLimit ? "资源与附件（超额宽限期）" : "资源与附件",
+            label: detail.storageCapacity?.overLimit ? "资源与附件（超额）" : "资源与附件",
             value: detail.storedFileBytes,
             limit: detail.storageCapacity?.totalBytes ?? detail.quota.storedFileGB * 1024 ** 3,
             display: `${bytes(detail.storedFileBytes)} / ${bytes(detail.storageCapacity?.totalBytes ?? detail.quota.storedFileGB * 1024 ** 3)}`,

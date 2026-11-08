@@ -18,7 +18,6 @@ const (
 
 	CodeQuotaExceeded          = 40301
 	CodeInsufficientCredits    = 40001
-	CodeStorageReadOnly        = 40302
 	CodeIdempotencyConflict    = 40901
 	CodeRateLimited            = 42901
 	CodeUsernameChangeLimit    = 42902
@@ -56,7 +55,6 @@ const (
 	ReasonFeedbackSubmissionConflict     ErrorReason = "feedback_submission_conflict"
 	ReasonSkillVersionConflict           ErrorReason = "skill_version_conflict"
 	ReasonStorageCapacityExceeded        ErrorReason = "storage_capacity_exceeded"
-	ReasonStorageReadOnly                ErrorReason = "storage_read_only"
 	// 短剧作品预算已用完（含关联画布上的精修花费）：画布生成任务也被拒绝，提高预算后可继续。
 	ReasonDramaBudgetExhausted ErrorReason = "drama_budget_exhausted"
 	// 采用到剧情段时段版本已变（调度或其他页面刚改过），客户端需刷新后重新确认。

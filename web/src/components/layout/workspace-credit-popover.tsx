@@ -1,6 +1,6 @@
 import { AlipayCircleFilled, WechatFilled } from "@ant-design/icons";
 import { App, Button, ConfigProvider, Input, Popover, QRCode, Skeleton } from "antd";
-import { Check, CircleCheck, Clock3, CreditCard, ExternalLink, Gift, HardDrive, History, Sparkles, TicketCheck } from "lucide-react";
+import { Check, CircleCheck, Clock3, CreditCard, ExternalLink, Gift, History, Sparkles, TicketCheck } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -400,9 +400,6 @@ export function WorkspaceCreditPopover({ userId, variant }: { userId: string; va
                         </Button>
                         <Button type="text" icon={<History />} onClick={() => openWalletSection({ tab: "history" })}>
                             {t("account.wallet.tabHistory")}
-                        </Button>
-                        <Button type="text" icon={<HardDrive />} onClick={() => openWalletSection({ tab: "topup", category: "storage" })}>
-                            {t("account.wallet.storage")}
                         </Button>
                     </nav>
                 </section>

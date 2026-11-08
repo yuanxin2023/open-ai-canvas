@@ -78,7 +78,7 @@ func (s *Service) requireStoredFileCapacityWhileLocked(userID string, taskType s
 
 func validateStoredFileCapacity(storedBytes int64, pendingBytes int64, storedLimit int64) error {
 	if storedLimit > 0 && storedBytes+pendingBytes >= storedLimit {
-		return StorageCapacityExceeded(fmt.Sprintf("账号文件容量已达到 %s 上限，请清理素材或购买存储空间后再生成", formatStorageLimit(storedLimit)))
+		return StorageCapacityExceeded(fmt.Sprintf("账号文件容量已达到 %s 上限，请清理素材或联系管理员调整配额后再生成", formatStorageLimit(storedLimit)))
 	}
 	return nil
 }

@@ -111,8 +111,6 @@ type PaymentOrderView struct {
 	AmountFen                 int64                    `json:"amountFen"`
 	Currency                  string                   `json:"currency"`
 	CreditsMicrocredits       int64                    `json:"creditsMicrocredits"`
-	StorageBytes              int64                    `json:"storageBytes,omitempty"`
-	StorageDurationDays       int                      `json:"storageDurationDays,omitempty"`
 	Status                    model.PaymentOrderStatus `json:"status"`
 	ProviderStatus            string                   `json:"providerStatus,omitempty"`
 	ProviderTradeNo           string                   `json:"providerTradeNo,omitempty"`
@@ -178,11 +176,12 @@ func (s *Service) CreatePaymentOrder(ctx context.Context, actor *model.User, req
 	if err != nil || !product.Enabled {
 		return nil, BadAuthRequest("充值商品不存在或已停用")
 	}
-	// 积分功能关闭时积分商品不可购买；存储空间商品不依赖积分功能。
-	if topupProductKind(product.Kind) == model.TopupProductKindCredits {
-		if err := s.RequireFeature(FeatureCredits); err != nil {
-			return nil, err
-		}
+	// 商品仅支持积分充值，并遵守积分功能开关。
+	if topupProductKind(product.Kind) != model.TopupProductKindCredits {
+		return nil, BadAuthRequest("不支持独立存储商品")
+	}
+	if err := s.RequireFeature(FeatureCredits); err != nil {
+		return nil, err
 	}
 	provider, ok := s.paymentRegistry.Get(providerID)
 	if !ok {
@@ -220,8 +219,8 @@ func (s *Service) CreatePaymentOrder(ctx context.Context, actor *model.User, req
 	order := &model.PaymentOrder{
 		ID: newID(), UserID: actor.ID, IdempotencyKey: idempotencyKey, MerchantOrderNo: newID(),
 		ProductID: product.ID, ProductName: product.Name, ProductKind: topupProductKind(product.Kind),
-		StorageBytes: product.StorageBytes, StorageDurationDays: product.StorageDurationDays, ProviderID: provider.Descriptor().ID,
-		PluginID: provider.Descriptor().PluginID, PluginVersion: provider.Descriptor().PluginVersion, ProviderConfigID: config.ID, ProviderConfigVersion: config.Version,
+		ProviderID: provider.Descriptor().ID,
+		PluginID:   provider.Descriptor().PluginID, PluginVersion: provider.Descriptor().PluginVersion, ProviderConfigID: config.ID, ProviderConfigVersion: config.Version,
 		AmountFen: quoteAmount(*product, now), Currency: "CNY", CreditsMicrocredits: product.CreditsMicrocredits,
 		Status: model.PaymentOrderCreated, CheckoutMode: provider.Descriptor().CheckoutMode,
 		ExpiresAt: now.Add(time.Duration(config.CloseAfterMinutes) * time.Minute),
@@ -592,13 +591,10 @@ func (s *Service) applyPaymentResult(providerID string, result payment.Result) (
 		if result.AmountFen != order.AmountFen || result.Currency != order.Currency {
 			return nil, repository.ErrPaymentEvidenceMismatch
 		}
-		completed, granted, err := s.completePaymentOrderWithReferral(providerID, result.MerchantOrderNo, repository.PaymentEvidence{
+		completed, _, err := s.completePaymentOrderWithReferral(providerID, result.MerchantOrderNo, repository.PaymentEvidence{
 			ProviderTradeNo: result.ProviderTradeNo, ProviderStatus: result.ProviderStatus,
 			AmountFen: result.AmountFen, Currency: result.Currency, PaidAt: result.PaidAt,
 		})
-		if err == nil && granted {
-			s.afterStorageOrderGranted(completed)
-		}
 		return completed, err
 	}
 	if result.Closed {
@@ -631,10 +627,10 @@ func (s *Service) paymentRuntimeForOrder(order *model.PaymentOrder) (payment.Pro
 
 // topupProductKind 把迁移前或未填写的类型视为积分商品。
 func topupProductKind(kind model.TopupProductKind) model.TopupProductKind {
-	if kind == model.TopupProductKindStorage {
-		return kind
+	if kind == "" {
+		return model.TopupProductKindCredits
 	}
-	return model.TopupProductKindCredits
+	return kind
 }
 
 func paymentOrderView(order model.PaymentOrder) PaymentOrderView {
@@ -653,8 +649,8 @@ func paymentOrderView(order model.PaymentOrder) PaymentOrderView {
 	return PaymentOrderView{
 		ReferralPolicyVersionID: order.ReferralPolicyVersionID, NewcomerBonusMicrocredits: order.NewcomerBonusMicrocredits,
 		ID: order.ID, UserID: order.UserID, MerchantOrderNo: order.MerchantOrderNo, ProductID: order.ProductID, ProductName: order.ProductName,
-		ProductKind: topupProductKind(order.ProductKind), StorageBytes: order.StorageBytes, StorageDurationDays: order.StorageDurationDays,
-		ProviderID: order.ProviderID, AmountFen: order.AmountFen, Currency: order.Currency,
+		ProductKind: topupProductKind(order.ProductKind),
+		ProviderID:  order.ProviderID, AmountFen: order.AmountFen, Currency: order.Currency,
 		CreditsMicrocredits: order.CreditsMicrocredits, Status: order.Status, ProviderStatus: order.ProviderStatus,
 		ProviderTradeNo: providerTradeNo, Checkout: checkout, ExpiresAt: order.ExpiresAt,
 		ProviderPaidAt: order.ProviderPaidAt, CreditedAt: order.CreditedAt, ClosedAt: order.ClosedAt,

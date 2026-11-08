@@ -211,7 +211,7 @@ func (s *Service) comparePaymentReconciliation(ctx context.Context, provider pay
 		if paidAt.IsZero() {
 			paidAt = billDate.Add(12 * time.Hour)
 		}
-		recoveredOrder, granted, creditErr := s.completePaymentOrderWithReferral(run.ProviderID, merchantOrderNo, repository.PaymentEvidence{
+		_, _, creditErr := s.completePaymentOrderWithReferral(run.ProviderID, merchantOrderNo, repository.PaymentEvidence{
 			ProviderTradeNo: confirmed.ProviderTradeNo, ProviderStatus: confirmed.ProviderStatus,
 			AmountFen: confirmed.AmountFen, Currency: confirmed.Currency, PaidAt: paidAt,
 		})
@@ -221,9 +221,6 @@ func (s *Service) comparePaymentReconciliation(ctx context.Context, provider pay
 			items = append(items, item)
 			failed++
 			continue
-		}
-		if granted {
-			s.afterStorageOrderGranted(recoveredOrder)
 		}
 		item.Result = model.PaymentReconciliationRecovered
 		item.Resolved = true

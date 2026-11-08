@@ -10,10 +10,9 @@ import { usePaymentOrderFlow } from "@/components/payment/use-payment-order-flow
 import { AppModal } from "@/components/ui/product/app-modal";
 import { formatCredits } from "@/constant/credits";
 import { useAccountFileStorageUsage } from "@/hooks/use-account-file-storage-usage";
-import { accountFileStorageUsageQueryKey, accountStorageMeter } from "@/lib/account-storage-usage";
+import { accountStorageMeter } from "@/lib/account-storage-usage";
 import { generationErrorMessage } from "@/lib/generation-error";
-import { listPaymentProviders, listTopupProducts, type PaymentOrder, type PaymentProvider, type TopupProduct, type TopupProductKind } from "@/services/api/payments";
-import { listMyStorageGrants } from "@/services/api/storage-grants";
+import { listPaymentProviders, listTopupProducts, type PaymentProvider, type TopupProduct, type TopupProductKind } from "@/services/api/payments";
 import { getWallet, redeemCredits, type CreditLedgerEntry, type WalletSummary } from "@/services/api/wallet";
 import { getReferralDashboard } from "@/services/api/referrals";
 import { cn } from "@/lib/utils";
@@ -21,8 +20,6 @@ import { consumePaymentReturnPath, openWorkspaceWallet, WORKSPACE_WALLET_OPEN_EV
 import { useUserStore } from "@/stores/use-user-store";
 
 type WalletModalTab = "topup" | "redeem" | "history";
-
-const storageGrantsQueryKey = ["account-storage-grants"] as const;
 
 export function WorkspaceWalletHost() {
     const userId = useUserStore((state) => state.user?.id);
@@ -33,7 +30,7 @@ export function WorkspaceWalletHost() {
     const [open, setOpen] = useState(false);
     const [openDetail, setOpenDetail] = useState<WorkspaceWalletOpenDetail>({});
 
-    // 积分关闭时仍要能打开充值页购买存储空间，只是隐藏积分余额、兑换和积分记录。
+    // 充值入口与积分功能开关保持一致。
     const applyOpen = (detail: WorkspaceWalletOpenDetail = {}) => {
         setOpenDetail(detail);
         setOpen(true);
@@ -57,7 +54,7 @@ export function WorkspaceWalletHost() {
         navigate(consumePaymentReturnPath(), { replace: true });
     }, [navigate, pathname, search]);
 
-    if (!loggedIn) return null;
+    if (!loggedIn || !creditsEnabled) return null;
     return (
         <WorkspaceWalletModal
             key={userId}
@@ -120,7 +117,6 @@ export function WorkspaceWalletModal({
     const [redeeming, setRedeeming] = useState(false);
     const requestSequence = useRef(0);
     const storageQuery = useAccountFileStorageUsage(open);
-    const grantsQuery = useQuery({ queryKey: [...storageGrantsQueryKey, actorId], queryFn: ({ signal }) => listMyStorageGrants(signal), enabled: open && Boolean(actorId) });
     const referralQuery = useQuery({ queryKey: ["wallet-referral", actorId], queryFn: ({ signal }) => getReferralDashboard(signal), enabled: open && Boolean(actorId), staleTime: 0 });
     const storageMeter = accountStorageMeter(storageQuery.data);
 
@@ -157,7 +153,7 @@ export function WorkspaceWalletModal({
                 const usableProviders = providerResult.providers.filter((item) => item.enabled && item.pluginEnabled && item.configured);
                 setProducts(enabledProducts);
                 setProviders(usableProviders);
-                // 从容量入口进入时优先选中存储空间套餐。
+                // 优先选择可购买的积分商品。
                 const preferred = enabledProducts.filter((item) => !initialCategory || initialCategory === "all" || item.kind === initialCategory);
                 setSelectedProductId((current) =>
                     current && enabledProducts.some((item) => item.id === current) && !initialCategory ? current : preferred.find((item) => item.canPurchase)?.id || enabledProducts.find((item) => item.canPurchase)?.id || "",
@@ -184,13 +180,9 @@ export function WorkspaceWalletModal({
         if (current()) window.dispatchEvent(new CustomEvent("wallet:updated"));
     };
 
-    const announceGranted = async (order: PaymentOrder) => {
+    const announceGranted = async () => {
         if (!current()) return;
         await queryClient.invalidateQueries({ queryKey: ["wallet-referral", actorId] });
-        if (order.productKind === "storage") {
-            await Promise.all([queryClient.invalidateQueries({ queryKey: accountFileStorageUsageQueryKey }), queryClient.invalidateQueries({ queryKey: storageGrantsQueryKey })]);
-            return;
-        }
         await announceWalletUpdated();
     };
 
@@ -238,15 +230,6 @@ export function WorkspaceWalletModal({
     };
 
     // 定位到某类套餐：滚动到分组，并在当前选中项不属于该类时改选该类第一个可买套餐。
-    const focusProducts = (kind: TopupProductKind) => {
-        setTab("topup");
-        setFocusKind(kind);
-        setFocusToken((value) => value + 1);
-        if (selectedProduct?.kind === kind) return;
-        const next = products.find((item) => item.kind === kind && item.canPurchase);
-        if (next) setSelectedProductId(next.id);
-    };
-
     const available = wallet?.account.availableMicrocredits ?? 0;
     const totalPages = Math.max(1, Math.ceil((wallet?.total || 0) / 20));
 
@@ -258,10 +241,10 @@ export function WorkspaceWalletModal({
                         <div>
                             <span className="workspace-wallet-kicker">
                                 <Coins />
-                                {creditsEnabled ? translate("nav.tools.wallet") : translate("account.wallet.topupCenter")}
+                                {translate("nav.tools.wallet")}
                             </span>
-                            <h2>{creditsEnabled ? translate("account.wallet.title") : translate("account.wallet.titleStorage")}</h2>
-                            <p>{creditsEnabled ? translate("account.wallet.description") : translate("account.wallet.descriptionStorage")}</p>
+                            <h2>{translate("account.wallet.title")}</h2>
+                            <p>{translate("account.wallet.description")}</p>
                         </div>
                         <div className="workspace-wallet-stats">
                             {creditsEnabled ? (
@@ -274,7 +257,15 @@ export function WorkspaceWalletModal({
                                     </small>
                                 </div>
                             ) : null}
-                            <button type="button" className="workspace-wallet-balance is-storage" aria-label={translate("account.wallet.viewStorage")} onClick={() => focusProducts("storage")}>
+                            <button
+                                type="button"
+                                className="workspace-wallet-balance is-storage"
+                                aria-label={translate("account.wallet.viewStorage")}
+                                onClick={() => {
+                                    onClose();
+                                    navigate("/assets");
+                                }}
+                            >
                                 <span>
                                     <HardDrive className="inline size-3 align-[-1px]" aria-hidden="true" />
                                     {translate("account.wallet.storage")}
@@ -283,15 +274,7 @@ export function WorkspaceWalletModal({
                                 <span className="wallet-topup-storage-track" aria-hidden="true">
                                     <span style={{ width: `${storageMeter.percent}%` }} />
                                 </span>
-                                <small>
-                                    {storageMeter.state === "read_only"
-                                        ? translate("account.wallet.storageReadOnly")
-                                        : storageMeter.state === "grace"
-                                          ? translate("account.wallet.storageGrace")
-                                          : storageMeter.purchasedLabel
-                                            ? `含已购 ${storageMeter.purchasedLabel}`
-                                            : `剩余 ${storageMeter.remainingLabel}`}
-                                </small>
+                                <small>剩余 {storageMeter.remainingLabel}</small>
                             </button>
                         </div>
                     </header>
@@ -327,12 +310,6 @@ export function WorkspaceWalletModal({
                             onSelectProvider={setSelectedProviderId}
                             creating={payment.creating}
                             onPay={() => void startPayment()}
-                            storageUsage={storageQuery.data}
-                            storageGrants={grantsQuery.data?.grants || []}
-                            onCleanAssets={() => {
-                                onClose();
-                                navigate("/assets");
-                            }}
                         />
                     ) : activeTab === "redeem" ? (
                         <div className="workspace-wallet-content is-redeem">

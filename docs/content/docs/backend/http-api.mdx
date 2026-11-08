@@ -184,40 +184,17 @@ handle 放错端点、格式错误或行 ID 不存在时，工具错误回执提
 
 完成上传时以数据库事务提交容量并消费预留，使用既有资源幂等标识。失败释放预留；跨 UTC 日期完成需要通过当天日额度检查。请求与响应字段不变。
 
-## 存储容量与只读
+## 文件容量与个人配额
 
-本地整合中，基础容量先合成全局默认与逐用户覆盖，再叠加有效扩容；读写准入与用量展示使用相同口径。管理扩容要求 `admin.users.accounts`，管理员目标另需全权限；不能以管理员角色代替模块授权。存储商品不发放积分，也不触发积分充值返利。
+账号文件总容量由全局默认与用户逐项覆盖的 `storedFileGB` 决定，不再叠加独立购买或赠送扩容。全局、普通用户和管理员个人配额接口及权限保持原有合同。
 
-账号有效文件容量 = 全局默认与逐用户覆盖合成的 `storedFileGB` + 当前生效的存储扩容（支付购买或授权管理员赠送，多笔叠加、各自到期）。
+`GET /api/resources/storage-usage` 返回 `{ usage: { usedBytes, totalBytes, overLimit } }`，其中 `overLimit = usedBytes > totalBytes`。接口实时读取用量，无超额计时、宽限期或只读状态副作用，不再返回基础/购买拆分、到期时间和只读字段。
 
-`GET /api/resources/storage-usage` 返回 `{ usage }`：
+上传、分片、生成回存和媒体任务准入仍检查文件容量，容量不足返回 HTTP 403、`code=40301`、`reason=storage_capacity_exceeded`。其他结构化数据、日总量和数量配额仍独立校验。超额不再触发账号只读，不删除已有内容；用户仍可查看、下载和清理，或联系管理员调整配额。
 
-| 字段 | 说明 |
-| --- | --- |
-| `usedBytes` / `totalBytes` | 已用与有效总容量 |
-| `baseBytes` / `purchasedBytes` | 逐用户有效基础容量与生效扩容合计 |
-| `nextExpiresAt` | 最近一笔有期限扩容的到期时间，可为空 |
-| `overLimit` | `usedBytes > totalBytes` |
-| `overLimitSince` / `readOnlyAt` | 首次观察到超额的时间及其 7 天后进入只读的时间 |
-| `readOnly` | 宽限期已结束且仍超额 |
+移除 `GET /resources/storage-grants`、`GET /admin/users/:id/storage`、`POST /admin/users/:id/storage-grants` 和 `POST /admin/storage-grants/:id/revoke`，不再提供扩容赠送或撤销能力。
 
-该接口每次实时计算，并刷新本实例的只读判定缓存（15 秒），所以用户删除素材或扩容后刷新用量即可解除限制。
-
-超额后的行为：
-
-- 宽限期内：上传、分片上传、生成资源落库和媒体生成任务准入返回 `storage_capacity_exceeded`，其它写入照常。
-- 宽限期结束：`/api` 下的非 GET 请求先经过只读守卫，返回 HTTP 403、`code=40302`、`reason=storage_read_only`。放行的请求：所有 `GET`/`HEAD`/`OPTIONS`/`DELETE`；路径前缀 `/auth/`、`/payments/`、`/wallet/`、`/admin/`、`/settings/`、`/diagnostics/`、`/model-catalog/`；以及 `POST /assets/batch-delete`、`/assets/batch`、`/resources/access`、`/announcements/read`、`/models/available`、`/models/:id/quote`、`/ai/models`、`/runninghub/*-info`、`/canvas-projects/:id/edit-lease`、`/feedbacks`、`/feedbacks/attachments`、`/tasks/:id/{cancel,query-provider,recover-media,text-deltas,text-replay-complete}`、`/agent/runs/:id/cancel`、`/dramas/:id/pause`、`/creation-runs/:id/{release,heartbeat}`。新增的写接口默认受只读约束，确需放行时在 `backend/internal/handler/storage_guard.go` 登记。
-
-扩容相关接口：
-
-| 方法 | 路径 | 行为 |
-| --- | --- | --- |
-| GET | `/api/resources/storage-grants` | 当前用户的扩容记录（含已到期、已撤销），最多 100 条 |
-| GET | `/api/admin/users/:id/storage` | 具有用户管理权限的管理员查看用户有效容量（不写入超额状态）和扩容记录 |
-| POST | `/api/admin/users/:id/storage-grants` | 具有用户管理权限的管理员赠送，请求 `{ "bytes": 10737418240, "durationDays": 30, "note": "" }`；`bytes` 必须是整 GB，`durationDays=0` 为永久；写管理员审计 |
-| POST | `/api/admin/storage-grants/:id/revoke` | 具有用户管理权限的管理员撤销，请求 `{ "reason": "线下退款" }`，原因必填；写管理员审计 |
-
-存储空间商品与积分商品共用 `/api/payments/*` 和 `/api/admin/payments/products`。商品和订单增加 `kind`/`productKind`（`credits`|`storage`）、`storageBytes`、`storageDurationDays`。`/payments/providers` 与下单不再要求积分功能；积分功能关闭时，`/payments/products` 只返回存储空间商品，积分商品下单返回功能未开启。商品类型创建后不能修改。
+支付商品仅支持积分，创建、更新、下单、回调和对账均不发放存储权益。创建/更新请求中的非积分类型、非零存储容量或有效期会被拒绝，不能降级视作积分商品。商品和订单响应不再包含 `storageBytes`、`storageDurationDays`。积分功能关闭时，商品目录、支付渠道与积分下单遵守功能开关。
 
 ## AutoDL 视频画面规格配置
 
@@ -913,7 +890,6 @@ Agent 已不再注入、召回或写入下列经验条目，记忆设置页只�
 | 40001 | 400 | `insufficient_credits` | 付费任务积分预留失败；充值后由用户手动重试 |
 | 40301 | 403 | `quota_exceeded` | 账号配额用尽（不自动重试） |
 | 40301 | 403 | `storage_capacity_exceeded` | 账号文件容量不足，上传或媒体生成被拒；前端据此展示“购买空间”入口 |
-| 40302 | 403 | `storage_read_only` | 账号超出文件容量且 7 天宽限期已结束，内容写入被拒；`details` 含 `usedBytes`、`totalBytes`、`readOnlyAt` |
 | 40901 | 409 | `conflict` | 幂等冲突 |
 | 42901 | 429 | `rate_limited` | 请求限流（可带 Retry-After） |
 | 42902 | 429 | `username_change_limit` | 30 天用户名修改次数已达上限（带 Retry-After） |

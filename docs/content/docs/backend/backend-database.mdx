@@ -118,34 +118,17 @@ description: AI 创作工作台后端核心持久化表与状态边界
 
 官方 61–71 与本地 84–94 一一对应，完整映射见仓库 `docs/plans/upstream-v1.7.1-review.md`。下文短剧段落的版本号均为官方来源号。
 
-## 存储空间套餐（本地 Schema 92，官方来源 69）
+## 文件配额与历史扩容迁移（Schema 113）
 
-本地版本 92 `storage_products` 让充值商品可以售卖账号文件容量，并新增扩容记录和超额状态两张表。账号有效文件容量 = `UserRuntimePolicy(userID).resource.storedFileGB`（全局默认值与逐用户覆盖合成的基础容量）+ 当前生效的扩容之和，上限 1 PiB。上传、分片上传、生成资源落库、媒体生成任务准入和 `GET /api/resources/storage-usage` 都使用同一计算。
+账号文件容量只取全局默认与用户逐项覆盖后的 `storedFileGB`。上传、分片、导入、生成回存、媒体任务准入和用量展示使用同一口径，不再叠加独立扩容，不再设置七天宽限期或账号只读状态。
 
-`topup_products` 与 `payment_orders` 新增列（已有行通过默认值成为积分商品/订单）：
+历史 Schema 92 `storage_products` 及其校验信息保留。`topup_products`、`payment_orders` 的 `kind` / `product_kind`、`storage_bytes`、`storage_duration_days` 列，以及 `user_storage_grants`、`user_storage_states` 表不删除；存储字段不再作为商品和订单响应权益返回，扩容表仅留作历史与迁移。
 
-| 字段 | 说明 |
-| --- | --- |
-| `kind` / `product_kind` | `credits`（默认）或 `storage`；商品创建后不能修改类型 |
-| `storage_bytes` | 扩容容量，必须是整 GB，1–100000 GB；积分商品为 0 |
-| `storage_duration_days` | 有效天数，0 表示永久，最长 3650 天 |
+Schema 113 `storage_grants_to_user_quota` 在事务内处理迁移时仍有效的管理员赠送：将原生效文件额度加有效赠送容量，写入 `user_resource_quotas.overrides_json.storedFileGB`。保留其他覆盖项、全局值和原更新人；转换后额度不再到期。写入 `storage_grants.migrate_to_quota` 系统审计，记录前后覆盖、基础与最终额度和赠送 ID；固定审计 ID 防止重复折入，不伪造管理员身份，不修改赠送历史。
 
-订单在创建时快照这三列，发放只读订单快照。积分功能关闭时只隐藏、拒绝积分商品，存储空间商品仍可下单。
+赠送必须为整 GB，转换后为 1–999 GB。发现存储或未知权益订单、非管理员或商品关联扩容、无所属用户、无效配额或超出范围时整笔迁移回滚并停止升级，不截断、不忽略。没有订单的历史存储商品下架，业务接口拒绝重新启用和购买。
 
-`user_storage_grants`（每笔扩容一行，多笔容量叠加、各自到期）：
-
-| 字段 | 说明 |
-| --- | --- |
-| `user_id`、`expires_at` | 联合索引 `idx_user_storage_grant_active`；`expires_at` 为空表示永久 |
-| `source` | `payment` 或 `admin` |
-| `payment_order_id`、`product_id`、`product_name` | 支付来源快照 |
-| `bytes`、`duration_days`、`starts_at` | 容量与有效期，从发放时刻起算 |
-| `revoked_at`、`revoked_by`、`revoke_reason` | 管理员撤销；撤销后不再计入容量 |
-| `reference_key`（唯一） | 支付发放为 `payment:<providerId>:<merchantOrderNo>`，与积分流水同一幂等口径 |
-
-支付成功时 `CompletePaymentOrder` 在同一事务内按订单类型写积分流水或扩容记录，然后把订单置为 `credited`（表示“权益已发放”）。到期不需要后台任务，查询时按 `revoked_at IS NULL AND starts_at <= now AND (expires_at IS NULL OR expires_at > now)` 过滤。
-
-`user_storage_states`（主键 `user_id`）只有 `over_limit_since`：首次观察到已用容量超过有效容量时写入，回落到容量以内时清空。观察点是用量接口和只读守卫，管理端查看不写入。超额后立即暂停上传和媒体生成；`over_limit_since` 起 7 天后账号进入只读，见 [HTTP API](/docs/backend/http-api) 的“存储容量与只读”。
+升级指定现有库前先备份，在副本演练并核对转换前后的总容量及业务数据；历史迁移不回退，不删除资源文件。
 
 ## 生成作品的本地兜底与对象存储补传（本地 Schema 93，官方来源 70）
 

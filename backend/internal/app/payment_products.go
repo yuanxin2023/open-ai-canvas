@@ -1,4 +1,4 @@
-// 充值商品：前台可购买的积分档位、存储空间档位与管理端增改。
+// 充值商品：前台可购买的积分档位与管理端增改。
 
 package app
 
@@ -23,21 +23,18 @@ func (s *Service) TopupProducts(actor *model.User) (*PaymentCatalog, error) {
 	if actor == nil {
 		return nil, Unauthorized("请先登录")
 	}
-	creditsEnabled, err := s.FeatureEnabled(FeatureCredits)
-	if err != nil {
+	if err := s.RequireFeature(FeatureCredits); err != nil {
 		return nil, err
 	}
 	products, err := s.repo.TopupProducts(false)
 	if err != nil {
 		return nil, err
 	}
-	// 积分功能关闭时只隐藏积分商品，存储空间商品照常售卖。
 	visible := make([]model.TopupProduct, 0, len(products))
 	for _, product := range products {
-		if topupProductKind(product.Kind) == model.TopupProductKindCredits && !creditsEnabled {
-			continue
+		if topupProductKind(product.Kind) == model.TopupProductKindCredits {
+			visible = append(visible, product)
 		}
-		visible = append(visible, product)
 	}
 	setting, promotion, err := s.readPaymentPromotion()
 	if err != nil {
@@ -174,18 +171,8 @@ func topupProductFromRequest(id, actorID string, request TopupProductRequest, st
 		return nil, BadAuthRequest("充值金额必须为 0.01 至 1,000,000 元")
 	}
 	kind := topupProductKind(request.Kind)
-	if request.Kind != "" && request.Kind != model.TopupProductKindCredits && request.Kind != model.TopupProductKindStorage {
-		return nil, BadAuthRequest("商品类型无效")
-	}
-	if kind == model.TopupProductKindStorage {
-		if request.CreditsMicrocredits != 0 {
-			return nil, BadAuthRequest("存储空间商品不能同时发放积分")
-		}
-		if err := validStorageGrantSize(request.StorageBytes, request.StorageDurationDays); err != nil {
-			return nil, err
-		}
-	} else if request.StorageBytes != 0 || request.StorageDurationDays != 0 {
-		return nil, BadAuthRequest("积分商品不能设置存储空间")
+	if kind != model.TopupProductKindCredits || request.StorageBytes != 0 || request.StorageDurationDays != 0 {
+		return nil, BadAuthRequest("仅支持积分商品，不支持独立存储权益")
 	}
 	if kind == model.TopupProductKindCredits && (request.CreditsMicrocredits <= 0 || request.CreditsMicrocredits > maxTopupCreditsMicrocredits) {
 		return nil, BadAuthRequest("充值积分必须为 0.01 至 10 亿积分")

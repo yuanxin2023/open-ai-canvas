@@ -11,7 +11,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { PaginationBar } from "@/pages/admin/components/admin-ui";
 import { paymentOrderGrantLabel } from "@/lib/payment-order-grant";
 import { formatCredits } from "@/constant/credits";
-import { formatStorageCapacity, formatStorageDuration } from "@/lib/account-storage-usage";
 import {
     closeAdminPaymentOrder,
     exportAdminPaymentOrders,
@@ -74,8 +73,8 @@ const paymentPageMeta: Record<AdminPaymentView, { title: string; description: st
 
 export default function AdminPaymentsPage({ view = "providers" }: { view?: AdminPaymentView }) {
     const { message, modal } = App.useApp();
-	const adminAccess = useUserStore((state) => state.user?.adminAccess);
-	const canViewUserDetails = hasAdminPermission(adminAccess, "admin.users.accounts");
+    const adminAccess = useUserStore((state) => state.user?.adminAccess);
+    const canViewUserDetails = hasAdminPermission(adminAccess, "admin.users.accounts");
     const [providers, setProviders] = useState<AdminPaymentProvider[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -380,16 +379,34 @@ export default function AdminPaymentsPage({ view = "providers" }: { view?: Admin
             width: 230,
             render: (_, order) => (
                 <div className="min-w-0">
-                    {order.user ? <>
-                        <div className="flex min-w-0 items-baseline gap-2">
-							{canViewUserDetails ? <button type="button" className="admin-table-primary-link truncate font-medium" title={order.user.username} onClick={() => setSelectedUserId(order.user!.id)}>{order.user.username}</button> : <span className="truncate font-medium" title={order.user.username}>{order.user.username}</span>}
-                            <span className="truncate text-xs text-foreground/45" title={`@${order.user.username}`}>@{order.user.username}</span>
-                        </div>
-                        <div className="mt-1 truncate text-xs text-foreground/60" title={order.user.email}>{order.user.email || "未填写邮箱"}</div>
-                    </> : <>
-                        <div className="text-foreground/60">用户不存在</div>
-                        <Typography.Text className="text-xs" copyable={order.userId ? { text: order.userId } : false}>{order.userId ? `${order.userId.slice(0, 8)}…${order.userId.slice(-6)}` : "--"}</Typography.Text>
-                    </>}
+                    {order.user ? (
+                        <>
+                            <div className="flex min-w-0 items-baseline gap-2">
+                                {canViewUserDetails ? (
+                                    <button type="button" className="admin-table-primary-link truncate font-medium" title={order.user.username} onClick={() => setSelectedUserId(order.user!.id)}>
+                                        {order.user.username}
+                                    </button>
+                                ) : (
+                                    <span className="truncate font-medium" title={order.user.username}>
+                                        {order.user.username}
+                                    </span>
+                                )}
+                                <span className="truncate text-xs text-foreground/45" title={`@${order.user.username}`}>
+                                    @{order.user.username}
+                                </span>
+                            </div>
+                            <div className="mt-1 truncate text-xs text-foreground/60" title={order.user.email}>
+                                {order.user.email || "未填写邮箱"}
+                            </div>
+                        </>
+                    ) : (
+                        <>
+                            <div className="text-foreground/60">用户不存在</div>
+                            <Typography.Text className="text-xs" copyable={order.userId ? { text: order.userId } : false}>
+                                {order.userId ? `${order.userId.slice(0, 8)}…${order.userId.slice(-6)}` : "--"}
+                            </Typography.Text>
+                        </>
+                    )}
                 </div>
             ),
         },
@@ -431,7 +448,19 @@ export default function AdminPaymentsPage({ view = "providers" }: { view?: Admin
                 </div>
             ),
         },
-        { title: "状态", dataIndex: "status", width: 150, align: "center", render: (value, order) => <div className="space-y-1"><AdminStatusBadge {...(paymentOrderStatus[value] || { label: value, tone: "neutral" as const })} />{order.closurePending ? <div className="text-xs">渠道待确认</div> : null}{order.inventoryOversold ? <AdminStatusBadge label="库存超售待核对" tone="error" /> : null}</div> },
+        {
+            title: "状态",
+            dataIndex: "status",
+            width: 150,
+            align: "center",
+            render: (value, order) => (
+                <div className="space-y-1">
+                    <AdminStatusBadge {...(paymentOrderStatus[value] || { label: value, tone: "neutral" as const })} />
+                    {order.closurePending ? <div className="text-xs">渠道待确认</div> : null}
+                    {order.inventoryOversold ? <AdminStatusBadge label="库存超售待核对" tone="error" /> : null}
+                </div>
+            ),
+        },
         { title: "创建时间", dataIndex: "createdAt", width: 130, render: (value) => <span title={formatDateTime(value)}>{dayjs(value).format("MM-DD HH:mm")}</span> },
         {
             title: "操作",
@@ -515,7 +544,8 @@ export default function AdminPaymentsPage({ view = "providers" }: { view?: Admin
             }
             scroll
         >
-            {[
+            {
+                [
                     {
                         key: "providers",
                         label: "支付渠道",
@@ -659,25 +689,88 @@ export default function AdminPaymentsPage({ view = "providers" }: { view?: Admin
                             </div>
                         ),
                     },
-                ].find((section) => section.key === view)?.children}
+                ].find((section) => section.key === view)?.children
+            }
 
             <AdminDrawer title="支付订单详情" size="min(680px, 100vw)" open={Boolean(selectedOrder)} onClose={() => setSelectedOrder(null)}>
-                {selectedOrder && <Descriptions column={1} bordered size="small" items={[
-					{ key: "user", label: "用户", children: selectedOrder.user ? (canViewUserDetails ? <button type="button" className="admin-table-primary-link" onClick={() => { setSelectedUserId(selectedOrder.user!.id); setSelectedOrder(null); }}>@{selectedOrder.user.username}</button> : `@${selectedOrder.user.username}`) : "用户不存在" },
-                    { key: "email", label: "邮箱", children: selectedOrder.user?.email || "未填写邮箱" },
-                    { key: "userId", label: "用户 ID", children: <Typography.Text copyable className="break-all">{selectedOrder.userId || "--"}</Typography.Text> },
-                    { key: "order", label: "订单号", children: <Typography.Text copyable className="break-all">{selectedOrder.merchantOrderNo}</Typography.Text> },
-                    { key: "trade", label: "渠道交易号", children: selectedOrder.providerTradeNo ? <Typography.Text copyable className="break-all">{selectedOrder.providerTradeNo}</Typography.Text> : "--" },
-                    { key: "product", label: "商品", children: selectedOrder.productName },
-                    { key: "channel", label: "支付渠道", children: providerNames[selectedOrder.providerId] || selectedOrder.providerId },
-                    { key: "amount", label: "金额 / 积分", children: `¥ ${(selectedOrder.amountFen / 100).toFixed(2)} / ${formatCredits(selectedOrder.creditsMicrocredits)} 积分` },
-                    { key: "status", label: "状态", children: paymentOrderStatus[selectedOrder.status]?.label || selectedOrder.status },
-                    { key: "closure", label: "关单确认", children: selectedOrder.status === "closed" ? selectedOrder.closurePending ? "站内已关闭，渠道尚未确认；库存或限购名额保留" : "渠道已确认关闭" : "--" },
-                    { key: "inventory", label: "库存核对", children: selectedOrder.inventoryOversold ? "迟到支付导致库存超售，已补记消耗并停止商品继续售卖，请核对" : "--" },
-                    ...([{ key: "createdAt", label: "创建时间" }, { key: "expiresAt", label: "过期时间" }, { key: "providerPaidAt", label: "支付时间" }, { key: "creditedAt", label: "入账时间" }, { key: "closedAt", label: "关闭时间" }] as const).map(({ key, label }) => ({ key, label, children: selectedOrder[key] ? formatDateTime(selectedOrder[key]!) : "--" })),
-                ]} />}
+                {selectedOrder && (
+                    <Descriptions
+                        column={1}
+                        bordered
+                        size="small"
+                        items={[
+                            {
+                                key: "user",
+                                label: "用户",
+                                children: selectedOrder.user ? (
+                                    canViewUserDetails ? (
+                                        <button
+                                            type="button"
+                                            className="admin-table-primary-link"
+                                            onClick={() => {
+                                                setSelectedUserId(selectedOrder.user!.id);
+                                                setSelectedOrder(null);
+                                            }}
+                                        >
+                                            @{selectedOrder.user.username}
+                                        </button>
+                                    ) : (
+                                        `@${selectedOrder.user.username}`
+                                    )
+                                ) : (
+                                    "用户不存在"
+                                ),
+                            },
+                            { key: "email", label: "邮箱", children: selectedOrder.user?.email || "未填写邮箱" },
+                            {
+                                key: "userId",
+                                label: "用户 ID",
+                                children: (
+                                    <Typography.Text copyable className="break-all">
+                                        {selectedOrder.userId || "--"}
+                                    </Typography.Text>
+                                ),
+                            },
+                            {
+                                key: "order",
+                                label: "订单号",
+                                children: (
+                                    <Typography.Text copyable className="break-all">
+                                        {selectedOrder.merchantOrderNo}
+                                    </Typography.Text>
+                                ),
+                            },
+                            {
+                                key: "trade",
+                                label: "渠道交易号",
+                                children: selectedOrder.providerTradeNo ? (
+                                    <Typography.Text copyable className="break-all">
+                                        {selectedOrder.providerTradeNo}
+                                    </Typography.Text>
+                                ) : (
+                                    "--"
+                                ),
+                            },
+                            { key: "product", label: "商品", children: selectedOrder.productName },
+                            { key: "channel", label: "支付渠道", children: providerNames[selectedOrder.providerId] || selectedOrder.providerId },
+                            { key: "amount", label: "金额 / 积分", children: `¥ ${(selectedOrder.amountFen / 100).toFixed(2)} / ${formatCredits(selectedOrder.creditsMicrocredits)} 积分` },
+                            { key: "status", label: "状态", children: paymentOrderStatus[selectedOrder.status]?.label || selectedOrder.status },
+                            { key: "closure", label: "关单确认", children: selectedOrder.status === "closed" ? (selectedOrder.closurePending ? "站内已关闭，渠道尚未确认；库存或限购名额保留" : "渠道已确认关闭") : "--" },
+                            { key: "inventory", label: "库存核对", children: selectedOrder.inventoryOversold ? "迟到支付导致库存超售，已补记消耗并停止商品继续售卖，请核对" : "--" },
+                            ...(
+                                [
+                                    { key: "createdAt", label: "创建时间" },
+                                    { key: "expiresAt", label: "过期时间" },
+                                    { key: "providerPaidAt", label: "支付时间" },
+                                    { key: "creditedAt", label: "入账时间" },
+                                    { key: "closedAt", label: "关闭时间" },
+                                ] as const
+                            ).map(({ key, label }) => ({ key, label, children: selectedOrder[key] ? formatDateTime(selectedOrder[key]!) : "--" })),
+                        ]}
+                    />
+                )}
             </AdminDrawer>
-			{canViewUserDetails ? <AdminUserDetailModal userId={selectedUserId} onClose={() => setSelectedUserId(null)} /> : null}
+            {canViewUserDetails ? <AdminUserDetailModal userId={selectedUserId} onClose={() => setSelectedUserId(null)} /> : null}
 
             <Drawer
                 title={providerDrawer ? `配置 ${providerDrawer.name}` : "配置支付渠道"}

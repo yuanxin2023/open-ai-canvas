@@ -11,18 +11,18 @@ import { paymentOrderGrantLabel } from "@/lib/payment-order-grant";
 import { rememberPaymentReturnPath } from "@/lib/workspace-wallet";
 import { closePaymentOrder, createPaymentOrder, getPaymentOrder, queryPaymentOrder, refreshPaymentCheckout, type PaymentOrder } from "@/services/api/payments";
 
-function grantedText(order: PaymentOrder) {
-    return order.productKind === "storage" ? "支付已确认，存储空间已扩容" : "支付已确认，积分已经到账";
+function grantedText() {
+    return "支付已确认，积分已经到账";
 }
 
 function notGrantedText(order: PaymentOrder) {
     if (order.closurePending) return "订单已在站内关闭，渠道结果待确认；若已支付，将按原订单发放权益";
-    return order.productKind === "storage" ? "订单已关闭，未产生扩容" : "订单已关闭，未产生积分充值";
+    return "订单已关闭，未产生积分充值";
 }
 
 /**
  * 在线支付下单、扫码、轮询、关单与重建收银台的共用流程。
- * onGranted 对每个订单只触发一次，调用方在其中刷新余额或容量。
+ * onGranted 对每个订单只触发一次，调用方在其中刷新积分余额。
  */
 export function usePaymentOrderFlow({ onGranted }: { onGranted: (order: PaymentOrder) => Promise<void> | void }) {
     const { message } = App.useApp();
@@ -115,7 +115,7 @@ export function usePaymentOrderFlow({ onGranted }: { onGranted: (order: PaymentO
             setOrder(result.order);
             if (result.order.status === "credited") {
                 await settle(result.order);
-                if (!silent) message.success(grantedText(result.order));
+                if (!silent) message.success(grantedText());
             } else if (!silent && result.order.status === "closed") message.warning(notGrantedText(result.order));
             else if (!silent) message.info(translate("account.payment.notConfirmed"));
         } catch (error) {
@@ -161,15 +161,7 @@ export function usePaymentOrderFlow({ onGranted }: { onGranted: (order: PaymentO
     const dialog = (
         <AppModal
             open={open}
-            title={
-                order?.status === "credited"
-                    ? order.productKind === "storage"
-                        ? translate("account.payment.storageDone")
-                        : translate("account.payment.topupDone")
-                    : order?.checkout.mode === "qr_code"
-                      ? translate("account.payment.scanTitle")
-                      : translate("account.payment.confirmTitle")
-            }
+            title={order?.status === "credited" ? translate("account.payment.topupDone") : order?.checkout.mode === "qr_code" ? translate("account.payment.scanTitle") : translate("account.payment.confirmTitle")}
             centered
             width={430}
             onCancel={close}
@@ -200,7 +192,7 @@ export function usePaymentOrderFlow({ onGranted }: { onGranted: (order: PaymentO
 }
 
 function PaymentStatus({ order, now }: { order: PaymentOrder; now: number }) {
-    if (order.status === "credited") return <div className="workspace-wallet-payment-status is-success">{grantedText(order)}</div>;
+    if (order.status === "credited") return <div className="workspace-wallet-payment-status is-success">{grantedText()}</div>;
     if (order.status === "closed") return <div className="workspace-wallet-payment-status">{notGrantedText(order)}</div>;
     if (order.status === "create_failed") return <div className="workspace-wallet-payment-status is-error">{translate("account.payment.createCheckoutFailed")}</div>;
     const remaining = Math.max(0, Math.floor((new Date(order.expiresAt).getTime() - now) / 1000));

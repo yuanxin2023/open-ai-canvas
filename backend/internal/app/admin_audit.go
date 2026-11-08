@@ -18,7 +18,7 @@ type AdminUserDetail struct {
 	StoredFileBytes  int64                       `json:"storedFileBytes"`
 	DailyUploadBytes int64                       `json:"dailyUploadBytes"`
 	Quota            RuntimeResourcePolicy       `json:"quota"`
-	// StorageCapacity 是包含已购扩容的有效账号文件容量与超额状态。
+	// StorageCapacity 与用户逐项覆盖后的文件配额一致。
 	StorageCapacity AccountFileStorageUsage `json:"storageCapacity"`
 }
 
@@ -126,7 +126,7 @@ func (s *Service) AdminUserDetail(actor *model.User, userID string) (*AdminUserD
 	if err != nil {
 		return nil, err
 	}
-	capacity, err := s.computeAccountStorageStatus(user.ID, time.Now(), false)
+	capacity, err := s.AccountFileStorageUsage(user.ID)
 	if err != nil {
 		return nil, err
 	}

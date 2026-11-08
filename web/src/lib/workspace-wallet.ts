@@ -4,12 +4,7 @@ export const WORKSPACE_WALLET_OPEN_EVENT = "wallet:open";
 export const WORKSPACE_CREDIT_PRODUCTS_OPEN_EVENT = "wallet:products-open";
 const PAYMENT_RETURN_PATH_KEY = "wallet:payment-return-path";
 const PAYMENT_RETURN_MAX_AGE_MS = 24 * 60 * 60 * 1000;
-const PAYMENT_RETURN_ROUTES = [
-    /^\/(?:|create|tasks|assets|prompts|skills|settings|profile)\/?$/,
-    /^\/plugins(?:\/eagle)?\/?$/,
-    /^\/canvas(?:\/[^/]+)?\/?$/,
-    /^\/projects(?:\/[^/]+(?:\/[^/]+|\/chapters\/[^/]+|\/workflow\/[^/]+\/[^/]+)?)?\/?$/,
-];
+const PAYMENT_RETURN_ROUTES = [/^\/(?:|create|tasks|assets|prompts|skills|settings|profile)\/?$/, /^\/plugins(?:\/eagle)?\/?$/, /^\/canvas(?:\/[^/]+)?\/?$/, /^\/projects(?:\/[^/]+(?:\/[^/]+|\/chapters\/[^/]+|\/workflow\/[^/]+\/[^/]+)?)?\/?$/];
 
 function validPaymentReturnPath(value: unknown): value is string {
     if (typeof value !== "string" || !value.startsWith("/") || value.startsWith("//") || /[\\\u0000-\u001f]/.test(value)) return false;
@@ -46,7 +41,7 @@ export type WorkspaceWalletOpenDetail = {
     /** 打开后所在的标签，默认“充值”。 */
     tab?: "topup" | "redeem" | "history";
     /** 充值页的商品分类，默认“全部”。 */
-    category?: "all" | "credits" | "storage";
+    category?: "all" | "credits";
 };
 
 /** 工作台任意入口打开积分中心弹窗，不再进入独立钱包页。 */

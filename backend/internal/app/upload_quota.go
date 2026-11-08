@@ -56,7 +56,7 @@ func uploadReservationError(err error) error {
 		return NewAppError(429, err.Error())
 	}
 	if errors.Is(err, repository.ErrUploadStorageLimit) {
-		return StorageCapacityExceeded("账号文件容量不足，请清理素材或购买存储空间")
+		return StorageCapacityExceeded("账号文件容量不足，请清理素材或联系管理员调整配额")
 	}
 	if errors.Is(err, repository.ErrDailyUploadLimitExceeded) {
 		return QuotaExceeded(err.Error())
@@ -114,7 +114,7 @@ func (s *Service) reserveUserStoredFileQuota(userID string, size int64, exclusiv
 		s.pendingStorage = map[string]int64{}
 	}
 	if storedBytes+s.pendingStorage[userID]+size >= storedLimit {
-		return "", StorageCapacityExceeded(fmt.Sprintf("账号资源和会话附件已达到 %s 上限，请清理素材或购买存储空间", formatStorageLimit(storedLimit)))
+		return "", StorageCapacityExceeded(fmt.Sprintf("账号资源和会话附件已达到 %s 上限，请清理素材或联系管理员调整配额", formatStorageLimit(storedLimit)))
 	}
 	s.pendingStorage[userID] += size
 	if err := s.repo.ReserveDailyUpload(userID, day, size, dailyLimit); err != nil {

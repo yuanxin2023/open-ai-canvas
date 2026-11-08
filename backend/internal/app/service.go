@@ -48,8 +48,6 @@ type Service struct {
 	characterTaskMu          sync.Mutex
 	activeCancels            map[string]context.CancelFunc
 	pendingStorage           map[string]int64
-	storageStatusMu          sync.Mutex
-	storageStatusCache       map[string]storageStatusEntry
 	coordinator              *platform.Coordinator
 	platform                 *platform.Service
 	taskBillingCoordinator   *taskBillingCoordinator
