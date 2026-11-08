@@ -38,7 +38,7 @@ const configSectionGroups: ConfigSectionGroup[] = ["general", "creation", "integ
 
 /**
  * 分类按用途分组：账户与通用 → 创作 → 渠道与存储 → 帮助与反馈。
- * 分组名在 settings.groups.<group>，分类名称与说明在 settings.sections.<key>。
+ * 分组名在 settings.groups.<group>，分类名称在 settings.sections.<key>.label。
  */
 const configSections: Array<{ key: ConfigSectionKey; group: ConfigSectionGroup; label?: string; icon: ReactNode }> = [
     { key: "profile", group: "general", label: translate("local.ui.profile"), icon: <UserRound className="size-4" /> },
@@ -280,7 +280,6 @@ export default function SettingsPage() {
                                                 <span className={`shrink-0 md:mt-0.5 ${selected ? "text-[var(--workspace-accent)]" : ""}`}>{item.icon}</span>
                                                 <span className="min-w-0">
                                                     <span className="block whitespace-nowrap text-sm font-medium">{item.label || t(`settings.sections.${item.key}.label`)}</span>
-                                                    {!item.label ? <span className="mt-1 hidden text-[var(--fs-label)] leading-4 text-current opacity-65 md:block">{t(`settings.sections.${item.key}.description`)}</span> : null}
                                                 </span>
                                             </button>
                                         );
