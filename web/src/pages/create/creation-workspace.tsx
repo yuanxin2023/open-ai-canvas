@@ -98,7 +98,7 @@ import {
     type CreationShotRailEntry,
     type CreationStatus,
 } from "./creation-types";
-import { openWorkspaceCreditProducts } from "@/lib/workspace-wallet";
+import { openWorkspaceWallet } from "@/lib/workspace-wallet";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
 import { useCopyText } from "@/hooks/use-copy-text";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";

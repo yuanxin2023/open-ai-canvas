@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { WalletTopupPanel } from "../src/components/layout/workspace-wallet-topup";
+import { CreditProductCard } from "../src/components/payments/credit-product-card";
 import type { TopupProduct } from "../src/services/api/payments";
 
 const credits: TopupProduct = {
@@ -31,13 +31,18 @@ const credits: TopupProduct = {
 };
 
 function render(products: TopupProduct[]) {
-    return renderToStaticMarkup(<WalletTopupPanel loading={false} products={products} providers={[]} selectedProviderId="" onSelectProduct={() => {}} onSelectProvider={() => {}} creating={false} onPay={() => {}} />);
+    return renderToStaticMarkup(
+        <>
+            {products.map((product) => (
+                <CreditProductCard key={product.id} product={product} maxCreditsMicrocredits={product.creditsMicrocredits} />
+            ))}
+        </>,
+    );
 }
 
 test("credit purchase preserves custom presentation without independent storage sales", () => {
     const html = render([credits]);
     for (const label of ["原有套餐权益", "本地横幅", "本地活动价格", "到账积分"]) expect(html).toContain(label);
-    expect(html).toContain('data-topup-kind="credits"');
     expect(html).not.toContain('data-topup-kind="storage"');
     expect(html).not.toContain("空间扩容");
 });

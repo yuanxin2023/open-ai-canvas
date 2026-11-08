@@ -4,7 +4,7 @@ import { translate } from "@/i18n";
 import { conversationTimeFormatter, type CreationMessage } from "./creation-types";
 import { creationMessageNeedsResultSync } from "./creation-conversations";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
-import { openWorkspaceCreditProducts } from "@/lib/workspace-wallet";
+import { openWorkspaceWallet } from "@/lib/workspace-wallet";
 import { AlertCircle, AlertTriangle, CircleStop, CloudOff, Copy, Download, FileText, Film, Image as ImageIcon, ImageOff, Maximize2, Music2, Pencil, RefreshCw, RotateCcw, UserRound, X, type LucideIcon, Blocks, Orbit } from "lucide-react";
 import { GenerationToolCard, type GenerationToolStatus } from "@/components/ai/generation-tool-card";
 import { GenerationPhaseSteps } from "@/components/ai/generation-phase-steps";
@@ -460,7 +460,7 @@ export function MediaResult({
             <div className="creation-media-actions">
                 <span>{isVideo ? "视频结果" : `${displayResultUrls.length} 张图片`}</span>
                 {item.generationErrorReason === "insufficient_credits" ? (
-                    <Button type="link" size="small" onClick={openWorkspaceCreditProducts}>
+                    <Button type="link" size="small" onClick={() => openWorkspaceWallet()}>
                         部分图片因积分不足失败 · 购买积分
                     </Button>
                 ) : null}

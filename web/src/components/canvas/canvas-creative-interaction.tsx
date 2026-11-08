@@ -3,7 +3,7 @@ import { Button } from "antd";
 import { useTranslation } from "react-i18next";
 import { translate } from "@/i18n";
 import { CanvasAnchoredDropdown as Dropdown } from "./canvas-anchored-dropdown";
-import { openWorkspaceCreditProducts } from "@/lib/workspace-wallet";
+import { openWorkspaceWallet } from "@/lib/workspace-wallet";
 import localforage from "localforage";
 import type { CanvasAssistantMessage } from "@/types/canvas";
 import type { AiConfig } from "@/stores/use-config-store";
@@ -314,7 +314,7 @@ export function CanvasCreativeInteraction(props: Props) {
                                     <p>{generationErrorMessage(item.error)}</p>
                                 </details>
                             )}
-                            {item.generationErrorReason === "insufficient_credits" && <Button onClick={openWorkspaceCreditProducts}>{translate("local.ui.buyCredits")}</Button>}
+                            {item.generationErrorReason === "insufficient_credits" && <Button onClick={() => openWorkspaceWallet()}>{translate("local.ui.buyCredits")}</Button>}
                             {props.active && item.status === "failed" && item.failureKind !== "observation" && (
                                 <Button type="primary" disabled={blocked} onClick={() => invoke(controller.current?.redo(item.ref))}>
                                     {translate("canvasA.creative.redoItem")}

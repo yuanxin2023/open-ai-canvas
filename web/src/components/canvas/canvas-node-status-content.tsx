@@ -18,7 +18,7 @@ import { useTaskElapsed } from "@/hooks/use-task-elapsed";
 import { canvasNodeCanResyncTask } from "@/lib/canvas/canvas-task-state";
 import { CONTENT_MODERATION_ERROR_CODE, generationErrorMessage, isContentModerationError } from "@/lib/generation-error";
 import { GenerationPhaseSteps } from "@/components/ai/generation-phase-steps";
-import { openWorkspaceCreditProducts } from "@/lib/workspace-wallet";
+import { openWorkspaceWallet } from "@/lib/workspace-wallet";
 import type { CanvasTheme } from "@/lib/canvas-theme";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 import type { CanvasNodeContentProps } from "./canvas-node-content";
@@ -181,7 +181,7 @@ export function ErrorContent({ node, theme, onRetry, onReloadResource, onOpenTas
                             className="canvas-gen-action is-primary"
                             onClick={(event) => {
                                 event.stopPropagation();
-                                openWorkspaceCreditProducts();
+                                openWorkspaceWallet();
                             }}
                         >
                             购买积分

@@ -16,7 +16,7 @@ mock.module("@/components/layout/workspace-account-card", () => ({ WorkspaceAcco
 for (const [path, name] of [
     ["banner-announcements-slider", "BannerAnnouncementsSlider"],
     ["model-setup-guide", "ModelSetupGuide"],
-    ["workspace-wallet-modal", "WorkspaceWalletHost"],
+    ["workspace-package-center", "WorkspacePackageCenterHost"],
     ["image-credit-shortfall-host", "ImageCreditShortfallHost"],
     ["workspace-storage-limit-notice", "WorkspaceStorageLimitNotice"],
     ["workspace-top-bar-checkin", "WorkspaceTopBarCheckin"],

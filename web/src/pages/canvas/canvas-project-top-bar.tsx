@@ -221,7 +221,7 @@ export function CanvasTopBar({
                             </Button>
                         </Dropdown>
                     </CanvasTopBarTooltip>
-                    {user && creditsEnabled ? <WorkspaceCreditPopover userId={user.id} /> : null}
+                    {user && creditsEnabled ? <WorkspaceCreditPopover key={user.id} userId={user.id} /> : null}
                     <CanvasTopBarTooltip label="进入专注模式（Shift + Ctrl/Cmd + F）">
                         <Button type="text" className="canvas-topbar-action !h-10 !w-10 !min-w-10 !rounded-xl !p-0" style={{ color: theme.node.text }} icon={<Focus className="size-4" />} onClick={onEnterFocusMode} aria-label="进入专注模式" />
                     </CanvasTopBarTooltip>

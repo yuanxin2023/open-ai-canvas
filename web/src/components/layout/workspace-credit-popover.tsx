@@ -1,70 +1,27 @@
-import { AlipayCircleFilled, WechatFilled } from "@ant-design/icons";
-import { App, Button, ConfigProvider, Input, Popover, QRCode, Skeleton } from "antd";
-import { Check, CircleCheck, Clock3, CreditCard, ExternalLink, Gift, History, Sparkles, TicketCheck } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Button, ConfigProvider, Input, Popover } from "antd";
+import { CreditCard, Gift, Sparkles } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { WorkspaceCreditGiftMark } from "@/components/layout/workspace-credit-gift-mark";
-import { CreditProductCard } from "@/components/payments/credit-product-card";
-import { topupSaleDescription } from "@/lib/topup-sale-policy";
-import { PaymentPromotionBanner, promotionClockOffset } from "@/components/payments/payment-promotion-banner";
-import { AppModal } from "@/components/ui/product/app-modal";
 import { formatCredits } from "@/constant/credits";
 import { useWalletBalance } from "@/hooks/use-wallet-balance";
+import { useCreditRedemption } from "@/hooks/use-credit-redemption";
 import { getWorkspaceAntThemeConfig } from "@/lib/app-theme";
-import { WORKSPACE_CREDIT_PRODUCTS_OPEN_EVENT, openWorkspaceWallet, rememberPaymentReturnPath, type WorkspaceWalletOpenDetail } from "@/lib/workspace-wallet";
-import { closePaymentOrder, createPaymentOrder, getPaymentOrder, listPaymentProviders, listTopupProducts, queryPaymentOrder, refreshPaymentCheckout, type PaymentOrder, type PaymentProvider, type TopupProduct } from "@/services/api/payments";
-import { redeemCredits } from "@/services/api/wallet";
+import { openWorkspaceWallet } from "@/lib/workspace-wallet";
 
-const PAYMENT_CATALOG_STALE_TIME_MS = 5 * 60_000;
 const HOVER_POINTER_QUERY = "(hover: hover) and (pointer: fine)";
 const workspaceCreditTheme = getWorkspaceAntThemeConfig();
 
 export function WorkspaceCreditPopover({ userId, variant }: { userId: string; variant?: "topbar" }) {
     const { t } = useTranslation();
     const topbar = variant === "topbar";
-    const { message } = App.useApp();
     const { availableMicrocredits, policy } = useWalletBalance(userId);
     const [open, setOpen] = useState(false);
     const [canHover, setCanHover] = useState(() => typeof window !== "undefined" && window.matchMedia(HOVER_POINTER_QUERY).matches);
-    const [productsOpen, setProductsOpen] = useState(false);
-    const [selectedProduct, setSelectedProduct] = useState<TopupProduct | null>(null);
-    const [selectedProviderId, setSelectedProviderId] = useState("");
-    const [paymentOrder, setPaymentOrder] = useState<PaymentOrder | null>(null);
-    const [paymentCreating, setPaymentCreating] = useState(false);
-    const [paymentQuerying, setPaymentQuerying] = useState(false);
-    const [clock, setClock] = useState(Date.now());
-    const [code, setCode] = useState("");
-    const [redeeming, setRedeeming] = useState(false);
-    const paymentIdempotencyKey = useRef("");
-    const completedPaymentOrderId = useRef("");
+    const { code, setCode, normalizedCode, redeeming, redeem } = useCreditRedemption(userId);
     const balance = availableMicrocredits === null ? "--" : formatCredits(availableMicrocredits);
     const dailyBonus = policy === null ? "--" : formatCredits(policy.checkinBonusMicrocredits, 2);
-    const normalizedCode = code.trim().toLowerCase();
-    const paymentCatalogQuery = useQuery({
-        queryKey: ["payment-catalog", userId],
-        queryFn: async () => {
-            const [productsResult, providersResult] = await Promise.all([listTopupProducts(), listPaymentProviders()]);
-            return {
-                products: productsResult.products.filter((product) => product.enabled && product.kind === "credits"),
-                promotion: productsResult.promotion,
-                serverTime: productsResult.serverTime,
-                providers: providersResult.providers.filter((provider) => provider.enabled && provider.pluginEnabled && provider.configured),
-            };
-        },
-        staleTime: PAYMENT_CATALOG_STALE_TIME_MS,
-        refetchOnWindowFocus: false,
-    });
-    const products = useMemo(() => paymentCatalogQuery.data?.products ?? [], [paymentCatalogQuery.data?.products]);
-    const providers = useMemo(() => paymentCatalogQuery.data?.providers ?? [], [paymentCatalogQuery.data?.providers]);
-    const promotion = paymentCatalogQuery.data?.promotion;
-    const catalogServerTime = paymentCatalogQuery.data?.serverTime || new Date().toISOString();
-    const maxProductCredits = useMemo(() => products.reduce((maximum, product) => Math.max(maximum, product.creditsMicrocredits), 0), [products]);
-    const productsLoading = paymentCatalogQuery.isPending;
-    const productsError = !paymentCatalogQuery.data && paymentCatalogQuery.error ? (paymentCatalogQuery.error instanceof Error ? paymentCatalogQuery.error.message : "读取商品套餐失败") : "";
-    const selectedProvider = useMemo(() => providers.find((provider) => provider.id === selectedProviderId), [providers, selectedProviderId]);
-
     useEffect(() => {
         const media = window.matchMedia(HOVER_POINTER_QUERY);
         const updateCanHover = () => {
@@ -74,196 +31,6 @@ export function WorkspaceCreditPopover({ userId, variant }: { userId: string; va
         media.addEventListener("change", updateCanHover);
         return () => media.removeEventListener("change", updateCanHover);
     }, []);
-
-    useEffect(() => {
-        if (!productsOpen) return;
-        void paymentCatalogQuery.refetch({ cancelRefetch: false });
-    }, [productsOpen, paymentCatalogQuery.refetch]);
-
-    useEffect(() => {
-        if (!productsOpen || !promotion) return;
-        const boundary = promotion.phase === "scheduled" ? promotion.startsAt : promotion.phase === "active" ? promotion.endsAt : undefined;
-        if (!boundary) return;
-        const offset = promotionClockOffset(catalogServerTime);
-        const remaining = Date.parse(boundary) - (Date.now() + offset);
-        const timer = window.setTimeout(() => void paymentCatalogQuery.refetch({ cancelRefetch: false }), Math.max(250, Math.min(remaining + 150, 2_147_000_000)));
-        return () => window.clearTimeout(timer);
-    }, [catalogServerTime, paymentCatalogQuery.refetch, productsOpen, promotion]);
-
-    useEffect(() => {
-        if (!productsOpen) return;
-        const refreshWhenVisible = () => {
-            if (document.visibilityState === "visible") void paymentCatalogQuery.refetch({ cancelRefetch: false });
-        };
-        document.addEventListener("visibilitychange", refreshWhenVisible);
-        return () => document.removeEventListener("visibilitychange", refreshWhenVisible);
-    }, [paymentCatalogQuery.refetch, productsOpen]);
-
-    useEffect(() => {
-        if (!selectedProduct) return;
-        const refreshed = products.find((product) => product.id === selectedProduct.id);
-        if (refreshed) setSelectedProduct(refreshed);
-    }, [products, selectedProduct?.id]);
-
-    useEffect(() => {
-        const openProducts = () => {
-            setOpen(false);
-            setProductsOpen(true);
-        };
-        window.addEventListener(WORKSPACE_CREDIT_PRODUCTS_OPEN_EVENT, openProducts);
-        return () => window.removeEventListener(WORKSPACE_CREDIT_PRODUCTS_OPEN_EVENT, openProducts);
-    }, []);
-
-    useEffect(() => {
-        setSelectedProviderId((current) => (providers.some((provider) => provider.id === current) ? current : providers[0]?.id || ""));
-    }, [providers]);
-
-    useEffect(() => {
-        paymentIdempotencyKey.current = "";
-    }, [selectedProduct?.id, selectedProviderId]);
-
-    useEffect(() => {
-        if (!selectedProduct || !paymentOrder || !["created", "pending", "closing"].includes(paymentOrder.status)) return;
-        const interval = window.setInterval(() => {
-            setClock(Date.now());
-            void getPaymentOrder(paymentOrder.id)
-                .then(({ order }) => {
-                    setPaymentOrder(order);
-                    if (order.status === "credited") paymentCompleted(order.id);
-                })
-                .catch(() => undefined);
-        }, 2_000);
-        return () => window.clearInterval(interval);
-    }, [selectedProduct?.id, paymentOrder?.id, paymentOrder?.status]);
-
-    const openPaymentSelector = (product: TopupProduct) => {
-        if (!product.canPurchase) {
-            message.warning("该套餐当前不可购买");
-            return;
-        }
-        setSelectedProduct(product);
-        setSelectedProviderId((current) => (providers.some((provider) => provider.id === current) ? current : providers[0]?.id || ""));
-        setPaymentOrder(null);
-        setClock(Date.now());
-    };
-
-    const closePaymentSelector = () => {
-        if (paymentCreating || paymentQuerying) return;
-        setSelectedProduct(null);
-        setPaymentOrder(null);
-    };
-
-    const startPayment = async () => {
-        if (!selectedProduct?.canPurchase) {
-            message.warning("该套餐当前不可购买");
-            return;
-        }
-        if (!selectedProduct || !selectedProvider) {
-            message.error("请选择支付方式");
-            return;
-        }
-        setPaymentCreating(true);
-        try {
-            if (!paymentIdempotencyKey.current) paymentIdempotencyKey.current = crypto.randomUUID();
-            const result = await createPaymentOrder({ productId: selectedProduct.id, providerId: selectedProvider.id, idempotencyKey: paymentIdempotencyKey.current });
-            paymentIdempotencyKey.current = "";
-            setPaymentOrder(result.order);
-            if (result.order.status === "credited") {
-                paymentCompleted(result.order.id);
-                return;
-            }
-            if (result.order.checkout.mode === "redirect" && result.order.checkout.url) {
-                rememberPaymentReturnPath();
-                window.location.assign(result.order.checkout.url);
-            }
-        } catch (error) {
-            message.error(error instanceof Error ? error.message : "创建支付订单失败");
-        } finally {
-            setPaymentCreating(false);
-        }
-    };
-
-    const confirmPayment = async () => {
-        if (!paymentOrder) return;
-        setPaymentQuerying(true);
-        try {
-            const result = await queryPaymentOrder(paymentOrder.id);
-            setPaymentOrder(result.order);
-            if (result.order.status === "credited") paymentCompleted(result.order.id);
-            else if (result.order.status === "closed") message.warning(result.order.closurePending ? "订单已在站内关闭，渠道结果待确认；若已支付，将按原订单到账" : "渠道已确认关闭");
-            else message.info("支付渠道尚未确认，请稍后再试");
-        } catch (error) {
-            message.error(error instanceof Error ? error.message : "查询支付结果失败");
-        } finally {
-            setPaymentQuerying(false);
-        }
-    };
-
-    const cancelPayment = async () => {
-        if (!paymentOrder) return;
-        setPaymentQuerying(true);
-        try {
-            const result = await closePaymentOrder(paymentOrder.id);
-            setPaymentOrder(result.order);
-            if (result.order.status === "credited") paymentCompleted(result.order.id);
-            else if (result.order.closurePending) message.info("订单已在站内关闭，渠道结果待确认");
-            else message.success("渠道已确认关闭订单");
-        } catch (error) {
-            message.error(error instanceof Error ? error.message : "关闭订单失败");
-        } finally {
-            setPaymentQuerying(false);
-        }
-    };
-
-    const retryPaymentCheckout = async () => {
-        if (!paymentOrder) return;
-        setPaymentQuerying(true);
-        try {
-            const result = await refreshPaymentCheckout(paymentOrder.id);
-            setPaymentOrder(result.order);
-            if (result.order.status === "credited") paymentCompleted(result.order.id);
-            else if (result.order.checkout.mode === "redirect" && result.order.checkout.url) {
-                rememberPaymentReturnPath();
-                window.location.assign(result.order.checkout.url);
-            }
-        } catch (error) {
-            message.error(error instanceof Error ? error.message : "重新生成支付信息失败");
-        } finally {
-            setPaymentQuerying(false);
-        }
-    };
-
-    const paymentCompleted = (orderId: string) => {
-        if (completedPaymentOrderId.current === orderId) return;
-        completedPaymentOrderId.current = orderId;
-        window.dispatchEvent(new CustomEvent("wallet:updated"));
-        message.success("支付成功，积分已到账");
-    };
-
-    const redeem = async () => {
-        if (normalizedCode.length !== 32) {
-            message.error("请输入完整的 32 位兑换码");
-            return;
-        }
-        setRedeeming(true);
-        try {
-            await redeemCredits(normalizedCode);
-            setCode("");
-            window.dispatchEvent(new CustomEvent("wallet:updated"));
-            message.success("兑换成功，积分已到账");
-        } catch (error) {
-            message.error(error instanceof Error ? error.message : "兑换失败");
-        } finally {
-            setRedeeming(false);
-        }
-    };
-
-    const openWalletSection = (detail: WorkspaceWalletOpenDetail) => {
-        setOpen(false);
-        setProductsOpen(false);
-        openWorkspaceWallet(detail);
-    };
-
     return (
         <ConfigProvider theme={workspaceCreditTheme}>
             <Popover
@@ -315,7 +82,7 @@ export function WorkspaceCreditPopover({ userId, variant }: { userId: string; va
                                 icon={<CreditCard aria-hidden />}
                                 onClick={() => {
                                     setOpen(false);
-                                    setProductsOpen(true);
+                                    openWorkspaceWallet();
                                 }}
                             >
                                 购买积分与套餐
@@ -332,7 +99,7 @@ export function WorkspaceCreditPopover({ userId, variant }: { userId: string; va
                     onClick={() => {
                         if (!canHover && !topbar) return;
                         setOpen(false);
-                        setProductsOpen(true);
+                        openWorkspaceWallet();
                     }}
                 >
                     {topbar ? (
@@ -349,263 +116,6 @@ export function WorkspaceCreditPopover({ userId, variant }: { userId: string; va
                     )}
                 </button>
             </Popover>
-
-            <AppModal flush centered open={productsOpen} title={null} footer={null} width="min(1280px, calc(100vw - 32px))" rootClassName="workspace-credit-products-modal" onCancel={() => setProductsOpen(false)}>
-                <section className="workspace-credit-products-shell">
-                    {promotion ? <PaymentPromotionBanner promotion={promotion} serverTime={catalogServerTime} onBoundary={() => void paymentCatalogQuery.refetch({ cancelRefetch: false })} /> : null}
-                    <header className="workspace-credit-products-header">
-                        <h2>选择您的套餐</h2>
-                        <p>选择适合你的积分套餐，购买成功后积分将自动到账</p>
-                        <span className="workspace-credit-products-balance">
-                            <Sparkles aria-hidden />
-                            当前余额 {balance} 积分
-                        </span>
-                    </header>
-
-                    {productsLoading ? (
-                        <div className="workspace-credit-products-grid" aria-label="正在加载商品套餐">
-                            {Array.from({ length: 3 }, (_, index) => (
-                                <Skeleton.Node key={index} active className="workspace-credit-product-skeleton" />
-                            ))}
-                        </div>
-                    ) : productsError ? (
-                        <div className="workspace-credit-products-state">
-                            <strong>商品套餐加载失败</strong>
-                            <span>{productsError}</span>
-                            <Button onClick={() => void paymentCatalogQuery.refetch()}>重新加载</Button>
-                        </div>
-                    ) : products.length ? (
-                        <div className="workspace-credit-products-grid">
-                            {products.map((product) => (
-                                <CreditProductCard
-                                    key={product.id}
-                                    product={product}
-                                    maxCreditsMicrocredits={maxProductCredits}
-                                    availabilityLabel={topupSaleDescription(product)}
-                                    actionLabel={!product.canPurchase ? "暂不可购买" : providers.length ? undefined : "暂无可用支付方式"}
-                                    actionDisabled={!product.canPurchase || !providers.length}
-                                    onAction={() => openPaymentSelector(product)}
-                                />
-                            ))}
-                        </div>
-                    ) : (
-                        <div className="workspace-credit-products-state">
-                            <strong>暂无可购买套餐</strong>
-                            <span>管理员尚未上架积分商品，请稍后再试。</span>
-                        </div>
-                    )}
-                    <nav className="mt-6 flex flex-wrap justify-center gap-3" aria-label={t("nav.tools.wallet")}>
-                        <Button type="text" icon={<TicketCheck />} onClick={() => openWalletSection({ tab: "redeem" })}>
-                            {t("account.wallet.tabRedeem")}
-                        </Button>
-                        <Button type="text" icon={<History />} onClick={() => openWalletSection({ tab: "history" })}>
-                            {t("account.wallet.tabHistory")}
-                        </Button>
-                    </nav>
-                </section>
-            </AppModal>
-
-            <AppModal
-                flush
-                centered
-                open={Boolean(selectedProduct)}
-                title={null}
-                footer={null}
-                width={paymentOrder ? "min(780px, calc(100vw - 24px))" : "min(600px, calc(100vw - 24px))"}
-                rootClassName="workspace-credit-checkout-modal"
-                maskClosable={!paymentCreating && !paymentQuerying}
-                onCancel={closePaymentSelector}
-            >
-                {selectedProduct ? (
-                    <section className={`workspace-credit-checkout-shell${paymentOrder ? " is-payment-order" : ""}`}>
-                        <header className="workspace-credit-checkout-header">
-                            <div>
-                                <h2>{paymentOrder ? (paymentOrder.status === "credited" ? "支付成功" : paymentOrder.checkout.mode === "qr_code" ? "扫码支付" : "完成支付") : "确认订单"}</h2>
-                                <p>
-                                    {paymentOrder
-                                        ? paymentOrder.status !== "credited" && paymentOrder.checkout.mode === "qr_code"
-                                            ? `请使用${paymentProviderLabel(providers.find((provider) => provider.id === paymentOrder.providerId))}扫描二维码完成付款`
-                                            : "请按收银台提示完成付款，到账状态将自动更新。"
-                                        : "确认套餐与支付方式，付款成功后积分自动到账"}
-                                </p>
-                            </div>
-                        </header>
-
-                        {!paymentOrder ? (
-                            <>
-                                <div className="workspace-credit-checkout-total">
-                                    <span>应付金额</span>
-                                    <strong>
-                                        <small>¥</small>
-                                        {(selectedProduct.amountFen / 100).toFixed(2)}
-                                    </strong>
-                                </div>
-                                <div className="workspace-credit-checkout-summary">
-                                    <div>
-                                        <span>所选套餐</span>
-                                        <strong>{selectedProduct.name}</strong>
-                                    </div>
-                                    <div>
-                                        <span>到账积分</span>
-                                        <strong>{formatCredits(selectedProduct.creditsMicrocredits)} 积分</strong>
-                                    </div>
-                                </div>
-                                <h3 className="workspace-credit-checkout-method-title">支付方式</h3>
-                                <div className="workspace-credit-provider-options" role="radiogroup" aria-label="支付方式">
-                                    {providers.map((provider) => (
-                                        <button
-                                            key={provider.id}
-                                            type="button"
-                                            role="radio"
-                                            aria-checked={selectedProviderId === provider.id}
-                                            tabIndex={selectedProviderId === provider.id ? 0 : -1}
-                                            className="workspace-credit-provider-option"
-                                            onClick={() => setSelectedProviderId(provider.id)}
-                                            onKeyDown={(event) => {
-                                                const index = providers.indexOf(provider);
-                                                const direction = event.key === "ArrowRight" || event.key === "ArrowDown" ? 1 : event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : 0;
-                                                if (!direction && event.key !== "Home" && event.key !== "End") return;
-                                                event.preventDefault();
-                                                const next = event.key === "Home" ? 0 : event.key === "End" ? providers.length - 1 : (index + direction + providers.length) % providers.length;
-                                                setSelectedProviderId(providers[next].id);
-                                                event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="radio"]')[next]?.focus();
-                                            }}
-                                        >
-                                            <PaymentProviderIcon providerId={provider.paymentMethod} />
-                                            <span>{paymentProviderLabel(provider)}</span>
-                                            <span className="workspace-credit-provider-radio" aria-hidden />
-                                        </button>
-                                    ))}
-                                </div>
-
-                                <p className="workspace-credit-checkout-hint">
-                                    {selectedProvider?.checkoutMode === "qr_code" ? "确认后请扫码完成付款" : "确认后将跳转至支付页面完成付款"}
-                                    {selectedProvider?.checkoutMode === "redirect" ? <ExternalLink aria-hidden /> : null}
-                                </p>
-                                <Button className="workspace-credit-checkout-submit" type="primary" size="large" block loading={paymentCreating} disabled={!selectedProvider} onClick={() => void startPayment()}>
-                                    {selectedProvider ? `确认支付 ¥${(selectedProduct.amountFen / 100).toFixed(2)}` : "暂无可用支付方式"}
-                                </Button>
-                                <p className="workspace-credit-checkout-note">支付结果确认后，积分将自动到账</p>
-                            </>
-                        ) : (
-                            <>
-                                <div className="workspace-credit-payment-order">
-                                    <div className="workspace-credit-payment-code">
-                                        <div className="workspace-credit-payment-brand">
-                                            <PaymentProviderIcon providerId={providers.find((provider) => provider.id === paymentOrder.providerId)?.paymentMethod || "online"} />
-                                            <strong>{paymentProviderLabel(providers.find((provider) => provider.id === paymentOrder.providerId))}</strong>
-                                        </div>
-                                        {paymentOrder.status === "credited" ? (
-                                            <span className="workspace-credit-payment-success">
-                                                <CircleCheck aria-hidden />
-                                            </span>
-                                        ) : paymentOrder.checkout.mode === "qr_code" && paymentOrder.checkout.value ? (
-                                            <div className="workspace-credit-payment-qr-frame">
-                                                <QRCode value={paymentOrder.checkout.value} size={220} color="#111111" bgColor="#FFFFFF" bordered={false} />
-                                            </div>
-                                        ) : null}
-                                        {paymentOrder.status === "credited" ? <strong>支付成功</strong> : paymentOrder.checkout.mode !== "qr_code" ? <strong>请在支付页面完成付款</strong> : null}
-                                        {paymentOrder.status === "pending" ? (
-                                            <span className="workspace-credit-payment-countdown">
-                                                <Clock3 aria-hidden />
-                                                支付剩余时间 <time>{formatPaymentCountdown(paymentOrder.expiresAt, clock)}</time>
-                                            </span>
-                                        ) : null}
-                                        <p className="workspace-credit-payment-note">支付完成后，到账状态将自动更新</p>
-                                    </div>
-                                    <div className="workspace-credit-payment-details">
-                                        <div className="workspace-credit-payment-total">
-                                            <span>应付金额</span>
-                                            <strong>
-                                                <small>¥</small>
-                                                {(paymentOrder.amountFen / 100).toFixed(2)}
-                                            </strong>
-                                        </div>
-                                        <dl>
-                                            <div>
-                                                <dt>所选套餐</dt>
-                                                <dd>{paymentOrder.productName}</dd>
-                                            </div>
-                                            <div>
-                                                <dt>到账积分</dt>
-                                                <dd>{formatCredits(paymentOrder.creditsMicrocredits)} 积分</dd>
-                                            </div>
-                                            <div>
-                                                <dt>支付方式</dt>
-                                                <dd>
-                                                    <PaymentProviderIcon providerId={providers.find((provider) => provider.id === paymentOrder.providerId)?.paymentMethod || "online"} />
-                                                    {paymentProviderLabel(providers.find((provider) => provider.id === paymentOrder.providerId))}
-                                                </dd>
-                                            </div>
-                                        </dl>
-                                        <div className="workspace-credit-payment-order-number">
-                                            <span>订单号</span>
-                                            <span>{paymentOrder.merchantOrderNo}</span>
-                                        </div>
-                                    </div>
-                                </div>
-                                <footer className="workspace-credit-payment-footer">
-                                    {paymentOrder.status === "create_failed" ? (
-                                        <Button type="primary" loading={paymentQuerying} onClick={() => void retryPaymentCheckout()}>
-                                            重新生成支付信息
-                                        </Button>
-                                    ) : paymentOrder.status === "pending" ? (
-                                        <>
-                                            <Button disabled={paymentQuerying} onClick={() => void cancelPayment()}>
-                                                关闭订单
-                                            </Button>
-                                            <Button type="primary" loading={paymentQuerying} onClick={() => void confirmPayment()}>
-                                                我已完成支付
-                                            </Button>
-                                        </>
-                                    ) : (
-                                        <Button type="primary" onClick={closePaymentSelector}>
-                                            完成
-                                        </Button>
-                                    )}
-                                </footer>
-                            </>
-                        )}
-                    </section>
-                ) : null}
-            </AppModal>
         </ConfigProvider>
     );
-}
-
-function PaymentProviderIcon({ providerId, large = false }: { providerId: string; large?: boolean }) {
-    const className = large ? "workspace-credit-provider-icon is-large" : "workspace-credit-provider-icon";
-    if (isWechatProvider(providerId))
-        return (
-            <span className={`${className} is-wechat`} aria-hidden>
-                <WechatFilled />
-            </span>
-        );
-    if (isAlipayProvider(providerId))
-        return (
-            <span className={`${className} is-alipay`} aria-hidden>
-                <AlipayCircleFilled />
-            </span>
-        );
-    return <CreditCard className={className} aria-hidden />;
-}
-
-function paymentProviderLabel(provider?: PaymentProvider) {
-    if (provider?.paymentMethod === "wechat") return "微信支付";
-    if (provider?.paymentMethod === "alipay") return "支付宝支付";
-    return "在线支付";
-}
-
-function isWechatProvider(providerId: string) {
-    return providerId.toLowerCase().includes("wechat");
-}
-
-function isAlipayProvider(providerId: string) {
-    return providerId.toLowerCase().includes("alipay");
-}
-
-function formatPaymentCountdown(expiresAt: string, now: number) {
-    const seconds = Math.max(0, Math.floor((new Date(expiresAt).getTime() - now) / 1000));
-    const minutes = Math.floor(seconds / 60);
-    return `${String(minutes).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
 }

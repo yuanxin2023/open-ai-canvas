@@ -21,21 +21,9 @@ describe("asset library category sidebar", () => {
     });
 });
 
-describe("wallet history pagination", () => {
-    test("pins ledger pagination to the history panel footer", () => {
-        const modal = readFileSync(resolve(import.meta.dir, "../src/components/layout/workspace-wallet-modal.tsx"), "utf8");
-        const css = readFileSync(resolve(import.meta.dir, "../src/styles/globals.css"), "utf8");
-        expect(modal).toContain("workspace-wallet-history-scroll");
-        expect(modal).toContain("workspace-wallet-pagination");
-        expect(modal).not.toContain("wallet.total > 20");
-        expect(css).toMatch(/\.workspace-wallet-content\.is-history\s*\{[^}]*overflow:\s*hidden/s);
-        expect(css).toMatch(/\.workspace-wallet-pagination\s*\{[^}]*margin-top:\s*auto/s);
-    });
-});
-
 describe("workspace credit products", () => {
     test("uses the editorial heading and four-column quota cards", () => {
-        const component = readFileSync(resolve(import.meta.dir, "../src/components/layout/workspace-credit-popover.tsx"), "utf8");
+        const component = readFileSync(resolve(import.meta.dir, "../src/components/layout/workspace-package-center.tsx"), "utf8");
         const card = readFileSync(resolve(import.meta.dir, "../src/components/payments/credit-product-card.tsx"), "utf8");
         const css = readFileSync(resolve(import.meta.dir, "../src/styles/globals.css"), "utf8");
         expect(component).toContain("选择您的套餐");

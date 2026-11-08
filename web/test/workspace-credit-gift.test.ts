@@ -13,7 +13,7 @@ describe("workspace credit entry", () => {
         expect(topBar).not.toContain("openWorkspaceWallet()");
         expect(popover).toContain("<WorkspaceCreditGiftMark />");
         expect(topBar).not.toContain("Coins");
-        expect(canvas).toContain("<WorkspaceCreditPopover userId={user.id} />");
+        expect(canvas).toContain("<WorkspaceCreditPopover key={user.id} userId={user.id} />");
         expect(canvas).not.toContain("Coins");
         expect(popover).toContain('"app-workspace-credit-button"');
         expect(popover).toContain("<Sparkles aria-hidden />");

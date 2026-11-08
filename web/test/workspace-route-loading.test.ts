@@ -155,7 +155,7 @@ describe("workspace wallet entry", () => {
     test("opens the credits modal instead of a dedicated wallet page", () => {
         const router = source("../src/router.tsx");
         const modules = source("../src/lib/workspace-route-modules.ts");
-        const host = source("../src/components/layout/workspace-wallet-modal.tsx");
+        const host = source("../src/components/layout/workspace-package-center.tsx");
         const palette = source("../src/components/layout/workspace-command-palette.tsx");
         const canvasTopBar = source("../src/pages/canvas/canvas-project-top-bar.tsx");
         const topBar = source("../src/components/layout/workspace-top-bar.tsx");
@@ -167,7 +167,7 @@ describe("workspace wallet entry", () => {
         expect(router).not.toContain("loadWalletPage");
         expect(modules).not.toContain("pages/wallet");
         expect(host).toContain('pathname !== "/wallet"');
-        expect(host).toContain("openWorkspaceWallet");
+        expect(host).toContain("WORKSPACE_WALLET_OPEN_EVENT");
         expect(palette).toContain("run: () => openWorkspaceWallet()");
         expect(palette).not.toContain('"/wallet"');
         expect(canvasTopBar).toContain("<WorkspaceCreditPopover");

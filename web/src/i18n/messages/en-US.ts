@@ -26,7 +26,7 @@ export const enUS: Messages = {
             assets: "Assets",
             skills: "Skills",
             plugins: "Plugins",
-            wallet: "Credits",
+            wallet: "Plans",
             settings: "Settings",
         },
         sections: {
@@ -81,7 +81,7 @@ export const enUS: Messages = {
         expandSidebarMenu: "Expand sidebar menu",
         breadcrumb: "Current location",
         credits: "Credits",
-        openWallet: "Open credits center, {{balance}} credits available",
+        openWallet: "Open plan center, {{balance}} credits available",
         toggleTheme: "Toggle theme",
         darkMode: "Dark mode",
         brandHome: "{{brand}} home",

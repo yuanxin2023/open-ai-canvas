@@ -11,7 +11,7 @@ import { readWorkspaceSidebarCollapsed, subscribeWorkspaceSidebarCollapsed, writ
 import { WorkspaceTopBar } from "@/components/layout/workspace-top-bar";
 import { WorkspaceTopBarExtensionProvider } from "@/components/layout/workspace-top-bar-extension";
 import { WorkspaceStorageLimitNotice } from "@/components/layout/workspace-storage-limit-notice";
-import { WorkspaceWalletHost } from "@/components/layout/workspace-wallet-modal";
+import { WorkspacePackageCenterHost } from "@/components/layout/workspace-package-center";
 import { GenerationSuccessNotifier } from "@/components/layout/generation-success-notifier";
 import { useWorkspaceDocumentTitle } from "@/hooks/use-workspace-document-title";
 import { ImageCreditShortfallHost } from "@/components/layout/image-credit-shortfall-host";
@@ -157,7 +157,7 @@ export function AppWorkspaceShell({ children }: { children: ReactNode }) {
                     </AppDrawer>
                 ) : null}
             </WorkspaceTopBarExtensionProvider>
-            <WorkspaceWalletHost />
+            <WorkspacePackageCenterHost />
             <ImageCreditShortfallHost />
             <WorkspaceStorageLimitNotice />
             <GenerationSuccessNotifier />

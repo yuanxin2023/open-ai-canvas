@@ -58,7 +58,7 @@ describe("MediaResult 不因地址变化重建或闪空态", () => {
         expect(workspace).not.toContain("function MediaResult(");
         expect(workspace).toContain('<UserAvatar user={user} className="creation-user-avatar"');
         expect(media).toContain('item.generationErrorReason === "insufficient_credits"');
-        expect(media).toContain("onClick={openWorkspaceCreditProducts}");
+        expect(media).toContain("onClick={() => openWorkspaceWallet()}");
         expect(media).toContain('getResourceAccess(storageKey, "display")');
     });
 

@@ -1,7 +1,6 @@
 import { getActiveUserScope } from "@/lib/user-scope";
 
 export const WORKSPACE_WALLET_OPEN_EVENT = "wallet:open";
-export const WORKSPACE_CREDIT_PRODUCTS_OPEN_EVENT = "wallet:products-open";
 const PAYMENT_RETURN_PATH_KEY = "wallet:payment-return-path";
 const PAYMENT_RETURN_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const PAYMENT_RETURN_ROUTES = [/^\/(?:|create|tasks|assets|prompts|skills|settings|profile)\/?$/, /^\/plugins(?:\/eagle)?\/?$/, /^\/canvas(?:\/[^/]+)?\/?$/, /^\/projects(?:\/[^/]+(?:\/[^/]+|\/chapters\/[^/]+|\/workflow\/[^/]+\/[^/]+)?)?\/?$/];
@@ -38,18 +37,10 @@ export function consumePaymentReturnPath() {
 export type WorkspaceWalletOpenDetail = {
     paymentOrderId?: string;
     paymentInvalid?: boolean;
-    /** 打开后所在的标签，默认“充值”。 */
-    tab?: "topup" | "redeem" | "history";
-    /** 充值页的商品分类，默认“全部”。 */
-    category?: "all" | "credits";
+    view?: "products" | "redeem";
 };
 
-/** 工作台任意入口打开积分中心弹窗，不再进入独立钱包页。 */
+/** 工作台任意购买入口打开唯一套餐中心，也可直接兑换或恢复订单。 */
 export function openWorkspaceWallet(detail: WorkspaceWalletOpenDetail = {}) {
     window.dispatchEvent(new CustomEvent<WorkspaceWalletOpenDetail>(WORKSPACE_WALLET_OPEN_EVENT, { detail }));
-}
-
-/** 跳过积分概览与兑换入口，直接打开购买积分与套餐弹窗。 */
-export function openWorkspaceCreditProducts() {
-    window.dispatchEvent(new CustomEvent(WORKSPACE_CREDIT_PRODUCTS_OPEN_EVENT));
 }

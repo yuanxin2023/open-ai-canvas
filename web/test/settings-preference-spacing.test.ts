@@ -17,11 +17,8 @@ test("settings page drops the page header copy and audio preference blocks", () 
     expect(preferences).toContain("settings-preference-heading");
 });
 
-test("wallet tabs and preference blocks keep a visible gap from neighboring surfaces", () => {
+test("preference blocks keep a visible gap from neighboring surfaces", () => {
     const css = readFileSync(resolve(import.meta.dir, "../src/styles/globals.css"), "utf8").replaceAll("\r\n", "\n");
-    expect(css).toContain(".workspace-wallet-tabs {");
-    expect(css).toContain("margin: 0 24px;");
-    expect(css).toContain("margin: 12px 24px 20px;");
     expect(css).toMatch(/\.settings-preference-heading\s*\{\s*margin-bottom:\s*var\(--space-5\);\s*\}/);
     expect(css).toContain(".app-user-workspace.settings-page .settings-preference-block {\n    padding: 20px 20px 12px;");
 });
