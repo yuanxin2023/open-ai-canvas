@@ -599,7 +599,8 @@ export async function getResourceBlob(storageKey: string, purpose: ResourceAcces
     // session-bound, so a Blob read must include it even when the URL is
     // relative to the platform origin.
     const credentials = access.delivery === "platform-local" || access.delivery === "platform-proxy" ? "include" : "omit";
-    const response = await fetch(resolveResourceAccessURL(access.url), { credentials, mode: "cors", signal: AbortSignal.timeout(60_000) });
+    // 展示用 img 可能已缓存同一签名地址的非 CORS 响应；字节处理只复用上层 Blob 缓存。
+    const response = await fetch(resolveResourceAccessURL(access.url), { credentials, mode: "cors", cache: "no-store", signal: AbortSignal.timeout(60_000) });
     if (!response.ok) throw new Error(`资源读取失败（${response.status}）`);
     return response.blob();
 }

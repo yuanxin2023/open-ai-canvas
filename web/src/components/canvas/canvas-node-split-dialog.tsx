@@ -13,7 +13,7 @@ export function CanvasNodeSplitDialog(props: SplitDialogProps) {
 
 function SplitEditor({ dataUrl, onClose, onConfirm }: SplitDialogProps) {
     const [grid, setGrid] = useState<ImageSplitParams>({ rows: 2, columns: 2 });
-    const { size, error } = useImageToolSource(dataUrl);
+    const { size, error, previewUrl } = useImageToolSource(dataUrl);
     const valid = size !== null && size.width >= grid.columns && size.height >= grid.rows;
     const tiles = valid ? planImageTiles(size, grid) : [];
     const previewSize = tiles[0];
@@ -27,7 +27,7 @@ function SplitEditor({ dataUrl, onClose, onConfirm }: SplitDialogProps) {
             <div className="grid gap-4 md:grid-cols-[1fr_220px]">
                 <figure className="m-0 flex min-w-0 flex-col items-center gap-3 rounded-lg border border-border bg-surface-active p-3">
                     <div className="relative max-w-full overflow-hidden">
-                        <img alt="待切分图片" src={dataUrl} draggable={false} className="block max-h-[340px] max-w-full object-contain" />
+                        {previewUrl ? <img alt="待切分图片" src={previewUrl} draggable={false} className="block max-h-[340px] max-w-full object-contain" /> : null}
                         <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
                             {Array.from({ length: grid.columns - 1 }, (_, i) => (
                                 <line key={`v${i}`} x1={(100 * (i + 1)) / grid.columns} x2={(100 * (i + 1)) / grid.columns} y1={0} y2={100} stroke="white" strokeWidth={1} vectorEffect="non-scaling-stroke" />

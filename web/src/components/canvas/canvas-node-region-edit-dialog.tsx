@@ -104,7 +104,7 @@ function RegionEditor({ image, config, onClose, onConfirm }: RegionEditorProps) 
 
     useEffect(() => {
         const request = new AbortController();
-        void imageToDataUrl({ url: image.url, storageKey: image.storageKey })
+        void imageToDataUrl({ url: image.url, storageKey: image.storageKey }, { signal: request.signal })
             .then((dataUrl) => {
                 if (!dataUrl) throw new Error("图片读取失败");
                 return loadRasterImage(dataUrl, request.signal).then((element) => ({ url: dataUrl, element }));

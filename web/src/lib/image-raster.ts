@@ -4,7 +4,7 @@ export async function prepareRasterSource(source: string, readBlob?: () => Promi
     let blob = await readBlob?.();
     if (!blob) {
         // fetch validates CORS across redirects; a display-only image URL must never be drawn as a fallback.
-        const response = await fetch(source, { mode: "cors", credentials: "same-origin" });
+        const response = await fetch(source, { mode: "cors", credentials: "same-origin", cache: "no-store" });
         if (!response.ok) throw new Error(`原图读取失败（${response.status}）`);
         blob = await response.blob();
     }

@@ -13,7 +13,7 @@ export function CanvasNodeUpscaleDialog(props: UpscaleDialogProps) {
 }
 
 function ResizeEditor({ dataUrl, onClose, onConfirm }: UpscaleDialogProps) {
-    const { size, error } = useImageToolSource(dataUrl);
+    const { size, error, previewUrl } = useImageToolSource(dataUrl);
     const [chosen, setChosen] = useState<number | null>(null);
     const [algorithm, setAlgorithm] = useState<ImageUpscaleAlgorithm>("high");
     const edge = size ? Math.max(size.width, size.height) : 0;
@@ -25,7 +25,7 @@ function ResizeEditor({ dataUrl, onClose, onConfirm }: UpscaleDialogProps) {
             <p className="mb-4 text-sm text-muted-foreground">插值放大并另存为新图片，原图保留。此操作不生成新的真实细节。</p>
             <div className="grid gap-5 md:grid-cols-2">
                 <figure className="m-0 flex flex-col items-center justify-center gap-3 rounded-lg border border-border bg-surface-active p-3">
-                    <img alt="待调整尺寸的图片" src={dataUrl} draggable={false} className="max-h-[320px] max-w-full object-contain" />
+                    {previewUrl ? <img alt="待调整尺寸的图片" src={previewUrl} draggable={false} className="max-h-[320px] max-w-full object-contain" /> : null}
                     <figcaption className="text-sm text-muted-foreground">{size ? `原图 ${size.width} × ${size.height} px` : error || "正在读取图片…"}</figcaption>
                 </figure>
                 <div className="flex flex-col gap-5">

@@ -138,7 +138,7 @@ test("uncached sources fetch with CORS and create a readable Blob URL", async ()
             return new Response(new Blob(["pixels"], { type: "image/png" }));
         };
         const source = await prepareRasterSource("/api/resources/image/file", async () => null);
-        assert.deepEqual(requests, [{ url: "/api/resources/image/file", options: { mode: "cors", credentials: "same-origin" } }]);
+        assert.deepEqual(requests, [{ url: "/api/resources/image/file", options: { mode: "cors", credentials: "same-origin", cache: "no-store" } }]);
         assert.match(source.url, /^blob:/);
         source.release();
     } finally {

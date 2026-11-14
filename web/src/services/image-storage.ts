@@ -107,16 +107,19 @@ export async function setImageBlob(storageKey: string, blob: Blob) {
     return url;
 }
 
-export async function imageToDataUrl(image: { url?: string; dataUrl?: string; storageKey?: string; name?: string; type?: string; mimeType?: string }) {
+export async function imageToDataUrl(image: { url?: string; dataUrl?: string; storageKey?: string; name?: string; type?: string; mimeType?: string }, options?: { signal?: AbortSignal }) {
+    options?.signal?.throwIfAborted();
     if (image.storageKey) {
         const blob = await getImageBlob(image.storageKey);
+        options?.signal?.throwIfAborted();
         if (blob) return blobToDataUrl(await normalizeImageBlob(blob, image.name || image.url));
     }
     const url = image.dataUrl || (await resolveImageUrl(image.storageKey, image.url || ""));
     if (!url) return url;
     if (url.startsWith("data:image/")) return url;
-    if (url.startsWith("data:")) return blobToDataUrl(await normalizeImageBlob(await (await fetch(url)).blob(), image.name));
-    const blob = await (await fetch(url, { credentials: isResourceUrl(url) ? "include" : "same-origin" })).blob();
+    const response = await fetch(url, { credentials: isResourceUrl(url) ? "include" : "same-origin", mode: "cors", cache: "no-store", signal: options?.signal });
+    if (!response.ok) throw new Error(`原图读取失败（${response.status}）`);
+    const blob = await response.blob();
     return blobToDataUrl(await normalizeImageBlob(blob, image.name || url));
 }
 
