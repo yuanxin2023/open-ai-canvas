@@ -26,6 +26,26 @@ type AdminUserCounts struct {
 	RechargeMicrocredits int64 `json:"rechargeMicrocredits"`
 	CheckinMicrocredits  int64 `json:"checkinMicrocredits"`
 }
+
+type AdminUserInviter struct {
+	ID       string `json:"id"`
+	Username string `json:"username"`
+}
+
+func (r *Repository) AdminUserInviter(userID string) (*AdminUserInviter, error) {
+	var inviter AdminUserInviter
+	err := r.db.Model(&model.User{}).Select("users.id, users.username").
+		Joins("JOIN referral_profiles ON referral_profiles.inviter_id = users.id").
+		Where("referral_profiles.user_id = ?", userID).Take(&inviter).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &inviter, nil
+}
+
 type AdminUserLoginEventFilter struct {
 	StartAt     *time.Time
 	EndAt       *time.Time

@@ -158,6 +158,7 @@ export type AdminAuditEvent = {
 export type AdminUserDetail = {
     user: AdminManagedUser;
     registrationIp?: string;
+    inviter: { id: string; username: string } | null;
     account: { userId: string; availableMicrocredits: number; reservedMicrocredits: number; version: number };
     counts: { ledgerEntries: number; tasks: number; apiCalls: number; auditEvents: number; loginEvents: number; rechargeMicrocredits?: number; checkinMicrocredits?: number };
     storageUsage: {

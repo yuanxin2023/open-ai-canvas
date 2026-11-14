@@ -10,14 +10,15 @@ import (
 )
 
 type AdminUserDetail struct {
-	User             AdminManagedUser            `json:"user"`
-	RegistrationIP   string                      `json:"registrationIp"`
-	Account          model.CreditAccount         `json:"account"`
-	Counts           repository.AdminUserCounts  `json:"counts"`
-	StorageUsage     repository.UserStorageUsage `json:"storageUsage"`
-	StoredFileBytes  int64                       `json:"storedFileBytes"`
-	DailyUploadBytes int64                       `json:"dailyUploadBytes"`
-	Quota            RuntimeResourcePolicy       `json:"quota"`
+	User             AdminManagedUser             `json:"user"`
+	RegistrationIP   string                       `json:"registrationIp"`
+	Inviter          *repository.AdminUserInviter `json:"inviter"`
+	Account          model.CreditAccount          `json:"account"`
+	Counts           repository.AdminUserCounts   `json:"counts"`
+	StorageUsage     repository.UserStorageUsage  `json:"storageUsage"`
+	StoredFileBytes  int64                        `json:"storedFileBytes"`
+	DailyUploadBytes int64                        `json:"dailyUploadBytes"`
+	Quota            RuntimeResourcePolicy        `json:"quota"`
 	// StorageCapacity 与用户逐项覆盖后的文件配额一致。
 	StorageCapacity AccountFileStorageUsage `json:"storageCapacity"`
 }
@@ -102,6 +103,10 @@ func (s *Service) AdminUserDetail(actor *model.User, userID string) (*AdminUserD
 	if err != nil {
 		return nil, err
 	}
+	inviter, err := s.repo.AdminUserInviter(user.ID)
+	if err != nil {
+		return nil, err
+	}
 	account, err := s.repo.CreditAccount(user.ID)
 	if err != nil {
 		return nil, err
@@ -134,6 +139,7 @@ func (s *Service) AdminUserDetail(actor *model.User, userID string) (*AdminUserD
 		User: AdminManagedUser{User: *user, Remark: user.AdminRemark, AdminAccess: adminAccessView(user)}, RegistrationIP: user.RegistrationIP, Account: *account, Counts: counts, StorageUsage: usage,
 		StoredFileBytes: storedFileBytes, DailyUploadBytes: dailyUploadBytes, Quota: policy.Resource,
 		StorageCapacity: *capacity,
+		Inviter:         inviter,
 	}, nil
 }
 

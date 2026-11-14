@@ -224,6 +224,7 @@ export function AdminUserDetailModal({
                                             { key: "registrationIp", label: "注册 IP", children: <span className="font-mono text-xs">{detail.registrationIp || "未记录"}</span> },
                                             { key: "username", label: "用户名", children: `@${detail.user.username}` },
                                             { key: "email", label: "邮箱", children: detail.user.email || "未填写" },
+                                            { key: "inviter", label: "邀请人", span: 2, children: detail.inviter ? <span className="break-all">@{detail.inviter.username}</span> : "无" },
                                             { key: "remark", label: "备注", span: 2, children: <span className="whitespace-pre-wrap break-words">{detail.user.remark || "未备注"}</span> },
                                             { key: "role", label: "角色", children: detail.user.role === "admin" ? "管理员" : "普通用户" },
                                             { key: "status", label: "状态", children: <AdminStatusBadge label={detail.user.status === "active" ? "启用" : "停用"} tone={detail.user.status === "active" ? "success" : "neutral"} /> },
@@ -235,30 +236,6 @@ export function AdminUserDetailModal({
                                             { key: "login", label: "最后登录", children: formatTime(detail.user.lastLoginAt) },
                                         ]}
                                     />
-                                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                                        {Object.entries({ 积分流水: detail.counts.ledgerEntries, 生成任务: detail.counts.tasks, 上游请求: detail.counts.apiCalls, 登录记录: detail.counts.loginEvents, 管理操作: detail.counts.auditEvents }).map(
-                                            ([label, value]) => (
-                                                <div key={label} className="rounded-md border border-border p-3">
-                                                    <div className="text-xs text-foreground/50">{label}</div>
-                                                    <div className="mt-1 text-xl font-semibold tabular-nums">{value}</div>
-                                                </div>
-                                            ),
-                                        )}
-                                    </div>
-                                    <div>
-                                        <div className="mb-3 text-sm font-medium">资源与配额占用</div>
-                                        <div className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
-                                            {quotaUsageItems(detail).map((item) => (
-                                                <div key={item.label}>
-                                                    <div className="mb-1 flex items-center justify-between gap-3 text-xs">
-                                                        <span className="text-foreground/60">{item.label}</span>
-                                                        <span className="shrink-0 tabular-nums text-foreground/75">{item.display}</span>
-                                                    </div>
-                                                    <Progress percent={Math.min(100, item.limit > 0 ? Math.round((item.value / item.limit) * 100) : 0)} size="small" showInfo={false} status={item.value >= item.limit ? "exception" : "normal"} />
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
                                 </div>
                             ),
                         },
@@ -455,6 +432,26 @@ export function AdminUserDetailModal({
                                     empty={<AdminTableEmpty />}
                                     footer={<PaginationBar alwaysShow current={auditPage} pageSize={20} total={auditTotal} onChange={(page) => setAuditPage(page)} pageSizeOptions={[20]} />}
                                 />
+                            ),
+                        },
+                        {
+                            key: "resource-quota",
+                            label: "资源与配额占用",
+                            children: (
+                                <div>
+                                    <div className="mb-3 text-sm font-medium">资源与配额占用</div>
+                                    <div className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
+                                        {quotaUsageItems(detail).map((item) => (
+                                            <div key={item.label}>
+                                                <div className="mb-1 flex items-center justify-between gap-3 text-xs">
+                                                    <span className="text-foreground/60">{item.label}</span>
+                                                    <span className="shrink-0 tabular-nums text-foreground/75">{item.display}</span>
+                                                </div>
+                                                <Progress percent={Math.min(100, item.limit > 0 ? Math.round((item.value / item.limit) * 100) : 0)} size="small" showInfo={false} status={item.value >= item.limit ? "exception" : "normal"} />
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
                             ),
                         },
                     ]}
