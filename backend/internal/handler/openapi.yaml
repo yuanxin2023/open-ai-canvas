@@ -95,6 +95,45 @@ paths:
       responses:
         "200": {description: 标准信封 data 包含 enabled、code、policy、boundPolicy、newcomerEligible、inviteeCount、invitees（含绑定规则）及 rewards（含计算快照）}
         "401": {$ref: "#/components/responses/Error"}
+  /admin/referrals/statistics:
+    get:
+      tags: [admin]
+      summary: 全站累计邀请统计
+      description: 需要 admin.finance.referrals。统计现存直接邀请关系及成功入账、金额大于零的人民币积分充值订单，不受返利启停或审核状态影响。
+      responses:
+        "200": {description: 标准信封 data 为 inviterCount、inviteeCount、paidInviteeCount、paymentOrderCount、paymentAmountFen（整数分）}
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+  /admin/referrals/statistics/users:
+    get:
+      tags: [admin]
+      summary: 全站邀请人排名
+      description: 需要 admin.finance.referrals。仅包含有直接邀请记录的现存账号，包含停用账号。按所选指标降序、用户 ID 升序排名，搜索后保留全站连续名次。
+      parameters:
+        - {name: keyword, in: query, schema: {type: string, maxLength: 200}, description: 用户名、用户 ID 或推广码的字面子串搜索}
+        - {name: sortBy, in: query, schema: {type: string, enum: [inviteeCount, paidInviteeCount, paymentOrderCount, paymentAmountFen], default: paidInviteeCount}}
+        - {name: page, in: query, schema: {type: integer, minimum: 1, maximum: 1000000, default: 1}}
+        - {name: pageSize, in: query, schema: {type: integer, minimum: 1, maximum: 100, default: 20}}
+      responses:
+        "200": {description: 标准信封 data 为 users、total、page、pageSize；每行含 rank、userId、username、code、inviteeCount、paidInviteeCount、paymentOrderCount、paymentAmountFen}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+  /admin/referrals/users/{id}/invitees:
+    get:
+      tags: [admin]
+      summary: 指定邀请人的被邀请用户及累计充值明细
+      description: 需要 admin.finance.referrals，无需用户管理或支付订单权限；只读，不自动创建推广档案。被邀请人按注册时间倒序、用户 ID 升序排列，无充值显示零。
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string}}
+        - {name: page, in: query, schema: {type: integer, minimum: 1, maximum: 1000000, default: 1}}
+        - {name: pageSize, in: query, schema: {type: integer, minimum: 1, maximum: 100, default: 20}}
+      responses:
+        "200": {description: 标准信封 data 为 inviter（身份与累计统计）、invitees、total、page、pageSize；被邀请人含 userId、username、joinedAt、paymentOrderCount、paymentAmountFen}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+        "404": {$ref: "#/components/responses/Error"}
   /admin/referrals/policy:
     get:
       tags: [admin]

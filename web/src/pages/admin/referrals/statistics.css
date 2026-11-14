@@ -1,0 +1,267 @@
+.referral-statistics,
+.referral-statistics-detail {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.referral-statistics-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.referral-statistics-heading h2 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.referral-statistics-heading > span,
+.referral-statistics-count,
+.referral-statistics-note,
+.referral-statistics-person > span {
+    color: var(--admin-text-muted);
+    font-size: 11px;
+    font-weight: 400;
+}
+
+.referral-statistics-count {
+    padding: 2px 6px;
+    border: 1px solid var(--admin-border);
+    border-radius: var(--admin-radius-sm);
+}
+
+.referral-statistics-overview,
+.referral-statistics-metrics {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    overflow: hidden;
+    padding-block: 18px;
+    border: 1px solid var(--admin-border);
+    border-radius: var(--admin-radius);
+    background: var(--admin-surface);
+}
+
+.referral-statistics-metrics {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.referral-statistics-overview .admin-stat-tile,
+.referral-statistics-metrics .admin-stat-tile {
+    min-width: 0;
+    min-height: 0;
+    padding: 0 18px;
+    border-radius: 0;
+    background: var(--admin-surface);
+}
+
+.referral-statistics-overview .admin-stat-tile + .admin-stat-tile,
+.referral-statistics-metrics .admin-stat-tile + .admin-stat-tile {
+    border-inline-start: 1px solid var(--admin-border);
+}
+
+.referral-statistics-overview .admin-stat-tile-value,
+.referral-statistics-metrics .admin-stat-tile-value {
+    overflow-wrap: anywhere;
+    font-size: 25px;
+    font-variant-numeric: tabular-nums;
+}
+
+.referral-statistics-metrics .admin-stat-tile-value {
+    font-size: 22px;
+}
+
+.referral-statistics .ant-table-tbody > tr > td,
+.referral-statistics-detail .ant-table-tbody > tr > td {
+    font-variant-numeric: tabular-nums;
+}
+
+.referral-statistics-toolbar,
+.referral-statistics-person {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.referral-statistics-toolbar > .ant-input-search {
+    width: 306px;
+    max-width: 100%;
+}
+
+.referral-statistics-sort,
+.referral-statistics-sort > div {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--admin-text-secondary);
+}
+
+.referral-statistics-sort > div {
+    flex-wrap: wrap;
+    gap: 2px;
+    padding: 3px;
+    border-radius: var(--admin-radius);
+    background: var(--admin-surface-2);
+}
+
+.referral-statistics-sort button {
+    padding: 5px 10px;
+    border: 0;
+    border-radius: var(--admin-radius-sm);
+    background: transparent;
+    color: var(--admin-text-secondary);
+    cursor: pointer;
+}
+
+.referral-statistics-sort button[aria-pressed="true"] {
+    background: var(--admin-surface);
+    color: var(--admin-text);
+    font-weight: 600;
+}
+
+.referral-statistics-sort button:focus-visible,
+.referral-statistics-link:focus-visible {
+    outline: 2px solid var(--admin-focus);
+    outline-offset: 2px;
+}
+
+.referral-statistics-identity strong {
+    display: block;
+    color: var(--admin-text);
+    font-size: 12px;
+    font-weight: 500;
+    overflow-wrap: anywhere;
+}
+
+.referral-statistics-identity small {
+    display: block;
+    margin-top: 3px;
+    color: var(--admin-text-muted);
+    font-family: var(--admin-font-mono);
+    font-size: 10px;
+    overflow-wrap: anywhere;
+}
+
+.referral-statistics-code {
+    color: var(--admin-text-secondary);
+    font-family: var(--admin-font-mono);
+}
+
+.referral-statistics-rank {
+    display: inline-flex;
+    min-width: 23px;
+    height: 23px;
+    align-items: center;
+    justify-content: center;
+    color: var(--admin-text-muted);
+}
+
+.referral-statistics-rank.is-top {
+    border-radius: var(--admin-radius-sm);
+    background: var(--admin-surface-2);
+    color: var(--admin-text);
+    font-weight: 600;
+}
+
+.referral-statistics-sorted {
+    color: var(--admin-text);
+    font-weight: 600;
+}
+
+.referral-statistics-sorted svg {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    margin-left: 3px;
+    vertical-align: middle;
+}
+
+.referral-statistics-link,
+.referral-statistics-note {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.referral-statistics-link {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--admin-text-secondary);
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.referral-statistics-link:hover {
+    color: var(--admin-text);
+}
+
+.referral-statistics-link svg,
+.referral-statistics-note svg {
+    width: 13px;
+    height: 13px;
+    flex-shrink: 0;
+}
+
+.referral-statistics-note {
+    margin: 0;
+    line-height: 1.6;
+}
+
+@media (max-width: 1100px) {
+    .referral-statistics-overview {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        row-gap: 20px;
+    }
+
+    .referral-statistics-overview .admin-stat-tile:nth-child(3n + 1) {
+        border-inline-start: 0;
+    }
+}
+
+@media (max-width: 639px) {
+    .referral-statistics-overview,
+    .referral-statistics-metrics {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        row-gap: 18px;
+    }
+
+    .referral-statistics-overview .admin-stat-tile + .admin-stat-tile,
+    .referral-statistics-metrics .admin-stat-tile + .admin-stat-tile {
+        border-top: 0;
+    }
+
+    .referral-statistics-overview .admin-stat-tile:nth-child(odd),
+    .referral-statistics-metrics .admin-stat-tile:nth-child(odd) {
+        border-inline-start: 0;
+    }
+
+    .referral-statistics-overview .admin-stat-tile:nth-child(even) {
+        border-inline-start: 1px solid var(--admin-border);
+    }
+
+    .referral-statistics-overview .admin-stat-tile:last-child {
+        grid-column: 1 / -1;
+    }
+
+    .referral-statistics-toolbar > .ant-input-search {
+        width: 100%;
+    }
+
+    .referral-statistics-sort {
+        flex-wrap: wrap;
+    }
+
+    .referral-statistics-heading {
+        flex-wrap: wrap;
+    }
+}

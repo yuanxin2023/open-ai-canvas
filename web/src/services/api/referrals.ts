@@ -1,4 +1,4 @@
-import { http } from "@/services/api/request";
+import { compactApiParams, http } from "@/services/api/request";
 
 export type ReferralPolicy = {
     enabled: boolean;
@@ -55,3 +55,23 @@ export const setAdminReferralUserPolicy = (userId: string, policy: ReferralPolic
 export const getAdminReferralUser = (userId: string) => http.get<ReferralUserPolicy>(`/admin/referrals/users/${encodeURIComponent(userId)}`);
 export const listAdminReferralRewards = (status: ReferralReward["status"] | "all", page: number, pageSize: number) => http.get<ReferralRewardPage>("/admin/referrals/rewards", { params: { status, page, pageSize } });
 export const reviewAdminReferralReward = (id: string, approve: boolean, note: string) => http.post<ReferralReward>(`/admin/referrals/rewards/${encodeURIComponent(id)}/${approve ? "approve" : "reject"}`, { note });
+
+export type ReferralMetrics = {
+    inviteeCount: number;
+    paidInviteeCount: number;
+    paymentOrderCount: number;
+    paymentAmountFen: number;
+};
+
+export type ReferralStatistics = ReferralMetrics & { inviterCount: number };
+export type ReferralUserStatistics = ReferralMetrics & { rank: number; userId: string; username: string; code: string };
+export type ReferralStatisticsSort = keyof ReferralMetrics;
+export type ReferralStatisticsQuery = { keyword?: string; sortBy: ReferralStatisticsSort; page: number; pageSize: number };
+export type ReferralUserStatisticsPage = { users: ReferralUserStatistics[]; total: number; page: number; pageSize: number };
+export type ReferralInviteeStatistics = { userId: string; username: string; joinedAt: string; paymentOrderCount: number; paymentAmountFen: number };
+export type ReferralInviteeStatisticsPage = { inviter: ReferralUserStatistics; invitees: ReferralInviteeStatistics[]; total: number; page: number; pageSize: number };
+
+export const getAdminReferralStatistics = (signal?: AbortSignal) => http.get<ReferralStatistics>("/admin/referrals/statistics", { signal });
+export const listAdminReferralStatisticsUsers = (query: ReferralStatisticsQuery, signal?: AbortSignal) => http.get<ReferralUserStatisticsPage>("/admin/referrals/statistics/users", { params: compactApiParams(query), signal });
+export const listAdminReferralInvitees = (userId: string, query: { page: number; pageSize: number }, signal?: AbortSignal) =>
+    http.get<ReferralInviteeStatisticsPage>(`/admin/referrals/users/${encodeURIComponent(userId)}/invitees`, { params: compactApiParams(query), signal });

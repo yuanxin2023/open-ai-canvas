@@ -212,6 +212,14 @@ handle 放错端点、格式错误或行 ID 不存在时，工具错误回执提
 
 ## 邀请返利
 
+管理员累计统计统一要求 `admin.finance.referrals`，不额外要求用户管理或支付订单权限：
+
+- `GET /admin/referrals/statistics` 返回全站 `inviterCount`、`inviteeCount`、`paidInviteeCount`、`paymentOrderCount`、`paymentAmountFen`。概览不受列表搜索影响。
+- `GET /admin/referrals/statistics/users?sortBy=paidInviteeCount&page=1&pageSize=20&keyword=` 返回 `{ users, total, page, pageSize }`。仅列出成功邀请过人的现存用户，每行包含 `rank`、`userId`、`username`、`code` 和四项累计指标。`sortBy` 仅允许 `inviteeCount|paidInviteeCount|paymentOrderCount|paymentAmountFen`，默认按充值人数降序，同值按用户 ID 升序形成连续排名；搜索用户名、用户 ID 或推广码时保留全站名次。关键词最多 200 字符，`%`、`_` 按字面搜索。
+- `GET /admin/referrals/users/:id/invitees?page=1&pageSize=20` 返回 `{ inviter, invitees, total, page, pageSize }`。`inviter` 包含身份和累计指标；每位被邀请人包含 `userId`、`username`、`joinedAt`、`paymentOrderCount`、`paymentAmountFen`，按注册时间倒序、用户 ID 升序排列。未充值用户仍显示，邀请人存在但无邀请时返回空列表，不存在返回 404。分页每页默认 20、最多 100 条，页码上限 1000000，非法排序或分页返回 400。
+
+上述统计只计算直接邀请；邀请人自己的充值和间接邀请不计入。有效充值采用 `credited`、`CNY`、`amount_fen > 0` 且排除历史存储订单的条件，金额以整数分累计；兑换码、人工加分和奖励积分不计入。注册和充值不依赖返利记录，返利关闭、暂停或拒绝审核不抹去实际业绩。停用但未删除的账号继续统计，注销后仅按剩余账号、邀请关系和订单计算，不保留注销前的终身业绩。查询为只读，不创建推广档案或新增统计表。
+
 `GET /referrals/me` 返回本人六位推广码、用于新邀请的 `policy`、本人被邀请时绑定的 `boundPolicy`、新人首充赠送资格 `newcomerEligible`、被邀请用户总数、最多 100 位被邀请用户的脱敏邮箱及其绑定规则，以及最近 100 条返利记录。分享链接为 `/register?ref=<推广码>`。注册只接受六位推广码，绑定时固定规则版本；关闭或暂停后仍可查看历史，页面隐藏分享入口。
 
 管理员接口要求 `admin.finance.referrals`：`GET/PUT /admin/referrals/policy` 读取或发布 `{ versionId, enabled, mode, stages, maxDays, maxOrders, perInviteeCapMicrocredits, newcomerEnabled, newcomerRateBps, newcomerCapMicrocredits }`。服务端生成新版本，规则修改仅影响之后绑定的邀请关系；全局 `enabled=false` 同时暂停全部新绑定和计提。
@@ -603,11 +611,7 @@ operations 的结构化配额在提交事务内实时统计账号的素材/画�
 
 ## 推广中心
 
-推广设置保存在 `system_settings` 的 `referral` 键，管理员通过 `GET/PATCH /admin/settings/referral` 读写 `{ enabled, mode, commissionRateBasisPoints }`，保存记录管理员审计。`mode` 为 `all`（全民推广）或 `assigned`（指定推广人）；返佣比例为万分比，范围 0–5000。推广人标记通过 `PATCH /admin/users/:id` 的可选布尔字段 `isPromoter` 修改，省略表示不变。
-
-`GET /auth/session` 的 `data.referralAvailable` 表示当前账号能否进入推广中心：推广已开启、账号正常，并且是全民模式或账号为推广人。用户接口 `GET /referral`、`GET /referral/invitees`、`GET /referral/commissions`（`page`、`pageSize`）在无资格时返回 403 `forbidden`；被邀请用户名称只返回首字加 `**`。`GET /admin/referral/commissions` 返回全站返佣，名称不脱敏。
-
-`POST /auth/register` 接受可选 `referralCode`（来自推广链接 `/register?ref=推广码`）。推广码无效、推广人当时无资格或绑定写入失败时注册照常成功，只是不记录归属。积分充值订单入账后按当时设置计算返佣：`floor(到账积分 × 比例 / 10000)`，以积分写入推广人账户，流水类型 `referral_commission`；同一订单只返佣一次，存储空间订单不返佣。
+本地定制版使用上文「邀请返利」合同，管理员入口为 `/admin/referrals`，用户入口为 `/referrals`。上游另一套单数 `/referral`、`isPromoter`、自动返佣合同未接入本地版本，不应据此调用接口或理解注册与结算行为。
 
 ## 欢迎页开放配置
 

@@ -16,6 +16,7 @@ import {
     type ReferralUserPolicy,
 } from "@/services/api/referrals";
 import { PolicyEditor } from "./policy-editor";
+import { ReferralStatisticsPanel } from "./statistics-panel";
 
 const statuses = { pending: "待审核", approved: "已批准", rejected: "已拒绝", all: "全部" };
 
@@ -122,8 +123,9 @@ export default function ReferralsAdminPage() {
         }
     };
     return (
-        <AdminPageFrame title="邀请返利" description="管理阶梯规则、专属方案与逐笔审核" scroll>
+        <AdminPageFrame title="邀请返利" description="查看全站邀请表现、管理推广规则与逐笔审核" scroll>
             <Tabs
+                defaultActiveKey="statistics"
                 items={[
                     {
                         key: "policy",
@@ -234,6 +236,11 @@ export default function ReferralsAdminPage() {
                                 />
                             </>
                         ),
+                    },
+                    {
+                        key: "statistics",
+                        label: "邀请统计",
+                        children: <ReferralStatisticsPanel />,
                     },
                 ]}
             />

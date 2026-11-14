@@ -11,6 +11,7 @@ import (
 )
 
 func registerReferralRoutes(r *gin.RouterGroup, svc *service.Service) {
+	registerReferralStatisticsRoutes(r, svc)
 	r.GET("/referrals/me", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {
