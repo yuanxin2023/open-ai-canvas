@@ -546,6 +546,21 @@ func RegisterAdminRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
+		c.Header("Cache-Control", "no-store")
+		ok(c, result)
+	})
+	r.GET("/admin/users/:id/ledger/:entryId/redemption", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		result, err := svc.AdminUserLedgerRedemption(user, c.Param("id"), c.Param("entryId"))
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		c.Header("Cache-Control", "no-store")
 		ok(c, result)
 	})
 	r.GET("/admin/users/:id/tasks", func(c *gin.Context) {

@@ -1,5 +1,5 @@
 import type { ModelChannel } from "@/stores/use-config-store";
-import type { BillingOrder, CreditLedgerEntry } from "@/services/api/wallet";
+import type { BillingOrder, CreditLedgerEntry, AdminRedeemCodeLookupResult } from "@/services/api/wallet";
 import type { GenerationTask, TaskStatus } from "@/services/api/task-center";
 import type { CanvasDrawingEngineSetting } from "@/lib/canvas/canvas-drawing-engine";
 import type { FeatureAvailability } from "@/stores/use-user-store";
@@ -682,7 +682,21 @@ export function getAdminUserDetail(id: string) {
 }
 
 export function listAdminUserLedger(id: string, params: { page?: number; pageSize?: number; type?: AdminUserLedgerFilter } = {}) {
-    return http.get<{ entries: CreditLedgerEntry[]; total: number; page: number; pageSize: number }>(`/admin/users/${encodeURIComponent(id)}/ledger`, { params });
+    return http.get<{ entries: AdminUserLedgerEntry[]; total: number; page: number; pageSize: number }>(`/admin/users/${encodeURIComponent(id)}/ledger`, { params });
+}
+
+export type AdminUserLedgerEntry = CreditLedgerEntry & {
+    redemption?: {
+        code?: string;
+        codeSuffix?: string;
+        status: "available" | "not_recorded" | "unavailable";
+    };
+};
+
+export type AdminUserLedgerRedemption = AdminRedeemCodeLookupResult & { amountMicrocredits: number };
+
+export function getAdminUserLedgerRedemption(userId: string, entryId: string, signal?: AbortSignal) {
+    return http.get<AdminUserLedgerRedemption>(`/admin/users/${encodeURIComponent(userId)}/ledger/${encodeURIComponent(entryId)}/redemption`, { signal });
 }
 
 export function listAdminUserTasks(id: string, params: { page?: number; pageSize?: number } = {}) {

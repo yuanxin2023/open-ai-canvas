@@ -785,6 +785,14 @@ PATCH 请求为 `{ "overrides": { "resourceUploadMB": 80, "storedFileGB": null }
 
 `GET /api/admin/users/:id/ledger` 仅允许管理员访问，使用 `page`、`pageSize` 分页，并通过 `type` 筛选流水。管理后台使用 `all`（全部）、`increase`（兑换、在线充值、退款、注册奖励和签到奖励）、`consume`（消费）与 `admin`（管理员增加或扣减积分）；管理员赠送不会重复进入 `increase`，积分预占记录不对外展示。返回的 `total` 是当前筛选条件下的总数。
 
+管理端流水保持现有字段，并为 `type=redeem` 的充值记录增加可选 `redemption`：`status` 为 `available` 时包含 `code`（完整码仍可恢复时）和 `codeSuffix`（尾号），前端在说明栏展示可点击兑换码；`not_recorded` 表示流水未保存兑换码 ID，`unavailable` 表示关联记录缺失或不匹配。只有同时具有用户管理与兑换码管理权限且兑换码属于可访问范围时才提供兑换码入口；无兑换码权限或模块管理员查看非本人生成的兑换码时，保留原流水说明。普通用户钱包接口不增加这些字段。
+
+`GET /api/admin/users/:id/ledger/:entryId/redemption` 返回 `{ code, batch, amountMicrocredits }`，分别为单码核销信息、所属批次和此笔流水实际到账积分。`code` 包含 `id`、可选完整 `code`、`codeSuffix`、`status`、`redeemedBy`、`redeemedUsername`、`redeemedDisplayName`、`redeemedAt`、`redeemedIp`、`amountMicrocredits`；批次包含 `id` 和 `note` 等原有元数据，不返回密文。前端显示完整码或尾号、核销状态、到账积分、用户及用户 ID、核销时间、IP、批次与备注。
+
+详情要求 `admin.users.accounts` 与 `admin.commerce.redeem_codes`，沿用管理员目标限制与模块管理员仅可查看本人发码的归属限制；服务端核验流水属于目标用户、类型为兑换码充值、兑换码核销用户与目标用户一致，且已有批次关联不能冲突。缺少模块权限返回 403；流水、关联记录不存在或不可访问返回 404。查询和解密异常正常报错，不当作历史码清理。两项管理端读取均设置 `Cache-Control: no-store`；完整兑换码不进入 URL、浏览器持久缓存或普通用户流水。
+
+完整码沿用现有批次清理规则，清理后尾号与核销记录继续提供，点击尾号仍可查看详情。旧流水有有效 ID 关联即可直接查询，缺少关联不根据金额或时间推测回填。本功能不改变入账事务和数据库结构。
+
 ## 管理员注销用户
 
 `DELETE /api/admin/users/:id/purge` 仅注销普通用户；管理员注销使用全权限入口 `DELETE /api/admin/administrators/:id/purge`。接口拒绝注销当前登录管理员，并保证至少保留一个可用的全权限管理员。成功后在单个数据库事务中删除目标账号及用户范围内的身份、会话、画布、项目、素材、任务、Agent、提示词、个人渠道、积分和支付等关联记录；其他用户仍需保留的财务或平台记录只移除目标用户标识。用户文件通过 `resource_deletion_jobs` 可靠清理，事务提交后即不可恢复。

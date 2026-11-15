@@ -16,11 +16,12 @@ import {
     type AdminAuditEvent,
     type AdminUserDetail,
     type AdminUserLedgerFilter,
+    type AdminUserLedgerEntry,
     type AdminUserLoginEvent,
     type AdminUserLoginEventQuery,
     type AdminUserTask,
 } from "@/services/api/auth";
-import type { CreditLedgerEntry } from "@/services/api/wallet";
+import { UserLedgerRedemptionModal } from "./user-ledger-redemption-modal";
 
 type LoginEventFilters = Pick<AdminUserLoginEventQuery, "startAt" | "endAt" | "loginMethod" | "ip">;
 
@@ -41,7 +42,8 @@ export function AdminUserDetailModal({
 }) {
     const { message } = App.useApp();
     const [detail, setDetail] = useState<AdminUserDetail | null>(null);
-    const [ledger, setLedger] = useState<CreditLedgerEntry[]>([]);
+    const [ledger, setLedger] = useState<AdminUserLedgerEntry[]>([]);
+    const [redemptionSelection, setRedemptionSelection] = useState<{ userId: string; entryId: string } | null>(null);
     const [tasks, setTasks] = useState<AdminUserTask[]>([]);
     const [events, setEvents] = useState<AdminAuditEvent[]>([]);
     const [loginEvents, setLoginEvents] = useState<AdminUserLoginEvent[]>([]);
@@ -69,6 +71,9 @@ export function AdminUserDetailModal({
         let active = true;
         setLoading(true);
         setDetail(null);
+        setRedemptionSelection(null);
+        setLedger([]);
+        setLedgerTotal(0);
         setLedgerFilter("all");
         setLedgerPage(1);
         setTaskPage(1);
@@ -271,7 +276,26 @@ export function AdminUserDetailModal({
                                             { title: "时间", dataIndex: "createdAt", width: 170, render: formatTime },
                                             { title: "类型", dataIndex: "type", width: 130 },
                                             { title: "变化", dataIndex: "amountMicrocredits", width: 120, align: "right", render: (value) => formatCredits(value) },
-                                            { title: "说明", dataIndex: "note", ellipsis: true },
+                                            {
+                                                title: "说明",
+                                                dataIndex: "note",
+                                                render: (note: string | undefined, entry: AdminUserLedgerEntry) => {
+                                                    const redemption = entry.type === "redeem" ? entry.redemption : undefined;
+                                                    if (!redemption) return note || "--";
+                                                    return (
+                                                        <div className="min-w-0">
+                                                            <div>兑换码充值</div>
+                                                            {redemption.status === "available" ? (
+                                                                <Button type="link" size="small" className="!h-auto !whitespace-normal !p-0 text-left font-mono" onClick={() => userId && setRedemptionSelection({ userId, entryId: entry.id })}>
+                                                                    <span className="break-all">{redemption.code || `····${redemption.codeSuffix}`}</span>
+                                                                </Button>
+                                                            ) : (
+                                                                <span className="text-xs text-foreground/50">{redemption.status === "not_recorded" ? "兑换码信息未记录" : "关联记录不可用"}</span>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                },
+                                            },
                                         ],
                                         scroll: { x: 720 },
                                     }}
@@ -459,6 +483,7 @@ export function AdminUserDetailModal({
             ) : (
                 <AdminEmpty size="compact" title="没有用户详情" />
             )}
+            {userId && redemptionSelection?.userId === userId ? <UserLedgerRedemptionModal key={`${userId}:${redemptionSelection.entryId}`} userId={userId} entryId={redemptionSelection.entryId} onClose={() => setRedemptionSelection(null)} /> : null}
         </AdminModal>
     );
 }

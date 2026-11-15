@@ -187,7 +187,7 @@ func normalizeAdminUserLoginEventFilter(query AdminUserLoginEventQuery) (reposit
 	return filter, nil
 }
 
-func (s *Service) AdminUserLedger(actor *model.User, userID string, entryType string, page int, limit int) (*WalletSummary, error) {
+func (s *Service) AdminUserLedger(actor *model.User, userID string, entryType string, page int, limit int) (*AdminUserLedgerPage, error) {
 	if err := s.RequireAdminPermission(actor, model.AdminPermissionUsers); err != nil {
 		return nil, err
 	}
@@ -208,7 +208,31 @@ func (s *Service) AdminUserLedger(actor *model.User, userID string, entryType st
 			entries[index].Note = userFacingTaskError(entries[index].Note)
 		}
 	}
-	return &WalletSummary{Account: *account, Entries: entries, Total: total, Page: page, Limit: limit}, nil
+	items := make([]AdminUserLedgerEntry, len(entries))
+	for index, entry := range entries {
+		items[index].CreditLedgerEntry = entry
+	}
+	if s.RequireAdminPermission(actor, model.AdminPermissionRedeemCodes) == nil {
+		details, err := s.adminLedgerRedemptions(actor, userID, entries)
+		if err != nil {
+			return nil, err
+		}
+		for index, entry := range entries {
+			if entry.Type != model.CreditLedgerRedeem {
+				continue
+			}
+			if detail, exists := details[entry.ID]; exists {
+				items[index].Redemption = &AdminLedgerRedemptionReference{Code: detail.Code.Code, CodeSuffix: detail.Code.CodeSuffix, Status: "available"}
+			} else if actor.AdminLevel != model.AdminLevelScoped {
+				status := "unavailable"
+				if entry.RedeemCodeID == "" {
+					status = "not_recorded"
+				}
+				items[index].Redemption = &AdminLedgerRedemptionReference{Status: status}
+			}
+		}
+	}
+	return &AdminUserLedgerPage{Account: *account, Entries: items, Total: total, Page: page, Limit: limit}, nil
 }
 
 func (s *Service) AdminUserTasks(actor *model.User, userID string, page int, limit int) (*AdminTaskPage, error) {

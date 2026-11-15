@@ -248,6 +248,43 @@ paths:
         "200": {description: 标准信封 data.user 为新建普通用户}
         "400": {$ref: "#/components/responses/Error"}
         "403": {$ref: "#/components/responses/Error"}
+  /admin/users/{id}/ledger:
+    get:
+      tags: [admin]
+      summary: 分页查询用户积分流水及兑换码来源
+      description: >-
+        需要 admin.users.accounts。兑换码充值仅在同时具有 admin.commerce.redeem_codes
+        且符合发码归属限制时返回 redemption（status、code、codeSuffix）。status 为 available、
+        not_recorded 或 unavailable；完整码已清理时仅返回尾号，仍可查询核销详情。
+        不为普通钱包接口增加完整码。响应 Cache-Control 为 no-store。
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: string}}
+        - {in: query, name: type, schema: {type: string, enum: [all, increase, consume, admin]}}
+        - {in: query, name: page, schema: {type: integer, minimum: 1}}
+        - {in: query, name: pageSize, schema: {type: integer, minimum: 1, maximum: 100}}
+      responses:
+        "200": {description: 标准信封 data 包含 account、entries、total、page、pageSize；entries 在原有流水字段上增加可选 redemption}
+        "403": {$ref: "#/components/responses/Error"}
+        "404": {$ref: "#/components/responses/Error"}
+        "500": {$ref: "#/components/responses/Error"}
+  /admin/users/{id}/ledger/{entryId}/redemption:
+    get:
+      tags: [admin]
+      summary: 查询用户单笔兑换码充值的核销详情
+      description: >-
+        需要 admin.users.accounts 与 admin.commerce.redeem_codes，模块管理员仅可查看本人生成的兑换码。
+        校验流水归属、充值类型、核销用户和批次关联。响应 Cache-Control 为 no-store。
+        code 为单码信息（可选完整 code、codeSuffix、status、redeemedBy、redeemedUsername、
+        redeemedDisplayName、redeemedAt、redeemedIp、amountMicrocredits），batch 为批次元数据，
+        amountMicrocredits 为该笔流水实际到账积分。已清理完整码不影响尾号与核销详情读取。
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: string}}
+        - {in: path, name: entryId, required: true, schema: {type: string}}
+      responses:
+        "200": {description: 标准信封 data 包含 code、batch、amountMicrocredits}
+        "403": {$ref: "#/components/responses/Error"}
+        "404": {$ref: "#/components/responses/Error"}
+        "500": {$ref: "#/components/responses/Error"}
   /admin/users/{id}/login-events:
     get:
       tags: [admin]

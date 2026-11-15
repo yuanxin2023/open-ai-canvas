@@ -98,6 +98,10 @@ type (
 	AdminManagedUser                       = app.AdminManagedUser
 	AdminUser                              = app.AdminUser
 	AdminUserDetail                        = app.AdminUserDetail
+	AdminUserLedgerPage                    = app.AdminUserLedgerPage
+	AdminUserLedgerEntry                   = app.AdminUserLedgerEntry
+	AdminLedgerRedemptionReference         = app.AdminLedgerRedemptionReference
+	AdminUserLedgerRedemption              = app.AdminUserLedgerRedemption
 	AdminUserLoginEventQuery               = app.AdminUserLoginEventQuery
 	AdminUserPage                          = app.AdminUserPage
 	AdminUserReference                     = app.AdminUserReference
