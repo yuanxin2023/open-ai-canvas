@@ -2,14 +2,15 @@ import { App, Button, DatePicker, Dropdown, Skeleton } from "antd";
 import { ArrowRight, ChevronDown, RefreshCw } from "lucide-react";
 import { useState } from "react";
 import { useUserStore } from "@/stores/use-user-store";
-import { Area, AreaChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 
 import { getControlPreview, type PreviewModel, type PreviewPeriod, type PreviewRange } from "@/services/api/control-preview";
 import { AdminPageFrame } from "../components/admin-shell";
 import { AdminStatTile, ListToolbar } from "../components/admin-ui";
 import { PreviewChoice, PreviewEmpty, PreviewError, PreviewPanel } from "./preview-controls";
 import { PreviewDetails, type PreviewSelection } from "./preview-details";
-import { previewCapabilities, previewColors, previewCredits, previewModelSlices, previewNumber, previewPercent, previewPeriods, previewRangeDates, previewRangeLabel, previewTime, previewUserColor } from "./preview-utils";
+import { previewCapabilities, previewColors, previewCredits, previewModelSlices, previewNumber, previewPercent, previewPeriods, previewRangeDates, previewRangeLabel, previewTime } from "./preview-utils";
+import { PreviewTrend } from "./preview-trend";
 import { usePreviewQuery } from "./use-preview-query";
 import { usePreviewRefresh } from "./use-preview-refresh";
 import { previewRefreshIntervals } from "./preview-refresh";
@@ -47,7 +48,7 @@ function ControlPreviewContent() {
     const openModel = (row?: PreviewModel) => setStack([row ? { kind: "model", row } : { kind: "models" }]);
     const successRate = kpi && kpi.succeeded + kpi.failed > 0 ? previewPercent(kpi.succeeded / (kpi.succeeded + kpi.failed)) : "--";
     return (
-        <AdminPageFrame title="控制预览" description="积分流向、用户消费与模型使用的实时概况" scroll>
+        <AdminPageFrame title="控制预览" description="查看积分流向、用户消费与模型使用情况" scroll>
             <div className="admin-control-preview" aria-busy={query.isFetching}>
                 <ListToolbar
                     trailing={
@@ -112,11 +113,11 @@ function ControlPreviewContent() {
                     <>
                         <div className="admin-preview-stats">
                             <AdminStatTile
-                                label="用户剩余积分 · 当前"
+                                label="用户可用积分 · 当前"
                                 value={previewCredits(kpi?.availableMicrocredits)}
                                 detail={kpi ? `冻结 ${previewCredits(kpi.reservedMicrocredits)} · 总额 ${previewCredits(kpi.availableMicrocredits + kpi.reservedMicrocredits)}` : "可用积分实时快照"}
                             />
-                            <AdminStatTile label={`${periodLabel}消耗积分`} value={previewCredits(kpi?.consumedMicrocredits)} detail={kpi ? `累计 ${previewCredits(kpi.lifetimeConsumedMicrocredits)} · 不含冻结` : "按实际结算统计"} />
+                            <AdminStatTile label={`${periodLabel}消费积分`} value={previewCredits(kpi?.consumedMicrocredits)} detail={kpi ? `累计 ${previewCredits(kpi.lifetimeConsumedMicrocredits)} · 不含冻结` : "按实际结算统计"} />
                             <div className="admin-preview-inflow-stat">
                                 <AdminStatTile label={`${periodLabel}新增到账`} value={previewCredits(kpi?.inflowMicrocredits)} detail="兑换 / 充值 / 管理员 / 奖励" />
                                 <button
@@ -132,13 +133,17 @@ function ControlPreviewContent() {
                                 value={kpi ? `¥${(kpi.paidAmountFen / 100).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "--"}
                                 detail={kpi ? `${previewNumber(kpi.payingUsers)} 人 · ${previewNumber(kpi.paidOrders)} 笔已入账订单` : "按成功入账时间 · 人民币"}
                             />
-                            <AdminStatTile label="消费用户数" value={previewNumber(kpi?.consumingUsers)} detail={kpi ? `人均消费 ${previewCredits(kpi.consumingUsers ? kpi.consumedMicrocredits / kpi.consumingUsers : 0)} 积分` : "实际消费的去重用户"} />
+                            <AdminStatTile
+                                label="消费用户数"
+                                value={previewNumber(kpi?.consumingUsers)}
+                                detail={kpi ? `人均消费 ${previewNumber(kpi.consumingUsers ? kpi.consumedMicrocredits / kpi.consumingUsers / 1_000_000 : 0)} 积分` : "实际消费的去重用户"}
+                            />
                             <AdminStatTile label="模型有效调用" value={previewNumber(kpi?.generations)} detail={`生成成功率 ${successRate}${kpi ? ` · 进行中 ${previewNumber(kpi.pending)}` : ""}`} />
                         </div>
                         <div className="admin-preview-main-grid">
                             <PreviewPanel
                                 title="用户积分消耗排行"
-                                description={`${periodLabel}累计 · 实际结算积分`}
+                                description={`${periodLabel}累计 · 按实际结算积分统计`}
                                 actions={
                                     <PreviewChoice
                                         label="排行人数"
@@ -152,27 +157,29 @@ function ControlPreviewContent() {
                                 }
                             >
                                 {ranking.length ? (
-                                    <div className="admin-preview-race" style={{ height: ranking.length * 44 }}>
-                                        {ranking.map((row, index) => (
-                                            <button
-                                                type="button"
-                                                className="admin-preview-race-row"
-                                                key={row.userId}
-                                                style={{ transform: `translateY(${index * 44}px)` }}
-                                                onClick={() => setStack([{ kind: "user", id: row.userId }])}
-                                                aria-label={`${row.username}，排名 ${row.rank}，消费 ${previewCredits(row.consumedMicrocredits)} 积分，查看明细`}
-                                            >
-                                                <span className="admin-preview-rank">{String(row.rank).padStart(2, "0")}</span>
-                                                <span className="admin-preview-user" title={row.username}>
-                                                    {row.username}
-                                                </span>
-                                                <span className="admin-preview-bar-track">
-                                                    <span className="admin-preview-bar" style={{ width: `${(row.consumedMicrocredits / ranking[0].consumedMicrocredits) * 100}%`, background: previewUserColor(row.userId) }} />
-                                                </span>
-                                                <strong>{previewCredits(row.consumedMicrocredits)}</strong>
-                                                <span className="admin-preview-share">{previewPercent(row.share)}</span>
-                                            </button>
-                                        ))}
+                                    <div className="admin-preview-race-viewport" role="region" aria-label="用户积分消耗排行，可滚动查看" tabIndex={0}>
+                                        <div className="admin-preview-race" style={{ height: ranking.length * 44 }}>
+                                            {ranking.map((row, index) => (
+                                                <button
+                                                    type="button"
+                                                    className="admin-preview-race-row"
+                                                    key={row.userId}
+                                                    style={{ transform: `translateY(${index * 44}px)` }}
+                                                    onClick={() => setStack([{ kind: "user", id: row.userId }])}
+                                                    aria-label={`${row.username}，排名 ${row.rank}，消费 ${previewCredits(row.consumedMicrocredits)} 积分，查看明细`}
+                                                >
+                                                    <span className="admin-preview-rank">{String(row.rank).padStart(2, "0")}</span>
+                                                    <span className="admin-preview-user" title={row.username}>
+                                                        {row.username}
+                                                    </span>
+                                                    <span className="admin-preview-bar-track">
+                                                        <span className="admin-preview-bar" style={{ width: `${ranking[0].consumedMicrocredits > 0 ? (row.consumedMicrocredits / ranking[0].consumedMicrocredits) * 100 : 0}%` }} />
+                                                    </span>
+                                                    <strong>{previewCredits(row.consumedMicrocredits)}</strong>
+                                                    <span className="admin-preview-share">{previewPercent(row.share)}</span>
+                                                </button>
+                                            ))}
+                                        </div>
                                     </div>
                                 ) : (
                                     <PreviewEmpty />
@@ -248,9 +255,9 @@ function ControlPreviewContent() {
                                     <PreviewEmpty />
                                 )}
                                 <div className="admin-preview-panel-footer">
-                                    <span>点击模型，查看用户调用明细</span>
+                                    <span>前 5 个模型 + 其他 · 点击查看明细</span>
                                     <button type="button" className="admin-preview-link" onClick={() => openModel()}>
-                                        全部模型 <ArrowRight className="size-3" />
+                                        查看完整统计 <ArrowRight className="size-3" />
                                     </button>
                                 </div>
                             </PreviewPanel>
@@ -262,39 +269,24 @@ function ControlPreviewContent() {
                                 actions={
                                     <div className="admin-preview-chart-legend">
                                         <span>
-                                            <i style={{ background: previewColors[1] }} />
+                                            <i className="admin-preview-legend-inflow" />
                                             新增到账
                                         </span>
                                         <span>
-                                            <i style={{ background: previewColors[0] }} />
+                                            <i className="admin-preview-legend-consumed" />
                                             实际消费
                                         </span>
                                     </div>
                                 }
                             >
-                                {data ? (
-                                    <div className="admin-preview-trend" role="img" aria-label="积分到账与消费趋势，按实际入账和结算时间统计">
-                                        <ResponsiveContainer width="100%" height="100%">
-                                            <AreaChart data={data.trend.map((row) => ({ label: row.label, inflow: row.inflowMicrocredits / 1_000_000, consumed: row.consumedMicrocredits / 1_000_000 }))} margin={{ top: 12, right: 12, left: 0, bottom: 0 }}>
-                                                <CartesianGrid stroke="var(--admin-divider)" vertical={false} />
-                                                <XAxis dataKey="label" tick={{ fill: "var(--admin-text-muted)", fontSize: 11 }} minTickGap={30} tickLine={false} axisLine={false} />
-                                                <YAxis tick={{ fill: "var(--admin-text-muted)", fontSize: 11 }} tickLine={false} axisLine={false} width={64} tickFormatter={(value) => previewNumber(Number(value))} />
-                                                <Tooltip formatter={(value) => `${previewNumber(Number(value))} 积分`} contentStyle={{ background: "var(--admin-surface)", borderColor: "var(--admin-border)", color: "var(--admin-text)" }} />
-                                                <Area name="新增到账" type="linear" dataKey="inflow" stroke={previewColors[1]} fill={previewColors[1]} fillOpacity={0.1} strokeWidth={2} isAnimationActive={false} />
-                                                <Area name="实际消费" type="linear" dataKey="consumed" stroke={previewColors[0]} fill={previewColors[0]} fillOpacity={0.03} strokeWidth={2} isAnimationActive={false} />
-                                            </AreaChart>
-                                        </ResponsiveContainer>
-                                    </div>
-                                ) : (
-                                    <PreviewEmpty />
-                                )}
+                                <PreviewTrend trend={data?.trend || []} />
                             </PreviewPanel>
                             <PreviewPanel
                                 id="admin-preview-inflows"
                                 title={`${periodLabel}到账来源`}
                                 actions={
                                     <span className="admin-preview-note">
-                                        合计 <strong>{previewCredits(kpi?.inflowMicrocredits)}</strong>
+                                        合计 <strong>{previewCredits(kpi?.inflowMicrocredits)}</strong> 积分
                                     </span>
                                 }
                             >
@@ -313,11 +305,12 @@ function ControlPreviewContent() {
                                         </div>
                                     ))}
                                 </div>
+                                {kpi?.inflowMicrocredits === 0 && <p className="admin-preview-note">当前范围暂无新增到账</p>}
                                 <p className="admin-preview-note">退款及冻结退回不计入新增到账；兑换包含管理员个人出资码。</p>
                             </PreviewPanel>
                         </div>
-                        <p className="admin-preview-note">仅统计当前保留的普通用户数据 · 管理员及已永久注销用户不计入 · 消费按结算时间，生成按首次请求时间统计 · 成功率仅包含已结束生成</p>
-                        <p className="admin-preview-note">用户剩余积分及累计消耗为当前快照，其余指标按所选范围统计；自定义范围包含结束日期当天。</p>
+                        <p className="admin-preview-note">仅统计普通用户；管理员及已永久注销用户不计入。消费按结算时间、生成按首次请求时间统计，成功率仅含已结束生成。</p>
+                        <p className="admin-preview-note">可用积分及累计消费为当前快照，其余指标按所选范围统计。自定义日期包含结束当天。</p>
                         {Boolean(kpi?.unlinkedGenerations) && <p className="admin-preview-note">有 {previewNumber(kpi?.unlinkedGenerations)} 条历史生成缺少任务或请求关联，已按独立日志计数。</p>}
                     </>
                 )}

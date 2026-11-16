@@ -53,6 +53,7 @@
 }
 
 .admin-control-preview button:focus-visible,
+.admin-preview-race-viewport:focus-visible,
 .admin-preview-detail button:focus-visible {
     outline: 2px solid var(--admin-focus);
     outline-offset: 2px;
@@ -163,6 +164,13 @@
     margin: auto;
 }
 
+.admin-preview-race-viewport {
+    max-height: 440px;
+    overflow: auto;
+    scrollbar-gutter: stable;
+    padding: 3px;
+    margin: -3px;
+}
 .admin-preview-race {
     position: relative;
     min-width: 0;
@@ -207,13 +215,15 @@
 }
 .admin-preview-bar-track {
     display: block;
-    height: 20px;
+    height: 16px;
     background: var(--admin-surface-2);
+    border-radius: var(--admin-radius-sm);
+    overflow: hidden;
 }
 .admin-preview-bar {
     display: block;
     height: 100%;
-    min-width: 2px;
+    background: var(--admin-preview-consumed);
     opacity: 0.85;
     border-radius: var(--admin-radius-sm);
     transition: width var(--admin-motion);
@@ -221,15 +231,15 @@
 
 .admin-preview-model-chart {
     display: flex;
-    flex-wrap: wrap;
+    flex-direction: column;
     justify-content: center;
     align-items: center;
     flex: 1;
     gap: 8px;
 }
 .admin-preview-donut {
-    width: 210px;
-    height: 230px;
+    width: 180px;
+    height: 180px;
     max-width: 100%;
     position: relative;
     flex-shrink: 0;
@@ -256,8 +266,8 @@
     color: var(--admin-text-muted);
 }
 .admin-preview-model-legend {
-    flex: 1;
-    min-width: 200px;
+    width: 100%;
+    min-width: 0;
 }
 .admin-preview-model-legend button {
     display: grid;
@@ -265,7 +275,7 @@
     align-items: center;
     gap: 8px;
     width: 100%;
-    min-height: 44px;
+    min-height: 34px;
     padding: 4px;
     border: 0;
     border-bottom: 1px solid var(--admin-divider);
@@ -289,7 +299,8 @@
     overflow-wrap: anywhere;
 }
 .admin-preview-model-name small {
-    display: block;
+    display: inline;
+    margin-left: 8px;
     font-size: 10px;
     color: var(--admin-text-muted);
 }
@@ -301,6 +312,7 @@
 }
 .admin-preview-chart-legend {
     display: flex;
+    flex-wrap: wrap;
     gap: 12px;
     font-size: 11px;
     color: var(--admin-text-muted);
@@ -311,16 +323,20 @@
     gap: 5px;
 }
 .admin-preview-chart-legend i {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
+    width: 18px;
+    height: 0;
+    border-top: 2.5px solid var(--admin-preview-consumed);
+}
+.admin-preview-chart-legend .admin-preview-legend-inflow {
+    border-top-color: var(--admin-preview-inflow);
+    border-top-style: dashed;
 }
 .admin-preview-trend {
     height: 240px;
     min-width: 0;
 }
 .admin-preview-source-bar {
-    height: 16px;
+    height: 13px;
     background: var(--admin-surface-2);
     border-radius: var(--admin-radius-sm);
     display: flex;
@@ -338,7 +354,7 @@
     grid-template-columns: 8px minmax(0, 1fr) auto 48px;
     gap: 10px;
     align-items: center;
-    min-height: 32px;
+    min-height: 37px;
     border-bottom: 1px solid var(--admin-divider);
     font-size: 12px;
 }

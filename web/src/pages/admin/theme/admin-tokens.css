@@ -47,6 +47,20 @@
     --admin-chart-primary: #0f172a;
     --admin-chart-secondary: #0f766e;
     --admin-chart-warning: #b45309;
+    --admin-palette-chart-blue: #2563eb;
+    --admin-palette-chart-teal: #0d9488;
+    --admin-palette-chart-violet: #8b5cf6;
+    --admin-palette-chart-amber: #d99a22;
+    --admin-palette-chart-rose: #db6a93;
+    --admin-palette-chart-slate: #94a3b8;
+    --admin-preview-chart-1: var(--admin-palette-chart-blue);
+    --admin-preview-chart-2: var(--admin-palette-chart-teal);
+    --admin-preview-chart-3: var(--admin-palette-chart-violet);
+    --admin-preview-chart-4: var(--admin-palette-chart-amber);
+    --admin-preview-chart-5: var(--admin-palette-chart-rose);
+    --admin-preview-chart-other: var(--admin-palette-chart-slate);
+    --admin-preview-consumed: var(--admin-preview-chart-1);
+    --admin-preview-inflow: var(--admin-preview-chart-2);
     --admin-card-shadow: none;
 
     /* Compatibility aliases used by existing admin-ui.css. Independent values, not workspace skins. */
@@ -128,6 +142,12 @@
     --admin-chart-primary: #e8eef6;
     --admin-chart-secondary: #2dd4bf;
     --admin-chart-warning: #fbbf24;
+    --admin-palette-chart-blue: #60a5fa;
+    --admin-palette-chart-teal: #2dd4bf;
+    --admin-palette-chart-violet: #a78bfa;
+    --admin-palette-chart-amber: #e9b44d;
+    --admin-palette-chart-rose: #f08db0;
+    --admin-palette-chart-slate: #718096;
     --admin-shadow-overlay: 0 22px 56px rgba(0, 0, 0, 0.48);
 }
 
