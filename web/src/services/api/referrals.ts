@@ -45,7 +45,13 @@ export type ReferralDashboard = {
     rewards: ReferralReward[];
 };
 
-export type ReferralRewardPage = { rewards: ReferralReward[]; total: number; page: number; pageSize: number };
+export type AdminReferralReward = ReferralReward & {
+    inviter: { id: string; username: string; email: string } | null;
+    invitee: { id: string; username: string; email: string } | null;
+    paymentOrder: { id: string; userId: string; merchantOrderNo: string; amountFen: number; currency: string; status: string; creditedAt: string | null } | null;
+};
+
+export type ReferralRewardPage = { rewards: AdminReferralReward[]; total: number; page: number; pageSize: number };
 
 export const getReferralDashboard = (signal?: AbortSignal) => http.get<ReferralDashboard>("/referrals/me", { signal });
 export const getAdminReferralPolicy = () => http.get<ReferralPolicy>("/admin/referrals/policy");

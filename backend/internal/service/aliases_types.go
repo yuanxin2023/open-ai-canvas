@@ -16,6 +16,9 @@ type (
 	ReferralPolicy                         = app.ReferralPolicy
 	ReferralDashboard                      = app.ReferralDashboard
 	ReferralRewardPage                     = app.ReferralRewardPage
+	AdminReferralRewardView                = app.AdminReferralRewardView
+	AdminReferralUserSummary               = app.AdminReferralUserSummary
+	AdminReferralPaymentSummary            = app.AdminReferralPaymentSummary
 	ReferralStatisticsQuery                = app.ReferralStatisticsQuery
 	SaveEcommerceProjectRequest            = app.SaveEcommerceProjectRequest
 	EcommerceCreativeDirectionsRequest     = app.EcommerceCreativeDirectionsRequest

@@ -37,10 +37,33 @@ type ReferralDashboard struct {
 }
 
 type ReferralRewardPage struct {
-	Rewards  []model.ReferralReward `json:"rewards"`
-	Total    int64                  `json:"total"`
-	Page     int                    `json:"page"`
-	PageSize int                    `json:"pageSize"`
+	Rewards  []AdminReferralRewardView `json:"rewards"`
+	Total    int64                     `json:"total"`
+	Page     int                       `json:"page"`
+	PageSize int                       `json:"pageSize"`
+}
+
+type AdminReferralUserSummary struct {
+	ID       string `json:"id"`
+	Username string `json:"username"`
+	Email    string `json:"email"`
+}
+
+type AdminReferralPaymentSummary struct {
+	ID              string                   `json:"id"`
+	UserID          string                   `json:"userId"`
+	MerchantOrderNo string                   `json:"merchantOrderNo"`
+	AmountFen       int64                    `json:"amountFen"`
+	Currency        string                   `json:"currency"`
+	Status          model.PaymentOrderStatus `json:"status"`
+	CreditedAt      *time.Time               `json:"creditedAt"`
+}
+
+type AdminReferralRewardView struct {
+	model.ReferralReward
+	Inviter      *AdminReferralUserSummary    `json:"inviter"`
+	Invitee      *AdminReferralUserSummary    `json:"invitee"`
+	PaymentOrder *AdminReferralPaymentSummary `json:"paymentOrder"`
 }
 
 func defaultReferralPolicy() ReferralPolicy {
@@ -225,9 +248,23 @@ func (s *Service) AdminReferralRewards(actor *model.User, status string, page, p
 	if pageSize < 1 || pageSize > 100 {
 		pageSize = 30
 	}
-	rewards, total, err := s.repo.ReferralRewards("", status, pageSize, (page-1)*pageSize)
+	records, total, err := s.repo.AdminReferralRewards(status, pageSize, (page-1)*pageSize)
 	if err != nil {
 		return nil, err
+	}
+	rewards := make([]AdminReferralRewardView, 0, len(records))
+	for _, record := range records {
+		view := AdminReferralRewardView{ReferralReward: record.ReferralReward}
+		if record.InviterUserID != nil {
+			view.Inviter = &AdminReferralUserSummary{ID: *record.InviterUserID, Username: record.InviterUsername, Email: record.InviterEmail}
+		}
+		if record.InviteeUserID != nil {
+			view.Invitee = &AdminReferralUserSummary{ID: *record.InviteeUserID, Username: record.InviteeUsername, Email: record.InviteeEmail}
+		}
+		if record.OrderID != nil {
+			view.PaymentOrder = &AdminReferralPaymentSummary{ID: *record.OrderID, UserID: record.OrderUserID, MerchantOrderNo: record.OrderMerchantOrderNo, AmountFen: record.OrderAmountFen, Currency: record.OrderCurrency, Status: record.OrderStatus, CreditedAt: record.OrderCreditedAt}
+		}
+		rewards = append(rewards, view)
 	}
 	return &ReferralRewardPage{Rewards: rewards, Total: total, Page: page, PageSize: pageSize}, nil
 }

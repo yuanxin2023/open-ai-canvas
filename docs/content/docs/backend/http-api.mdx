@@ -230,6 +230,8 @@ handle 放错端点、格式错误或行 ID 不存在时，工具错误回执提
 
 `GET /admin/referrals/rewards?status=pending&page=1&pageSize=30` 分页读取记录，新增 `policyVersionId`、`baseMicrocredits`、`orderOrdinal`、`stageIndex`、`uncappedMicrocredits` 供核对。`POST /admin/referrals/rewards/:id/approve|reject` 提交 `{ "note": "..." }`，拒绝时原因必填；批准按保存金额向邀请人钱包入账，同一记录不能重复审核。新人首充奖励自动到账，支付订单返回 `referralPolicyVersionId` 与 `newcomerBonusMicrocredits`，不进入邀请人审核队列。
 
+管理员返利列表还返回 `inviter`、`invitee`（仅含 `id、username、email`）以及 `paymentOrder`（仅含 `id、userId、merchantOrderNo、amountFen、currency、status、creditedAt`）。拥有 `admin.finance.referrals` 即可读取这些审核摘要，无需额外用户管理或支付订单权限。用户身份取当前账号信息；订单严格关联该条记录的 `paymentOrderId`，并核对订单 `userId` 等于 `inviteeId`，不使用最新订单或累计充值替代。用户缺失、订单缺失或订单归属不匹配时，相应摘要为 `null`，原始关联 ID 保留；邮箱未填写返回空字符串，尚未入账的 `creditedAt` 为 `null`。`merchantOrderNo` 与支付订单页面一致，可复制到该页面检索；内部 `paymentOrderId` 不等于商户订单号。普通用户 `/referrals/me` 及审批接口不返回这些新增摘要。
+
 空数据库中的首个用户是初始化例外：仍必须提交合法邮箱和至少 8 位密码，但不要求 `emailCode`，创建后自动成为管理员，便于未配置 SMTP 的新部署完成初始化。后续用户必须同时满足普通注册已开启、邮箱域名白名单和一次性验证码要求。
 
 ## 控制预览

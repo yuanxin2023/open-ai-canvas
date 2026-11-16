@@ -13,10 +13,12 @@ import {
     updateAdminReferralPolicy,
     type ReferralPolicy,
     type ReferralReward,
+    type AdminReferralReward,
     type ReferralUserPolicy,
 } from "@/services/api/referrals";
 import { PolicyEditor } from "./policy-editor";
 import { ReferralStatisticsPanel } from "./statistics-panel";
+import { ReferralPaymentSummary, ReferralUserSummary } from "./reward-summary";
 
 const statuses = { pending: "待审核", approved: "已批准", rejected: "已拒绝", all: "全部" };
 
@@ -34,7 +36,7 @@ export default function ReferralsAdminPage() {
     const [status, setStatus] = useState<ReferralReward["status"] | "all">("pending");
     const [page, setPage] = useState(1);
     const [total, setTotal] = useState(0);
-    const [rewards, setRewards] = useState<ReferralReward[]>([]);
+    const [rewards, setRewards] = useState<AdminReferralReward[]>([]);
     const [loadingRewards, setLoadingRewards] = useState(false);
     const [notes, setNotes] = useState<Record<string, string>>({});
     const [reviewingId, setReviewingId] = useState("");
@@ -197,16 +199,16 @@ export default function ReferralsAdminPage() {
                                     }}
                                     options={Object.entries(statuses).map(([value, label]) => ({ value, label }))}
                                 />
-                                <Table
+                                <Table<AdminReferralReward>
                                     rowKey="id"
                                     loading={loadingRewards}
                                     dataSource={rewards}
                                     pagination={{ current: page, pageSize: 20, total, onChange: setPage }}
-                                    scroll={{ x: 1450 }}
+                                    scroll={{ x: 2010 }}
                                     columns={[
-                                        { title: "订单", dataIndex: "paymentOrderId", width: 160, ellipsis: true },
-                                        { title: "邀请人", dataIndex: "inviterId", width: 140, ellipsis: true },
-                                        { title: "被邀请人", dataIndex: "inviteeId", width: 140, ellipsis: true },
+                                        { title: "被邀请人支付订单", width: 300, render: (_, row: AdminReferralReward) => <ReferralPaymentSummary order={row.paymentOrder} orderId={row.paymentOrderId} /> },
+                                        { title: "邀请人", width: 300, render: (_, row: AdminReferralReward) => <ReferralUserSummary user={row.inviter} userId={row.inviterId} /> },
+                                        { title: "被邀请人", width: 300, render: (_, row: AdminReferralReward) => <ReferralUserSummary user={row.invitee} userId={row.inviteeId} /> },
                                         { title: "规则版本", dataIndex: "policyVersionId", width: 140, ellipsis: true, render: (value?: string) => value || "历史记录" },
                                         { title: "基础积分 / 单序 / 阶段", width: 180, render: (_, row: ReferralReward) => (row.policyVersionId ? formatCredits(row.baseMicrocredits) + " / 第" + row.orderOrdinal + "单 / " + (row.stageIndex + 1) : "—") },
                                         { title: "比例", dataIndex: "rateBps", width: 80, render: (value: number) => value / 100 + "%" },

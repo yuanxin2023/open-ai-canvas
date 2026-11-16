@@ -10,6 +10,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { PaginationBar } from "@/pages/admin/components/admin-ui";
 import { paymentOrderGrantLabel } from "@/lib/payment-order-grant";
+import { paymentOrderStatus } from "@/lib/payment-order-status";
 import { formatCredits } from "@/constant/credits";
 import {
     closeAdminPaymentOrder,
@@ -42,15 +43,6 @@ type ProviderFormValues = {
     enabled: boolean;
     closeAfterMinutes: number;
     values: Record<string, string>;
-};
-
-const paymentOrderStatus: Record<string, { label: string; tone: "neutral" | "success" | "warning" | "error" | "info" }> = {
-    created: { label: "创建中", tone: "info" },
-    pending: { label: "待支付", tone: "warning" },
-    closing: { label: "关单中", tone: "warning" },
-    closed: { label: "已关闭", tone: "neutral" },
-    credited: { label: "已入账", tone: "success" },
-    create_failed: { label: "下单失败", tone: "error" },
 };
 
 const reconciliationResult: Record<string, { label: string; tone: "neutral" | "success" | "warning" | "error" | "info" }> = {

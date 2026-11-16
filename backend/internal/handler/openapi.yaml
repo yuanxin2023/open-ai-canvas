@@ -189,12 +189,28 @@ paths:
     get:
       tags: [admin]
       summary: 分页查询待审核及历史返利
+      description: 需要 admin.finance.referrals；每条记录包含双方用户身份与该笔返利对应的支付订单摘要，不需要额外的用户管理或支付订单权限。关联缺失时摘要为 null，原始关联 ID 保留；订单同时按内部 ID 和被邀请人归属校验。
       parameters:
         - {in: query, name: status, schema: {type: string, enum: [all, pending, approved, rejected]}}
         - {in: query, name: page, schema: {type: integer, minimum: 1}}
         - {in: query, name: pageSize, schema: {type: integer, minimum: 1, maximum: 100}}
       responses:
-        "200": {description: 标准信封 data 包含 rewards、total、page、pageSize}
+        "200":
+          description: 标准信封 data 包含 rewards、total、page、pageSize
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - {$ref: "#/components/schemas/Envelope"}
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          rewards: {type: array, items: {$ref: "#/components/schemas/AdminReferralReward"}}
+                          total: {type: integer, format: int64}
+                          page: {type: integer}
+                          pageSize: {type: integer}
         "403": {$ref: "#/components/responses/Error"}
   /admin/referrals/rewards/{id}/approve:
     post:
@@ -5208,6 +5224,38 @@ components:
         sortOrder: { type: integer }
         allChannels: { type: boolean }
         channelIds: { type: array, items: { type: string } }
+    AdminReferralUserSummary:
+      type: object
+      nullable: true
+      required: [id, username, email]
+      properties:
+        id: {type: string}
+        username: {type: string}
+        email: {type: string, description: 未填写时为空字符串}
+    AdminReferralPaymentSummary:
+      type: object
+      nullable: true
+      required: [id, userId, merchantOrderNo, amountFen, currency, status, creditedAt]
+      properties:
+        id: {type: string, description: 内部支付订单 ID}
+        userId: {type: string, description: 必须为返利记录中的被邀请人 ID}
+        merchantOrderNo: {type: string, description: 支付订单页面可检索的商户订单号}
+        amountFen: {type: integer, format: int64}
+        currency: {type: string}
+        status: {type: string, enum: [created, pending, closing, closed, credited, create_failed]}
+        creditedAt: {type: string, format: date-time, nullable: true}
+    AdminReferralReward:
+      type: object
+      description: 保留原返利记录全部字段，身份与订单摘要仅用于管理员列表，不用于普通用户接口或审批返回值。
+      required: [id, paymentOrderId, inviterId, inviteeId, inviter, invitee, paymentOrder]
+      properties:
+        id: {type: string}
+        paymentOrderId: {type: string}
+        inviterId: {type: string}
+        inviteeId: {type: string}
+        inviter: {$ref: "#/components/schemas/AdminReferralUserSummary"}
+        invitee: {$ref: "#/components/schemas/AdminReferralUserSummary"}
+        paymentOrder: {$ref: "#/components/schemas/AdminReferralPaymentSummary"}
     ReferralPolicy:
       type: object
       required: [enabled, mode, stages, maxDays, maxOrders, perInviteeCapMicrocredits, newcomerEnabled, newcomerRateBps, newcomerCapMicrocredits]
