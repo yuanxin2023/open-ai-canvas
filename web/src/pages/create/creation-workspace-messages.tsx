@@ -16,7 +16,7 @@ import { generationErrorMessage } from "@/lib/generation-error";
 import { isGenerationCostUncertainError } from "@/lib/canvas/canvas-generation-batch";
 import { generationPhaseHint, generationPhaseLabel, generationPhaseStep, generationTaskPhase, generationTaskSavingState, generationTaskShowsProgress, type GenerationPhase } from "@/lib/generation-task-display";
 import { useTaskElapsed } from "@/hooks/use-task-elapsed";
-import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useCopyText } from "@/hooks/use-copy-text";
 import { type CreationReference, displayCreationPrompt } from "./creation-references";
 import { useUserStore } from "@/stores/use-user-store";
@@ -28,10 +28,12 @@ import { useAssetStore, type Asset, type ImageAsset, type VideoAsset } from "@/s
 import { creationResultAssetIds, creationResultStorageKeys } from "@/lib/canvas/canvas-asset-handoff";
 import { resolveMediaUrl } from "@/services/file-storage";
 import { resolveImageUrl } from "@/services/image-storage";
-import { Button } from "antd";
+import { App, Button } from "antd";
 import { CanvasImagePreview } from "@/components/canvas/canvas-image-preview";
 import { AppModal } from "@/components/ui/product/app-modal";
 import { creationResultEntries } from "./creation-result-urls";
+import { creationResultDownload } from "./creation-result-download";
+import { downloadBrowserMedia } from "@/services/browser-download";
 
 export function CreationMessageView({
     item,
@@ -285,6 +287,9 @@ export function MediaResult({
     const [previewUrl, setPreviewUrl] = useState("");
     const [previewType, setPreviewType] = useState<"image" | "video">("image");
     const assets = useAssetStore((state) => state.assets);
+    const { message } = App.useApp();
+    const downloadingKeys = useRef(new Set<string>());
+    const [downloads, setDownloads] = useState<Record<string, boolean>>({});
     const storedResultUrls = item.resultUrls || [];
     const resultStorageKeys = item.resultStorageKeys?.length ? item.resultStorageKeys : creationResultStorageKeys(assets, { messageId: item.id, taskIds: item.taskIds || [], resultUrls: storedResultUrls });
     // 展示地址按 storageKey 保存；effect 重跑（素材库更新、续签）时不回退到历史 hint。
@@ -357,6 +362,19 @@ export function MediaResult({
     const { entries: resultEntries, resolving } = creationResultEntries({ storageKeys: resultStorageKeys, storedUrls: storedResultUrls, resolvedByKey, failedByKey, isVideo, isRemoteKey: (storageKey) => Boolean(resourceIdFromStorageKey(storageKey)) });
     const alignedResultUrls = resultStorageKeys.length ? resultStorageKeys.map((storageKey) => resultEntries.find((entry) => entry.key === storageKey)?.url || "") : resultEntries.map((entry) => entry.url);
     const displayResultUrls = resultEntries.map((entry) => entry.url);
+    const downloadResult = async (entry: (typeof resultEntries)[number], index: number) => {
+        if (downloadingKeys.current.has(entry.key)) return;
+        downloadingKeys.current.add(entry.key);
+        setDownloads((current) => ({ ...current, [entry.key]: true }));
+        try {
+            await downloadBrowserMedia(creationResultDownload(entry, resultStorageKeys, assets, isVideo, index, window.location.origin));
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "下载失败，请重试");
+        } finally {
+            downloadingKeys.current.delete(entry.key);
+            setDownloads((current) => ({ ...current, [entry.key]: false }));
+        }
+    };
     const resultAssetIds = alignedResultUrls.length || resultStorageKeys.length ? creationResultAssetIds(assets, { messageId: item.id, taskIds: item.taskIds || [], resultUrls: alignedResultUrls, resultStorageKeys }) : [];
     const expectedResultCount = resultStorageKeys.length || alignedResultUrls.length;
     const canContinueWithResults = expectedResultCount > 0 && resultAssetIds.length === expectedResultCount;
@@ -467,8 +485,8 @@ export function MediaResult({
                 <Button type="link" size="small" loading={openingCanvas} disabled={!canContinueWithResults} title={canContinueWithResults ? undefined : "素材保存完成后才能转入画布"} onClick={() => onContinueCanvas(resultAssetIds)}>
                     添加到画布
                 </Button>
-                {displayResultUrls.map((url, index) => (
-                    <a key={`download-${index}`} href={url} download>
+                {resultEntries.map((entry, index) => (
+                    <Button key={`download-${entry.key}`} type="link" size="small" loading={downloads[entry.key]} disabled={downloads[entry.key]} onClick={() => void downloadResult(entry, index)}>
                         {displayResultUrls.length > 1 ? (
                             `下载 ${index + 1}`
                         ) : (
@@ -477,7 +495,7 @@ export function MediaResult({
                                 {translate("canvasA.assetView.download")}
                             </>
                         )}
-                    </a>
+                    </Button>
                 ))}
             </div>
             <CreationMediaPreviewModal url={previewUrl} type={previewType} onClose={() => setPreviewUrl("")} />
