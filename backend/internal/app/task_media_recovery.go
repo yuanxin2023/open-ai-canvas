@@ -138,6 +138,9 @@ func recoverProtocolMedia(ctx context.Context, config providerConfig, mode strin
 			if decodeErr != nil {
 				return nil, true, &mediaRecoveryError{stage: "checkpoint", cause: decodeErr}
 			}
+			if err := validateProtocolSVG(reference, mimeType, data); err != nil {
+				return nil, true, &mediaRecoveryError{stage: "checkpoint", cause: err}
+			}
 			policy, policyErr := s.RuntimePolicy()
 			if policyErr != nil {
 				return nil, true, &mediaRecoveryError{stage: "checkpoint", cause: policyErr}
@@ -226,6 +229,9 @@ func (s *Service) materializeTaskMedia(ctx context.Context, task *model.Task, co
 				if err := s.saveMediaCheckpoint(task, checkpoint, "download"); err != nil {
 					return nil, err
 				}
+			}
+			if item.Reference.MIMEType == "image/svg+xml" && item.MIMEType != "image/svg+xml" {
+				return nil, &mediaRecoveryError{stage: "download", cause: errors.New("上游未返回 SVG，请确认该模型及渠道已启用 SVG 输出")}
 			}
 			stage := "local_save"
 			_, _, oss, settingErr := s.activeResourceOSSSetting(task.UserID)

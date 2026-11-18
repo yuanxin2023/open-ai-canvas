@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"infinite-canvas/backend/internal/assets"
 	"infinite-canvas/backend/internal/model"
 )
 
@@ -297,7 +298,19 @@ func (s *Service) storeTaskMediaFile(task *model.Task, index int, path, mimeType
 	}
 	width, height := 0, 0
 	durationMs := int64(0)
-	if kind == "image" {
+	if kind == "image" && mimeType == assets.SVGMIME {
+		data, readErr := io.ReadAll(io.LimitReader(file, assets.MaxSVGBytes+1))
+		if readErr != nil {
+			return nil, nil, readErr
+		}
+		width, height, err = assets.InspectStaticSVG(data)
+		if err != nil {
+			return nil, nil, err
+		}
+		if _, err := file.Seek(0, io.SeekStart); err != nil {
+			return nil, nil, err
+		}
+	} else if kind == "image" {
 		config, _, err := image.DecodeConfig(file)
 		if err != nil {
 			// The standard library does not decode WebP/AVIF. Verify their

@@ -36,6 +36,16 @@ OpenAI 参考图优先使用可用对象存储签名地址；本地内联必须�
 
 AutoDL 当前分发只提供视频。旧音频与 IndexTTS2 配置数据保留，对应模型和任务不再获准执行，不自动迁到其他供应商；已有未完成任务的资金、退款与恢复行为须在升级前演练。
 
+## GrsAI GPT Image SVG 专用插件
+
+`plugin-packages/grsai-svg/` 是独立声明式协议源码，插件 ID 为 `grsai-svg` 1.0.0，Provider ID 为 `grsai-svg-image`。可上传包为 `grsai-svg.yingce-plugin`；下载交付 ZIP 内使用带版本的 `grsai-svg-1.0.0.yingce-plugin` 文件名。包内根目录直接包含 manifest、README 和接口文档，文档由现有嵌入脚本针对本插件同步。
+
+协议固定请求 `POST /v1/api/generate`，使用 `gpt-image-2.6`、`outputFormat=svg`、`quality=auto`、`replyType=async`。支持文档列出的比例和 1K 尺寸及可选参考图 URL/Base64；单次一张，拒绝蒙版、其他模型、格式、质量和未声明尺寸。使用 `GET /v1/api/result?id=<任务ID>` 分离回查，读取 `results[].url`；违规映射为失败。恢复只查询原任务，不声明取消或幂等创建支持。
+
+默认全球节点为 `https://grsaiapi.com`，可在渠道改用国内节点 `https://grsai.dakka.com.cn`。管理员安装启用后须单独配置渠道、精确模型 ID、动态参数、价格和公开模型关联，并关闭蒙版支持。GrsAI 文档限定 SVG 仅适用于 `gpt-image-2.6`，任务出最终结果后查询有效期为两小时。
+
+本插件依赖配套宿主 SVG 校验和保存能力，不能仅上传到旧版后端。宿主检查完整静态 SVG XML、有效尺寸、元素及本地引用，拒绝脚本、事件、外部资源、动画和内嵌位图；通过后按 `image/svg+xml`、`.svg` 和实际宽高保留原始字节。沿用资源归属、生成配额、保存恢复及附件/sandbox 分发；忽略 SVG 参数而返回位图时明确失败。不提供位图转矢量或矢量路径编辑，不修改 API、数据表、账务和既有协议。真实上游生成、浏览器与对象存储验收见待测试文档。
+
 ## 支付插件升级
 
 新单使用启用的支付渠道；暂停只停止新单，旧单仍可查单、关单和验签。存在仍占库存或限购名额的未确认订单时，升级和卸载受到保护，同版本替换为不同内容也不能绕过检查。

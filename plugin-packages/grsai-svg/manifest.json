@@ -1,0 +1,385 @@
+{
+  "apiVersion": "yingce.plugin/v2",
+  "id": "grsai-svg",
+  "name": "GrsAI GPT Image · SVG 矢量图",
+  "version": "1.0.0",
+  "author": "本地定制",
+  "description": "GrsAI gpt-image-2.6 SVG 专用协议，支持参考图和异步查询；需要宿主 SVG 保存支持。",
+  "permissions": [
+    "generation.run",
+    "media.read"
+  ],
+  "configuration": {
+    "fields": [
+      {
+        "name": "apiKey",
+        "type": "secret",
+        "label": "API Key",
+        "required": true
+      }
+    ]
+  },
+  "contributes": {
+    "providers": [
+      {
+        "id": "grsai-svg-image",
+        "label": "GrsAI GPT Image · SVG 矢量图",
+        "capabilities": [
+          "image"
+        ],
+        "scopes": [
+          "admin.system-channel",
+          "user.custom-channel",
+          "canvas",
+          "creation",
+          "agent"
+        ],
+        "baseUrl": "https://grsaiapi.com",
+        "requiresPublicMediaUrls": false,
+        "detachedPolling": true,
+        "auth": {
+          "type": "bearer",
+          "field": "apiKey"
+        },
+        "imageParameters": [
+          {
+            "name": "size",
+            "label": "画幅 / 尺寸",
+            "type": "string",
+            "binding": "aspectRatio",
+            "values": [
+              "auto",
+              "1:1",
+              "16:9",
+              "9:16",
+              "4:3",
+              "3:4",
+              "3:2",
+              "2:3",
+              "5:4",
+              "4:5",
+              "21:9",
+              "9:21",
+              "1:2",
+              "2:1",
+              "1024x1024",
+              "1672x941",
+              "941x1672",
+              "1443x1090",
+              "1090x1443",
+              "1536x1024",
+              "1024x1536",
+              "1408x1120",
+              "1120x1408",
+              "1920x832",
+              "832x1920",
+              "896x1792",
+              "1792x896"
+            ],
+            "default": "1024x1024",
+            "pricing": true
+          },
+          {
+            "name": "quality",
+            "label": "质量",
+            "type": "string",
+            "binding": "quality",
+            "values": [
+              "auto"
+            ],
+            "default": "auto"
+          },
+          {
+            "name": "count",
+            "label": "生成数量",
+            "type": "integer",
+            "binding": "imageCount",
+            "min": 1,
+            "max": 1,
+            "default": 1
+          },
+          {
+            "name": "outputFormat",
+            "label": "输出格式",
+            "type": "string",
+            "binding": "providerOptions.grsai-svg-image.outputFormat",
+            "values": [
+              "svg"
+            ],
+            "default": "svg"
+          }
+        ],
+        "parameters": [
+          {
+            "name": "model",
+            "type": "string",
+            "required": true,
+            "mapping": "model",
+            "values": [
+              "gpt-image-2.6"
+            ],
+            "description": "仅支持精确上游模型 ID gpt-image-2.6。"
+          },
+          {
+            "name": "prompt",
+            "type": "string",
+            "required": true,
+            "mapping": "prompt",
+            "description": "描述 SVG 主体、构图、颜色和矢量风格的提示词。"
+          },
+          {
+            "name": "images",
+            "type": "media[]",
+            "mapping": "images",
+            "description": "可选参考图，支持 URL 或完整 Base64 data URL，不支持蒙版。"
+          }
+        ],
+        "validations": [
+          {
+            "assert": {
+              "$eq": [
+                {
+                  "$ref": "request.model"
+                },
+                "gpt-image-2.6"
+              ]
+            },
+            "message": "GrsAI SVG 仅支持 gpt-image-2.6，不支持 flare、sunburst 或其他模型。"
+          },
+          {
+            "assert": {
+              "$in": [
+                {
+                  "$ref": "request.imageCount"
+                },
+                [
+                  0,
+                  1
+                ]
+              ]
+            },
+            "message": "GrsAI SVG 每次只能生成一张图。"
+          },
+          {
+            "assert": {
+              "$in": [
+                {
+                  "$coalesce": [
+                    {
+                      "$ref": "request.output.count"
+                    },
+                    0
+                  ]
+                },
+                [
+                  0,
+                  1
+                ]
+              ]
+            },
+            "message": "GrsAI SVG 每次只能生成一张图。"
+          },
+          {
+            "assert": {
+              "$in": [
+                {
+                  "$ref": "request.quality"
+                },
+                [
+                  "",
+                  "auto"
+                ]
+              ]
+            },
+            "message": "GrsAI SVG 专用协议仅支持 auto 质量。"
+          },
+          {
+            "assert": {
+              "$in": [
+                {
+                  "$ref": "request.aspectRatio"
+                },
+                [
+                  "",
+                  "auto",
+                  "1:1",
+                  "16:9",
+                  "9:16",
+                  "4:3",
+                  "3:4",
+                  "3:2",
+                  "2:3",
+                  "5:4",
+                  "4:5",
+                  "21:9",
+                  "9:21",
+                  "1:2",
+                  "2:1",
+                  "1024x1024",
+                  "1672x941",
+                  "941x1672",
+                  "1443x1090",
+                  "1090x1443",
+                  "1536x1024",
+                  "1024x1536",
+                  "1408x1120",
+                  "1120x1408",
+                  "1920x832",
+                  "832x1920",
+                  "896x1792",
+                  "1792x896"
+                ]
+              ]
+            },
+            "message": "GrsAI SVG 仅支持文档列出的比例和 1K 尺寸。"
+          },
+          {
+            "assert": {
+              "$eq": [
+                {
+                  "$len": {
+                    "$filter": {
+                      "from": {
+                        "$ref": "request.images"
+                      },
+                      "as": "media",
+                      "where": {
+                        "$eq": [
+                          {
+                            "$lower": {
+                              "$ref": "media.role"
+                            }
+                          },
+                          "mask"
+                        ]
+                      }
+                    }
+                  }
+                },
+                0
+              ]
+            },
+            "message": "GrsAI SVG 不支持蒙版编辑，请移除蒙版。"
+          },
+          {
+            "assert": {
+              "$eq": [
+                {
+                  "$len": {
+                    "$filter": {
+                      "from": {
+                        "$ref": "request.images"
+                      },
+                      "as": "media",
+                      "where": {
+                        "$not": {
+                          "$ref": "media.value"
+                        }
+                      }
+                    }
+                  }
+                },
+                0
+              ]
+            },
+            "message": "GrsAI SVG 参考图缺少可用 URL 或 Base64。"
+          }
+        ],
+        "create": {
+          "method": "POST",
+          "path": "/v1/api/generate",
+          "originPath": true,
+          "contentType": "application/json",
+          "body": {
+            "model": "gpt-image-2.6",
+            "prompt": {
+              "$ref": "request.prompt"
+            },
+            "images": {
+              "$map": {
+                "from": {
+                  "$sortByOrder": {
+                    "$ref": "request.images"
+                  }
+                },
+                "as": "media",
+                "in": {
+                  "$ref": "media.value"
+                }
+              }
+            },
+            "aspectRatio": {
+              "$coalesce": [
+                {
+                  "$ref": "request.aspectRatio"
+                },
+                "1024x1024"
+              ]
+            },
+            "quality": "auto",
+            "outputFormat": "svg",
+            "replyType": "async"
+          }
+        },
+        "poll": {
+          "method": "GET",
+          "path": "/v1/api/result",
+          "originPath": true,
+          "query": {
+            "id": {
+              "$ref": "taskId"
+            }
+          }
+        },
+        "response": {
+          "taskIdPaths": [
+            "id"
+          ],
+          "status": {
+            "$if": {
+              "condition": {
+                "$eq": [
+                  {
+                    "$ref": "response.status"
+                  },
+                  "violation"
+                ]
+              },
+              "then": "failed",
+              "else": {
+                "$ref": "response.status"
+              }
+            }
+          },
+          "statusPaths": [
+            "status"
+          ],
+          "errorPaths": [
+            "error"
+          ],
+          "messagePaths": [
+            "error",
+            "message"
+          ],
+          "images": {
+            "$map": {
+              "from": {
+                "$ref": "response.results"
+              },
+              "as": "item",
+              "in": {
+                "url": {
+                  "$omitEmpty": {
+                    "$ref": "item.url"
+                  }
+                },
+                "mimeType": "image/svg+xml"
+              }
+            }
+          }
+        }
+      }
+    ]
+  },
+  "documentation": "# GrsAI GPT Image · SVG 矢量图 1.0.0\n\n独立协议插件 `grsai-svg`，Provider ID 为 `grsai-svg-image`。固定使用 `gpt-image-2.6` 请求 SVG，支持文字和可选参考图，不覆盖已有图片协议。\n\n## 安装和使用\n\n1. 先确认宿主后端包含本项目当前的 SVG 校验、任务保存和原文件下载支持。旧版宿主不能只靠安装插件补齐 SVG 保存能力。\n2. 解压交付 ZIP，在后台插件管理上传 `grsai-svg-1.0.0.yingce-plugin`，启用插件。若宿主已随源码构建内置同 ID 插件，直接启用内置项；项目禁止上传覆盖内置插件。\n3. 在渠道中选择「GrsAI GPT Image · SVG 矢量图」，配置 GrsAI API Key 和地址：全球节点 `https://grsaiapi.com` 或国内节点 `https://grsai.dakka.com.cn`。\n4. 新建或复制一个模型，上游模型 ID 必须填写 `gpt-image-2.6`。显示名称可自定义；不要填写 `gpt_image-2.6`、flare 或 sunburst。\n5. 核对动态参数、价格、公开模型关联及参考图权限；模型参考图配置须关闭蒙版支持。尺寸默认 1024x1024，质量 auto，单张生成，输出 SVG。\n6. 刷新前台后选择该模型，描述图标、Logo 或插画，可附参考图。生成结束后下载原文件得到 .svg，可交给矢量编辑软件编辑。\n\n## 行为和边界\n\n- 固定发送 `outputFormat: \"svg\"`、`replyType: \"async\"`；不使用 OpenAI 的 `output_format` 字段。不提供 PNG/GIF 切换。\n- 沿用宿主任务轮询和保存恢复；不声明上游幂等创建或取消接口，不自动切换模型或重提收费生成。\n- GrsAI 文档说明任务出最终结果后仅可查询两小时，应及时保存作品。上游原图地址过期后，插件不能恢复已无法下载的文件。\n- 结果读取 `results[].url`，下载受宿主出站限制。宿主要求正确 SVG MIME 和合法静态 SVG 内容，保留原始字节、尺寸和 .svg 扩展名。\n- 上游返回 PNG/GIF、无效 XML、脚本、事件、外部资源、动画或内嵌位图时会失败；此插件不提供位图转矢量，也不把位图改后缀伪装成 SVG。\n- 原文件沿用宿主附件/sandbox 分发与资源归属校验；不提供矢量路径编辑器，不放宽普通文件上传限制。\n- 插件不包含真实密钥，不创建渠道、模型或价格，不修改账务和历史订单。\n- 本地校验使用模拟上游和临时目录；未调用真实收费模型。实际线路的参考图效果、SVG 复杂度、预览、对象存储及计费仍需验收。\n\n## 官方文档\n\n- [GPT Image 系列接口](https://qmy27nhsd9.apifox.cn/452409160e0)\n- [异步生成结果查询](https://qmy27nhsd9.apifox.cn/452409577e0)\n\n---\n\n# GrsAI SVG 接口说明\n\n## 身份与请求\n\n- 清单：`yingce.plugin/v2`，插件 `grsai-svg` 1.0.0，协议 `grsai-svg-image`。\n- 权限：`generation.run`、`media.read`；支持后台系统渠道、用户自定义渠道、画布、创作和 Agent。\n- 鉴权：`Authorization: Bearer <API Key>`，密钥使用宿主 secret 配置。\n- 创建：`POST /v1/api/generate`，JSON；查询：`GET /v1/api/result?id=<任务ID>`。两条路径均从渠道域名根路径解析，不重复拼接 /v1。\n\n| 参数 | 上游映射及限制 |\n| --- | --- |\n| 模型 | 固定 `model=gpt-image-2.6`，请求模型不匹配时拒绝 |\n| 提示词 | `prompt` |\n| 参考图 | `images[]`，按 order 排序，使用 URL 或完整 Base64 data URL；无参考图时为空数组 |\n| 画幅 / 尺寸 | `aspectRatio`，默认 `1024x1024`，允许文档中的比例或 1K 像素值；不提供 2K/4K 和自定义像素 |\n| 质量 | 固定 `quality=auto` |\n| 数量 | 单张；不发送文档未声明的 n/count |\n| 输出格式 | 固定 `outputFormat=svg`，不受扩展参数覆盖 |\n| 回复类型 | 固定 `replyType=async` |\n\n拒绝其他模型、其他格式、多张输出、其他质量、未声明尺寸、缺少地址的参考图和蒙版。上游文档没有提供 SVG 专用蒙版接口或其他模型的 SVG 支持，因此不作推断。\n\n## 响应与恢复\n\n创建和查询共用 `id`、`status`、`results[].url`、`error` 映射。宿主规范化 pending/queued、running/processing、succeeded、failed 等状态；violation 显式映射为 failed，保留上游错误信息。创建接口提前返回完整结果时也可直接保存。\n\n每个图片引用声明 `mimeType=image/svg+xml`。SVG 下载、静态 XML 校验、尺寸识别、原字节保存、归属检查及保存失败恢复由宿主执行。下载地址应返回 `Content-Type: image/svg+xml`。不添加未记录的 Base64 输出字段解析。\n\n查询复用已持久化的上游任务 ID，不重新调用创建接口；查询有效期是出最终结果后两小时。插件未声明上游取消或幂等创建支持，不把本地停止等待描述为上游取消。\n\n<!-- OPEN_AI_CANVAS_MANIFEST_CONTRACT_START -->\n## Manifest 完整接口定义\n\n以下 JSON 与插件包内实际 `manifest.json` 逐字段一致，覆盖插件身份、权限、配置、鉴权、参数、校验、创建、Agent、查询、取消、结果下载、响应和 Agent 响应映射。`documentation` 字段的值就是当前完整文档；为避免文档在自身内部无限递归，JSON 中仅用等义占位文本表示正文。\n\n```json\n{\n  \"apiVersion\": \"yingce.plugin/v2\",\n  \"id\": \"grsai-svg\",\n  \"name\": \"GrsAI GPT Image · SVG 矢量图\",\n  \"version\": \"1.0.0\",\n  \"author\": \"本地定制\",\n  \"description\": \"GrsAI gpt-image-2.6 SVG 专用协议，支持参考图和异步查询；需要宿主 SVG 保存支持。\",\n  \"permissions\": [\n    \"generation.run\",\n    \"media.read\"\n  ],\n  \"configuration\": {\n    \"fields\": [\n      {\n        \"name\": \"apiKey\",\n        \"type\": \"secret\",\n        \"label\": \"API Key\",\n        \"required\": true\n      }\n    ]\n  },\n  \"contributes\": {\n    \"providers\": [\n      {\n        \"id\": \"grsai-svg-image\",\n        \"label\": \"GrsAI GPT Image · SVG 矢量图\",\n        \"capabilities\": [\n          \"image\"\n        ],\n        \"scopes\": [\n          \"admin.system-channel\",\n          \"user.custom-channel\",\n          \"canvas\",\n          \"creation\",\n          \"agent\"\n        ],\n        \"baseUrl\": \"https://grsaiapi.com\",\n        \"requiresPublicMediaUrls\": false,\n        \"detachedPolling\": true,\n        \"auth\": {\n          \"type\": \"bearer\",\n          \"field\": \"apiKey\"\n        },\n        \"imageParameters\": [\n          {\n            \"name\": \"size\",\n            \"label\": \"画幅 / 尺寸\",\n            \"type\": \"string\",\n            \"binding\": \"aspectRatio\",\n            \"values\": [\n              \"auto\",\n              \"1:1\",\n              \"16:9\",\n              \"9:16\",\n              \"4:3\",\n              \"3:4\",\n              \"3:2\",\n              \"2:3\",\n              \"5:4\",\n              \"4:5\",\n              \"21:9\",\n              \"9:21\",\n              \"1:2\",\n              \"2:1\",\n              \"1024x1024\",\n              \"1672x941\",\n              \"941x1672\",\n              \"1443x1090\",\n              \"1090x1443\",\n              \"1536x1024\",\n              \"1024x1536\",\n              \"1408x1120\",\n              \"1120x1408\",\n              \"1920x832\",\n              \"832x1920\",\n              \"896x1792\",\n              \"1792x896\"\n            ],\n            \"default\": \"1024x1024\",\n            \"pricing\": true\n          },\n          {\n            \"name\": \"quality\",\n            \"label\": \"质量\",\n            \"type\": \"string\",\n            \"binding\": \"quality\",\n            \"values\": [\n              \"auto\"\n            ],\n            \"default\": \"auto\"\n          },\n          {\n            \"name\": \"count\",\n            \"label\": \"生成数量\",\n            \"type\": \"integer\",\n            \"binding\": \"imageCount\",\n            \"min\": 1,\n            \"max\": 1,\n            \"default\": 1\n          },\n          {\n            \"name\": \"outputFormat\",\n            \"label\": \"输出格式\",\n            \"type\": \"string\",\n            \"binding\": \"providerOptions.grsai-svg-image.outputFormat\",\n            \"values\": [\n              \"svg\"\n            ],\n            \"default\": \"svg\"\n          }\n        ],\n        \"parameters\": [\n          {\n            \"name\": \"model\",\n            \"type\": \"string\",\n            \"required\": true,\n            \"mapping\": \"model\",\n            \"values\": [\n              \"gpt-image-2.6\"\n            ],\n            \"description\": \"仅支持精确上游模型 ID gpt-image-2.6。\"\n          },\n          {\n            \"name\": \"prompt\",\n            \"type\": \"string\",\n            \"required\": true,\n            \"mapping\": \"prompt\",\n            \"description\": \"描述 SVG 主体、构图、颜色和矢量风格的提示词。\"\n          },\n          {\n            \"name\": \"images\",\n            \"type\": \"media[]\",\n            \"mapping\": \"images\",\n            \"description\": \"可选参考图，支持 URL 或完整 Base64 data URL，不支持蒙版。\"\n          }\n        ],\n        \"validations\": [\n          {\n            \"assert\": {\n              \"$eq\": [\n                {\n                  \"$ref\": \"request.model\"\n                },\n                \"gpt-image-2.6\"\n              ]\n            },\n            \"message\": \"GrsAI SVG 仅支持 gpt-image-2.6，不支持 flare、sunburst 或其他模型。\"\n          },\n          {\n            \"assert\": {\n              \"$in\": [\n                {\n                  \"$ref\": \"request.imageCount\"\n                },\n                [\n                  0,\n                  1\n                ]\n              ]\n            },\n            \"message\": \"GrsAI SVG 每次只能生成一张图。\"\n          },\n          {\n            \"assert\": {\n              \"$in\": [\n                {\n                  \"$coalesce\": [\n                    {\n                      \"$ref\": \"request.output.count\"\n                    },\n                    0\n                  ]\n                },\n                [\n                  0,\n                  1\n                ]\n              ]\n            },\n            \"message\": \"GrsAI SVG 每次只能生成一张图。\"\n          },\n          {\n            \"assert\": {\n              \"$in\": [\n                {\n                  \"$ref\": \"request.quality\"\n                },\n                [\n                  \"\",\n                  \"auto\"\n                ]\n              ]\n            },\n            \"message\": \"GrsAI SVG 专用协议仅支持 auto 质量。\"\n          },\n          {\n            \"assert\": {\n              \"$in\": [\n                {\n                  \"$ref\": \"request.aspectRatio\"\n                },\n                [\n                  \"\",\n                  \"auto\",\n                  \"1:1\",\n                  \"16:9\",\n                  \"9:16\",\n                  \"4:3\",\n                  \"3:4\",\n                  \"3:2\",\n                  \"2:3\",\n                  \"5:4\",\n                  \"4:5\",\n                  \"21:9\",\n                  \"9:21\",\n                  \"1:2\",\n                  \"2:1\",\n                  \"1024x1024\",\n                  \"1672x941\",\n                  \"941x1672\",\n                  \"1443x1090\",\n                  \"1090x1443\",\n                  \"1536x1024\",\n                  \"1024x1536\",\n                  \"1408x1120\",\n                  \"1120x1408\",\n                  \"1920x832\",\n                  \"832x1920\",\n                  \"896x1792\",\n                  \"1792x896\"\n                ]\n              ]\n            },\n            \"message\": \"GrsAI SVG 仅支持文档列出的比例和 1K 尺寸。\"\n          },\n          {\n            \"assert\": {\n              \"$eq\": [\n                {\n                  \"$len\": {\n                    \"$filter\": {\n                      \"from\": {\n                        \"$ref\": \"request.images\"\n                      },\n                      \"as\": \"media\",\n                      \"where\": {\n                        \"$eq\": [\n                          {\n                            \"$lower\": {\n                              \"$ref\": \"media.role\"\n                            }\n                          },\n                          \"mask\"\n                        ]\n                      }\n                    }\n                  }\n                },\n                0\n              ]\n            },\n            \"message\": \"GrsAI SVG 不支持蒙版编辑，请移除蒙版。\"\n          },\n          {\n            \"assert\": {\n              \"$eq\": [\n                {\n                  \"$len\": {\n                    \"$filter\": {\n                      \"from\": {\n                        \"$ref\": \"request.images\"\n                      },\n                      \"as\": \"media\",\n                      \"where\": {\n                        \"$not\": {\n                          \"$ref\": \"media.value\"\n                        }\n                      }\n                    }\n                  }\n                },\n                0\n              ]\n            },\n            \"message\": \"GrsAI SVG 参考图缺少可用 URL 或 Base64。\"\n          }\n        ],\n        \"create\": {\n          \"method\": \"POST\",\n          \"path\": \"/v1/api/generate\",\n          \"originPath\": true,\n          \"contentType\": \"application/json\",\n          \"body\": {\n            \"model\": \"gpt-image-2.6\",\n            \"prompt\": {\n              \"$ref\": \"request.prompt\"\n            },\n            \"images\": {\n              \"$map\": {\n                \"from\": {\n                  \"$sortByOrder\": {\n                    \"$ref\": \"request.images\"\n                  }\n                },\n                \"as\": \"media\",\n                \"in\": {\n                  \"$ref\": \"media.value\"\n                }\n              }\n            },\n            \"aspectRatio\": {\n              \"$coalesce\": [\n                {\n                  \"$ref\": \"request.aspectRatio\"\n                },\n                \"1024x1024\"\n              ]\n            },\n            \"quality\": \"auto\",\n            \"outputFormat\": \"svg\",\n            \"replyType\": \"async\"\n          }\n        },\n        \"poll\": {\n          \"method\": \"GET\",\n          \"path\": \"/v1/api/result\",\n          \"originPath\": true,\n          \"query\": {\n            \"id\": {\n              \"$ref\": \"taskId\"\n            }\n          }\n        },\n        \"response\": {\n          \"taskIdPaths\": [\n            \"id\"\n          ],\n          \"status\": {\n            \"$if\": {\n              \"condition\": {\n                \"$eq\": [\n                  {\n                    \"$ref\": \"response.status\"\n                  },\n                  \"violation\"\n                ]\n              },\n              \"then\": \"failed\",\n              \"else\": {\n                \"$ref\": \"response.status\"\n              }\n            }\n          },\n          \"statusPaths\": [\n            \"status\"\n          ],\n          \"errorPaths\": [\n            \"error\"\n          ],\n          \"messagePaths\": [\n            \"error\",\n            \"message\"\n          ],\n          \"images\": {\n            \"$map\": {\n              \"from\": {\n                \"$ref\": \"response.results\"\n              },\n              \"as\": \"item\",\n              \"in\": {\n                \"url\": {\n                  \"$omitEmpty\": {\n                    \"$ref\": \"item.url\"\n                  }\n                },\n                \"mimeType\": \"image/svg+xml\"\n              }\n            }\n          }\n        }\n      }\n    ]\n  },\n  \"documentation\": \"<当前插件的完整 documentation，由 README.md 与 docs/interface.md 拼接而成；为避免 JSON 递归，此处不重复展开正文。>\"\n}\n```\n<!-- OPEN_AI_CANVAS_MANIFEST_CONTRACT_END -->\n"
+}

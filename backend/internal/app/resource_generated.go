@@ -20,6 +20,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"infinite-canvas/backend/internal/assets"
 )
 
 func localObjectKey(userID string, kind string, fileName string, mimeType string, now time.Time) string {
@@ -76,6 +78,13 @@ func (s *Service) persistGeneratedMediaValueMode(userID string, value interface{
 				return nil, err
 			}
 			if err == nil {
+				if mimeType == assets.SVGMIME {
+					width, height, inspectErr := assets.InspectStaticSVG(data)
+					if inspectErr != nil {
+						return nil, inspectErr
+					}
+					item["width"], item["height"] = width, height
+				}
 				kind := normalizeResourceKind("", mimeType)
 				width, height := intValue(item["width"]), intValue(item["height"])
 				if kind == "image" && (width <= 0 || height <= 0) {
@@ -248,6 +257,9 @@ func validateRemoteResourceURL(rawURL string) (*url.URL, error) {
 }
 
 func extensionFromMimeType(mimeType string) string {
+	if mimeType == assets.SVGMIME {
+		return "svg"
+	}
 	if strings.Contains(mimeType, "png") {
 		return "png"
 	}

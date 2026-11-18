@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"infinite-canvas/backend/internal/assets"
 	"infinite-canvas/backend/internal/protocol"
 )
 
@@ -272,6 +273,9 @@ func protocolMediaBytes(ctx context.Context, config providerConfig, reference pr
 func protocolMediaBytesOnce(ctx context.Context, config providerConfig, reference protocol.MediaReference) ([]byte, string, error) {
 	if strings.TrimSpace(reference.DataURL) != "" {
 		mimeType, data, err := decodeProviderDataURL(reference.DataURL)
+		if err == nil {
+			err = validateProtocolSVG(reference, mimeType, data)
+		}
 		return data, mimeType, err
 	}
 	value := strings.TrimSpace(reference.URL)
@@ -279,7 +283,22 @@ func protocolMediaBytesOnce(ctx context.Context, config providerConfig, referenc
 		return nil, "", errors.New("声明式协议媒体结果地址为空")
 	}
 	data, mimeType, err := getProviderExternalBinary(withProviderRequestKind(ctx, "download"), config, value)
-	return data, normalizedMediaMimeType(mimeType, data), err
+	mimeType = normalizedMediaMimeType(mimeType, data)
+	if err == nil {
+		err = validateProtocolSVG(reference, mimeType, data)
+	}
+	return data, mimeType, err
+}
+
+func validateProtocolSVG(reference protocol.MediaReference, mimeType string, data []byte) error {
+	if reference.MIMEType == assets.SVGMIME && mimeType != assets.SVGMIME {
+		return errors.New("上游未返回 SVG，请确认该模型及渠道已启用 SVG 输出")
+	}
+	if mimeType == assets.SVGMIME {
+		_, _, err := assets.InspectStaticSVG(data)
+		return err
+	}
+	return nil
 }
 
 func retryableProtocolMediaDownload(err error) bool {
