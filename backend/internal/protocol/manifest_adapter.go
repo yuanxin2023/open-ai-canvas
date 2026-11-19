@@ -488,7 +488,7 @@ func normalizeManifestInlineDataURL(value, kind, formatHint string) string {
 func manifestInlineMediaMIME(kind, formatHint string) string {
 	hint := strings.ToLower(strings.TrimSpace(formatHint))
 	switch hint {
-	case "image/png", "image/jpeg", "image/webp", "image/gif", "audio/mpeg", "audio/wav", "audio/ogg", "video/mp4", "video/webm":
+	case "image/png", "image/jpeg", "image/webp", "image/gif", "image/svg+xml", "audio/mpeg", "audio/wav", "audio/ogg", "video/mp4", "video/webm":
 		return hint
 	case "image/jpg":
 		return "image/jpeg"
@@ -502,6 +502,8 @@ func manifestInlineMediaMIME(kind, formatHint string) string {
 		return "image/webp"
 	case "gif":
 		return "image/gif"
+	case "svg":
+		return "image/svg+xml"
 	case "mp3", "mpeg":
 		return "audio/mpeg"
 	case "wav":

@@ -36,6 +36,16 @@ OpenAI 参考图优先使用可用对象存储签名地址；本地内联必须�
 
 AutoDL 当前分发只提供视频。旧音频与 IndexTTS2 配置数据保留，对应模型和任务不再获准执行，不自动迁到其他供应商；已有未完成任务的资金、退款与恢复行为须在升级前演练。
 
+## A6API SVG 矢量图
+
+`plugin-packages/a6api-svg/` 提供独立可上传协议，插件 ID 为 `a6api-svg`，Provider ID 为 `a6api-svg-image`。内置 A6API 不能被上传覆盖，因此管理员应安装独立包，再复制并显式切换指定模型的协议，核对尺寸、质量、单张数量、价格与公开模型关联。原 PNG、透明 PNG 和既有 GIF 模型继续使用原协议。
+
+新协议只请求 `/images/generations`，固定 `output_format=svg`、`n=1`，拒绝参考图、蒙版编辑与其他数量；不发送流式、渐进图片、压缩和透明背景参数。支持 URL 与 Base64 结果。A6API 文档没有承诺所有模型或商家支持 SVG，必须用实际精确模型 ID 和目标线路确认；插件安装或本地测试通过不证明上游可用。
+
+本协议依赖配套宿主后端的 SVG 支持，不能仅把包上传到旧后端。宿主验证完整静态 SVG XML、元素、本地引用与有效尺寸；拒绝脚本、事件、外部资源、动画和内嵌位图。通过校验后保留原始字节，以 `image/svg+xml`、`.svg` 与实际宽高保存，沿用资源归属、生成配额、任务保存恢复及附件/sandbox 分发策略。URL 返回必须提供正确 MIME；忽略格式参数而返回位图会明确失败，不把 PNG/GIF 改后缀当作矢量图，不自动重提收费生成。
+
+前端已有 SVG 下载扩展名映射，本次不新增矢量路径编辑器或位图转矢量功能。真实模型生成、浏览器预览、对象存储与实际用量计费须另行验收；本次不修改报价、账务或数据表。
+
 ## GrsAI GPT Image SVG 专用插件
 
 `plugin-packages/grsai-svg/` 是独立声明式协议源码，插件 ID 为 `grsai-svg` 1.0.0，Provider ID 为 `grsai-svg-image`。可上传包为 `grsai-svg.yingce-plugin`；下载交付 ZIP 内使用带版本的 `grsai-svg-1.0.0.yingce-plugin` 文件名。包内根目录直接包含 manifest、README 和接口文档，文档由现有嵌入脚本针对本插件同步。

@@ -1,0 +1,195 @@
+{
+  "apiVersion": "yingce.plugin/v2",
+  "id": "a6api-svg",
+  "name": "A6API SVG 矢量图",
+  "version": "1.0.0",
+  "author": "A6API / 本地定制",
+  "description": "通过 A6API 请求原生 SVG 文生图；需要商家线路支持 SVG 输出及宿主 SVG 保存支持。",
+  "permissions": [
+    "generation.run",
+    "media.read"
+  ],
+  "configuration": {
+    "fields": [
+      {
+        "name": "apiKey",
+        "type": "secret",
+        "label": "API Key",
+        "required": true
+      }
+    ]
+  },
+  "contributes": {
+    "providers": [
+      {
+        "id": "a6api-svg-image",
+        "label": "A6API Image · SVG 矢量图",
+        "capabilities": [
+          "image"
+        ],
+        "scopes": [
+          "admin.system-channel",
+          "user.custom-channel",
+          "canvas",
+          "creation",
+          "agent"
+        ],
+        "baseUrl": "https://api.a6api.vip",
+        "auth": {
+          "type": "bearer",
+          "field": "apiKey"
+        },
+        "imageParameters": [
+          {
+            "name": "size",
+            "label": "画幅 / 尺寸",
+            "type": "string",
+            "binding": "aspectRatio",
+            "encoding": "pixels",
+            "pricing": true
+          },
+          {
+            "name": "quality",
+            "label": "参考图质量",
+            "description": "控制用于制作 SVG 的参考图质量。",
+            "type": "string",
+            "binding": "quality",
+            "pricing": true
+          },
+          {
+            "name": "count",
+            "label": "生成数量",
+            "type": "integer",
+            "binding": "imageCount",
+            "min": 1,
+            "max": 1,
+            "default": 1
+          },
+          {
+            "name": "outputFormat",
+            "label": "输出格式",
+            "type": "string",
+            "binding": "providerOptions.a6api-svg-image.output_format",
+            "values": [
+              "svg"
+            ],
+            "default": "svg"
+          }
+        ],
+        "parameters": [
+          {
+            "name": "model",
+            "type": "string",
+            "required": true,
+            "mapping": "model",
+            "description": "使用已确认支持 SVG 的 A6API 精确模型 ID。"
+          },
+          {
+            "name": "prompt",
+            "type": "string",
+            "required": true,
+            "mapping": "prompt"
+          }
+        ],
+        "validations": [
+          {
+            "assert": {
+              "$eq": [
+                {
+                  "$len": {
+                    "$ref": "request.images"
+                  }
+                },
+                0
+              ]
+            },
+            "message": "SVG 协议仅支持文生图，不支持参考图或蒙版编辑。"
+          },
+          {
+            "assert": {
+              "$or": [
+                {
+                  "$eq": [
+                    {
+                      "$ref": "request.imageCount"
+                    },
+                    0
+                  ]
+                },
+                {
+                  "$eq": [
+                    {
+                      "$ref": "request.imageCount"
+                    },
+                    1
+                  ]
+                }
+              ]
+            },
+            "message": "SVG 协议每次只能生成一张图。"
+          }
+        ],
+        "create": {
+          "method": "POST",
+          "path": "/images/generations",
+          "contentType": "application/json",
+          "body": {
+            "model": {
+              "$ref": "request.model"
+            },
+            "prompt": {
+              "$ref": "request.prompt"
+            },
+            "n": 1,
+            "size": {
+              "$omitEmpty": {
+                "$ref": "request.aspectRatio"
+              }
+            },
+            "quality": {
+              "$omitEmpty": {
+                "$ref": "request.quality"
+              }
+            },
+            "output_format": "svg"
+          }
+        },
+        "response": {
+          "status": "succeeded",
+          "images": {
+            "$map": {
+              "from": {
+                "$ref": "response.data"
+              },
+              "as": "item",
+              "in": {
+                "url": {
+                  "$omitEmpty": {
+                    "$ref": "item.url"
+                  }
+                },
+                "b64_json": {
+                  "$omitEmpty": {
+                    "$ref": "item.b64_json"
+                  }
+                },
+                "mimeType": "image/svg+xml"
+              }
+            }
+          },
+          "usage": {
+            "$ref": "response.usage"
+          },
+          "errorPaths": [
+            "error.code",
+            "error.message"
+          ],
+          "messagePaths": [
+            "error.message"
+          ]
+        }
+      }
+    ]
+  },
+  "documentation": "# A6API SVG 矢量图 1.0.0\n\n独立可上传的 SVG 文生图协议，插件 ID 为 `a6api-svg`，Provider ID 为 `a6api-svg-image`。不覆盖内置 A6API，也不替换现有透明 PNG 协议。\n\n## 安装和使用\n\n1. 先更新宿主后端至包含本次 SVG 支持的源码构建。仅安装插件到旧后端不能补齐 SVG 内容校验和作品保存。\n2. 管理后台上传 `a6api-svg-1.0.0.yingce-plugin`。\n3. 在渠道与模型中复制一个已确认支持 SVG 的模型，选择「A6API Image · SVG 矢量图」协议。保留实际渠道地址、密钥和精确上游模型 ID。\n4. 保存前逐项核对尺寸、质量、单张数量、价格和公开模型关联；不要把旧协议参数直接复制为新协议的动态参数。\n5. 刷新前台后选择新模型，用文字描述生成图标、Logo 或插画，下载原文件得到 `.svg`。\n\n此协议固定请求 SVG，参数只提供 SVG 格式和单张数量。参考图和蒙版编辑会明确拒绝。普通 PNG、透明 PNG 和已能生成的 GIF 继续使用原模型协议。\n\n## 支持边界\n\n- A6API 生图文档只说明 `output_format` 可接收，是否转发由适配器和商家决定，没有承诺所有线路支持 SVG。安装成功不等于上游支持；尚未调用真实收费模型验证。\n- URL 和 Base64 两种响应均接受。宿主验证完整 SVG XML、静态元素和本地引用，保留原始字节；禁止脚本、事件处理器、外部资源、内嵌位图和动画。不是 PNG 改后缀，也不提供位图转矢量后处理。\n- 上游忽略 SVG 参数并返回 PNG/GIF 时明确失败，不把位图标成 SVG。不自动换模型或重新提交生成。\n- SVG 原文件沿用附件与 sandbox 分发，不放宽普通上传文件的安全边界。预览由浏览器图片组件处理，不提供路径编辑器；原文件可交给矢量编辑软件继续编辑。\n- SVG 费用可能包括参考图生成和 SVG 编写；本次不改变系统报价、结算或历史订单。真实商家的用量和计价需管理员另行核对。\n\n资料：[A6API 生图说明](https://a6api.vip/#/docs?topic=api-reference&section=image-generation)、[OpenAI SVG 输出](https://developers.openai.com/api/docs/guides/image-generation#generate-svg-output)。\n\n---\n\n# A6API SVG 接口说明\n\n`POST {channel_base_url}/images/generations`，Bearer 鉴权，JSON 请求；宿主按既有规则处理 `/v1` 前缀。\n\n| 参数 | 映射与约束 |\n| --- | --- |\n| 模型 | `model`，使用渠道实际模型 ID，不维护模型名称白名单 |\n| 提示词 | `prompt`，描述主体、颜色、构图与矢量路径要求 |\n| 画幅 / 尺寸 | `size`，沿用模型配置的实际可用像素尺寸 |\n| 参考图质量 | `quality`，未设置时省略 |\n| 数量 | `n=1`，其他数量拒绝 |\n| 输出格式 | `output_format=svg`，无法由扩展选项覆盖 |\n\n不发送 `response_format`、`stream`、`partial_images`、`output_compression` 或 `background`，不请求编辑接口。支持 SVG 的官方接口默认返回 Base64，A6API 商家也可能返回下载 URL。\n\n响应读取 `data[].b64_json` 或 `data[].url`。声明期望 MIME 为 `image/svg+xml`，URL 的下载仍受宿主出站校验。SVG 要有正数的宽高或有效 `viewBox`，仅接受静态矢量内容；原文件逐字节保存，尺寸和 `.svg` 扩展名由宿主识别。\n\n失败时保留上游错误。上游返回非 SVG、无效 XML、脚本、外部资源或内嵌位图时明确失败，不生成伪矢量资源。URL 响应应提供 `image/svg+xml`；类型丢失或错误时不靠文件名猜测。\n\n<!-- OPEN_AI_CANVAS_MANIFEST_CONTRACT_START -->\n## Manifest 完整接口定义\n\n以下 JSON 与插件包内实际 `manifest.json` 逐字段一致，覆盖插件身份、权限、配置、鉴权、参数、校验、创建、Agent、查询、取消、结果下载、响应和 Agent 响应映射。`documentation` 字段的值就是当前完整文档；为避免文档在自身内部无限递归，JSON 中仅用等义占位文本表示正文。\n\n```json\n{\n  \"apiVersion\": \"yingce.plugin/v2\",\n  \"id\": \"a6api-svg\",\n  \"name\": \"A6API SVG 矢量图\",\n  \"version\": \"1.0.0\",\n  \"author\": \"A6API / 本地定制\",\n  \"description\": \"通过 A6API 请求原生 SVG 文生图；需要商家线路支持 SVG 输出及宿主 SVG 保存支持。\",\n  \"permissions\": [\n    \"generation.run\",\n    \"media.read\"\n  ],\n  \"configuration\": {\n    \"fields\": [\n      {\n        \"name\": \"apiKey\",\n        \"type\": \"secret\",\n        \"label\": \"API Key\",\n        \"required\": true\n      }\n    ]\n  },\n  \"contributes\": {\n    \"providers\": [\n      {\n        \"id\": \"a6api-svg-image\",\n        \"label\": \"A6API Image · SVG 矢量图\",\n        \"capabilities\": [\n          \"image\"\n        ],\n        \"scopes\": [\n          \"admin.system-channel\",\n          \"user.custom-channel\",\n          \"canvas\",\n          \"creation\",\n          \"agent\"\n        ],\n        \"baseUrl\": \"https://api.a6api.vip\",\n        \"auth\": {\n          \"type\": \"bearer\",\n          \"field\": \"apiKey\"\n        },\n        \"imageParameters\": [\n          {\n            \"name\": \"size\",\n            \"label\": \"画幅 / 尺寸\",\n            \"type\": \"string\",\n            \"binding\": \"aspectRatio\",\n            \"encoding\": \"pixels\",\n            \"pricing\": true\n          },\n          {\n            \"name\": \"quality\",\n            \"label\": \"参考图质量\",\n            \"description\": \"控制用于制作 SVG 的参考图质量。\",\n            \"type\": \"string\",\n            \"binding\": \"quality\",\n            \"pricing\": true\n          },\n          {\n            \"name\": \"count\",\n            \"label\": \"生成数量\",\n            \"type\": \"integer\",\n            \"binding\": \"imageCount\",\n            \"min\": 1,\n            \"max\": 1,\n            \"default\": 1\n          },\n          {\n            \"name\": \"outputFormat\",\n            \"label\": \"输出格式\",\n            \"type\": \"string\",\n            \"binding\": \"providerOptions.a6api-svg-image.output_format\",\n            \"values\": [\n              \"svg\"\n            ],\n            \"default\": \"svg\"\n          }\n        ],\n        \"parameters\": [\n          {\n            \"name\": \"model\",\n            \"type\": \"string\",\n            \"required\": true,\n            \"mapping\": \"model\",\n            \"description\": \"使用已确认支持 SVG 的 A6API 精确模型 ID。\"\n          },\n          {\n            \"name\": \"prompt\",\n            \"type\": \"string\",\n            \"required\": true,\n            \"mapping\": \"prompt\"\n          }\n        ],\n        \"validations\": [\n          {\n            \"assert\": {\n              \"$eq\": [\n                {\n                  \"$len\": {\n                    \"$ref\": \"request.images\"\n                  }\n                },\n                0\n              ]\n            },\n            \"message\": \"SVG 协议仅支持文生图，不支持参考图或蒙版编辑。\"\n          },\n          {\n            \"assert\": {\n              \"$or\": [\n                {\n                  \"$eq\": [\n                    {\n                      \"$ref\": \"request.imageCount\"\n                    },\n                    0\n                  ]\n                },\n                {\n                  \"$eq\": [\n                    {\n                      \"$ref\": \"request.imageCount\"\n                    },\n                    1\n                  ]\n                }\n              ]\n            },\n            \"message\": \"SVG 协议每次只能生成一张图。\"\n          }\n        ],\n        \"create\": {\n          \"method\": \"POST\",\n          \"path\": \"/images/generations\",\n          \"contentType\": \"application/json\",\n          \"body\": {\n            \"model\": {\n              \"$ref\": \"request.model\"\n            },\n            \"prompt\": {\n              \"$ref\": \"request.prompt\"\n            },\n            \"n\": 1,\n            \"size\": {\n              \"$omitEmpty\": {\n                \"$ref\": \"request.aspectRatio\"\n              }\n            },\n            \"quality\": {\n              \"$omitEmpty\": {\n                \"$ref\": \"request.quality\"\n              }\n            },\n            \"output_format\": \"svg\"\n          }\n        },\n        \"response\": {\n          \"status\": \"succeeded\",\n          \"images\": {\n            \"$map\": {\n              \"from\": {\n                \"$ref\": \"response.data\"\n              },\n              \"as\": \"item\",\n              \"in\": {\n                \"url\": {\n                  \"$omitEmpty\": {\n                    \"$ref\": \"item.url\"\n                  }\n                },\n                \"b64_json\": {\n                  \"$omitEmpty\": {\n                    \"$ref\": \"item.b64_json\"\n                  }\n                },\n                \"mimeType\": \"image/svg+xml\"\n              }\n            }\n          },\n          \"usage\": {\n            \"$ref\": \"response.usage\"\n          },\n          \"errorPaths\": [\n            \"error.code\",\n            \"error.message\"\n          ],\n          \"messagePaths\": [\n            \"error.message\"\n          ]\n        }\n      }\n    ]\n  },\n  \"documentation\": \"<当前插件的完整 documentation，由 README.md 与 docs/interface.md 拼接而成；为避免 JSON 递归，此处不重复展开正文。>\"\n}\n```\n<!-- OPEN_AI_CANVAS_MANIFEST_CONTRACT_END -->\n"
+}

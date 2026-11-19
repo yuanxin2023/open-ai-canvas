@@ -16,13 +16,41 @@ POST `https://api.a6api.com/chat/completions`
 
 POST `https://api.a6api.com/images/generations`
 
-请求体：`model`、`prompt`、`n`、`size`、`quality`、`response_format`。
+请求体：`model`、`prompt`、`n`、`size`、`quality`、`background`、`output_format`、`response_format`。
 
 响应 `data[].url` 或 `data[].b64_json`。
 
 ## 图像编辑
 
 POST `https://api.a6api.com/images/edits`（multipart，带参考图时使用）
+
+### 动态图片参数与 PNG 透明背景
+
+| 工作台参数 | 上游映射 | 默认与边界 |
+| --- | --- | --- |
+| `size` | `size` | 像素编码；分辨率档位由宿主按尺寸预设换算。 |
+| `imageResolution` | 宿主尺寸换算和计价 | 初始关闭；不直接发送独立 `resolution`。 |
+| `quality` | `quality` | 由管理员按精确模型收窄范围与默认值。 |
+| `count` | `n` | 默认 1，插件允许 1–100；具体模型和商家可有更低上限。 |
+| `transparentBackground` | `background=transparent` | 初始关闭且默认 false；由管理员为已确认支持的模型启用。 |
+| `outputFormat` | `output_format=png` | 只允许 PNG；请求模板固定为 PNG，不能用扩展参数改为 JPEG。 |
+
+开启透明背景时，JSON 文生图及 multipart 图片编辑均发送 `background=transparent`；关闭或未传时省略 `background`，不擅自发送 `opaque`。输出始终请求 PNG，响应中的 `b64_json` 原样添加 `data:image/png;base64,` 前缀，不重编码、压平透明通道或合成棋盘格。URL 响应交由宿主下载持久化。
+
+例如，工作台参数 `{ "transparentBackground": true, "count": 1 }` 经插件绑定后生成的请求包含：
+
+```json
+{
+  "model": "gpt-image-2",
+  "prompt": "保留完整主体，背景完全透明",
+  "n": 1,
+  "background": "transparent",
+  "output_format": "png",
+  "response_format": "b64_json"
+}
+```
+
+`response_format` 沿用 A6API 网关合同，不能据此推断 OpenAI 官方直连接口也接受该字段。`background` 和 PNG 输出能否被具体商家执行，以 [A6API 生图文档](https://a6api.vip/#/docs?topic=api-reference&section=image-generation)、模型市场及真实调用为准。Base URL 沿用渠道设置，本次不自动替换域名、修改文本协议或新增异步入口。
 
 ## 模型列表
 
@@ -38,7 +66,7 @@ GET `https://api.a6api.com/models`
   "apiVersion": "yingce.plugin/v2",
   "id": "a6api",
   "name": "A6api",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": "A6api",
   "description": "A6api 模型网关协议插件：OpenAI 兼容对话与图像生成。",
   "permissions": [
@@ -272,6 +300,61 @@ GET `https://api.a6api.com/models`
           "type": "bearer",
           "field": "apiKey"
         },
+        "imageParameters": [
+          {
+            "name": "size",
+            "label": "画幅 / 尺寸",
+            "type": "string",
+            "binding": "aspectRatio",
+            "encoding": "pixels",
+            "pricing": true
+          },
+          {
+            "name": "imageResolution",
+            "label": "分辨率",
+            "type": "string",
+            "binding": "resolution",
+            "enabled": false,
+            "pricing": true
+          },
+          {
+            "name": "quality",
+            "label": "图片质量",
+            "type": "string",
+            "binding": "quality",
+            "pricing": true
+          },
+          {
+            "name": "count",
+            "label": "生成数量",
+            "type": "integer",
+            "binding": "imageCount",
+            "min": 1,
+            "max": 100,
+            "step": 1,
+            "default": 1
+          },
+          {
+            "name": "transparentBackground",
+            "label": "透明背景",
+            "description": "请求保留 Alpha 通道的 PNG；仅为已确认支持的模型和商家线路开启。",
+            "type": "boolean",
+            "binding": "transparentBackground",
+            "default": false,
+            "enabled": false
+          },
+          {
+            "name": "outputFormat",
+            "label": "输出格式",
+            "description": "固定为 PNG，避免透明通道丢失及 Base64 MIME 类型不一致。",
+            "type": "string",
+            "binding": "providerOptions.a6api-image.output_format",
+            "values": [
+              "png"
+            ],
+            "default": "png"
+          }
+        ],
         "parameters": [
           {
             "name": "model",
@@ -401,16 +484,23 @@ GET `https://api.a6api.com/models`
                 "$ref": "request.quality"
               }
             },
-            "output_format": {
+            "background": {
               "$omitEmpty": {
-                "$coalesce": [
-                  {
-                    "$ref": "request.providerOptions.a6api-image.output_format"
+                "$if": {
+                  "condition": {
+                    "$eq": [
+                      {
+                        "$ref": "request.extra.transparentBackground"
+                      },
+                      "true"
+                    ]
                   },
-                  "png"
-                ]
+                  "then": "transparent",
+                  "else": null
+                }
               }
             },
+            "output_format": "png",
             "response_format": {
               "$omitEmpty": {
                 "$coalesce": [
