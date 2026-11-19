@@ -31,7 +31,7 @@ const paths: Record<string, string> = {
 };
 function copySource(source: string, name: string) {
     const code = readFileSync(new URL(source, root), "utf8");
-    const imports = code.replace(/"(@\/[^\"]+|\.\/user-data-sync-media|\.\/canvas-edit-leases|\.\/canvas-mutation-batches|json-canonicalize|zustand)"/g, (_, specifier: string) => JSON.stringify(paths[specifier] ?? stubPath));
+    const imports = code.replace(/"(@\/[^\"]+|\.\/resource-blob-cache|\.\/user-data-sync-media|\.\/canvas-edit-leases|\.\/canvas-mutation-batches|json-canonicalize|zustand)"/g, (_, specifier: string) => JSON.stringify(paths[specifier] ?? stubPath));
     writeFileSync(join(dir, name), `import { fixtureWindow as window } from ${JSON.stringify(stubPath)};\n` + imports);
 }
 writeFileSync(
@@ -46,7 +46,7 @@ export const fixtureWindow = {
 };
 const remoteFor = id => id === "canvas" ? fixture.remoteState?.project ?? fixture.remote : fixture.remoteById.get(id);
 const setRemote = (id, project) => { if (id === "canvas") { fixture.remote = project; if (fixture.remoteState) fixture.remoteState.project = project; } fixture.remoteById.set(id, project); };
-export const useCanvasStore = createStore((set, get) => ({ projects: [], openProject: id => get().projects.find(project => project.id === id) }));
+export const useCanvasStore = createStore((set, get) => ({ projects: [], openProject: id => get().projects.find(project => project.id === id), deleteProjects: ids => set(state => ({ projects: state.projects.filter(project => !ids.includes(project.id)) })) }));
 export const useAssetStore = createStore(() => ({ assets: [] }));
 export const getActiveUserScope = () => fixture.scope;
 export const localForageStorageForScope = () => ({ getItem: async key => fixture.data.get(key) ?? null, setItem: async (key, value) => { await fixture.saveHook?.(key, value); if (fixture.setError) throw fixture.setError; fixture.data.set(key, value); }, removeItem: async key => { fixture.data.delete(key); } });
@@ -121,13 +121,15 @@ export async function getRemoteAsset(id) { fixture.assetReads.push(id); if (fixt
 export async function upsertRemoteAsset(asset) { fixture.assetWrites.push(structuredClone(asset)); if (fixture.assetWriteErrors.has(asset.id)) throw fixture.assetWriteErrors.get(asset.id); fixture.remoteAssetsById.set(asset.id, structuredClone(asset)); }
 export const assetForRemoteSync = asset => asset;
 export const getRemoteAssetsByIds = async ids => ({ assets: ids.map(id => fixture.remoteAssetsById.get(id)).filter(Boolean) });
+export const getUserDataCleanupChanges = async after => { await fixture.cleanupHook?.(); const entries = (fixture.cleanupEntries ?? []).filter(entry => entry.revision > after); return { entries, cursor: Math.max(after, ...entries.map(entry => entry.revision)), hasMore: false }; };
+export const evictDeletedResourceBlobs = async () => {};
 export const parseAssetRecordList = records => records;
 export const deleteRemoteAssets = unexpected, deleteRemoteCanvasProject = unexpected, getRemoteUserDataSnapshot = unexpected, listRemoteAssetsPage = unexpected;
 export const getImageBlob = unexpected, getMediaBlob = unexpected, rebaseAssetSnapshot = unexpected, canvasNodeToAsset = unexpected;
 const defaultLeases = { reset() {}, session: () => "test-session", versions: () => ({}), proofs: async () => { if (fixture.proofError) throw fixture.proofError; return []; }, acknowledged() {}, invalidate() {}, async yield() {} };
 export let canvasEditLeases = defaultLeases;
 export const setLeaseClient = client => { canvasEditLeases = client ?? defaultLeases; };
-export const useCanvasHistoryStore = {};
+export const useCanvasHistoryStore = { getState: () => ({ removeDeletedHistoryItem: () => {} }) };
 `,
 );
 copySource("services/api/resources.ts", "resources.ts");
@@ -420,6 +422,10 @@ beforeEach(async () => {
     fixture.remoteState = fixture.checkLeases = undefined;
     peer.fixture.remoteState = peer.fixture.checkLeases = undefined;
     fixture.proofError = undefined;
+    fixture.cleanupEntries = [];
+    fixture.cleanupHook = undefined;
+    peer.fixture.cleanupEntries = [];
+    peer.fixture.cleanupHook = undefined;
     fixture.remote = base();
     fixture.data.clear();
     fixture.remoteById.clear();
@@ -448,6 +454,96 @@ afterEach(() => {
     sync.resetRemoteUserDataSync();
     peerSync.resetRemoteUserDataSync();
 });
+describe("管理员资源清理同步", () => {
+    test("在线清理移除素材与画布，并通知当前编辑器", async () => {
+        useAssetStore.setState({ assets: [{ id: "card", kind: "text", data: { content: "cached" } }] });
+        const deleted: string[] = [];
+        const stop = sync.subscribeAdminCanvasDeleted((id) => deleted.push(id));
+        fixture.cleanupEntries = [
+            { kind: "asset", id: "card", action: "delete", revision: 1 },
+            { kind: "canvas", id: "canvas", action: "delete", revision: 1 },
+        ];
+        try {
+            await sync.refreshAdminResourceCleanup();
+            expect(useAssetStore.getState().assets).toEqual([]);
+            expect(useCanvasStore.getState().projects).toEqual([]);
+            expect(deleted).toEqual(["canvas"]);
+            expect(fixture.data.get("yingce:admin-cleanup-cursor")).toBe("1");
+            await sync.refreshAdminResourceCleanup();
+            expect(deleted).toEqual(["canvas"]);
+            await sync.saveRemoteUserDataNow();
+            expect(fixture.writes).toHaveLength(0);
+        } finally {
+            stop();
+        }
+    });
+
+    test("清理更新使用服务端内容，并将未提交修改保存在恢复材料中", async () => {
+        const edited = structuredClone(base());
+        edited.nodes[0].title = "unsaved work";
+        useCanvasStore.setState({ projects: [edited] });
+        fixture.remote.nodes = [];
+        fixture.remote.revision++;
+        fixture.cleanupEntries = [{ kind: "canvas", id: "canvas", action: "update", revision: 1 }];
+        const sources: unknown[] = [];
+        const stop = sync.subscribeAgentCanvasRefresh((_project, _previous, source) => sources.push(source));
+        try {
+            await sync.refreshAdminResourceCleanup();
+            expect(useCanvasStore.getState().projects[0].nodes).toEqual([]);
+            expect(sources).toEqual(["cleanup"]);
+            expect([...fixture.data.keys()].some((key) => key.startsWith("yingce:canvas-recovery:canvas:"))).toBe(true);
+        } finally {
+            stop();
+        }
+    });
+
+    test("持久化失败时不推进游标，重试可完成", async () => {
+        fixture.cleanupEntries = [{ kind: "canvas", id: "canvas", action: "delete", revision: 2 }];
+        fixture.flushError = new Error("IndexedDB unavailable");
+        await expect(sync.refreshAdminResourceCleanup()).rejects.toThrow("IndexedDB unavailable");
+        expect(fixture.data.has("yingce:admin-cleanup-cursor")).toBe(false);
+        fixture.flushError = undefined;
+        await sync.refreshAdminResourceCleanup();
+        expect(fixture.data.get("yingce:admin-cleanup-cursor")).toBe("2");
+    });
+
+    test("切换账号后，旧清理响应不能修改新账号内容", async () => {
+        let release!: () => void;
+        let entered!: () => void;
+        const started = new Promise<void>((resolve) => {
+            entered = resolve;
+        });
+        const gate = new Promise<void>((resolve) => {
+            release = resolve;
+        });
+        fixture.cleanupHook = async () => {
+            entered();
+            await gate;
+        };
+        fixture.cleanupEntries = [{ kind: "canvas", id: "canvas", action: "delete", revision: 1 }];
+        const pending = sync.refreshAdminResourceCleanup();
+        await started;
+        sync.resetRemoteUserDataSync();
+        fixture.scope = "next-user";
+        useCanvasStore.setState({ projects: [base()] });
+        release();
+        await expect(pending).rejects.toThrow("账号已切换");
+        expect(useCanvasStore.getState().projects).toHaveLength(1);
+    });
+
+    test("登录重放删除标记，两个标签页分别清理自己的旧缓存", async () => {
+        const entries = [{ kind: "canvas", id: "canvas", action: "delete", revision: 1 }];
+        fixture.cleanupEntries = entries;
+        peer.fixture.cleanupEntries = entries;
+        peer.fixture.scope = fixture.scope;
+        peer.useCanvasStore.setState({ projects: [base()] });
+        await sync.refreshAdminResourceCleanup();
+        await peerSync.initializeRemoteUserDataSession("sync-test-user");
+        expect(useCanvasStore.getState().projects).toHaveLength(0);
+        expect(peer.useCanvasStore.getState().projects).toHaveLength(0);
+    });
+});
+
 afterAll(() => {
     if (!resolve(dir).startsWith(resolve(tmpdir()) + sep)) throw new Error("unexpected fixture directory");
     rmSync(dir, { recursive: true, force: true });

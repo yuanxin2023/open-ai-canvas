@@ -16,7 +16,7 @@ import (
 	"gorm.io/gorm"
 )
 
-const CurrentSchemaVersion int64 = 113
+const CurrentSchemaVersion int64 = 114
 
 //go:embed seed/inspirations.json
 var inspirationSeedJSON []byte
@@ -164,7 +164,9 @@ func buildSchemaMigrationPlan() []migration {
 	plan = append(plan, upstreamV1735Migrations()...)
 	plan = append(plan, upstreamV1737Migrations()...)
 	plan = append(plan, upstreamV181Migrations()...)
-	return append(plan, migration{version: 113, name: "storage_grants_to_user_quota", checksum: "sha256:storage-grants-to-user-quota-v113", apply: migrateStorageGrantsToQuota})
+	return append(plan, migration{version: 113, name: "storage_grants_to_user_quota", checksum: "sha256:storage-grants-to-user-quota-v113", apply: migrateStorageGrantsToQuota}, migration{version: 114, name: "admin_resource_cleanup", checksum: "sha256:admin-resource-cleanup-v114", apply: func(tx *gorm.DB) error {
+		return tx.AutoMigrate(&model.UserDataCleanupState{}, &model.UserDataCleanupEntry{})
+	}})
 }
 
 func migrateSixCharacterReferralCodes(tx *gorm.DB) error {

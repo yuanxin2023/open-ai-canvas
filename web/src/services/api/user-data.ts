@@ -37,6 +37,18 @@ export type RemoteUserDataSnapshot = {
     projects: CanvasProject[];
 };
 
+export type UserDataCleanupEntry = {
+    kind: "resource" | "asset" | "canvas" | "node";
+    id: string;
+    action: "delete" | "update";
+    revision: number;
+    canvasId?: string;
+};
+
+export function getUserDataCleanupChanges(after: number) {
+    return http.get<{ entries: UserDataCleanupEntry[]; cursor: number; hasMore: boolean }>("/user-data/cleanup-changes", { params: { after } });
+}
+
 export type CanvasLibrarySummary = Pick<CanvasProject, "id" | "projectId" | "title" | "revision" | "createdAt" | "updatedAt"> & {
     nodeCount: number;
     previewNodes: CanvasProject["nodes"];

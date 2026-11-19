@@ -77,17 +77,21 @@ export type AdminResourceDeleteBlocked = {
 };
 
 export type AdminResourceDeleteResult = {
+    impact: AdminResourceCleanupImpact;
     deleted: string[];
     blocked: AdminResourceDeleteBlocked[];
     warnings: Array<{ id: string; reason: string }>;
 };
 
 export type AdminResourceDeletePreview = {
+    impact: AdminResourceCleanupImpact;
     inspirationCovers: Array<{
         id: string;
         references: AdminResourceReference[];
     }>;
 };
+
+export type AdminResourceCleanupImpact = { assets: number; nodes: number; canvases: number; updatedCanvases: number };
 
 export async function listAdminResources(query: AdminResourceQuery, signal?: AbortSignal) {
     return http.get<AdminResourcePage>("/admin/resources", { params: compactApiParams(query), signal });

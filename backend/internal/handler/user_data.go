@@ -18,6 +18,24 @@ import (
 )
 
 func RegisterUserDataRoutes(r *gin.RouterGroup, svc *service.Service) {
+	r.GET("/user-data/cleanup-changes", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		after, err := strconv.ParseInt(c.DefaultQuery("after", "0"), 10, 64)
+		if err != nil || after < 0 {
+			fail(c, http.StatusBadRequest, fmt.Errorf("清理游标无效"))
+			return
+		}
+		result, err := svc.UserDataCleanupChanges(user.ID, after)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, result)
+	})
 	r.POST("/resources/access", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {

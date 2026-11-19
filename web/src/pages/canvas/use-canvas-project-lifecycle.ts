@@ -16,6 +16,7 @@ import { hydrateAssistantImages, resetInterruptedGeneration } from "@/lib/canvas
 import { listAddedSkills, type Skill } from "@/services/api/skills";
 import { createCanvasProjectWithRemoteSync, deleteCanvasProjectsWithRemoteSync, loadCanvasProjectForEditing, saveRemoteUserDataNow, prepareCanvasForCloudAction, subscribeAgentCanvasRefresh, refreshCanvasAfterAgent } from "@/services/user-data-sync";
 import { getCanvasSyncStatus } from "@/services/api/user-data";
+import { refreshAdminResourceCleanup, subscribeAdminCanvasDeleted } from "@/services/user-data-sync";
 import { canvasEditLeases } from "@/services/canvas-edit-leases";
 import { startCanvasSyncPolling } from "@/services/canvas-sync-polling";
 import { subscribeCanvasRealtime } from "@/services/canvas-realtime";
@@ -230,7 +231,7 @@ export function useCanvasProjectLifecycle({
         () =>
             subscribeAgentCanvasRefresh((project, previous, source) => {
                 if (!projectLoaded || project.id !== projectId) return;
-                if (source === "sync") {
+                if (source === "sync" || source === "cleanup") {
                     const fallbackTheme = useCanvasThemeStore.getState().theme;
                     const editor = {
                         ...(previous || project),
@@ -242,7 +243,7 @@ export function useCanvasProjectLifecycle({
                         backgroundMode,
                         showImageInfo,
                     };
-                    const merged = previous ? rebaseCanvasLocalEdits(previous, project, editor) : project;
+                    const merged = source === "cleanup" ? project : previous ? rebaseCanvasLocalEdits(previous, project, editor) : project;
                     const appearance = merged.appearance ? normalizeCanvasAppearance(merged.appearance, fallbackTheme) : canvasAppearanceForTheme(fallbackTheme);
                     const snapshot: CanvasHistorySnapshot = {
                         nodes: merged.nodes,
@@ -274,6 +275,7 @@ export function useCanvasProjectLifecycle({
                     setCanvasAppearance(snapshot.canvasAppearance);
                     setBackgroundMode(snapshot.backgroundMode);
                     setShowImageInfo(snapshot.showImageInfo);
+                    if (source === "cleanup") resetHistory(snapshot);
                     setLoadError("");
                     return;
                 }
@@ -326,6 +328,17 @@ export function useCanvasProjectLifecycle({
         ],
     );
 
+    useEffect(
+        () =>
+            subscribeAdminCanvasDeleted((id) => {
+                if (id !== projectId) return;
+                historyPausedRef.current = true;
+                message.info("管理员已删除此画布的全部媒体资源，画布已移除");
+                navigate("/canvas", { replace: true });
+            }),
+        [projectId, message, navigate, historyPausedRef],
+    );
+
     useEffect(() => {
         if (!projectLoaded || !sessionHydrated) return;
         const scope = getActiveUserScope();
@@ -349,6 +362,8 @@ export function useCanvasProjectLifecycle({
         const stop = startCanvasSyncPolling(
             async (signal) => {
                 if (scope !== getActiveUserScope()) return;
+                await refreshAdminResourceCleanup();
+                if (signal.aborted || scope !== getActiveUserScope() || !useCanvasStore.getState().openProject(projectId)) return;
                 const token = canvasEditLeases.statusToken(projectId);
                 const status = await getCanvasSyncStatus(projectId, signal);
                 if (signal.aborted || scope !== getActiveUserScope()) return;

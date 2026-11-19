@@ -58,6 +58,8 @@ func conversionSource(t *testing.T, lineage string) string {
 		&model.FeedbackResourceReference{FeedbackID: "feedback", ResourceID: "resource", UserID: "owner"},
 		&model.WorkbenchSubmission{UserID: "owner", RequestKey: "fixture-request-01", RequestHash: "digest", Kind: "image", TaskID: "historic-task", QuoteJSON: `{"amountMicrocredits":12345}`},
 		&model.UserInspirationLibrary{UserID: "owner", Revision: 9, StateJSON: `{"favorites":["fixture"]}`},
+		&model.UserDataCleanupState{UserID: "owner", Revision: 4},
+		&model.UserDataCleanupEntry{UserID: "owner", Kind: "asset", EntityID: "deleted-asset", Revision: 4, Action: "delete", CreatedAt: stamp},
 	} {
 		if err := db.Create(entity).Error; err != nil {
 			t.Fatalf("seed %T: %v", entity, err)

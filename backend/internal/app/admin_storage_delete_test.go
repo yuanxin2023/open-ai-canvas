@@ -183,12 +183,12 @@ func TestAdminResourceReferencesKeepsOnlyDeletionBlockingTaskReferences(t *testi
 func TestDeleteAdminResourcesCleansStructuredReferencesAndKeepsHistory(t *testing.T) {
 	svc, db, _, admin := newAdminStorageDeleteTestService(t)
 	resource := model.Resource{ID: "force-delete", UserID: admin.ID, Kind: "image", Status: model.ResourceStatusReady, Provider: "local"}
-	asset := model.Asset{ID: "asset", UserID: admin.ID, Title: "素材", PayloadJSON: `{"storageKey":"resource:force-delete"}`}
+	asset := model.Asset{ID: "asset", UserID: admin.ID, Kind: "image", Title: "素材", PayloadJSON: `{"data":{"storageKey":"resource:force-delete"}}`}
 	version := model.AssetVersion{ID: "version", AssetID: asset.ID, Version: 1, DefinitionJSON: asset.PayloadJSON}
 	snapshot := model.CanvasSnapshot{ID: "snapshot", CanvasID: "canvas", UserID: admin.ID, Revision: 1, Title: "历史", PayloadJSON: asset.PayloadJSON, CreatedAt: time.Now()}
 	items := []any{
 		&resource,
-		&model.CanvasProject{ID: "canvas", UserID: admin.ID, Title: "画布", PayloadJSON: asset.PayloadJSON},
+		&model.CanvasProject{ID: "canvas", UserID: admin.ID, Title: "画布", PayloadJSON: `{"nodes":[{"id":"deleted","type":"image","metadata":{"storageKey":"resource:force-delete"}},{"id":"keep","type":"image","metadata":{"content":"https://example.com/keep.png"}}]}`},
 		&snapshot,
 		&model.CanvasSnapshotResource{SnapshotID: snapshot.ID, ResourceID: resource.ID},
 		&asset,
@@ -223,6 +223,7 @@ func TestDeleteAdminResourcesCleansStructuredReferencesAndKeepsHistory(t *testin
 		{&model.CanvasSnapshotResource{}, "resource_id = 'force-delete'"},
 		{&model.AssetRepresentation{}, "resource_id = 'force-delete'"},
 		{&model.ShotArtifact{}, "resource_id = 'force-delete'"},
+		{&model.Asset{}, "id = 'asset'"},
 	} {
 		assertModelCount(t, db, check.model, check.query, 0)
 	}
@@ -232,7 +233,6 @@ func TestDeleteAdminResourcesCleansStructuredReferencesAndKeepsHistory(t *testin
 	}{
 		{&model.CanvasProject{}, "id = 'canvas'"},
 		{&model.CanvasSnapshot{}, "id = 'snapshot'"},
-		{&model.Asset{}, "id = 'asset'"},
 		{&model.Project{}, "id = 'project'"},
 		{&model.Announcement{}, "id = 'announcement'"},
 		{&model.Inspiration{}, "id = 'inspiration'"},

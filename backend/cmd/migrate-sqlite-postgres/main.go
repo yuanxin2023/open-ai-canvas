@@ -115,6 +115,8 @@ func migrations() []tableMigration {
 		migrateTable[model.RedeemBatch]("redeem_batches"),
 		migrateTable[model.RedeemCode]("redeem_codes"),
 		migrateTable[model.AdminAuditEvent]("admin_audit_events"),
+		migrateTable[model.UserDataCleanupState]("user_data_cleanup_states"),
+		migrateTable[model.UserDataCleanupEntry]("user_data_cleanup_entries"),
 		migrateTable[model.UserDailyActivity]("user_daily_activities"),
 		migrateTable[model.SystemSetting]("system_settings"),
 		migrateTable[model.PluginPlatformState]("plugin_platform_states"),

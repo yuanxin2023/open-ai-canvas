@@ -19,10 +19,13 @@ func newProjectDeleteTestService(t *testing.T) (*Service, *gorm.DB) {
 		t.Fatal(err)
 	}
 	if err := db.AutoMigrate(
+		&model.User{},
+		&model.UserDataCleanupEntry{},
 		&model.Project{},
 		&model.ProjectUnit{},
 		&model.CanvasProject{},
 		&model.CanvasEditLease{},
+		&model.CanvasMutationReceipt{},
 		&model.CanvasSnapshot{},
 		&model.CanvasSnapshotResource{},
 		&model.CanvasShare{},
@@ -32,6 +35,7 @@ func newProjectDeleteTestService(t *testing.T) (*Service, *gorm.DB) {
 		&model.ProjectAssetCandidate{},
 		&model.Asset{},
 		&model.Task{},
+		&model.CloudAgentExecution{},
 		&model.Shot{},
 		&model.ShotRevision{},
 		&model.ShotArtifact{},
@@ -41,6 +45,9 @@ func newProjectDeleteTestService(t *testing.T) (*Service, *gorm.DB) {
 		&model.WorkflowStepTask{},
 		&model.ProductionTaskLink{},
 	); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&model.User{ID: "user-1", Username: "project-delete-user"}).Error; err != nil {
 		t.Fatal(err)
 	}
 	return &Service{repo: repository.New(db)}, db

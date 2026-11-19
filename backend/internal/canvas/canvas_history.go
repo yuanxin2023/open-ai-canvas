@@ -139,7 +139,11 @@ func (s *Service) RestoreCanvasHistory(userID string, canvasID, snapshotID strin
 	if err != nil {
 		return UserDataSummary{}, err
 	}
-	return s.upsertUserCanvasProjectWithHistory(userID, raw, "before_restore")
+	cleaned, err := s.repo.SanitizeAdminCanvasPayload(userID, canvasID, string(raw))
+	if err != nil {
+		return UserDataSummary{}, err
+	}
+	return s.upsertUserCanvasProjectWithHistory(userID, json.RawMessage(cleaned), "before_restore")
 }
 
 func canvasHistoryContent(project model.CanvasProject) ([]byte, error) {

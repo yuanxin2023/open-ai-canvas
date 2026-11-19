@@ -67,7 +67,7 @@ func TestCanvasRevision(t *testing.T) {
 
 func testCanvasRevision(t *testing.T, db *gorm.DB) {
 	t.Helper()
-	if err := db.AutoMigrate(&model.CanvasEditLease{}, &model.CanvasProject{}, &model.CanvasUnitLink{}, &model.Project{}); err != nil {
+	if err := db.AutoMigrate(&model.User{}, &model.UserDataCleanupState{}, &model.UserDataCleanupEntry{}, &model.ProductionTaskLink{}, &model.CanvasMutationReceipt{}, &model.CloudAgentExecution{}, &model.CanvasEditLease{}, &model.CanvasProject{}, &model.CanvasUnitLink{}, &model.Project{}); err != nil {
 		t.Fatal(err)
 	}
 	repo := New(db)
@@ -156,4 +156,5 @@ func testCanvasRevision(t *testing.T, db *gorm.DB) {
 		t.Fatalf("deleted canvas was recreated: %v", err)
 	}
 	t.Run("history", func(t *testing.T) { testCanvasHistory(t, db) })
+	t.Run("cleanup-feed", func(t *testing.T) { testUserDataCleanupFeed(t, db) })
 }

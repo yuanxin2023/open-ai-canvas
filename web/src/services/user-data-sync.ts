@@ -26,6 +26,9 @@ import { applyAgentCanvasPatch, mergeThreeWayValue, type AgentCanvasPatch } from
 import { collectLocalMediaKeys, ensureRemoteResourceReferences, restoreRemoteTextNodeContents } from "./user-data-sync-media";
 import { submitCanvasMutationBatches, type CanvasMutationBatchState } from "./canvas-mutation-batches";
 import { canvasEditLeases } from "./canvas-edit-leases";
+import { getUserDataCleanupChanges } from "@/services/api/user-data";
+import { clearResourceAccessCache } from "@/services/api/resources";
+import { evictDeletedResourceBlobs } from "./resource-blob-cache";
 import { CanvasSyncPendingError, createSyncSingleFlight, waitForCanvasSync, rememberSyncRecovery } from "@/lib/canvas/sync-recovery";
 
 const syncSingleFlight = createSyncSingleFlight();
@@ -68,6 +71,115 @@ let sessionEpoch = 0;
 const verifiedProjects = new Set<string>();
 const remoteDeletedProjects = new Set<string>();
 const verifiedAssets = new Set<string>();
+let cleanupCursor = 0;
+const cleanupDeletedCanvasListeners = new Set<(id: string) => void>();
+
+export function subscribeAdminCanvasDeleted(listener: (id: string) => void) {
+    cleanupDeletedCanvasListeners.add(listener);
+    return () => {
+        cleanupDeletedCanvasListeners.delete(listener);
+    };
+}
+
+export async function refreshAdminResourceCleanup() {
+    if (!activeRemoteUserId || remoteUserDataPhase !== "ready") return;
+    return withRemoteUserDataSyncExclusive(applyAdminResourceCleanupLocked);
+}
+
+async function applyAdminResourceCleanupLocked() {
+    const epoch = sessionEpoch;
+    const scope = getActiveUserScope();
+    const ensureSession = () => {
+        if (epoch !== sessionEpoch || scope !== getActiveUserScope()) throw new Error("账号已切换，已停止清理同步");
+    };
+    while (activeRemoteUserId) {
+        const page = await getUserDataCleanupChanges(cleanupCursor);
+        ensureSession();
+        const changes = new Map(page.entries.map((entry) => [`${entry.kind}:${entry.id}`, entry]));
+        const resourceIds = page.entries.filter((entry) => entry.kind === "resource" && entry.action === "delete").map((entry) => entry.id);
+        if (resourceIds.length) {
+            clearResourceAccessCache();
+            await evictDeletedResourceBlobs(resourceIds, scope);
+            ensureSession();
+        }
+        for (const entry of changes.values()) {
+            if (entry.kind === "asset") {
+                const local = useAssetStore.getState().assets.find((asset) => asset.id === entry.id);
+                if (entry.action === "delete") {
+                    if (local) useAssetStore.setState((state) => ({ assets: state.assets.filter((asset) => asset.id !== entry.id) }));
+                    acknowledgedAssets.delete(entry.id);
+                    verifiedAssets.delete(entry.id);
+                } else if (local) {
+                    let remote: Asset;
+                    try {
+                        remote = (await getRemoteAsset(entry.id)).asset;
+                    } catch (error) {
+                        ensureSession();
+                        if (!(error instanceof ApiError && error.status === 404)) throw error;
+                        continue;
+                    }
+                    ensureSession();
+                    if (!sameEntitySnapshot(local, acknowledgedAssets.get(entry.id))) await preserveSyncRecovery(entry.id, { reason: "admin_resource_cleanup", asset: local });
+                    ensureSession();
+                    const [parsed] = parseAssetRecordList([remote]);
+                    acknowledgedAssets.set(entry.id, parsed);
+                    useAssetStore.setState((state) => ({ assets: state.assets.map((asset) => (asset.id === entry.id ? parsed : asset)) }));
+                }
+            }
+            if (entry.kind === "canvas") {
+                const local = useCanvasStore.getState().openProject(entry.id);
+                const pending = pendingCanvasMutations.get(entry.id);
+                if (local && (pending || !sameCanvasContent(acknowledgedProjects.get(entry.id), local))) {
+                    await preserveSyncRecovery(entry.id, { reason: "admin_resource_cleanup", project: local, pending });
+                    ensureSession();
+                }
+                if (entry.action === "delete") {
+                    pendingCanvasMutations.delete(entry.id);
+                    acknowledgedProjects.delete(entry.id);
+                    verifiedProjects.delete(entry.id);
+                    unbasedProjects.delete(entry.id);
+                    remoteDeletedProjects.add(entry.id);
+                    useCanvasStore.getState().deleteProjects([entry.id]);
+                    useCanvasHistoryStore.getState().removeDeletedHistoryItem(entry.id);
+                    for (const listener of cleanupDeletedCanvasListeners) listener(entry.id);
+                } else if (local) {
+                    let remote: CanvasProject;
+                    try {
+                        remote = await restoreRemoteTextNodeContents((await getRemoteCanvasProject(entry.id)).project);
+                    } catch (error) {
+                        ensureSession();
+                        if (!(error instanceof ApiError && error.status === 404)) throw error;
+                        continue;
+                    }
+                    ensureSession();
+                    const project = { ...remote, viewport: local.viewport, remoteContentHash: await canvasContentHash(remote) };
+                    ensureSession();
+                    pendingCanvasMutations.delete(entry.id);
+                    acknowledgedProjects.set(entry.id, project);
+                    verifiedProjects.add(entry.id);
+                    for (const listener of agentCanvasListeners) listener(project, local, "cleanup");
+                    useCanvasStore.setState((state) => ({ projects: state.projects.map((item) => (item.id === entry.id ? project : item)) }));
+                }
+            }
+            ensureSession();
+        }
+        if (page.entries.length) {
+            await persistPendingCanvasMutationJournal();
+            ensureSession();
+            await persistConfirmedCanvasBaselines();
+            ensureSession();
+            await Promise.all([flushCanvasStorePersistence(), flushAssetStorePersistence()]);
+            ensureSession();
+            await localForageStorageForScope(scope).setItem("yingce:admin-cleanup-cursor", String(page.cursor));
+            ensureSession();
+            void appQueryClient.invalidateQueries({ queryKey: ["asset-library"] });
+            void appQueryClient.invalidateQueries({ queryKey: ["canvas-library"] });
+            void appQueryClient.invalidateQueries({ queryKey: ["account-file-storage-usage"] });
+        }
+        cleanupCursor = page.cursor;
+        if (!page.hasMore) return;
+    }
+}
 type RemoteProjectLoad = { mode: "normal"; promise: Promise<CanvasProject | undefined> };
 const remoteProjectLoadPromises = new Map<string, RemoteProjectLoad>();
 const REMOTE_SYNC_RETRY_DELAYS_MS = [2_000, 4_000, 8_000, 16_000, 30_000] as const;
@@ -221,6 +333,7 @@ export async function initializeRemoteUserDataSession(userId: string) {
         await loadPendingCanvasMutationJournal();
         incrementalSession = true;
         await loadConfirmedCanvasBaselines();
+        await applyAdminResourceCleanupLocked();
         for (const project of useCanvasStore.getState().projects) {
             if (!acknowledgedProjects.has(project.id) && project.remoteContentHash === (await canvasContentHash(project))) acknowledgedProjects.set(project.id, project);
         }
@@ -381,9 +494,9 @@ export async function loadCanvasProjectForEditing(id: string, options: { onLoad?
 }
 
 // Project remote changes into the live editor while retaining authored edits.
-const agentCanvasListeners = new Set<(project: CanvasProject, previous: CanvasProject | undefined, source?: "sync" | "agent") => void>();
+const agentCanvasListeners = new Set<(project: CanvasProject, previous: CanvasProject | undefined, source?: "sync" | "agent" | "cleanup") => void>();
 
-export function subscribeAgentCanvasRefresh(listener: (project: CanvasProject, previous: CanvasProject | undefined, source?: "sync" | "agent") => void) {
+export function subscribeAgentCanvasRefresh(listener: (project: CanvasProject, previous: CanvasProject | undefined, source?: "sync" | "agent" | "cleanup") => void) {
     agentCanvasListeners.add(listener);
     return () => {
         agentCanvasListeners.delete(listener);
@@ -645,6 +758,7 @@ export async function syncRemoteUserData(userId?: string | null) {
         try {
             // 登录只拉一次聚合快照。摘要列表再逐条请求详情会把 N 条数据放大成 2N+2 个请求，
             // 并且会在登录阶段同时触发大量媒体解析，任何一项失败都会污染登录结果。
+            await applyAdminResourceCleanupLocked();
             const snapshot = await getRemoteUserDataSnapshot();
             ensureSession();
             const localProjects = useCanvasStore.getState().projects;
@@ -751,6 +865,17 @@ export async function syncRemoteUserData(userId?: string | null) {
 export function installRemoteUserDataAutoSync() {
     if (subscriptionsInstalled) return;
     subscriptionsInstalled = true;
+    const refreshCleanup = () => {
+        if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+        if (typeof navigator !== "undefined" && navigator.onLine === false) return;
+        void refreshAdminResourceCleanup().catch((error) => console.warn("管理员资源清理同步失败，下次重试", error));
+    };
+    if (typeof window !== "undefined") {
+        if (typeof window.setInterval === "function") window.setInterval(refreshCleanup, 15_000);
+        window.addEventListener("focus", refreshCleanup);
+        window.addEventListener("online", refreshCleanup);
+        if (typeof document !== "undefined") document.addEventListener("visibilitychange", refreshCleanup);
+    }
     if (typeof window !== "undefined")
         window.addEventListener("online", () => {
             if (remoteUserDataPhase === "ready") scheduleRemoteUserDataSync();
@@ -778,6 +903,7 @@ export function installRemoteUserDataAutoSync() {
 
 export function resetRemoteUserDataSync() {
     sessionEpoch += 1;
+    cleanupCursor = 0;
     // Old operations retain their epoch guards, but must never hold the next
     // account behind a stalled IndexedDB/network promise.
     remoteOperationTail = Promise.resolve();

@@ -35,6 +35,127 @@ tags:
   - name: pose-library
     description: 站点姿势库：浏览、选用，管理员导入与图片同步
 paths:
+  /admin/resources/delete-preview:
+    post:
+      tags: [admin, resources]
+      summary: 预览管理员资源删除及素材、节点、画布影响数量
+      description: 需要 admin.storage.resources 权限。impact 仅统计当前可删除资源；实际提交时重新核对。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminResourceDeleteInput" }
+      responses:
+        "200":
+          description: 预览结果
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code: { type: integer, enum: [0] }
+                  msg: { type: string }
+                  data:
+                    type: object
+                    required: [inspirationCovers, impact]
+                    properties:
+                      impact: { $ref: "#/components/schemas/AdminResourceCleanupImpact" }
+                      inspirationCovers:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id: { type: string }
+                            references:
+                              type: array
+                              items: { $ref: "#/components/schemas/AdminResourceReference" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+  /admin/resources/delete:
+    post:
+      tags: [admin, resources]
+      summary: 管理员删除资源并联动清理素材和画布
+      description: 需要 admin.storage.resources 权限。全部媒体被删完的画布及其文本永久删除；返回部分成功结果和实际影响数量。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminResourceDeleteInput" }
+      responses:
+        "200":
+          description: 删除结果
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code: { type: integer, enum: [0] }
+                  msg: { type: string }
+                  data:
+                    type: object
+                    required: [deleted, blocked, warnings, impact]
+                    properties:
+                      impact: { $ref: "#/components/schemas/AdminResourceCleanupImpact" }
+                      deleted: { type: array, items: { type: string } }
+                      blocked:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id: { type: string }
+                            reason: { type: string }
+                            references:
+                              type: array
+                              items: { $ref: "#/components/schemas/AdminResourceReference" }
+                      warnings:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id: { type: string }
+                            reason: { type: string }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /user-data/cleanup-changes:
+    get:
+      tags: [canvas, assets]
+      summary: 获取管理员资源删除造成的用户数据清理变更
+      description: 仅返回登录用户的数据。revision 为用户级递增清理版本；一次返回最多 100 个完整版本，hasMore 时使用 cursor 继续读取。删除标记永久保留，客户端在持久化清理结果后推进游标。
+      parameters:
+        - { in: query, name: after, schema: { type: integer, format: int64, minimum: 0, default: 0 } }
+      responses:
+        "200":
+          description: 清理变更
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code: { type: integer, enum: [0] }
+                  msg: { type: string }
+                  data:
+                    type: object
+                    required: [entries, cursor, hasMore]
+                    properties:
+                      cursor: { type: integer, format: int64 }
+                      hasMore: { type: boolean }
+                      entries:
+                        type: array
+                        items:
+                          type: object
+                          required: [kind, id, action, revision]
+                          properties:
+                            kind: { type: string, enum: [resource, asset, canvas, node] }
+                            id: { type: string }
+                            action: { type: string, enum: [delete, update] }
+                            revision: { type: integer, format: int64 }
+                            canvasId: { type: string }
+                            createdAt: { type: string, format: date-time }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
   /admin/administrators/{id}/resource-quota:
     parameters:
       - {in: path, name: id, required: true, schema: {type: string}}
@@ -5178,6 +5299,31 @@ components:
       in: cookie
       name: open_ai_canvas_session
   schemas:
+    AdminResourceDeleteInput:
+      type: object
+      required: [resourceIds]
+      properties:
+        resourceIds:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items: { type: string, minLength: 1, maxLength: 80 }
+        confirmInspirationCovers: { type: boolean, default: false }
+    AdminResourceCleanupImpact:
+      type: object
+      required: [assets, nodes, canvases, updatedCanvases]
+      properties:
+        assets: { type: integer, minimum: 0 }
+        nodes: { type: integer, minimum: 0 }
+        canvases: { type: integer, minimum: 0 }
+        updatedCanvases: { type: integer, minimum: 0 }
+    AdminResourceReference:
+      type: object
+      required: [kind, id, title]
+      properties:
+        kind: { type: string }
+        id: { type: string }
+        title: { type: string }
     EcommerceAgentRequest:
       type: object
       description: 电商 Agent 请求；分析、规划和生成接口分别校验其必需字段，生成前还校验项目归属、功能开放与积分。

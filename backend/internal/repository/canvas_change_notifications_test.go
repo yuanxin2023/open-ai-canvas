@@ -15,7 +15,7 @@ func TestCanvasNotificationsWaitForOuterCommitAndDiscardRollback(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&model.CanvasProject{}); err != nil {
+	if err := db.AutoMigrate(&model.User{}, &model.UserDataCleanupState{}, &model.UserDataCleanupEntry{}, &model.CanvasProject{}); err != nil {
 		t.Fatal(err)
 	}
 	sqlDB, _ := db.DB()

@@ -63,6 +63,7 @@ beforeEach(async () => {
     useCanvasStore.setState({ projects: [] });
     useAssetStore.setState({ assets: [] });
     await flushAssetStorePersistence();
+    apiClient.defaults.adapter = async (config) => ({ config, headers: {}, status: 200, statusText: "OK", data: { code: 0, data: { entries: [], cursor: 0, hasMore: false }, msg: "ok" } });
     await initializeRemoteUserDataSession("batch-test-user");
 });
 

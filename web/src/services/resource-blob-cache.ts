@@ -45,6 +45,23 @@ export function clearResourceBlobCache() {
     cacheStats = null;
 }
 
+export async function evictDeletedResourceBlobs(resourceIds: string[], scope = getActiveUserScope()) {
+    cacheGeneration += 1;
+    await persistQueue;
+    for (const id of resourceIds) {
+        const key = `${scope}:${id}:file`;
+        const url = objectUrls.get(key);
+        if (url) URL.revokeObjectURL(url);
+        objectUrls.delete(key);
+        sessionBlobs.delete(key);
+        blobInFlight.delete(key);
+        metaTouchedAt.delete(key);
+        await blobStore.removeItem(key);
+        await metaStore.removeItem(key);
+    }
+    cacheStats = null;
+}
+
 export async function getCachedResourceObjectUrl(storageKey: string) {
     const target = await cacheTarget(storageKey);
     if (!target) return "";

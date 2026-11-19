@@ -97,6 +97,12 @@ func (s *Service) UpsertUserAsset(userID string, raw json.RawMessage) (UserDataS
 			}
 		}
 		existing, existingErr := s.repo.AssetForUser(userID, asset.ID)
+		if err := s.repo.RequireNotAdminDeleted(userID, "asset", asset.ID); err != nil {
+			if errors.Is(err, repository.ErrAdminDeletedEntity) {
+				return kernel.NotFound(err.Error())
+			}
+			return err
+		}
 		if existingErr != nil && !errors.Is(existingErr, gorm.ErrRecordNotFound) {
 			return existingErr
 		}
@@ -117,6 +123,9 @@ func (s *Service) UpsertUserAsset(userID string, raw json.RawMessage) (UserDataS
 			return err
 		}
 		if err := s.repo.UpsertAsset(&asset); err != nil {
+			if errors.Is(err, repository.ErrAdminDeletedEntity) {
+				return canvasMutationError("admin_resource_deleted", err.Error())
+			}
 			return err
 		}
 		if existingErr != nil {
@@ -282,7 +291,16 @@ func (s *Service) ApplyUserCanvasOperations(userID, canvasID string, req CanvasO
 	err = s.host.WithStorageLock(func() error {
 		return s.repo.Transaction(func(tx *repository.Repository) error {
 			tx = tx.WithCanvasEditProofs(req.EditProofs)
+			if err := tx.LockUserDataCleanup(userID); err != nil {
+				return err
+			}
 			if err := tx.LockCanvasMutation(userID, canvasID); err != nil {
+				return err
+			}
+			if err := tx.RequireNotAdminDeleted(userID, "canvas", canvasID); err != nil {
+				if errors.Is(err, repository.ErrAdminDeletedEntity) {
+					return kernel.NotFound(err.Error())
+				}
 				return err
 			}
 			candidate := &model.CanvasMutationReceipt{ID: kernel.NewID(), UserID: userID, CanvasID: canvasID, MutationID: req.MutationID, PayloadDigest: digest}
@@ -372,6 +390,11 @@ func (s *Service) ApplyUserCanvasOperations(userID, canvasID string, req CanvasO
 			if err != nil {
 				return err
 			}
+			cleanedAdmin, err := tx.SanitizeAdminCanvasPayload(userID, canvasID, string(raw))
+			if err != nil {
+				return err
+			}
+			raw = json.RawMessage(cleanedAdmin)
 			if legacyOperations {
 				if err := validateMigratedPrevisReferences(raw); err != nil {
 					return err
@@ -422,6 +445,9 @@ func (s *Service) ApplyUserCanvasOperations(userID, canvasID string, req CanvasO
 	})
 	if errors.Is(err, ErrCanvasObjectMissing) {
 		return UserDataSummary{}, canvasMutationError("canvas_object_missing", err.Error())
+	}
+	if errors.Is(err, repository.ErrAdminDeletedEntity) {
+		return UserDataSummary{}, canvasMutationError("admin_resource_deleted", err.Error())
 	}
 	if errors.Is(err, ErrCanvasOperationConflict) {
 		return UserDataSummary{}, canvasMutationError("canvas_field_conflict", err.Error())

@@ -74,6 +74,7 @@ beforeEach(async () => {
     storageValues.set(scopeStorageKey(ASSET_STORE_KEY), JSON.stringify({ state: { assets: [] }, version: 0, storageRevision: 0, tombstones: { assets: {} } }));
     withAssetStorePersistenceSuppressed(() => useAssetStore.setState({ assets: [] }));
     await flushAssetStorePersistence();
+    apiClient.defaults.adapter = async (config) => ({ config, headers: {}, status: 200, statusText: "OK", data: { code: 0, data: { entries: [], cursor: 0, hasMore: false }, msg: "ok" } });
     await initializeRemoteUserDataSession("recovery-user");
     const effectStore = createProviderNeutralGenerationTaskEffectStore();
     const effectKey = "materialize:task-recovery:0";

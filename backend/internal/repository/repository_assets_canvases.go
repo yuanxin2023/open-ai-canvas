@@ -43,6 +43,21 @@ func (r *Repository) AssetsForUserIDs(userID string, ids []string) ([]model.Asse
 }
 
 func (r *Repository) UpsertAsset(asset *model.Asset) error {
+	return r.Transaction(func(repo *Repository) error {
+		if err := repo.LockUserDataCleanup(asset.UserID); err != nil {
+			return err
+		}
+		return repo.upsertAsset(asset)
+	})
+}
+
+func (r *Repository) upsertAsset(asset *model.Asset) error {
+	if err := r.RequireNoAdminDeletedResources(asset.UserID, asset.PayloadJSON); err != nil {
+		return err
+	}
+	if err := r.RequireNotAdminDeleted(asset.UserID, "asset", asset.ID); err != nil {
+		return err
+	}
 	result := r.db.Model(&model.Asset{}).
 		Where("id = ? AND user_id = ?", asset.ID, asset.UserID).
 		Updates(map[string]any{"folder_id": asset.FolderID, "kind": asset.Kind, "category": asset.Category, "status": asset.Status, "primary_version_id": asset.PrimaryVersionID, "title": asset.Title, "payload_json": asset.PayloadJSON, "updated_at": asset.UpdatedAt})
@@ -70,6 +85,17 @@ func (r *Repository) FindExpiredArchivedAssets(cutoff time.Time, limit int) ([]m
 
 func (r *Repository) ReplaceAssets(userID string, assets []model.Asset) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := New(tx).LockUserDataCleanup(userID); err != nil {
+			return err
+		}
+		for _, asset := range assets {
+			if err := New(tx).RequireNoAdminDeletedResources(userID, asset.PayloadJSON); err != nil {
+				return err
+			}
+			if err := New(tx).RequireNotAdminDeleted(userID, "asset", asset.ID); err != nil {
+				return err
+			}
+		}
 		if err := tx.Delete(&model.Asset{}, "user_id = ?", userID).Error; err != nil {
 			return err
 		}
@@ -102,6 +128,9 @@ func (r *Repository) CanvasProjectForUser(userID string, id string) (*model.Canv
 
 func (r *Repository) UpsertCanvasProject(project *model.CanvasProject) error {
 	return r.Transaction(func(tx *Repository) error {
+		if err := tx.LockUserDataCleanup(project.UserID); err != nil {
+			return err
+		}
 		if project.Revision > 0 {
 			if err := tx.LockCanvasMutation(project.UserID, project.ID); err != nil {
 				return err
@@ -122,6 +151,11 @@ func (r *Repository) UpsertCanvasProject(project *model.CanvasProject) error {
 }
 
 func (r *Repository) upsertCanvasProject(project *model.CanvasProject) error {
+	cleaned, err := r.SanitizeAdminCanvasPayload(project.UserID, project.ID, project.PayloadJSON)
+	if err != nil {
+		return err
+	}
+	project.PayloadJSON = cleaned
 	expected := project.Revision
 	if expected < 0 {
 		return ErrCanvasRevisionConflict
@@ -158,6 +192,9 @@ func (r *Repository) upsertCanvasProject(project *model.CanvasProject) error {
 
 func (r *Repository) DeleteCanvasProject(userID string, id string) error {
 	return r.Transaction(func(repo *Repository) error {
+		if err := repo.LockUserDataCleanup(userID); err != nil {
+			return err
+		}
 		tx := repo.db
 		// Serialize deletion with saves before reading the history IDs to remove.
 		if err := tx.Model(&model.CanvasProject{}).Where("user_id = ? AND id = ?", userID, id).UpdateColumn("revision", gorm.Expr("revision")).Error; err != nil {
@@ -187,6 +224,15 @@ func (r *Repository) DeleteCanvasProject(userID string, id string) error {
 			return err
 		}
 		if err := tx.Where("canvas_id = ?", id).Delete(&model.CanvasUnitLink{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("canvas_id = ?", id).Delete(&model.ProductionTaskLink{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("user_id = ? AND canvas_id = ?", userID, id).Delete(&model.CanvasMutationReceipt{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&model.CloudAgentExecution{}).Where("user_id = ? AND canvas_id = ?", userID, id).Update("canvas_id", "").Error; err != nil {
 			return err
 		}
 		// 任务和会话是审计记录，不随独立画布实体保留归属 ID，避免删除后继续挂住画布上下文。

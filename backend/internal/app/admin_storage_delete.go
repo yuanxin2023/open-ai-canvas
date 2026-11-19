@@ -43,9 +43,11 @@ type AdminResourceDeleteConfirmation struct {
 
 type AdminResourceDeletePreview struct {
 	InspirationCovers []AdminResourceDeleteConfirmation `json:"inspirationCovers"`
+	Impact            AdminResourceCleanupImpact        `json:"impact"`
 }
 
 type AdminResourceDeleteResult struct {
+	Impact   AdminResourceCleanupImpact   `json:"impact"`
 	Deleted  []string                     `json:"deleted"`
 	Blocked  []AdminResourceDeleteBlocked `json:"blocked"`
 	Warnings []AdminResourceDeleteWarning `json:"warnings"`
@@ -63,7 +65,25 @@ func (s *Service) PreviewAdminResourceDelete(actor *model.User, req AdminResourc
 	if err != nil {
 		return nil, err
 	}
-	return &AdminResourceDeletePreview{InspirationCovers: adminResourceDeleteConfirmations(resourceIDs, references)}, nil
+	resources, err := s.repo.AdminResourcesByIDs(resourceIDs)
+	if err != nil {
+		return nil, err
+	}
+	blocked, err := s.adminResourceDeletionBlocks(s.repo, resources, resourceIDs)
+	if err != nil {
+		return nil, err
+	}
+	deletable := make([]model.Resource, 0, len(resources))
+	for _, resource := range resources {
+		if _, protected := blocked[resource.ID]; !protected {
+			deletable = append(deletable, resource)
+		}
+	}
+	impact, err := s.cleanupAdminResourceDocuments(s.repo, deletable, false)
+	if err != nil {
+		return nil, err
+	}
+	return &AdminResourceDeletePreview{Impact: impact, InspirationCovers: adminResourceDeleteConfirmations(resourceIDs, references)}, nil
 }
 
 func (s *Service) DeleteAdminResources(actor *model.User, req AdminResourceDeleteRequest) (*AdminResourceDeleteResult, error) {
@@ -106,47 +126,12 @@ func (s *Service) DeleteAdminResources(actor *model.User, req AdminResourceDelet
 			blockedByID[resourceID] = AdminResourceDeleteBlocked{ID: resourceID, Reason: "资源不存在", References: []AdminResourceReferenceView{}}
 		}
 	}
-	for userID, userResources := range resourcesByUser {
-		userResourceIDs := make([]string, 0, len(userResources))
-		for _, resource := range userResources {
-			userResourceIDs = append(userResourceIDs, resource.ID)
-		}
-		snapshot, snapshotErr := s.repo.ResourceReferenceSnapshot(userID, "", userResourceIDs)
-		if snapshotErr != nil {
-			return nil, snapshotErr
-		}
-		for resourceID, references := range adminResourceReferences(snapshot, userResources) {
-			blockedByID[resourceID] = AdminResourceDeleteBlocked{ID: resourceID, Reason: "资源正在被保护功能使用", References: references}
-		}
-	}
-	avatarReferences, err := s.repo.UserAvatarResourceReferences(resourceIDs)
+	protected, err := s.adminResourceDeletionBlocks(s.repo, resources, resourceIDs)
 	if err != nil {
 		return nil, err
 	}
-	for _, reference := range avatarReferences {
-		blocked := blockedByID[reference.ResourceID]
-		blocked.ID = reference.ResourceID
-		blocked.Reason = "资源正在被用户头像使用"
-		blocked.References = appendUniqueAdminResourceReference(blocked.References, AdminResourceReferenceView{Kind: reference.Kind, ID: reference.ID, Title: reference.Title})
-		blockedByID[reference.ResourceID] = blocked
-	}
-	for resourceID, references := range s.appearanceResourceReferences(resourceIDs) {
-		for _, reference := range references {
-			blocked := blockedByID[resourceID]
-			blocked.ID = resourceID
-			blocked.Reason = "资源正在被平台外观使用"
-			blocked.References = appendUniqueAdminResourceReference(blocked.References, reference)
-			blockedByID[resourceID] = blocked
-		}
-	}
-	for resourceID, references := range s.customerServiceResourceReferences(resourceIDs) {
-		for _, reference := range references {
-			blocked := blockedByID[resourceID]
-			blocked.ID = resourceID
-			blocked.Reason = "资源正在被客服配置使用"
-			blocked.References = appendUniqueAdminResourceReference(blocked.References, reference)
-			blockedByID[resourceID] = blocked
-		}
+	for id, blocked := range protected {
+		blockedByID[id] = blocked
 	}
 
 	deletable := make([]model.Resource, 0, len(resources))
@@ -236,7 +221,27 @@ func (s *Service) DeleteAdminResources(actor *model.User, req AdminResourceDelet
 		}
 		audits = append(audits, *event)
 	}
-	if err := s.repo.DeleteAdminResources(deletable, toolCleanups, deletionJobs, audits, req.ConfirmInspirationCovers); err != nil {
+	var impact AdminResourceCleanupImpact
+	if err := s.repo.Transaction(func(repo *repository.Repository) error {
+		var err error
+		impact, err = s.cleanupAdminResourceDocuments(repo, deletable, true)
+		if err != nil {
+			return err
+		}
+		for index := range audits {
+			var metadata map[string]any
+			if err := json.Unmarshal([]byte(audits[index].MetadataJSON), &metadata); err != nil {
+				return err
+			}
+			metadata["cleanupImpact"] = impact
+			encoded, err := json.Marshal(metadata)
+			if err != nil {
+				return err
+			}
+			audits[index].MetadataJSON = string(encoded)
+		}
+		return repo.DeleteAdminResources(deletable, toolCleanups, deletionJobs, audits, req.ConfirmInspirationCovers)
+	}); err != nil {
 		if errors.Is(err, repository.ErrAdminResourceDeleteChanged) || errors.Is(err, repository.ErrAdminResourceProtected) {
 			return nil, BadAuthRequest("资源状态或保护引用已变化，请刷新后重试")
 		}
@@ -246,7 +251,7 @@ func (s *Service) DeleteAdminResources(actor *model.User, req AdminResourceDelet
 		s.runWorkerTask(func() { s.drainResourceDeletionJobs(len(deletionJobs)) })
 	}
 
-	result := &AdminResourceDeleteResult{Deleted: []string{}, Blocked: []AdminResourceDeleteBlocked{}, Warnings: []AdminResourceDeleteWarning{}}
+	result := &AdminResourceDeleteResult{Impact: impact, Deleted: []string{}, Blocked: []AdminResourceDeleteBlocked{}, Warnings: []AdminResourceDeleteWarning{}}
 	deletedSet := make(map[string]struct{}, len(deletable))
 	for _, resource := range deletable {
 		deletedSet[resource.ID] = struct{}{}
@@ -262,6 +267,77 @@ func (s *Service) DeleteAdminResources(actor *model.User, req AdminResourceDelet
 		}
 	}
 	return result, nil
+}
+
+func (s *Service) adminResourceDeletionBlocks(repo *repository.Repository, resources []model.Resource, resourceIDs []string) (map[string]AdminResourceDeleteBlocked, error) {
+	blockedByID := make(map[string]AdminResourceDeleteBlocked)
+	resourcesByUser := make(map[string][]model.Resource)
+	for _, resource := range resources {
+		resourcesByUser[resource.UserID] = append(resourcesByUser[resource.UserID], resource)
+	}
+	for userID, userResources := range resourcesByUser {
+		userResourceIDs := make([]string, 0, len(userResources))
+		for _, resource := range userResources {
+			userResourceIDs = append(userResourceIDs, resource.ID)
+		}
+		snapshot, snapshotErr := repo.ResourceReferenceSnapshot(userID, "", userResourceIDs)
+		if snapshotErr != nil {
+			return nil, snapshotErr
+		}
+		for resourceID, references := range adminResourceReferences(snapshot, userResources) {
+			blockedByID[resourceID] = AdminResourceDeleteBlocked{ID: resourceID, Reason: "资源正在被保护功能使用", References: references}
+		}
+	}
+	avatarReferences, err := repo.UserAvatarResourceReferences(resourceIDs)
+	if err != nil {
+		return nil, err
+	}
+	for _, reference := range avatarReferences {
+		blocked := blockedByID[reference.ResourceID]
+		blocked.ID = reference.ResourceID
+		blocked.Reason = "资源正在被用户头像使用"
+		blocked.References = appendUniqueAdminResourceReference(blocked.References, AdminResourceReferenceView{Kind: reference.Kind, ID: reference.ID, Title: reference.Title})
+		blockedByID[reference.ResourceID] = blocked
+	}
+	for resourceID, references := range s.appearanceResourceReferences(resourceIDs) {
+		for _, reference := range references {
+			blocked := blockedByID[resourceID]
+			blocked.ID = resourceID
+			blocked.Reason = "资源正在被平台外观使用"
+			blocked.References = appendUniqueAdminResourceReference(blocked.References, reference)
+			blockedByID[resourceID] = blocked
+		}
+	}
+	for resourceID, references := range s.customerServiceResourceReferences(resourceIDs) {
+		for _, reference := range references {
+			blocked := blockedByID[resourceID]
+			blocked.ID = resourceID
+			blocked.Reason = "资源正在被客服配置使用"
+			blocked.References = appendUniqueAdminResourceReference(blocked.References, reference)
+			blockedByID[resourceID] = blocked
+		}
+	}
+	for userID, userResources := range resourcesByUser {
+		canvases, err := repo.CanvasProjects(userID)
+		if err != nil {
+			return nil, err
+		}
+		for _, canvas := range canvases {
+			active, err := repo.CanvasHasActiveWork(userID, canvas.ID)
+			if err != nil {
+				return nil, err
+			}
+			if !active {
+				continue
+			}
+			for _, resource := range userResources {
+				if documentReferencesResources(canvas.PayloadJSON, map[string]struct{}{resource.ID: {}}) {
+					blockedByID[resource.ID] = AdminResourceDeleteBlocked{ID: resource.ID, Reason: "受影响画布存在活动任务或 Agent", References: []AdminResourceReferenceView{{Kind: "活动画布", ID: canvas.ID, Title: canvas.Title}}}
+				}
+			}
+		}
+	}
+	return blockedByID, nil
 }
 
 func adminResourceDeleteConfirmations(resourceIDs []string, references []repository.ResourceDirectReference) []AdminResourceDeleteConfirmation {

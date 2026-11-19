@@ -83,7 +83,8 @@ beforeEach(async () => {
     apiClient.defaults.adapter = async (config) => {
         const url = String(config.url);
         let data: unknown;
-        if (url === "/user-data/snapshot") data = { projects: [structuredClone(remote)], assets: [] };
+        if (url === "/user-data/cleanup-changes") data = { entries: [], cursor: 0, hasMore: false };
+        else if (url === "/user-data/snapshot") data = { projects: [structuredClone(remote)], assets: [] };
         else if (url === "/canvas-projects/canvas" && config.method === "get") data = { project: structuredClone(remote) };
         else if (url === "/canvas-projects/canvas/operations" && config.method === "patch") {
             const body = JSON.parse(config.data) as CanvasOperationsRequest;

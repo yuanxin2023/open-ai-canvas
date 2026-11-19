@@ -190,9 +190,11 @@ export default function StorageResourcesPanel() {
         const uniqueIds = Array.from(new Set(resourceIds));
         setDeleting(true);
         let inspirationCovers;
+        let impact;
         try {
             const preview = await previewAdminResourceDelete(uniqueIds);
             inspirationCovers = preview.inspirationCovers;
+            impact = preview.impact;
         } catch (error) {
             message.error(error instanceof Error ? error.message : "读取资源引用失败");
             return;
@@ -208,9 +210,17 @@ export default function StorageResourcesPanel() {
                     <p>这是上传的提示词图展示图，确认要删除么？删除后对应首页灵感卡片将不再显示封面，此操作不可恢复。</p>
                     {inspirationTitles.length > 0 ? <p className="text-foreground/60">涉及：{inspirationTitles.join("、")}</p> : null}
                     {uniqueIds.length > inspirationCovers.length ? <p className="text-foreground/60">确认后，本次选中的其他资源也会一并按原规则删除。</p> : null}
+                    <p>
+                        同时删除 {impact.assets} 个素材卡片、{impact.nodes} 个媒体节点、{impact.canvases} 个画布。画布全部媒体被删完后，剩余文本也随画布永久删除。
+                    </p>
                 </div>
             ) : (
-                "此操作不可恢复。系统会强制删除普通创作资源并清理结构化依赖，画布、项目和历史记录中的对应媒体将显示为已删除。用户头像、平台外观、客服资源及活动任务引用仍会受保护。"
+                <div className="space-y-2">
+                    <p>
+                        此操作不可恢复。预计同时删除 {impact.assets} 个素材卡片、{impact.nodes} 个媒体节点、{impact.canvases} 个画布，并更新 {impact.updatedCanvases} 个画布。
+                    </p>
+                    <p>画布全部媒体被删完后，剩余文本也随画布永久删除。用户头像、平台外观、客服资源及活动任务引用仍会受保护。实际影响以提交时的数据为准。</p>
+                </div>
             ),
             okText: hasInspirationCovers ? "确认删除" : "确认永久删除",
             cancelText: "取消",
@@ -221,7 +231,7 @@ export default function StorageResourcesPanel() {
                     const result = await deleteAdminResources(uniqueIds, hasInspirationCovers);
                     setSelectedIds([]);
                     setRefreshKey((value) => value + 1);
-                    if (result.deleted.length > 0) message.success(`已删除 ${result.deleted.length} 个资源`);
+                    if (result.deleted.length > 0) message.success(`已删除 ${result.deleted.length} 个资源、${result.impact.assets} 个素材卡片、${result.impact.canvases} 个画布`);
                     if (result.blocked.length > 0 || result.warnings.length > 0) {
                         modal.warning({
                             title: result.blocked.length > 0 ? (result.deleted.length > 0 ? "部分资源未删除" : "资源未删除") : "资源记录已删除，但文件需手动清理",

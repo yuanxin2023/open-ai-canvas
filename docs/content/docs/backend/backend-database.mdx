@@ -5,7 +5,18 @@ description: AI 创作工作台后端核心持久化表与状态边界
 
 # 后端数据库
 
-当前整合 Schema 为 **113**。保留本地 1–105 的迁移身份，追加 106–113；官方来源编号不作为本站执行编号。升级与验收见 [v1.8.1 本地整合](./upstream-v181-integration)。
+当前整合 Schema 为 **114**。保留本地 1–105 的迁移身份，追加 106–114；官方来源编号不作为本站执行编号。升级与验收见 [v1.8.1 本地整合](./upstream-v181-integration)。
+
+## 管理员资源联动清理（Schema 114）
+
+迁移 `admin_resource_cleanup` 只创建两张表，不自动清理历史数据：
+
+| 表 | 数据与约束 |
+| --- | --- |
+| `user_data_cleanup_states` | `user_id` 主键、`revision` 用户级清理版本；事务内递增并持有行锁到提交，避免游标跳过晚提交变更 |
+| `user_data_cleanup_entries` | `(user_id, kind, entity_id)` 联合主键；保存 `revision`、`action`、`canvas_id`、`created_at`；`(user_id, revision)` 索引用于增量读取。kind 为 resource/asset/canvas/node，action 为 delete/update。节点标识为画布 ID 加冒号及节点 ID |
+
+记录同时承担客户端失效通知和持久删除标记，不按时间自动过期；账号永久注销时一并清理。资源、素材、画布、删除标记、审计与物理文件删除 Outbox 原子提交。已删除的素材、画布 ID 禁止旧客户端重建；保留画布的历史恢复过滤失效资源和节点。具体行为与历史专项命令见 [管理员资源清理](./admin-resource-cleanup)。
 
 ## 视频参考视频计费（Schema 111）
 

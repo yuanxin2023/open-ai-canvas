@@ -487,6 +487,9 @@ func (r *Repository) DeleteAssetAndResources(userID string, assetID string, reso
 
 func (r *Repository) DeleteAssetsAndResources(userID string, assetIDs []string, resourceIDs []string, deletionJobs []model.ResourceDeletionJob, deleteReferencedResources bool) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := New(tx).LockUserDataCleanup(userID); err != nil {
+			return err
+		}
 		var ownedAssets []model.Asset
 		query := tx.Where("user_id = ? AND id IN ?", userID, assetIDs).Order("id")
 		if r.Dialect() == "postgres" {
